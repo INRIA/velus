@@ -484,9 +484,9 @@ Module Type ILCORRECTNESS
             eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
             left. right. right. right. solve_In.
         + rewrite app_assoc. eapply local_hist_dom_ub; eauto.
-        + rewrite app_assoc, <-(@Typing.senv_of_decls_senv_of_anns exp).
+        + rewrite app_assoc, <-Typing.senv_of_decls_senv_of_anns.
           eapply local_hist_dom; eauto. now rewrite Typing.senv_of_decls_senv_of_anns.
-        + rewrite app_assoc, <-(@Typing.senv_of_decls_senv_of_anns exp).
+        + rewrite app_assoc, <-Typing.senv_of_decls_senv_of_anns.
           eapply local_hist_sc_vars; eauto using dom_dom_ub. reflexivity.
           *{ intros * In1 In2. apply IsVar_fst in In2. simpl_In.
              eapply reuse_idents_find' in H0 as (?&?&?&V1&Fol1&Fol2&Reu&Find); eauto using In_InMembers.
@@ -571,14 +571,15 @@ Module Type ILCORRECTNESS
       inv Hsem; rename H0 into Hfind; simpl in Hfind. destruct (ident_eq_dec (n_name n) f).
       - erewrite find_node_now in Hfind; eauto. inv Hfind.
         (*The semantics of equations can be given according to G only *)
-        eapply sem_node_ck_cons1' in H4 as (Blk&_); eauto. clear H3.
-        2:{ inv Hord1. destruct H7 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        assert (~Is_node_in_block (n_name n0) (n_block n0)) as Blk.
+        { inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        eapply sem_block_ck_cons1 in Blk; eauto. clear H3.
 
         replace {| types := types G1; nodes := nodes G1 |} with G1 in Blk by (destruct G1; auto).
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
         pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
-        destruct H5 as (Hdom1&Hsc1).
+        take (clocked_node _ _ _) and destruct it as (Hdom1&Hsc1).
         destruct (inlinelocal_block
                     (Env.empty _) (n_block n0)
                     {| fresh_st := Fresh.init_st; used := PSP.of_list (map fst (n_in n0) ++ map fst (n_out n0))|})
@@ -590,10 +591,9 @@ Module Type ILCORRECTNESS
         + erewrite find_node_now; eauto.
         + eauto.
         + eauto.
-        + simpl_Forall. subst. constructor.
         + apply sem_block_ck_cons2; simpl...
           2:{ eapply find_node_not_Is_node_in in Hord2. contradict Hord2.
-            2:erewrite find_node_now; eauto. right. eauto. }
+            2:erewrite find_node_now; eauto. eauto. }
           assert (FEnv.Equiv (@EqSt _) Hf (H + restrict Hf (senv_of_anns locs'))) as Heq.
           { intros ?. destruct (Hf x) eqn:Hfind.
             - unfold restrict, FEnv.restrict. destruct (existsb (fun y : var_last => y ==b x) (vars_of_senv (senv_of_anns locs'))) eqn:Ex.
@@ -624,7 +624,6 @@ Module Type ILCORRECTNESS
              - rewrite DL, vars_of_senv_Last, IsLast_app, Typing.senv_of_decls_senv_of_anns.
                split; intros; repeat (progress destruct_conjs || take (_ \/ _) and destruct it); auto.
            }
-          * simpl_Forall. constructor.
           * eapply sc_vars_morph. 1,3:reflexivity. eauto.
             eapply sc_vars_incl; [|eauto]. unfold senv_of_decls, senv_of_tyck. solve_incl_app.
             erewrite map_map, map_ext; [reflexivity|]. intros; destruct_conjs; auto.
@@ -647,8 +646,8 @@ Module Type ILCORRECTNESS
       - erewrite find_node_other in Hfind; eauto.
         eapply sem_node_ck_cons2...
         destruct G2; apply HGref.
-        eapply sem_node_ck_cons1' in H4 as (?&?); eauto using find_node_later_not_Is_node_in.
         destruct G1; econstructor...
+        eapply sem_block_ck_cons1; eauto using find_node_later_not_Is_node_in.
     Qed.
 
   End inlinelocal_node_sem.

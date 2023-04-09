@@ -202,12 +202,12 @@ Module Type COMPLETENESS
         eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
         rewrite 2 InMembers_idfst in Hinm. congruence.
     }
-    inversion_clear Hwtn as [?? _ _ _ _ Hwt]. rewrite Hblk in Hwt. inv Hwt; inv H1. subst Γ Γ'.
+    inversion_clear Hwtn as [?? _ _ _ Hwt]. rewrite Hblk in Hwt. inv Hwt; inv H1. subst Γ'.
     clear Hblk Hperm0.
     induction Hvars; intros; simpl in *; eauto. simpl_Forall.
     apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H4 as (?&Heqs1); eauto.
-    eapply IHHvars in H8 as (?&Heqs2); eauto.
+    eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
+    eapply IHHvars in H7 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 

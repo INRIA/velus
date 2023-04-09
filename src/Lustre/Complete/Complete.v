@@ -49,7 +49,7 @@ Module Type COMPLETE
 
   Fixpoint complete_block (env : Env.t type) (blk : block) :=
     match blk with
-    | Beq eq => Beq eq
+    | Beq _ | Blast _ _ => blk
     | Breset blks er => Breset (map (complete_block env) blks) er
     | Blocal s => Blocal (complete_scope (fun env => map (complete_block env)) env s)
     | Bswitch e brs =>
@@ -150,6 +150,7 @@ Module Type COMPLETE
       assert (ND':=ND); inv ND'; assert (VD':=VD); inv VD'; simpl.
     - (* equation *)
       rewrite H0. constructor.
+    - (* last *) constructor.
     - (* reset *)
       rewrite concat_map. econstructor.
       simpl_Forall. eauto 6 using NoDupMembers_concat, NoDupLocals_incl, incl_map, incl_concat.
@@ -237,6 +238,34 @@ Module Type COMPLETE
   Qed.
   Transparent complete_scope.
 
+  Lemma complete_block_LastsDefined : forall blk env xs,
+      LastsDefined blk xs ->
+      LastsDefined (complete_block env blk) xs.
+  Proof.
+    induction blk using block_ind2; intros * LD; inv LD.
+    - (* equation *) constructor.
+    - (* last *) constructor.
+    - (* reset *)
+      constructor. simpl_Forall. eauto.
+    - (* switch *)
+      constructor.
+      + intros Map. apply map_eq_nil in Map. contradiction.
+      + simpl_Forall. inv_branch. econstructor.
+        apply Forall_app; split; simpl_Forall; eauto.
+        constructor.
+    - (* automaton *)
+      constructor.
+      + intros Map. apply map_eq_nil in Map. contradiction.
+      + simpl_Forall. inv_branch. inv_scope. do 2 econstructor.
+        do 2 esplit.
+        * apply Forall2_app with (l2':=x); simpl_Forall; eauto.
+          erewrite Forall2_map_2 with (f:=fun _ => []). apply Forall2_same. simpl_Forall. constructor.
+        * rewrite concat_app, concat_map_nil. auto.
+    - (* local *)
+      inv_scope. do 4 econstructor; eauto.
+      simpl_Forall; auto.
+  Qed.
+
   Program Definition complete_node (n : @node (fun _ _ => True) elab_prefs) : @node complete elab_prefs :=
     let env := Env.from_list
                  (map_filter
@@ -261,6 +290,11 @@ Module Type COMPLETE
     all:rewrite Perm; try rewrite fst_NoDupMembers; rewrite map_fst_senv_of_decls.
     1,3:eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
     eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    pose proof (n_lastd n) as (?&Last&Perm).
+    do 2 esplit; eauto.
+    now apply complete_block_LastsDefined.
   Qed.
   Next Obligation.
     pose proof (n_nodup n) as (Nd1&Nd2).

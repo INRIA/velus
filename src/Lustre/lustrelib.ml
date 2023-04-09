@@ -60,7 +60,7 @@ module type SYNTAX =
 
     type auto_type = Weak | Strong
 
-    type decl = (ident * (((typ * clock) * ident) * (exp * ident) option))
+    type decl = (ident * (((typ * clock) * ident) * ident option))
 
     type 'a scope =
     | Scope of decl list * 'a
@@ -70,6 +70,7 @@ module type SYNTAX =
 
     type block =
     | Beq of equation
+    | Blast of ident * exp
     | Breset of block list * exp
     | Bswitch of exp * (enumtag * (block list) branch) list
     | Bauto of auto_type * clock * ((exp * enumtag) list * enumtag) *
@@ -269,13 +270,7 @@ module PrintFun
         print_clock_decl ck
 
     let print_decl p (id, (((ty, ck), cx), o)) =
-      match o with
-      | Some (e, _) ->
-        fprintf p "@[<h>%a : %a%a@]"
-          print_ident id
-          PrintOps.print_typ ty
-          print_clock_decl ck
-      | None -> print_input_decl p (id, ((ty, ck), cx))
+      print_input_decl p (id, ((ty, ck), cx))
 
     let print_input_decl_list = print_semicol_list print_input_decl
     let print_decl_list = print_semicol_list print_decl
@@ -326,6 +321,10 @@ module PrintFun
 
     let rec print_block p = function
       | L.Beq eq -> print_equation p eq
+      | L.Blast (x, e) ->
+        fprintf p "@[<hov 2>%a = %a@]"
+          print_ident x
+          print_exp e
       | L.Breset (blks, er) ->
         fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a"
           print_blocks blks

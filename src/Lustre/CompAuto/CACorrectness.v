@@ -639,7 +639,6 @@ Module Type CACORRECTNESS
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
             destruct H22 as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; simpl in *; congruence.
-        + repeat constructor.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
               take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
@@ -721,7 +720,7 @@ Module Type CACORRECTNESS
                  take (select_hist _ _ _ _ _) and rename it into Hsel.
                  assert (Hsel':=Hsel). apply select_hist_fselect_hist in Hsel'. simpl in *.
                  repeat inv_branch. destruct s.
-                 take (sem_scope_ck _ _ _ _ _) and eapply sem_scope_refines2, sem_scope_restrict2 in it. 3,4:eauto.
+                 take (sem_scope_ck _ _ _ _) and eapply sem_scope_refines2, sem_scope_restrict2 in it. 3,4:eauto.
                  2:{ apply Forall_forall; intros; simpl_In.
                      edestruct H18 as (?&Hbase); eauto with senv. rewrite Hbase; constructor. }
                  repeat inv_scope. repeat inv_bind. subst Γ'0 Γ'1.
@@ -802,8 +801,7 @@ Module Type CACORRECTNESS
                      clear - L H39. inv L. simpl_In. simpl_Forall. subst. simpl in *. congruence.
                  }
 
-                 eapply Sscope with (Hi':=Hi'). 4:constructor. all:eauto.
-                 * simpl_Forall; subst; constructor.
+                 eapply Sscope with (Hi':=Hi'). 3:constructor. all:eauto.
                  * subst; eauto.
                  *{ take (sem_transitions_ck _ _ _ _ _ _) and eapply sem_transitions_refines, sem_transitions_restrict
                       with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ' ++ senv_of_decls l)) in it; eauto.
@@ -838,7 +836,7 @@ Module Type CACORRECTNESS
                         edestruct H18 as (_&Hbase); eauto with senv. rewrite Hbase; constructor.
                     } all:simpl.
                     - etransitivity; eauto. eapply FEnv.restrict_refines; eauto using EqStrel_Reflexive.
-                    - intros * Hv. inv Hv. apply InMembers_app in H56 as [Hin|Hin]; apply InMembers_In in Hin as (?&?).
+                    - intros * Hv. inv Hv. take (InMembers _ _) and apply InMembers_app in it as [Hin|Hin]; apply InMembers_In in Hin as (?&?).
                       + apply Hat; eauto with senv.
                       + simpl_In. simpl_Forall; auto.
                     - apply NoLast_app; auto.
@@ -900,7 +898,6 @@ Module Type CACORRECTNESS
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
             destruct H25 as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; simpl in *; congruence.
-        + repeat constructor.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
               take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
@@ -1057,7 +1054,7 @@ Module Type CACORRECTNESS
                  take (select_hist _ _ _ _ _) and rename it into Hsel.
                  assert (Hsel':=Hsel). apply select_hist_fselect_hist in Hsel'. simpl in *.
                  repeat inv_branch. destruct s.
-                 take (sem_scope_ck _ _ _ _ _) and eapply sem_scope_refines3, sem_scope_restrict3 in it. 3,4:eauto.
+                 take (sem_scope_ck _ _ _ _) and eapply sem_scope_refines3, sem_scope_restrict3 in it. 3,4:eauto.
                  2:{ apply Forall_forall; intros; simpl_In.
                      edestruct H17 as (?&Hbase); eauto with senv. rewrite Hbase; constructor. }
                  repeat inv_scope. repeat inv_bind. subst Γ'0 Γ'1.
@@ -1137,7 +1134,6 @@ Module Type CACORRECTNESS
                  }
 
                  eapply Sscope with (Hi':=Hi'); eauto.
-                 * simpl_Forall; subst; constructor.
                  * subst. eauto.
                  *{ auto_block_simpl_Forall.
                     eapply sem_block_refines, H
@@ -1148,7 +1144,7 @@ Module Type CACORRECTNESS
                         edestruct H17 as (_&Hbase); eauto with senv. rewrite Hbase; constructor.
                     } all:simpl.
                     - etransitivity; eauto. eapply FEnv.restrict_refines; eauto using EqStrel_Reflexive.
-                    - intros * Hv. inv Hv. apply InMembers_app in H51 as [Hin|Hin]; apply InMembers_In in Hin as (?&?).
+                    - intros * Hv. inv Hv. take (InMembers _ _) and apply InMembers_app in it as [Hin|Hin]; apply InMembers_In in Hin as (?&?).
                       + apply Hat; eauto with senv.
                       + simpl_In. simpl_Forall; auto.
                     - apply NoLast_app; auto.
@@ -1170,7 +1166,6 @@ Module Type CACORRECTNESS
       - (* local *)
         repeat inv_scope.
         do 2 econstructor; eauto.
-        1:simpl_Forall; subst; constructor.
         auto_block_simpl_Forall.
         assert (forall x, ~ IsLast (senv_of_decls locs) x) as Hnl'.
         { intros * Hlast. inv Hlast. simpl_In; simpl_Forall. subst; simpl in *; congruence. }
@@ -1199,25 +1194,24 @@ Module Type CACORRECTNESS
       inv Hsem; rename H0 into Hfind; simpl in Hfind. destruct (ident_eq_dec (n_name n) f).
       - erewrite find_node_now in Hfind; eauto. inv Hfind.
         (*The semantics of equations can be given according to G only *)
-        eapply sem_node_ck_cons1' in H4 as (Hblk'&_); eauto. clear H3.
-        2:{ inv Hord1. destruct H7 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        assert (~Is_node_in_block (n_name n0) (n_block n0)) as Blk.
+        { inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        eapply sem_block_ck_cons1 in Blk; eauto. clear H3.
 
         pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 _].
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
-        inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
-        inv Hwt. destruct H4 as (Hwt&_); simpl in Hwt.
-        destruct H5 as (Hdom1&Hsc1).
+        inv Hwc. take (_ /\ _) and destruct it as (Hwc&_); simpl in Hwc.
+        inv Hwt. take (_ /\ _) and destruct it as (Hwt&_); simpl in Hwt.
+        destruct H4 as (Hdom1&Hsc1).
         econstructor; eauto.
         + erewrite find_node_now; eauto.
         + eauto.
         + eauto.
-        + simpl_Forall. subst. constructor.
         + eapply sem_block_ck_cons2; eauto.
-          2:{ eapply find_node_not_Is_node_in in Hord2. 2:erewrite find_node_now; eauto.
-              contradict Hord2. right; auto. }
-          simpl. replace (Global (types G1) (externs G1) (nodes G1)) with G1 in Hblk' by (destruct G1; auto).
-          eapply auto_block_sem in Hblk'; eauto using dom_dom_ub, node_NoDupLocals.
+          2:{ eapply find_node_not_Is_node_in in Hord2. 2:erewrite find_node_now; eauto. auto. }
+          simpl. replace (Global (types G1) (externs G1) (nodes G1)) with G1 in Blk by (destruct G1; auto).
+          eapply auto_block_sem in Blk; eauto using dom_dom_ub, node_NoDupLocals.
           7:rewrite surjective_pairing with (p:=auto_block _ _), surjective_pairing with (p:=fst _); reflexivity.
           * destruct G2; eauto.
           * intros * Hv. inv Hv. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls in H0.
@@ -1227,13 +1221,13 @@ Module Type CACORRECTNESS
           * apply NoLast_app; split; auto using senv_of_ins_NoLast.
             intros ? L; inv L; simpl_In. simpl_Forall. subst; simpl in *; congruence.
           * inv Hwt; subst Γ; destruct G1; auto.
-          * inv Hwc; subst Γ; destruct G1; auto.
+          * inv Hwc; destruct G1; auto.
         + constructor; auto.
       - erewrite find_node_other in Hfind; eauto.
         eapply sem_node_ck_cons2...
         destruct G2; apply Href.
-        eapply sem_node_ck_cons1' in H4 as (?&?)... 2:eapply find_node_later_not_Is_node_in in Hord1...
         destruct G1; econstructor...
+        eapply sem_block_ck_cons1; eauto using find_node_later_not_Is_node_in.
     Qed.
 
   End sem_node.

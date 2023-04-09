@@ -99,7 +99,6 @@ Module Type CACLOCKING
       econstructor; eauto.
       - simpl_Forall.
         eapply wc_clock_incl; [|eauto]. solve_incl_app.
-      - simpl_Forall; subst; auto.
       - take (P_wc _ _ ) and eapply Hind in it; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
@@ -148,9 +147,8 @@ Module Type CACLOCKING
           end.
 
         do 2 econstructor; eauto; simpl.
-        3:repeat (apply Forall_cons); auto.
+        2:repeat (apply Forall_cons); auto.
         + repeat apply Forall_cons; auto. all:wc_automaton.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wc_automaton.
           *{ eapply init_state_exp_wc in H10; eauto.
@@ -191,9 +189,8 @@ Module Type CACLOCKING
 
       - (* automaton (strong) *)
         do 2 econstructor; eauto; simpl.
-        3:repeat (apply Forall_cons); auto.
+        2:repeat (apply Forall_cons); auto.
         + repeat apply Forall_cons; auto. all:wc_automaton.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wc_automaton.
           * apply add_whens_wc; auto. wc_automaton.
@@ -257,7 +254,6 @@ Module Type CACLOCKING
       intros * Hwcn. inv Hwcn.
       pose proof (n_syn n) as Hsyn. inv Hsyn.
       repeat split; auto.
-      - simpl_Forall. subst. constructor.
       - unfold auto_node in *; simpl in *.
         destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
         eapply auto_block_wc; eauto.

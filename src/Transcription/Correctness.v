@@ -1458,7 +1458,7 @@ Module Type CORRECTNESS
         { inv Hwc; eauto. simpl_Foralls. inv H4; eauto. }
         take (L.find_node _ _ = Some n) and
              pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& Wc).
-        inversion_clear Wc as [?? Wcin _ _ _].
+        inversion_clear Wc as [? Wcin _ _].
         assert (find_base_clock (L.clocksof l) = bck) as ->.
         {
           apply find_base_clock_bck.
@@ -1650,7 +1650,7 @@ Module Type CORRECTNESS
     intros * Hnormed Hord Hwt Hwc Htr Hsem.
     destruct Hwt as (Hbool&Hwt).
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? Hfind Hins Houts ? Slast Sblk (Hdom&Hsc)].
+    inversion_clear Hsem' as [? ? ? ? ? Hfind Hins Houts ? Sblk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
     pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
@@ -1658,19 +1658,22 @@ Module Type CORRECTNESS
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
     - rewrite L.find_node_now in Hfind; eauto. inv Hfind.
-      assert (Hord':=Hord).
-      inversion_clear Hord as [|? ? Hord'' Hnnblocks Hnn].
-      eapply LCS.sem_node_ck_cons1' in Sblk as (Sblk'&_); eauto.
+      assert (~Lord.Is_node_in_block (L.n_name n) (L.n_block n)) as Blk.
+      { inv Hord. destruct H10 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+      eapply LCS.sem_block_ck_cons1 in Blk; eauto. clear Sblk.
+
       assert (Htr':=Htr). monadInv Htr'; simpl in *; monadInv EQ.
       assert (forall f ins outs,
                  LCS.sem_node_ck (L.Global types externs nodes) f ins outs ->
                  NLSC.sem_node (NL.Global types externs x3) f ins outs) as IHnds'.
-      { intros. eapply IHnodes; eauto. constructor; auto.
-        unfold to_global; simpl. rewrite EQ; auto. }
-      take (LT.wt_node _ _) and inversion_clear it as [?? Hwt1 Hwt2 Hwt3 _ Hwt4]; subst Γ.
-      take (LC.wc_node _ _) and inversion_clear it as [?? Hwc1 Hwc2 _ Hwc3]; subst Γ.
+      { intros. eapply IHnodes; eauto.
+        - inv Hord; auto.
+        - constructor; auto.
+        - unfold to_global; simpl. rewrite EQ; auto. }
+      take (LT.wt_node _ _) and inversion_clear it as [?? Hwt1 Hwt2 Hwt3 Hwt4]; subst Γ.
+      take (LC.wc_node _ _) and inversion_clear it as [? Hwc1 Hwc2 Hwc3].
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv H8. inv Sblk'. inv H10.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Blk. inv H10.
       assert (H ⊑ H + Hi') as Href.
       { eapply LS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
         intros. rewrite IsVar_fst, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls; eauto. }
@@ -1700,7 +1703,7 @@ Module Type CORRECTNESS
       + apply NLSC.sem_equation_cons2; eauto using ord_l_nl.
         2:{ assert (Htrn' := EQ0).
             apply to_node_name in EQ0. rewrite <- EQ0.
-            eapply ninin_l_nl; eauto. contradict Hnini. right; auto. }
+            eapply ninin_l_nl; eauto. }
         tonodeInv EQ0; simpl in *.
         eapply sem_blockstoeqs with (cenv:=senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n) ++ _). 1-9:eauto.
         5:{ clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto. }

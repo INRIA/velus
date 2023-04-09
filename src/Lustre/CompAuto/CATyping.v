@@ -127,8 +127,7 @@ Module Type CATYPING
         eapply wt_clock_incl; [|eauto with ltyping].
         intros. repeat rewrite HasType_app in *. intuition.
       - simpl_Forall; subst; eauto with ltyping.
-      - simpl_Forall; subst; eauto.
-      - eapply Hind in H7; eauto.
+      - eapply Hind in H6; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
           intros ? Hl; inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -195,11 +194,10 @@ Module Type CATYPING
             by (eapply iface_incl_wt_type, HwtG1; eauto).
 
         do 2 econstructor; eauto; simpl.
-        4:repeat (apply Forall_cons); auto.
+        3:repeat (apply Forall_cons); auto.
         + unfold wt_clocks; repeat constructor; simpl.
           all:wt_automaton.
         + repeat (apply Forall_cons); auto.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wt_automaton.
           * eapply init_state_exp_wt; eauto; wt_automaton.
@@ -256,11 +254,10 @@ Module Type CATYPING
             by (eapply iface_incl_wt_type, HwtG1; eauto).
 
         do 2 econstructor; eauto; simpl.
-        4:repeat (apply Forall_cons); auto.
+        3:repeat (apply Forall_cons); auto.
         + unfold wt_clocks; repeat constructor; simpl.
           all:wt_automaton.
         + repeat (apply Forall_cons); auto.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wt_automaton.
           * apply add_whens_wt; auto; wt_automaton.
@@ -325,7 +322,6 @@ Module Type CATYPING
       pose proof (n_syn n) as Hsyn. inv Hsyn.
       repeat split.
       1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-      - simpl_Forall. destruct o; simpl in *; destruct_conjs; eauto using iface_incl_wt_exp.
       - unfold auto_node in *; simpl in *.
         destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
         eapply auto_block_wt; eauto.

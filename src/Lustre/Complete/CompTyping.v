@@ -50,7 +50,7 @@ Module Type COMPTYPING
         eapply NoDupMembers_det in Hin0; eauto. inv Hin0. destruct o0; simpl in *; try congruence.
         erewrite Env.In_find_adds'; eauto. 2:solve_In; simpl; eauto.
         apply NoDupMembers_map_filter; auto.
-        intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+        intros; destruct_conjs; auto. destruct o as [|]; simpl; auto.
     Qed.
 
     Lemma complete_block_wt : forall blk env Γ xs,
@@ -65,6 +65,9 @@ Module Type COMPTYPING
         assert (VD':=VD); inv VD'; assert (ND':=ND); inv ND'; assert (Wt':=Wt); inv Wt'.
       - (* equation *)
         constructor; eauto with ltyping.
+
+      - (* last *)
+        econstructor; eauto with ltyping.
 
       - (* reset *)
         constructor; eauto with ltyping.
@@ -119,11 +122,9 @@ Module Type COMPTYPING
         { etransitivity; [|eauto]. take (Permutation _ xs) and rewrite <-it. solve_incl_app. }
         assert (incl ysl Γ) as Incl2.
         { etransitivity; [|apply Incl]. take (Permutation _ xs) and rewrite <-it. solve_incl_app. }
-        econstructor; eauto. 4:split.
+        econstructor; eauto. 3:split.
         1:{ unfold wt_clocks in *. simpl_Forall. eauto with ltyping. }
         1:{ simpl_Forall. eauto with ltyping. }
-        1:{ simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
-            destruct_conjs; split; eauto with ltyping. }
         2:{ simpl_Forall. split; [|split]; eauto with ltyping.
             erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
         apply Forall_app; split.
@@ -170,11 +171,9 @@ Module Type COMPTYPING
         { etransitivity; [|eauto]. take (Permutation _ xs) and rewrite <-it. solve_incl_app. }
         assert (incl ysl Γ) as Incl2.
         { etransitivity; [|apply Incl]. take (Permutation _ xs) and rewrite <-it. solve_incl_app. }
-        econstructor; eauto. 4:split; auto.
+        econstructor; eauto. 3:split; auto.
         1:{ unfold wt_clocks in *. simpl_Forall. eauto with ltyping. }
         1:{ simpl_Forall. eauto with ltyping. }
-        1:{ simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
-            destruct_conjs; split; eauto with ltyping. }
         apply Forall_app; split.
         + simpl_Forall.
            assert (IsVar ysl x0) as V.
@@ -208,8 +207,6 @@ Module Type COMPTYPING
         do 2 econstructor.
         + unfold wt_clocks in *. simpl_Forall. eauto with ltyping.
         + simpl_Forall. eauto using iface_incl_wt_type.
-        + simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
-          destruct_conjs; split; eauto with ltyping.
         + simpl_Forall. inv_VarsDefined.
           eapply H; eauto using incl_appl', local_env.
           * etransitivity; eauto using incl_concat.
@@ -225,17 +222,16 @@ Module Type COMPTYPING
       pose proof (n_defd n) as (?&Vars&Perm).
       repeat econstructor; simpl; eauto.
       1-4:unfold wt_clocks, senv_of_decls in *; simpl_Forall; eauto with ltyping.
-      - destruct o as [(?&?)|]; simpl in *; destruct_conjs; auto. split; eauto with ltyping.
       - eapply complete_block_wt; eauto.
         + intros * L Ty. inv L. inv Ty.
           eapply NoDupMembers_det in H0; eauto using node_NoDupMembers. subst.
           apply in_app_iff in H2 as [In|In]; simpl_In. congruence.
-          destruct o as [(?&?)|]; simpl in *; try congruence.
+          destruct o as [|]; simpl in *; try congruence.
           erewrite Env.find_In_from_list; eauto.
           * solve_In.
           * apply NoDupMembers_map_filter; eauto.
             2:apply NoDupMembers_senv_of_decls; eauto using node_NoDupMembers, NoDupMembers_app_r.
-            intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
+            intros; destruct_conjs. destruct o as [|]; simpl; auto.
         + rewrite Perm. solve_incl_app.
         + apply node_NoDupLocals.
     Qed.

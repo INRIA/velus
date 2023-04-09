@@ -103,29 +103,11 @@ Module Type LSEMANTICS
 
     Section sem_scope.
       Context {A : Type}.
-
-      Variable sem_exp : history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
-
-      Inductive sem_last_decl (Hi Hi' : history) (bs : Stream bool) : (ident * (type * clock * ident * option (exp * ident))) -> Prop :=
-      | sem_nolast : forall x ty ck cx,
-          sem_last_decl Hi Hi' bs (x, (ty, ck, cx, None))
-      | sem_last : forall x ty ck cx e0 clx vs0 vs1 vs,
-          sem_exp (Hi + Hi') bs e0 [vs0] ->
-          sem_var Hi' (Var x) vs1 ->
-          fby vs0 vs1 vs ->
-          sem_var Hi' (Last x) vs ->
-          sem_last_decl Hi Hi' bs (x, (ty, ck, cx, Some (e0, clx))).
-
       Variable sem_block : history -> A -> Prop.
 
       Inductive sem_scope : history -> Stream bool -> (scope A) -> Prop :=
       | Sscope : forall Hi Hi' bs locs blks,
-          (* Domain of the internal history *)
           dom Hi' (senv_of_decls locs) ->
-
-          (* Last declarations *)
-          Forall (sem_last_decl Hi Hi' bs) locs ->
-
           sem_block (Hi + Hi') blks ->
           sem_scope Hi bs (Scope locs blks).
     End sem_scope.
@@ -293,6 +275,14 @@ Module Type LSEMANTICS
         sem_equation H b eq ->
         sem_block H b (Beq eq)
 
+    | Slastd:
+      forall H bs x e vs0 vs1 vs,
+        sem_exp H bs e [vs0] ->
+        sem_var H (Var x) vs1 ->
+        fby vs0 vs1 vs ->
+        sem_var H (Last x) vs ->
+        sem_block H bs (Blast x e)
+
     | Sreset:
       forall H b blocks er sr r,
         sem_exp H b er [sr] ->
@@ -308,8 +298,8 @@ Module Type LSEMANTICS
                   exists Hi', when_hist (fst blks) Hi sc Hi'
                          /\ let bi := fwhenb (fst blks) b sc in
                            sem_branch (Forall (sem_block Hi' bi))
-                             (fun x => Is_defined_in x (Bswitch ec branches))
-                             (fun x => List.Exists (Is_defined_in x))
+                             (fun x => Is_defined_in (Var x) (Bswitch ec branches))
+                             (fun x => List.Exists (Is_defined_in (Var x)))
                              Hi' (snd blks)) branches ->
         sem_block Hi b (Bswitch ec branches)
 
@@ -324,13 +314,13 @@ Module Type LSEMANTICS
                               /\ let bik := fselectb tag k stres bs in
                                 sem_branch
                                   (fun blks =>
-                                     sem_scope sem_exp
+                                     sem_scope
                                        (fun Hi' blks =>
                                           Forall (sem_block Hi' bik) (fst blks)
                                           /\ sem_transitions Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
                                        ) Hik bik (snd blks))
-                                  (fun x => Is_defined_in x (Bauto Weak ck (ini, oth) states))
-                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                                  (fun x => Is_defined_in (Var x) (Bauto Weak ck (ini, oth) states))
+                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                                   Hik (snd state)
                ) states ->
         sem_block H bs (Bauto Weak ck (ini, oth) states)
@@ -346,8 +336,8 @@ Module Type LSEMANTICS
                                 sem_branch
                                   (fun blks =>
                                      sem_transitions Hik bik (fst blks) (tag, false) (fselect absent tag k stres stres1))
-                                  (fun x => Is_defined_in x (Bauto Strong ck ([], ini) states))
-                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                                  (fun x => Is_defined_in (Var x) (Bauto Strong ck ([], ini) states))
+                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                                   Hik (snd state)
                ) states ->
         Forall (fun state =>
@@ -356,18 +346,18 @@ Module Type LSEMANTICS
                               /\ let bik := fselectb tag k stres1 bs in
                                 sem_branch
                                   (fun blks =>
-                                     sem_scope sem_exp
+                                     sem_scope
                                        (fun Hi' blks => Forall (sem_block Hi' bik) (fst blks))
                                        Hik bik (snd blks))
-                                  (fun x => Is_defined_in x (Bauto Strong ck ([], ini) states))
-                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                                  (fun x => Is_defined_in (Var x) (Bauto Strong ck ([], ini) states))
+                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                                   Hik (snd state)
                ) states ->
         sem_block H bs (Bauto Strong ck ([], ini) states)
 
     | Slocal:
       forall Hi bs scope,
-        sem_scope sem_exp (fun Hi' => Forall (sem_block Hi' bs)) Hi bs scope ->
+        sem_scope (fun Hi' => Forall (sem_block Hi' bs)) Hi bs scope ->
         sem_block Hi bs (Blocal scope)
 
     with sem_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
@@ -377,7 +367,6 @@ Module Type LSEMANTICS
           Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_in)) ss ->
           Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_out)) os ->
           let bs := clocks_of ss in
-          Forall (sem_last_decl sem_exp (FEnv.empty _) H bs) n.(n_out) ->
           sem_block H bs n.(n_block) ->
           sem_node f ss os.
 
@@ -390,7 +379,7 @@ Module Type LSEMANTICS
 
   Ltac inv_scope :=
     match goal with
-    | H:sem_scope _ _ _ _ _ |- _ => inv H
+    | H:sem_scope _ _ _ _ |- _ => inv H
     end;
     destruct_conjs; subst.
 
@@ -807,17 +796,6 @@ Module Type LSEMANTICS
     - now rewrite <-Heq.
   Qed.
 
-  Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_last_decl (sem_exp G))
-      with signature history_equiv ==> history_equiv ==> @EqSt bool ==> eq ==> Basics.impl
-        as sem_last_decls_morph.
-  Proof.
-    intros Hi1 Hi2 EH Hi1' Hi2' EH' ?? Eb ? Hsem.
-    inv Hsem; econstructor; eauto.
-    2-3:now rewrite <-EH'.
-    eapply sem_exp_morph; eauto. 2:reflexivity.
-    apply FEnv.union_Equiv; auto.
-  Qed.
-
   Add Parametric Morphism : var_history
       with signature history_equiv ==> FEnv.Equiv (@EqSt _)
         as var_history_morph.
@@ -832,6 +810,8 @@ Module Type LSEMANTICS
     intros H H' EH b b' Eb blk.
     revert H H' b b' EH Eb; induction blk using block_ind2; intros * EH Eb Hsem; inv Hsem.
     - constructor. now rewrite <-EH, <-Eb.
+    - econstructor; eauto.
+      all:rewrite <-EH; auto. now rewrite <-Eb.
     - econstructor; eauto.
       + now rewrite <-EH, <-Eb.
       + intros k. specialize (H8 k); simpl_Forall. eapply H; eauto.
@@ -850,7 +830,6 @@ Module Type LSEMANTICS
         inv_branch. inv_scope.
         exists Hik. split; [|econstructor; eauto; econstructor; eauto; repeat split].
         * now rewrite <-EH.
-        * simpl_Forall. now rewrite <-Eb.
         * simpl_Forall. eapply H; eauto. reflexivity. now rewrite <-Eb.
         * now rewrite <-Eb.
     - econstructor; eauto.
@@ -863,11 +842,9 @@ Module Type LSEMANTICS
         inv_branch. inv_scope.
         exists Hik. split; [|econstructor; eauto; econstructor; eauto; repeat split]; eauto.
         * now rewrite <-EH.
-        * simpl_Forall. now rewrite <-Eb.
         * simpl_Forall. eapply H; eauto. reflexivity. now rewrite <-Eb.
     - constructor. inv_scope.
       eapply Sscope with (Hi':=Hi'); eauto.
-      + simpl_Forall. now rewrite <-EH, <-Eb.
       + simpl_Forall.
         eapply H; eauto.
         apply FEnv.union_Equiv; auto; reflexivity.
@@ -885,8 +862,6 @@ Module Type LSEMANTICS
       simpl_Forall. take (_ ≡ _) and now rewrite <-it.
     + eapply Forall2_trans_ex in Eyss; [|eauto].
       simpl_Forall. take (_ ≡ _) and now rewrite <-it.
-    + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
-      subst bs. now rewrite <-Exss.
     + now rewrite <-Exss.
   Qed.
 
@@ -1031,6 +1006,15 @@ Module Type LSEMANTICS
         P_equation H b eq ->
         P_block H b (Beq eq).
 
+    Hypothesis BlastdCase:
+      forall H bs x e vs0 vs1 vs,
+        sem_exp G H bs e [vs0] ->
+        P_exp H bs e [vs0] ->
+        sem_var H (Var x) vs1 ->
+        fby vs0 vs1 vs ->
+        sem_var H (Last x) vs ->
+        P_block H bs (Blast x e).
+
     Hypothesis BresetCase:
       forall H b blocks er sr r,
         sem_exp G H b er [sr] ->
@@ -1050,8 +1034,8 @@ Module Type LSEMANTICS
                                   sem_branch
                                     (fun blks => Forall (sem_block G Hi' bi) blks
                                               /\ Forall (P_block Hi' bi) blks)
-                                    (fun x : ident => Is_defined_in x (Bswitch ec branches))
-                                    (fun x : ident => List.Exists (Is_defined_in x)) Hi' (snd blks)) branches ->
+                                    (fun x : ident => Is_defined_in (Var x) (Bswitch ec branches))
+                                    (fun x : ident => List.Exists (Is_defined_in (Var x))) Hi' (snd blks)) branches ->
         P_block Hi b (Bswitch ec branches).
 
     Hypothesis TransDefCase:
@@ -1082,14 +1066,13 @@ Module Type LSEMANTICS
                       sem_branch
                         (fun '(_, scope) =>
                            sem_scope
-                             (fun Hi' bik e vs => sem_exp G Hi' bik e vs /\ P_exp Hi' bik e vs)
                              (fun Hi' blks => Forall (sem_block G Hi' bik) (fst blks)
                                            /\ Forall (P_block Hi' bik) (fst blks)
                                            /\ sem_transitions G Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
                                            /\ P_transitions Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
                              ) Hik bik scope)
-                        (fun x => Is_defined_in x (Bauto Weak ck (ini, oth) states))
-                        (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                        (fun x => Is_defined_in (Var x) (Bauto Weak ck (ini, oth) states))
+                        (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                         Hik br) states ->
         P_block Hi bs (Bauto Weak ck (ini, oth) states).
 
@@ -1104,8 +1087,8 @@ Module Type LSEMANTICS
                                   (fun '(unl, _) =>
                                      sem_transitions G Hik bik unl (tag, false) (fselect absent tag k stres0 stres1)
                                      /\ P_transitions Hik bik unl (tag, false) (fselect absent tag k stres0 stres1))
-                                  (fun x => Is_defined_in x (Bauto Strong ck ([], ini) states))
-                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                                  (fun x => Is_defined_in (Var x) (Bauto Strong ck ([], ini) states))
+                                  (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                                   Hik br) states ->
         Forall (fun '((tag, _), br) =>
                   forall k, exists Hik,
@@ -1114,18 +1097,17 @@ Module Type LSEMANTICS
                       sem_branch
                         (fun '(_, scope) =>
                            sem_scope
-                             (fun Hi' bik e vs => sem_exp G Hi' bik e vs /\ P_exp Hi' bik e vs)
                              (fun Hi' blks => Forall (sem_block G Hi' bik) (fst blks)
                                            /\ Forall (P_block Hi' bik) (fst blks)
                              ) Hik bik scope)
-                        (fun x => Is_defined_in x (Bauto Strong ck ([], ini) states))
-                        (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in x) blks) x s)
+                        (fun x => Is_defined_in (Var x) (Bauto Strong ck ([], ini) states))
+                        (fun x '(_, s) => Is_defined_in_scope (fun '(blks, _) => List.Exists (Is_defined_in (Var x)) blks) (Var x) s)
                         Hik br) states ->
         P_block Hi bs (Bauto Strong ck ([], ini) states).
 
     Hypothesis BlocalCase:
       forall Hi bs scope,
-        sem_scope (fun Hi' bs e vs => sem_exp G Hi' bs e vs /\ P_exp Hi' bs e vs)
+        sem_scope
           (fun Hi' blks => Forall (sem_block G Hi' bs) blks /\ Forall (P_block Hi' bs) blks)
           Hi bs scope ->
         P_block Hi bs (Blocal scope).
@@ -1136,7 +1118,6 @@ Module Type LSEMANTICS
         Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_in)) ss ->
         Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_out)) os ->
         let bs := clocks_of ss in
-        Forall (sem_last_decl (fun Hi' bs e vs => sem_exp G Hi' bs e vs /\ P_exp Hi' bs e vs) (FEnv.empty _) H bs) n.(n_out) ->
         sem_block G H bs n.(n_block) ->
         P_block H bs n.(n_block) ->
         P_node f ss os.
@@ -1204,6 +1185,7 @@ Module Type LSEMANTICS
         + eapply TransCase; eauto.
       - inv Sem.
         + eapply BeqCase; eauto.
+        + eapply BlastdCase; eauto.
         + eapply BresetCase; eauto.
           intros k. specialize (H3 k). split; eauto. SolveForall.
         + eapply BswitchCase; eauto.
@@ -1218,10 +1200,8 @@ Module Type LSEMANTICS
           intros k. specialize (H0 k). destruct_conjs.
           inv_branch'. inv_scope'.
           do 2 esplit; eauto.
-          do 2 (econstructor; eauto). 2:split; [|split; [|split]]; eauto.
-          * clear - sem_exp_ind2 H8. SolveForall. constructor; auto.
-            inv H; econstructor; eauto.
-          * clear H7. simpl. SolveForall.
+          do 2 (econstructor; eauto). split; [|split; [|split]]; eauto.
+          clear H7. simpl. SolveForall.
         + eapply BautoStrongCase; eauto.
           * clear - H3 sem_transitions_ind2.
             revert H3. generalize (Bauto Strong ck ([], ini) states) as blk. intros.
@@ -1233,18 +1213,12 @@ Module Type LSEMANTICS
             intros k. specialize (H0 k). destruct_conjs.
             inv_branch'. inv_scope'.
             do 2 esplit; eauto. do 2 (econstructor; eauto).
-            2:split; auto; simpl.
-            -- clear - sem_exp_ind2 H7. SolveForall. constructor; auto.
-               inv H; econstructor; eauto.
-            -- clear H6. SolveForall.
+            split; auto; simpl.
+            clear H6. SolveForall.
         + eapply BlocalCase; eauto.
-          inv H0. econstructor; eauto. 2:split; auto; SolveForall.
-          clear - sem_exp_ind2 H2. SolveForall. constructor; auto.
-          inv H0; econstructor; eauto.
+          inv H0. econstructor; eauto. split; auto; SolveForall.
       - inv Sem.
         eapply Node; eauto.
-        clear - sem_exp_ind2 H3. SolveForall. constructor; auto.
-        take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
     Qed.
 
   End sem_exp_ind2.
@@ -1277,13 +1251,11 @@ Module Type LSEMANTICS
         do 2 esplit; [auto|sem_cons]
     | |- exists _, select_hist _ _ _ _ _ /\ _ =>
         do 2 esplit; [auto|sem_cons]
-    | H:sem_last_decl _ _ _ _ _ |- sem_last_decl _ _ _ _ _ =>
-        inv H; destruct_conjs; econstructor; eauto
     | H:sem_branch _ _ _ _ _ |- _ =>
         inv H; destruct_conjs
     | |- sem_branch _ _ _ _ _ => econstructor; eauto
     | |- Is_node_in_branch _ _ => econstructor; sem_cons
-    | H:sem_scope _ _ _ _ _ |- sem_scope _ _ _ _ _ =>
+    | H:sem_scope _ _ _ _ |- sem_scope _ _ _ _ =>
         inv H; destruct_conjs; econstructor; eauto
     | |- Is_node_in_scope _ _ _ => econstructor; sem_cons
     | |- _ /\ _ => split; sem_cons
@@ -1316,10 +1288,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons1 typs exts nd nds)
            (P_transitions := transitions_cons1 typs exts nd nds)
            (P_block := block_cons1 typs exts nd nds)
-           (P_node := node_cons1 typs exts nd nds). 25:eauto.
+           (P_node := node_cons1 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Lemma sem_block_cons1 {PSyn prefs} :
@@ -1334,10 +1305,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons1 typs exts nd nds)
            (P_transitions := transitions_cons1 typs exts nd nds)
            (P_block := block_cons1 typs exts nd nds)
-           (P_node := node_cons1 typs exts nd nds). 25:eauto.
+           (P_node := node_cons1 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Lemma sem_node_cons1 {PSyn prefs} :
@@ -1352,27 +1322,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons1 typs exts nd nds)
            (P_transitions := transitions_cons1 typs exts nd nds)
            (P_block := block_cons1 typs exts nd nds)
-           (P_node := node_cons1 typs exts nd nds). 25:eauto.
+           (P_node := node_cons1 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
-  Qed.
-
-  Corollary sem_node_cons1' {PSyn prefs} : forall typs exts (n nd: @node PSyn prefs) nds Hi bs,
-      Ordered_nodes (Global typs exts (nd::nds)) ->
-      ~Is_node_in nd.(n_name) n ->
-      sem_block (Global typs exts (nd::nds)) Hi bs (n_block n) ->
-      Forall (sem_last_decl (sem_exp (Global typs exts (nd::nds))) (FEnv.empty (Stream svalue)) Hi bs) (n_out n) ->
-      sem_block (Global typs exts nds) Hi bs (n_block n)
-      /\ Forall (sem_last_decl (sem_exp (Global typs exts nds)) (FEnv.empty (Stream svalue)) Hi bs) (n_out n).
-  Proof.
-    intros * Hord Hnin Hsem1 Hsem2.
-    split.
-    - eapply sem_block_cons1; eauto.
-      contradict Hnin. now right.
-    - simpl_Forall. inv Hsem2; econstructor; eauto.
-      eapply sem_exp_cons1; eauto.
-      contradict Hnin. left; solve_Exists.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Definition exp_cons2 {PSyn prefs} typs exts (nd: @node PSyn prefs) (nds: list (@node PSyn prefs)) H bs e ss :=
@@ -1399,10 +1351,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons2 typs exts nd nds)
            (P_transitions := transitions_cons2 typs exts nd nds)
            (P_block := block_cons2 typs exts nd nds)
-           (P_node := node_cons2 typs exts nd nds). 25:eauto.
+           (P_node := node_cons2 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Lemma sem_block_cons2 {PSyn prefs} :
@@ -1417,10 +1368,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons2 typs exts nd nds)
            (P_transitions := transitions_cons2 typs exts nd nds)
            (P_block := block_cons2 typs exts nd nds)
-           (P_node := node_cons2 typs exts nd nds). 25:eauto.
+           (P_node := node_cons2 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Lemma sem_node_cons2 {PSyn prefs} :
@@ -1435,10 +1385,9 @@ Module Type LSEMANTICS
            (P_equation := equation_cons2 typs exts nd nds)
            (P_transitions := transitions_cons2 typs exts nd nds)
            (P_block := block_cons2 typs exts nd nds)
-           (P_node := node_cons2 typs exts nd nds). 25:eauto.
+           (P_node := node_cons2 typs exts nd nds). 26:eauto.
     all:autounfold with lsem in *; econstructor; eauto; repeat sem_cons.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. left; solve_Exists.
-    - intros contra. eapply find_node_later_not_Is_node_in; eauto. right; auto.
+    - intros contra. eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Lemma sem_node_cons_iff {PSyn prefs} :
@@ -1475,12 +1424,14 @@ Module Type LSEMANTICS
   Lemma sem_block_defined {PSyn prefs} (G: @global PSyn prefs) : forall blk H bs x,
       sem_block G H bs blk ->
       Is_defined_in x blk ->
-      FEnv.In (Var x) H.
+      FEnv.In x H.
   Proof.
     induction blk using block_ind2; intros * Hsem Hdef; repeat inv_block'.
     - (* equation *)
       take (sem_equation _ _ _ _) and inv it.
       eapply Forall2_ignore2, Forall_forall in H7 as (?&?&?); eauto using sem_var_In.
+    - (* last *)
+      eauto using sem_var_In.
     - (* reset *)
       specialize (H9 0).
       simpl_Exists; simpl_Forall.
@@ -1504,39 +1455,39 @@ Module Type LSEMANTICS
       repeat inv_branch'. repeat inv_scope'.
       simpl_Exists. simpl_Forall.
       eapply FEnv.In_refines; eauto.
-      eapply H, FEnv.union_In in H15 as [|Hin']; eauto.
+      eapply H, FEnv.union_In in H14 as [|Hin']; eauto.
       exfalso. take (~ _) and eapply it.
       take (dom _ _) and apply it in Hin'. inv Hin'. solve_In.
     - (* local *)
       repeat inv_scope'. simpl_Exists; simpl_Forall.
-      eapply H, FEnv.union_In in H10 as [|Hin']; eauto.
+      eapply H, FEnv.union_In in H9 as [|Hin']; eauto.
       exfalso. take (~ _) and eapply it.
-      take (dom _ _) and apply it in Hin'. inv Hin'. solve_In.
+      destruct x; take (dom _ _) and apply it in Hin'; inv Hin'; solve_In.
   Qed.
 
   Corollary Forall_sem_block_defined {PSyn prefs} (G: @global PSyn prefs) : forall blks x H bs,
       Forall (sem_block G H bs) blks ->
       List.Exists (Is_defined_in x) blks ->
-      FEnv.In (Var x) H.
+      FEnv.In x H.
   Proof.
     intros * Hsem Hdef; simpl_Exists; simpl_Forall.
     eapply sem_block_defined; eauto.
   Qed.
 
   Lemma sem_scope_defined {PSyn prefs} (G: @global PSyn prefs) : forall locs blks Hi bs x,
-      sem_scope (sem_exp G) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
+      sem_scope (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
       Is_defined_in_scope (List.Exists (Is_defined_in x)) x (Scope locs blks) ->
-      FEnv.In (Var x) Hi.
+      FEnv.In x Hi.
   Proof.
     intros * Hsem Hdef; inv Hsem; inv Hdef.
-    eapply Forall_sem_block_defined, FEnv.union_In in H5 as [|Hin']; eauto.
+    eapply Forall_sem_block_defined, FEnv.union_In in H4 as [|Hin']; eauto.
     exfalso. take (~ _) and eapply it.
-    take (dom _ _) and apply it in Hin'. inv Hin'. solve_In.
+    destruct x; take (dom _ _) and apply it in Hin'; inv Hin'; solve_In.
   Qed.
 
   Corollary sem_scope_defined1 {PSyn prefs} (G: @global PSyn prefs) :
     forall locs blks Hi bs Γ xs x,
-      sem_scope (sem_exp G) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
+      sem_scope (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
       VarsDefinedCompScope (fun blks ys => exists xs, Forall2 VarsDefinedComp blks xs /\ Permutation (concat xs) ys) (Scope locs blks) xs ->
       NoDupScope (fun Γ => Forall (NoDupLocals Γ)) Γ (Scope locs blks) ->
       incl xs Γ ->
@@ -1556,7 +1507,7 @@ Module Type LSEMANTICS
 
   Corollary sem_scope_defined2 {A} {PSyn prefs} (G: @global PSyn prefs) :
     forall locs (blks: _ * A) Hi bs Γ xs x,
-      sem_scope (sem_exp G) (fun Hi blks => Forall (sem_block G Hi bs) (fst blks)) Hi bs (Scope locs blks) ->
+      sem_scope (fun Hi blks => Forall (sem_block G Hi bs) (fst blks)) Hi bs (Scope locs blks) ->
       VarsDefinedCompScope (fun blks ys => exists xs, Forall2 VarsDefinedComp (fst blks) xs /\ Permutation (concat xs) ys) (Scope locs blks) xs ->
       NoDupScope (fun Γ blks => Forall (NoDupLocals Γ) (fst blks)) Γ (Scope locs blks) ->
       incl xs Γ ->
@@ -1573,7 +1524,7 @@ Module Type LSEMANTICS
   Lemma sem_branch_defined {PSyn prefs} (G: @global PSyn prefs) must_def is_def : forall caus blks Hi bs x,
       sem_branch (Forall (sem_block G Hi bs)) must_def is_def Hi (Branch caus blks) ->
       Is_defined_in_branch (List.Exists (Is_defined_in x)) (Branch caus blks) ->
-      FEnv.In (Var x) Hi.
+      FEnv.In x Hi.
   Proof.
     intros * Hsem Hdef; inv Hsem; inv Hdef.
     eapply Forall_sem_block_defined in H0; eauto.
@@ -1582,8 +1533,8 @@ Module Type LSEMANTICS
   Corollary sem_branch_defined1 {PSyn prefs} (G: @global PSyn prefs) :
     forall caus ec branches blks Hi bs Γ xs x,
       sem_branch (Forall (sem_block G Hi bs))
-        (fun x => Is_defined_in x (Bswitch ec branches))
-        (fun x => List.Exists (Is_defined_in x))
+        (fun x => Is_defined_in (Var x) (Bswitch ec branches))
+        (fun x => List.Exists (Is_defined_in (Var x)))
         Hi (Branch caus blks) ->
       VarsDefinedCompBranch (fun blks ys => exists xs, Forall2 VarsDefinedComp blks xs /\ Permutation (concat xs) ys) (Branch caus blks) xs ->
       NoDupBranch (Forall (NoDupLocals Γ)) (Branch caus blks) ->
@@ -1603,7 +1554,7 @@ Module Type LSEMANTICS
     forall caus (blks: (A * scope (_ * A))) Hi bs Γ xs x,
       sem_branch
         (fun blks =>
-           sem_scope (sem_exp G)
+           sem_scope
              (fun Hi blks => Forall (sem_block G Hi bs) (fst blks)) Hi bs (snd blks))
         must_def is_def Hi (Branch caus blks) ->
       VarsDefinedCompBranch
@@ -1761,6 +1712,8 @@ Module Type LSEMANTICS
     induction d using block_ind2; intros * Href Hsem; inv Hsem.
     - (* equation *)
       econstructor; eauto using sem_equation_refines.
+    - (* last *)
+      econstructor; eauto using sem_exp_refines, sem_var_refines.
     - (* reset *)
       econstructor; eauto using sem_exp_refines.
       intros k. specialize (H8 k).
@@ -1797,9 +1750,7 @@ Module Type LSEMANTICS
         take (_ ≡ _) and now rewrite <-it.
     - (* locals *)
       constructor.
-      inv H4. econstructor; [| |eauto]; eauto.
-      + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
-        eapply sem_exp_refines; [|eauto]; eauto using FEnv.union_refines1, EqStrel_Reflexive.
+      inv H4. econstructor; [|eauto]; eauto.
       + simpl_Forall. eapply H; eauto using FEnv.union_refines1, EqStrel_Reflexive.
   Qed.
 
@@ -1898,7 +1849,7 @@ Module Type LSEMANTICS
     Fact sem_block_sem_var : forall blk x Hi bs,
         Is_defined_in x blk ->
         sem_block G Hi bs blk ->
-        exists vs, sem_var Hi (Var x) vs.
+        exists vs, sem_var Hi x vs.
     Proof.
       intros * Hdef Hsem.
       eapply sem_block_defined in Hsem as (?&?); eauto.
@@ -2017,7 +1968,7 @@ Module Type LSEMANTICS
       econstructor; eauto using sem_exp_restrict.
   Qed.
 
-  Definition vars_of_locs (locs : list (ident * (type * clock * ident * option (exp * ident)))) :=
+  Definition vars_of_locs (locs : list (ident * (type * clock * ident * option ident))) :=
     vars_of_senv (senv_of_decls locs).
 
   Fact vars_of_locs_Var : forall locs x,
@@ -2044,8 +1995,8 @@ Module Type LSEMANTICS
       VarsDefinedCompScope P_vd (Scope locs blks) xs ->
       NoDupScope P_nd xs (Scope locs blks) ->
       wx_scope wx_block Γ (Scope locs blks) ->
-      sem_scope (sem_exp G) sem_block Hi bs (Scope locs blks) ->
-      sem_scope (sem_exp G) sem_block (restrict Hi Γ) bs (Scope locs blks).
+      sem_scope sem_block Hi bs (Scope locs blks) ->
+      sem_scope sem_block (restrict Hi Γ) bs (Scope locs blks).
   Proof.
     intros * Hp VD ND Hwx Hsem; inv VD; inv ND; inv Hwx; inv Hsem.
     assert (FEnv.Equiv (@EqSt _) (restrict (Hi + Hi') (Γ ++ senv_of_decls locs))
@@ -2057,17 +2008,15 @@ Module Type LSEMANTICS
       - replace (existsb _ _) with true; [constructor; reflexivity|].
         symmetry. rewrite existsb_exists. do 2 esplit; [|eapply equiv_decb_refl].
         apply FEnv.find_In in HHi'.
-        destruct x; [apply H3, vars_of_locs_Var in HHi'|apply H3, vars_of_locs_Last in HHi']; auto.
+        destruct x; [apply H8, vars_of_locs_Var in HHi'|apply H8, vars_of_locs_Last in HHi']; auto.
       - replace (existsb _ _) with false. constructor.
         symmetry. rewrite existsb_Forall, forallb_Forall. simpl_Forall.
         apply Bool.negb_true_iff, not_equiv_decb_equiv. intros Eq; inv Eq.
         apply FEnv.not_find_In in HHi'.
-        destruct x; [apply vars_of_locs_Var, H3 in H; eauto|apply vars_of_locs_Last, H3 in H; eauto].
+        destruct x; [apply vars_of_locs_Var, H8 in H; eauto|apply vars_of_locs_Last, H8 in H; eauto].
     }
     eapply Sscope with (Hi':=Hi'); eauto.
-    - simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
-      eapply sem_exp_morph, sem_exp_restrict; eauto; try reflexivity.
-    - eapply Hp in H7; eauto. now symmetry.
+    - eapply Hp in H9; eauto. now symmetry.
   Qed.
 
   Lemma sem_block_restrict {PSyn prefs} : forall (G: @global PSyn prefs) blk Γ xs H b,
@@ -2082,6 +2031,10 @@ Module Type LSEMANTICS
     - (* equation *)
       econstructor.
       eapply sem_equation_restrict; eauto.
+    - (* last *)
+      econstructor; eauto using sem_exp_restrict.
+      all:(eapply sem_var_restrict; eauto; try eapply vars_of_senv_Var; try eapply vars_of_senv_Last; eauto).
+      eauto using IsLast_IsVar.
     - (* reset *)
       econstructor; eauto using sem_exp_restrict.
       intros k; specialize (H12 k).
@@ -2161,11 +2114,63 @@ Module Type LSEMANTICS
       eapply NoDupLocals_incl; [|eauto]; take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
   Qed.
 
+  (** Moving out of local scope *)
+
+  Lemma sem_var_local_inv1 locs Γ Hi Hi': forall x vs,
+      (forall x, InMembers x locs -> ~In x (List.map fst Γ)) ->
+      dom Hi' (senv_of_decls locs) ->
+      IsVar Γ x ->
+      sem_var (Hi + Hi') (Var x) vs ->
+      sem_var Hi (Var x) vs.
+  Proof.
+    intros * Nd Dom IV V.
+    apply sem_var_union in V as [V|V]; auto.
+    exfalso. eapply Nd. 2:eapply IsVar_fst; eauto.
+    apply IsVar_senv_of_decls, Dom; eauto using sem_var_In.
+  Qed.
+
+  Lemma sem_var_local_inv2 locs Hi Hi': forall x vs,
+      dom Hi' (senv_of_decls locs) ->
+      InMembers x locs ->
+      sem_var (Hi + Hi') (Var x) vs ->
+      sem_var Hi' (Var x) vs.
+  Proof.
+    intros * Dom IV V.
+    apply sem_var_union' in V as [(Nin&V)|V]; auto.
+    exfalso. eapply Nin, Dom.
+    apply IsVar_senv_of_decls; auto.
+  Qed.
+
+  Lemma sem_last_local_inv1 locs Γ Hi Hi': forall x vs,
+      (forall x, InMembers x locs -> ~In x (List.map fst Γ)) ->
+      dom Hi' (senv_of_decls locs) ->
+      IsLast Γ x ->
+      sem_var (Hi + Hi') (Last x) vs ->
+      sem_var Hi (Last x) vs.
+  Proof.
+    intros * Nd Dom IV V. inv IV.
+    apply sem_var_union in V as [V|V]; auto.
+    exfalso. eapply Nd. 2:solve_In.
+    apply IsLast_senv_of_decls, Dom; eauto using sem_var_In.
+  Qed.
+
+  Lemma sem_last_local_inv2 locs (Γ: static_env) Hi Hi': forall x ty ck cx clx vs,
+      dom Hi' (senv_of_decls locs) ->
+      In (x, (ty, ck, cx, Some clx)) locs ->
+      sem_var (Hi + Hi') (Last x) vs ->
+      sem_var Hi' (Last x) vs.
+  Proof.
+    intros * Dom IV V.
+    apply sem_var_union' in V as [(Nin&V)|V]; auto.
+    exfalso. eapply Nin, Dom.
+    econstructor. solve_In. simpl. congruence.
+  Qed.
+
   (** dom and co *)
 
   Lemma local_hist_dom : forall Γ locs (H H' : FEnv.t (Stream svalue)),
       dom H Γ ->
-      dom H' (@senv_of_decls exp locs) ->
+      dom H' (senv_of_decls locs) ->
       dom (H + H') (Γ ++ senv_of_decls locs).
   Proof.
     intros * (D1&DL1) (D2&DL2).
@@ -2176,7 +2181,7 @@ Module Type LSEMANTICS
 
   Lemma local_hist_dom_ub : forall Γ locs (H H' : FEnv.t (Stream svalue)),
       dom_ub H Γ ->
-      dom H' (@senv_of_decls exp locs) ->
+      dom H' (senv_of_decls locs) ->
       dom_ub (H + H') (Γ ++ senv_of_decls locs).
   Proof.
     intros * (D1&DL1) (D2&DL2).
@@ -2187,7 +2192,7 @@ Module Type LSEMANTICS
 
   Lemma local_hist_dom_lb : forall Γ locs (H H' : FEnv.t (Stream svalue)),
       dom_lb H Γ ->
-      dom H' (@senv_of_decls exp locs) ->
+      dom H' (senv_of_decls locs) ->
       dom_lb (H + H') (Γ ++ senv_of_decls locs).
   Proof.
     intros * (D1&DL1) (D2&DL2).
@@ -2199,7 +2204,7 @@ Module Type LSEMANTICS
   Lemma local_hist_dom_ub_refines : forall Γ locs (H H': FEnv.t (Stream svalue)),
       (forall x, InMembers x locs -> ~IsVar Γ x) ->
       dom_ub H Γ ->
-      dom H' (@senv_of_decls exp locs) ->
+      dom H' (senv_of_decls locs) ->
       H ⊑ H + H'.
   Proof.
     intros * Hnd (D1&DL1) (D2&DL2) ?? Hfind.
@@ -2215,7 +2220,7 @@ Module Type LSEMANTICS
   Corollary local_hist_dom_refines : forall Γ locs (H H': FEnv.t (Stream svalue)),
       (forall x, InMembers x locs -> ~IsVar Γ x) ->
       dom H Γ ->
-      dom H' (@senv_of_decls exp locs) ->
+      dom H' (senv_of_decls locs) ->
       H ⊑ H + H'.
   Proof.
   Proof.
@@ -2608,6 +2613,8 @@ Module Type LSEMANTICS
         inv Hsem.
       - (* equation *)
         constructor; eauto using sem_ref_sem_equation.
+      - (* last *)
+        econstructor; eauto using sem_ref_sem_exp.
       - (* reset *)
         econstructor; eauto using sem_ref_sem_exp.
         intros k. specialize (H8 k).
@@ -2622,7 +2629,6 @@ Module Type LSEMANTICS
         simpl_Forall. specialize (H11 k); destruct_conjs.
         do 2 esplit; eauto.
         inv_branch'; inv_scope'; do 2 (econstructor; eauto).
-        + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto using sem_ref_sem_exp.
         + destruct_conjs. split; simpl_Forall; eauto using sem_ref_sem_transitions.
       - (* automaton (strong) *)
         econstructor; eauto.
@@ -2631,11 +2637,9 @@ Module Type LSEMANTICS
         + simpl_Forall. specialize (H11 k); destruct_conjs.
           do 2 esplit; eauto.
           inv_branch'; inv_scope'; do 2 (econstructor; eauto).
-          * simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto using sem_ref_sem_exp.
           * destruct_conjs. simpl_Forall; eauto.
       - (* local *)
         constructor. inv_scope'; econstructor; eauto.
-        + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto using sem_ref_sem_exp.
         + simpl_Forall; eauto.
     Qed.
 

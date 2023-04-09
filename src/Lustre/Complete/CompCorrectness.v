@@ -60,7 +60,7 @@ Module Type COMPCORRECTNESS
 
     - (* switch *)
       simpl_Exists. destruct b. simpl in *. Syn.inv_branch.
-      apply Exists_app' in H2 as [Ex|Ex].
+      apply Exists_app' in H1 as [Ex|Ex].
       + simpl_Exists. inv Ex. simpl in *. take (_ \/ _) and destruct it as [Eq|Eq]; inv Eq.
         apply In_PS_elements, PS.diff_spec in Hin0 as (In&_).
         apply vars_defined_Is_defined_in with (blk:=Bswitch ec _) in In.
@@ -69,7 +69,7 @@ Module Type COMPCORRECTNESS
 
     - (* automaton *)
       simpl_Exists. destruct b as [?(?&[?(?&?)])]. Syn.inv_branch. Syn.inv_scope.
-      apply Exists_app' in H3 as [Ex|Ex].
+      apply Exists_app' in H4 as [Ex|Ex].
       + simpl_Exists. inv Ex. simpl in *. take (_ \/ _) and destruct it as [Eq|Eq]; inv Eq.
         apply In_PS_elements, PS.diff_spec in Hin0 as (In&_).
         apply vars_defined_Is_defined_in with (blk:=Bauto type ck (l, e0) _) in In.
@@ -98,6 +98,9 @@ Module Type COMPCORRECTNESS
       - (* equation *)
         constructor; eauto using sem_ref_sem_equation.
 
+      - (* last *)
+        econstructor; eauto using sem_ref_sem_exp.
+
       - (* reset *)
         econstructor; eauto using sem_ref_sem_exp.
         intros k. specialize (H10 k). simpl_Forall; eauto.
@@ -121,9 +124,7 @@ Module Type COMPCORRECTNESS
         econstructor; eauto using sem_ref_sem_transitions.
         simpl_Forall. specialize (H16 k). destruct_conjs.
         do 2 esplit; eauto. repeat inv_branch. repeat inv_scope. subst Γ'.
-        constructor. econstructor; eauto. 2:simpl; split; [apply Forall_app; split; simpl_Forall; eauto|].
-        + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it.
-          1,2:econstructor; eauto using sem_ref_sem_exp.
+        constructor. econstructor; eauto. simpl; split; [apply Forall_app; split; simpl_Forall; eauto|].
         + apply In_PS_elements, PS.diff_spec in H18 as (In&nIn).
           apply vars_defined_Is_defined_in with (blk:=Bauto Weak ck (ini0, oth) _) in In.
           rewrite PS.filter_spec, map_vars_defined_spec, Bool.negb_true_iff, mem_assoc_ident_false_iff in nIn.
@@ -131,11 +132,11 @@ Module Type COMPCORRECTNESS
           edestruct H17 as (?&V&L); eauto.
           1:{ contradict nIn. inv nIn. auto. }
           assert (~InMembers x0 locs) as nInM.
-          { intros InM. eapply H11; eauto.
-            eapply fst_InMembers, Is_defined_in_wx_In; eauto. }
+          { intros InM. eapply H11, fst_InMembers; eauto.
+            eapply Is_defined_in_wx_In in In; eauto. }
           do 2 econstructor. 1,2:simpl; repeat (constructor; eauto).
           1,2:eapply sem_var_union2; [eauto|].
-          1,2:contradict nInM; apply H20 in nInM; clear - nInM; inv nInM; solve_In.
+          1,2:contradict nInM; apply H21 in nInM; clear - nInM; inv nInM; solve_In.
         + eapply H with (Γ:=Γ++senv_of_decls locs); eauto.
           * now rewrite map_app, map_fst_senv_of_decls.
         + eauto using sem_ref_sem_transitions.
@@ -158,9 +159,7 @@ Module Type COMPCORRECTNESS
         }
         simpl_Forall. specialize (H16 k). destruct_conjs.
         do 2 esplit; eauto. repeat inv_branch. repeat inv_scope. subst Γ'.
-        constructor. econstructor; eauto. 2:apply Forall_app; split; simpl_Forall; eauto.
-        + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it.
-          1,2:econstructor; eauto using sem_ref_sem_exp.
+        constructor. econstructor; eauto. apply Forall_app; split; simpl_Forall; eauto.
         + apply In_PS_elements, PS.diff_spec in H11 as (In&nIn).
           apply vars_defined_Is_defined_in with (blk:=Bauto Strong ck ([], oth) _) in In.
           rewrite PS.filter_spec, map_vars_defined_spec, Bool.negb_true_iff, mem_assoc_ident_false_iff in nIn.
@@ -168,11 +167,11 @@ Module Type COMPCORRECTNESS
           edestruct H16 as (?&V&L); eauto.
           1:{ contradict nIn. inv nIn. auto. }
           assert (~InMembers x0 locs) as nInM.
-          { intros InM. eapply H10; eauto.
-            eapply fst_InMembers, Is_defined_in_wx_In; eauto. }
+          { intros InM. eapply H10, fst_InMembers; eauto.
+            eapply Is_defined_in_wx_In in In; eauto. }
           do 2 econstructor. 1,2:simpl; repeat (constructor; eauto).
           1,2:eapply sem_var_union2; [eauto|].
-          1,2:contradict nInM; apply H19 in nInM; clear - nInM; inv nInM; solve_In.
+          1,2:contradict nInM; apply H20 in nInM; clear - nInM; inv nInM; solve_In.
         + eapply H with (Γ:=Γ++senv_of_decls locs); eauto.
           * now rewrite map_app, map_fst_senv_of_decls.
         + intros * Def NDef.
@@ -184,8 +183,6 @@ Module Type COMPCORRECTNESS
       - (* local *)
         repeat inv_scope.
         do 2 econstructor; eauto.
-        + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it.
-          1,2:econstructor; eauto using sem_ref_sem_exp.
         + simpl_Forall.
           eapply H with (Γ:=Γ++senv_of_decls locs); eauto.
           * now rewrite map_app, map_fst_senv_of_decls.
@@ -203,13 +200,14 @@ Module Type COMPCORRECTNESS
       inv Hsem; rename H0 into Hfind; simpl in Hfind. destruct (ident_eq_dec (n_name n) f).
       - erewrite find_node_now in Hfind; eauto. inv Hfind.
         (*The semantics of equations can be given according to G only *)
-        eapply sem_node_cons1' in H4 as (Blk&Lasts); eauto. clear H3.
-        2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        assert (~Is_node_in_block (n_name n0) (n_block n0)) as Blk.
+        { inv Hord1. destruct H5 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        eapply sem_block_cons1 in Blk; eauto. clear H3.
 
         replace {| types := types G1; nodes := nodes G1 |} with G1 in * by (destruct G1; auto).
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
 
-        inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc. inversion_clear Hwc as [?? _ _ _ Wc]. subst Γ.
+        inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc. inversion_clear Hwc as [? _ _ Wc].
 
         eapply complete_block_sem with (Hi:=H) in Blk;
           eauto using node_NoDupLocals with lclocking.
@@ -217,21 +215,15 @@ Module Type COMPCORRECTNESS
         + erewrite find_node_now; eauto.
         + simpl_Forall. eauto.
         + simpl_Forall. eauto.
-        + simpl_Forall. inv Lasts; econstructor; eauto.
-          eapply sem_exp_cons2; eauto.
-          2:{ eapply find_node_not_Is_node_in in Hord2.
-            2:erewrite find_node_now; eauto. contradict Hord2. left. solve_Exists. }
-          replace {| types := types G2; externs := externs G2; nodes := nodes G2 |} with G2 by (destruct G2; auto);
-            eauto using sem_ref_sem_exp.
         + apply sem_block_cons2; simpl...
           2:{ eapply find_node_not_Is_node_in in Hord2.
-            2:erewrite find_node_now; eauto. contradict Hord2. now right. }
+            2:erewrite find_node_now; eauto. eapply Hord2. }
           destruct G2; eauto.
       - erewrite find_node_other in Hfind; eauto.
         eapply sem_node_cons2...
         destruct G2; apply Gref.
-        eapply sem_node_cons1' in H4 as (?&?); eauto using find_node_later_not_Is_node_in.
         destruct G1; econstructor...
+        eapply sem_block_cons1; eauto using find_node_later_not_Is_node_in.
     Qed.
 
   End complete_node_sem.

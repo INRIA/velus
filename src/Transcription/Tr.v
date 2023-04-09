@@ -334,7 +334,7 @@ Module Type TR
                  end = OK neqs }.
   Proof.
     destruct (L.n_block n); simpl.
-    1-4:right; exact (msg "node not normalized").
+    1-5:right; exact (msg "node not normalized").
     destruct s as [? l0].
     destruct (mmap (block_to_equation (Env.adds' (idfst (idfst l)) env) envo []) l0).
     left. simpl. eauto.

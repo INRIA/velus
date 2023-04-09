@@ -222,7 +222,7 @@ Module Type ILTYPING
           unfold rename_var. rewrite Find.
           eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
           left. right. right. right. solve_In.
-      + rewrite <-app_assoc in H16; auto.
+      + take (Forall (wt_block _ _) _) and rewrite <-app_assoc in it; auto.
   Qed.
 
   (** Used enum types are correct *)
@@ -252,8 +252,8 @@ Module Type ILTYPING
 
   (** Typing of the node *)
 
-  Fact senv_of_decls_senv_of_anns {A} : forall locs,
-      senv_of_decls (map (fun xtc => (fst xtc, (fst (snd xtc), snd (snd xtc), xH, @None (A * _)))) locs) = senv_of_anns locs.
+  Fact senv_of_decls_senv_of_anns : forall locs,
+      senv_of_decls (map (fun xtc => (fst xtc, (fst (snd xtc), snd (snd xtc), xH, @None _))) locs) = senv_of_anns locs.
   Proof.
     intros. unfold senv_of_decls, senv_of_anns.
     erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
@@ -282,7 +282,6 @@ Module Type ILTYPING
       unfold wt_clocks, idfst. simpl_Forall. simpl_In. simpl_Forall.
       rewrite senv_of_decls_senv_of_anns; eauto with ltyping.
     - eapply inlinelocal_block_wt_type in Il; eauto. simpl_Forall. eauto with ltyping.
-    - now simpl_Forall.
     - simpl_Forall. rewrite senv_of_decls_senv_of_anns. eauto with ltyping.
   Qed.
 

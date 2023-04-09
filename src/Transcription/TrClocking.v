@@ -363,7 +363,7 @@ Module Type TRCLOCKING
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto.
         assert (find_base_clock (L.clocksof l) = bck) as ->.
         { take (L.find_node _ _ = Some n) and apply LC.wc_find_node in it as (?&Wcn); eauto.
-          inversion_clear Wcn as [?? Wcin _ _ _]; subst Γ.
+          inversion_clear Wcn as [? Wcin _ _].
           apply find_base_clock_bck.
           - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
             rewrite map_length; exact (L.n_ingt0 n).
@@ -396,7 +396,7 @@ Module Type TRCLOCKING
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto.
         assert (find_base_clock (L.clocksof l) = bck) as ->.
         { take (L.find_node _ _ = Some n) and apply LC.wc_find_node in it as (?&Wcn); eauto.
-          inversion_clear Wcn as [?? Wcin _ _ _]; subst Γ.
+          inversion_clear Wcn as [? Wcin _ _].
           apply find_base_clock_bck.
           - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
             rewrite map_length; exact (L.n_ingt0 n).
@@ -449,16 +449,12 @@ Module Type TRCLOCKING
         NLC.wc_equation P (Senv.idck vars) e'.
     Proof.
       induction d using L.block_ind2; intros * Hg Htr Henvs Hxr Hwt Hwenv Hwc;
-        inv Hwt; inv Hwc; simpl in *.
+        inv Hwt; inv Hwc; simpl in *; try now inv Htr.
       - eapply wc_equation in Htr; eauto.
       - cases. apply Forall_singl in H. apply Forall_singl in H2. apply Forall_singl in H3.
         eapply H; eauto.
         constructor; auto.
         inv H7; inv H1. solve_In.
-      - inv Htr.
-      - inv Htr.
-      - inv Htr.
-      - inv Htr.
     Qed.
 
     Fact idsnd_idfst : forall (xs : list (_ * (type * clock * ident))),
@@ -478,12 +474,12 @@ Module Type TRCLOCKING
     Proof.
       intros * Htn Htg Hwt Hwc.
       tonodeInv Htn. unfold NLC.wc_node. simpl.
-      inversion_clear Hwc as [?? WCi WCo _ WCeq]; subst Γ.
-      inversion_clear Hwt as [?????? WT]; subst Γ.
+      inversion_clear Hwc as [? WCi WCo WCeq].
+      inversion_clear Hwt as [????? WT]; subst Γ.
       pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
-      rewrite <-H3 in *; symmetry in H3; rename H3 into Hblk.
+      rewrite <-H2 in *; symmetry in H2; rename H2 into Hblk.
       eapply envs_eq_node in Hblk.
-      monadInv Hmmap. inv WCeq; inv H7. inv WT; inv H7. subst Γ' Γ'0.
+      monadInv Hmmap. inv WCeq; inv H6. inv WT; inv H6. subst Γ' Γ'0.
       repeat split.
       - unfold idsnd, idfst. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
       - unfold idsnd, idfst. erewrite map_app, 3 map_map, map_ext, map_ext with (l:=L.n_out _); eauto. 1,2:unfold L.decl; intros; destruct_conjs; auto.
@@ -497,8 +493,8 @@ Module Type TRCLOCKING
           1-3:unfold L.decl; intros; destruct_conjs; auto.
       - eapply mmap_inversion in EQ.
         induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; eauto.
-        eapply wc_block_to_equation in H11; eauto.
-        + clear - H11. simpl_app.
+        eapply wc_block_to_equation in H10; eauto.
+        + clear - H10. simpl_app.
           repeat rewrite map_map in *.
           erewrite (Permutation_app_comm (map _ l)), map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _); eauto.
           1-3:unfold L.decl; intros; destruct_conjs; auto.

@@ -458,6 +458,55 @@ Module Type INLINELOCAL
         eapply H12; eauto with datatypes.
   Qed.
 
+  (** *** LastsDefined *)
+
+  Fact mmap_lasts_perm : forall (f : Env.t ident -> block -> Reuse (list (ident * ann) * list block)) blks sub locs' blks' xs st st',
+      Forall
+        (fun blk : block =>
+           forall sub locs' blks' xs st st',
+             noswitch_block blk ->
+             LastsDefined blk xs ->
+             f sub blk st = (locs', blks', st') ->
+             exists ys : list (list ident), Forall2 LastsDefined blks' ys /\ Permutation (concat ys) xs) blks ->
+      Forall noswitch_block blks ->
+      Forall2 LastsDefined blks xs ->
+      mmap2 (f sub) blks st = (locs', blks', st') ->
+      exists ys, Forall2 LastsDefined (concat blks') ys /\ Permutation (concat ys) (concat xs).
+  Proof.
+    induction blks; intros * Hf Hns Hvars Hnorm; inv Hf; inv Hns; inv Hvars; repeat monadInv; simpl.
+    - exists []. split; auto.
+    - eapply H1 in H5 as (ys1&Hvars1&Hperm1); eauto.
+      eapply IHblks in H2 as (ys2&Hvars2&Hperm2); eauto. clear IHblks.
+      exists (ys1 ++ ys2). split.
+      + apply Forall2_app; auto.
+      + rewrite concat_app, Hperm1, Hperm2. solve_Permutation_app.
+  Qed.
+
+  Lemma inlinelocal_block_lasts_perm : forall blk sub locs' blks' xs st st',
+      noswitch_block blk ->
+      LastsDefined blk xs ->
+      inlinelocal_block sub blk st = (locs', blks', st') ->
+      exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) xs.
+  Proof.
+    induction blk using block_ind2; intros * Hns Hvars Hdl;
+      inv Hns; inv Hvars; repeat monadInv.
+    - (* equation *)
+      destruct eq.
+      repeat esplit; simpl; eauto using LastsDefined with datatypes.
+    - (* reset *)
+      eapply mmap_lasts_perm in H0 as (?&L'&Perm); eauto.
+      do 2 esplit.
+      + repeat constructor; eauto.
+      + simpl. now rewrite app_nil_r.
+    - (* local *)
+      repeat inv_scope. take (Permutation _ _) and rename it into Hperm.
+      eapply mmap_lasts_perm in H4 as (ys1&Hvars1&Hperm1); eauto.
+      do 2 esplit; eauto.
+      rewrite Hperm1, Hperm.
+      unfold lasts_of_decls. rewrite map_filter_nil, app_nil_r; auto.
+      simpl_Forall; subst; auto.
+  Qed.
+
   (** *** st_valid *)
 
   Lemma reuse_ident_st_valid : forall x y st st',
@@ -962,6 +1011,15 @@ Module Type INLINELOCAL
     do 4 econstructor; eauto.
     rewrite Hperm', <-Hperm. apply Permutation_app_head.
     now rewrite map_map.
+  Qed.
+  Next Obligation.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 _].
+    pose proof (n_lastd n) as (?&Last&Perm).
+    destruct (inlinelocal_block _ _) as ((?&?)&st') eqn:Hdl. simpl.
+    eapply inlinelocal_block_lasts_perm in Hdl as (?&Last1&Perm1); eauto.
+    do 2 esplit; eauto. do 4 econstructor; eauto.
+    unfold lasts_of_decls. rewrite map_filter_nil; [rewrite app_nil_r; auto|].
+    simpl_Forall. auto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).

@@ -66,8 +66,7 @@ Module Type LORDERED
 
   Inductive Is_node_in_scope {A} (P_in : A -> Prop) (f : ident) : scope A -> Prop :=
   | INScope : forall locs blks,
-      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
-      \/ P_in blks ->
+      P_in blks ->
       Is_node_in_scope P_in f (Scope locs blks).
 
   Inductive Is_node_in_branch {A} (P_in : A -> Prop) : branch A -> Prop :=
@@ -79,6 +78,9 @@ Module Type LORDERED
   | INBeq: forall eq,
       Is_node_in_eq f eq ->
       Is_node_in_block f (Beq eq)
+  | INBlast: forall x e,
+      Is_node_in_exp f e ->
+      Is_node_in_block f (Blast x e)
   | INBreset : forall blocks er,
       Exists (Is_node_in_block f) blocks \/ Is_node_in_exp f er ->
       Is_node_in_block f (Breset blocks er)
@@ -101,8 +103,7 @@ Module Type LORDERED
       Is_node_in_block f (Blocal scope).
 
   Definition Is_node_in {PSyn prefs} (f: ident) (nd : @node PSyn prefs) :=
-      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) nd.(n_out)
-      \/ Is_node_in_block f nd.(n_block).
+    Is_node_in_block f nd.(n_block).
 
   Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
     Ordered_program Is_node_in.
@@ -205,11 +206,8 @@ Module Type LORDERED
       Is_node_in f n ->
       In f (map n_name (nodes G)).
   Proof.
-    intros * Hwl Hisin. inv Hwl. destruct Hisin.
-    - simpl_Exists. simpl_Forall.
-      destruct o as [(?&?)|]; simpl in *; destruct_conjs; try now exfalso.
-      eapply wl_exp_Is_node_in_exp; eauto.
-    - eapply wl_block_Is_node_in_block; eauto.
+    intros * Hwl Hisin. inv Hwl.
+    eapply wl_block_Is_node_in_block; eauto.
   Qed.
 
   Lemma wl_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),

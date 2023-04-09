@@ -307,12 +307,11 @@ Module Type ILCLOCKING
       wc_node G2 (inlinelocal_node n).
   Proof.
     unfold inlinelocal_node; simpl.
-    intros * Hiface Hwc. inversion_clear Hwc as [?? Wc1 Wc2 Wc3 Wc4]; subst Γ.
+    intros * Hiface Hwc. inversion_clear Hwc as [?? Wc1 Wc2 Wc3].
     pose proof (n_nodup n) as (_&Hnd2).
     pose proof (n_good n) as (_&Hgood&_).
     pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2].
     econstructor; simpl; eauto.
-    1:{ simpl_Forall. subst. auto. }
     destruct (inlinelocal_block _ _ _) as ((?&?)&?) eqn:Hdl.
     repeat split; auto.
     assert (Hinl:=Hdl). eapply inlinelocal_block_wc
@@ -320,7 +319,6 @@ Module Type ILCLOCKING
     - repeat econstructor; simpl; eauto.
       + simpl_Forall. simpl_app. repeat rewrite map_map in *.
         erewrite map_ext with (l:=l); eauto. intros; destruct_conjs; auto.
-      + simpl_Forall. auto.
       + simpl_Forall. simpl_app. repeat rewrite map_map in *.
         erewrite map_ext with (l:=l); eauto using iface_incl_wc_block. intros; destruct_conjs; auto.
     - apply NoLast_app; split; auto using senv_of_ins_NoLast.

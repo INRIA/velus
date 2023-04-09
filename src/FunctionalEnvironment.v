@@ -778,6 +778,16 @@ Delimit Scope fenv_scope with fenv.
 
 Inductive var_last : Type := Var (x : ident) | Last (x : ident).
 
+Lemma var_last_is_ident : forall (y : var_last),
+    exists x, y = Var x \/ y = Last x.
+Proof. intros []; eauto. Qed.
+
+Definition var_last_ident (x : var_last) :=
+  match x with
+  | Var x
+  | Last x => x
+  end.
+
 Global Program Instance var_eq_dec : EqDec var_last eq.
 Next Obligation.
   destruct x, y.

@@ -1411,21 +1411,23 @@ Module Type NCLOCKING
         unnest_block G1 d st = (blocks', st') ->
         Forall (wc_block G2 (vars++st_senv st')) blocks'.
     Proof.
-      induction d using block_ind2; intros * Hnl Hwc Hun; inv Hwc;
-        repeat inv_bind.
+      induction d using block_ind2; intros * Hnl Hwc Hun;
+        repeat inv_bind; eauto using iface_incl_wc_block.
       - (* equation *)
+        inv Hwc.
         eapply unnest_equation_wc_eq in H; eauto.
         rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
         constructor; auto.
       - (* reset *)
+        inv Hwc.
         assert (st_follows x0 st') as Hfollows by (repeat solve_st_follows).
         eapply unnest_reset_wc with (vars:=vars) in H1 as (Hck1&Hwc1&Hwc1'); eauto.
-        2:{ intros. eapply unnest_exp_wc in H6; eauto; repeat solve_incl. }
+        2:{ intros. eapply unnest_exp_wc in H3; eauto; repeat solve_incl. }
         2:repeat solve_incl.
         apply Forall_app; split.
-        + clear - Hnl H H2 H0 H5 Hck1 Hwc1 Hfollows.
-          revert st x x0 Hfollows H H0 H2 H5.
-          induction blocks; intros * Hfollows Hf Hmap Hwc Hwc2; repeat inv_bind; simpl; auto;
+        + clear - Hnl H H0 H4 Hck1 Hwc1 Hfollows.
+          revert st x x0 Hfollows H H0 H4.
+          induction blocks; intros * Hfollows Hf Hmap Hwc; repeat inv_bind; simpl; auto;
             inv Hf; inv Hwc.
           rewrite map_app, Forall_app; split.
           * eapply H3 in H; eauto.
@@ -1435,15 +1437,6 @@ Module Type NCLOCKING
           * eapply IHblocks; eauto.
             clear - H6 H. solve_forall. repeat solve_incl.
         + simpl_Forall. constructor; auto.
-      - (* switch *)
-        constructor; auto.
-        eapply iface_incl_wc_block; eauto. econstructor; eauto.
-      - (* automaton *)
-        constructor; eauto.
-        eapply iface_incl_wc_block; eauto. econstructor; eauto.
-      - (* locals *)
-        constructor; eauto.
-        eapply iface_incl_wc_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_wc : forall vars blocks blocks' st st',
@@ -1833,16 +1826,15 @@ Module Type NCLOCKING
         wc_node G1 n ->
         wc_node G2 (unnest_node G1 n).
     Proof with eauto.
-      intros * Wc. inversion_clear Wc as [??? Hin Hout Hblk]; subst Γ.
+      intros * Wc. inversion_clear Wc as [? Hin Hout Hblk].
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H in *. inv Hblk.
       repeat constructor; simpl; auto.
-      1:{ simpl_Forall. subst. auto. }
       assert (forall x, ~ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) x) as Hnl.
       { repeat rewrite NoLast_app; repeat split; auto using senv_of_ins_NoLast.
         - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
         - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. }
-      inv_scope; subst Γ'. rewrite <- H0. do 2 econstructor; eauto.
+      inv_scope; subst Γ'. rewrite <- H. do 2 econstructor; eauto.
       - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply unnest_blocks_wc_env in Heqres as Henv'...
         2,3:unfold st_senv; rewrite init_st_anns, app_nil_r. 3:eauto.
@@ -1853,14 +1845,13 @@ Module Type NCLOCKING
           1,2:repeat rewrite map_map. 2:erewrite map_ext with (l:=st_anns _). 1,2:eapply incl_appr', incl_appr'. apply incl_appl, incl_refl. apply incl_refl.
           intros; destruct_conjs; auto.
         + unfold wc_env in *. simpl_app.
-          repeat rewrite Forall_app in *. destruct Hin as (?&?).
+          repeat rewrite Forall_app in *.
           repeat split; simpl_Forall.
           1-3:eapply wc_clock_incl; [|eauto]. 3:reflexivity.
           1,2:repeat rewrite map_map. erewrite map_ext. eapply incl_appl, incl_refl.
           2:erewrite map_ext, map_ext with (l:=n_out n). 2:eapply incl_appr', incl_appl, incl_refl.
           all:unfold decl; intros; destruct_conjs; auto.
         + now rewrite app_assoc.
-      - apply Forall_app; split; simpl_Forall; subst; auto.
       - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply unnest_blocks_wc in Heqres as Hwc'...
         2:unfold st_senv; rewrite init_st_anns, app_nil_r; now rewrite app_assoc.
@@ -2107,7 +2098,7 @@ Module Type NCLOCKING
         Forall (wc_block G2 (vars++st_senv st')) blocks' /\ wc_env (idck (vars++st_senv st')).
     Proof.
       induction d using block_ind2; intros * Hunt Henv Hwc Hfby;
-        unfold normfby_blocks in *; repeat inv_bind; simpl; auto.
+        unfold normfby_blocks in *; repeat inv_bind; simpl; eauto using iface_incl_wc_block.
       - (* equation *)
         inv Hunt. inv Hwc.
         eapply normfby_equation_wc in H as (?&?); eauto.
@@ -2125,9 +2116,6 @@ Module Type NCLOCKING
         eapply iface_incl_wc_exp; eauto.
         repeat solve_incl.
         1,2:eapply normfby_block_st_follows; eauto.
-      - split; auto. constructor; eauto using iface_incl_wc_block.
-      - split; auto. constructor; eauto using iface_incl_wc_block.
-      - split; auto. constructor; eauto using iface_incl_wc_block.
     Qed.
 
     Corollary normfby_blocks_wc : forall vars to_cut blocks blocks' st st' ,
@@ -2154,27 +2142,22 @@ Module Type NCLOCKING
         wc_node G1 n ->
         wc_node G2 (normfby_node n).
     Proof.
-      intros * Hun Wc. inversion_clear Wc as [??? Hin Hout Hblk]; subst Γ.
+      intros * Hun Wc. inversion_clear Wc as [? Hin Hout Hblk].
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H in *. inv Hblk.
       repeat constructor; simpl; auto.
-      1:{ simpl_Forall. subst. auto. }
-      (* assert (forall x, ~ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) x) as Hnl. *)
-      (* { repeat rewrite NoLast_app; repeat split; auto using senv_of_ins_NoLast. *)
-      (*   - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. *)
-      (*   - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. } *)
-      inv_scope; subst Γ'. rewrite <- H0.
+      inv_scope; subst Γ'. rewrite <- H.
       destruct (normfby_blocks _ _ _) as (eqs'&st') eqn:Heqres.
       eapply normfby_blocks_wc in Heqres as (Hres1&Henv')...
       3,4:unfold st_senv; rewrite init_st_anns, app_nil_r. 4:eauto.
       3:{ unfold wc_env in *. simpl_app.
-          repeat rewrite Forall_app in *. destruct Hin as (?&?).
+          repeat rewrite Forall_app in *.
           repeat split; simpl_Forall.
           1-3:eapply wc_clock_incl; [|eauto]. 3:reflexivity.
           1,2:repeat rewrite map_map. erewrite map_ext. eapply incl_appl, incl_refl.
           2:erewrite map_ext, map_ext with (l:=n_out n). 2:eapply incl_appr', incl_appl, incl_refl.
           all:unfold decl; intros; destruct_conjs; auto. }
-      2:{ inv Hun. rewrite H3 in H0. now inv H0. }
+      2:{ inv Hun. rewrite H2 in H. now inv H. }
       do 2 econstructor; eauto.
       - simpl_app.
         unfold wc_env in Henv'.
@@ -2182,7 +2165,6 @@ Module Type NCLOCKING
         eapply Forall_app. split; simpl_Forall; simpl_app; solve_incl.
         1,2:repeat rewrite map_map. 2:erewrite map_ext with (l:=st_anns _). 1,2:eapply incl_appr', incl_appr'. apply incl_appl, incl_refl. apply incl_refl.
         intros; destruct_conjs; auto.
-      - apply Forall_app; split; simpl_Forall; subst; auto.
       - simpl_Forall.
         simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.

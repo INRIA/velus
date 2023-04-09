@@ -437,7 +437,7 @@ Module Type TRTYPING
         LT.wt_node G n ->
         NLT.wt_node P n'.
     Proof.
-      intros * Htr Hg Wtn. inversion_clear Wtn as [?? Wti Wto Wte _ Hwt]; subst Γ.
+      intros * Htr Hg Wtn. inversion_clear Wtn as [?? Wti Wto Wte Hwt]; subst Γ.
       tonodeInv Htr. unfold NLT.wt_node. simpl.
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
       pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 (?&Hvars&Hperm)]. inv Hsyn2.

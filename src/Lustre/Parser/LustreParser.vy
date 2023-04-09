@@ -79,7 +79,6 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.constant * LustreAst.astloc> constant
 %type<list LustreAst.expression> expression_list
 %type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
-%type<LustreAst.input_decls> input_decl
 %type<list Common.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
 %type<list LustreAst.type_name> type_names
@@ -88,8 +87,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.var_decls> var_decl
 %type<LustreAst.var_decls> var_decl_list
 %type<LustreAst.var_decls> local_decl
-%type<LustreAst.var_decls> local_decl_list oparameter_list
-%type<LustreAst.input_decls> parameter_list
+%type<LustreAst.var_decls> local_decl_list parameter_list
 %type<list Common.ident> pattern
 %type<LustreAst.equation> equation
 %type<LustreAst.block> block
@@ -436,15 +434,9 @@ clock:
    (e.g., "unsigned short int"), since we use the type names from
    stdint.h/Scade (e.g., "uint_16"). *)
 
-input_decl:
+var_decl:
 | ids=identifier_list loc=COLON ty=type_name clk=declared_clock
     { map (fun id => (id, (fst ty, clk, loc))) (rev ids) }
-
-var_decl:
-| vars=input_decl
-   { map (fun '(id, (ty, ck, loc)) => (id, (ty, ck, [], loc))) vars }
-| LAST id=VAR_NAME loc=COLON ty=type_name clk=declared_clock EQ e=expression
-   { [(fst id, (fst ty, clk, e, loc))] }
 
 var_decl_list:
 | vars=var_decl SEMICOLON
@@ -463,15 +455,9 @@ local_decl_list:
     { d ++ dl }
 
 parameter_list:
-| vars=input_decl
-    { vars }
-| vars_list=parameter_list SEMICOLON vars=input_decl
-    { vars_list ++ vars }
-
-oparameter_list:
 | vars=var_decl
     { vars }
-| vars_list=oparameter_list SEMICOLON vars=var_decl
+| vars_list=parameter_list SEMICOLON vars=var_decl
     { vars_list ++ vars }
 
 (* Semantic value is in reverse order. *)
@@ -537,8 +523,10 @@ auto_state_list:
 
 block:
 | eq=equation
-   { LustreAst.BEQ eq } 
-| RESET blks=blocks loc=EVERY er=expression
+   { LustreAst.BEQ eq }
+| loc=LAST id=VAR_NAME EQ e=expression
+   { LustreAst.BLAST (fst id) e loc }
+| loc=RESET blks=blocks EVERY er=expression
    { LustreAst.BRESET blks er loc }
 | loc=SWITCH ec=expression brs=switch_branch_list END
    { LustreAst.BSWITCH ec brs loc }
@@ -586,7 +574,7 @@ optbar:
 declaration:
 | is_node=node_or_function id=VAR_NAME
   LPAREN iparams=parameter_list RPAREN optsemicolon
-  RETURNS LPAREN oparams=oparameter_list RPAREN optsemicolon
+  RETURNS LPAREN oparams=parameter_list RPAREN optsemicolon
   locals=local_decl_list loc=LET blks=blocks TEL optsemicolon
     { LustreAst.NODE
         (fst id) (fst is_node) iparams oparams (LustreAst.BLOCAL locals blks loc) (snd is_node) }

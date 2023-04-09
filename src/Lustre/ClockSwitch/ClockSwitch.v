@@ -168,7 +168,7 @@ Module Type CLOCKSWITCH
       let locs := flat_map (fun '(_, _, nfrees, ndefs) => (map (fun '(_, x, (ty, ck)) => (x, (ty, ck, xH, None))) (nfrees++ndefs))) xs' in
       ret (Blocal (Scope (List.map (fun '(xc, (ty, ck)) => (xc, (ty, ck, xH, None))) xcs++locs) (mergeeqs++concat blks'++map Beq condeqs)))
 
-    | Bauto _ _ _ _ => ret blk
+    | _ => ret blk
     end.
 
   (** *** Some properties *)
@@ -449,7 +449,7 @@ Module Type CLOCKSWITCH
                         (map
                            (fun '(_, _, nfrees, ndefs) =>
                               map fst
-                                (map (fun '(_, x5, (ty, ck)) => (x5, (ty, ck, 1%positive, @None (exp * ident)))) (nfrees ++ ndefs))) x)))
+                                (map (fun '(_, x5, (ty, ck)) => (x5, (ty, ck, 1%positive, @None ident))) (nfrees ++ ndefs))) x)))
         as (vars'&Hdef''&Hperm').
       { clear - Hdef'. induction Hdef'; destruct_conjs; do 2 esplit; try constructor; eauto.
         instantiate (1:=(_,_)); simpl; eauto. simpl.
@@ -492,6 +492,48 @@ Module Type CLOCKSWITCH
         Transparent switch_scope.
   Qed.
 
+  (* LastsDefined *)
+
+  Lemma switch_block_LastsDefined : forall blk xs bck sub env blk' st st',
+      noauto_block blk ->
+      LastsDefined blk xs ->
+      switch_block env bck sub blk st = (blk', st') ->
+      LastsDefined blk' xs.
+  Proof.
+    induction blk using block_ind2; intros * NoAuto VD Switch; try destruct type0;
+      inv NoAuto; inv VD; destruct_conjs; repeat inv_bind.
+    - (* equation *) constructor.
+    - (* reset *)
+      constructor.
+      apply mmap_values, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H4; eauto. simpl_Forall; eauto.
+    - (* switch *)
+      cases. repeat inv_bind. cases. repeat inv_bind.
+      repeat constructor; simpl.
+      do 2 esplit. repeat apply Forall2_app.
+      + instantiate (1:=map (fun _ => []) l). simpl_Forall. constructor.
+      + eapply mmap2_values, Forall3_ignore12 in H4.
+        2:{ apply mmap_length in H2; auto. }
+        instantiate (1:=map (fun _ => []) (concat x3)).
+        simpl_Forall. take (In _ (concat _)) and apply in_concat in it as (?&?&?).
+        simpl_Forall. repeat inv_branch. repeat inv_bind.
+        take (In _ (_ ++ _)) and apply in_app_iff in it as [|]; simpl_In; [|constructor].
+        eapply mmap_values, Forall2_ignore1 in H1. simpl_Forall. eauto.
+      + instantiate (1:=map (fun _ => []) x0). simpl_Forall. constructor.
+      + rewrite 2 concat_app, 3 concat_map_nil; simpl.
+        unfold lasts_of_decls. rewrite map_filter_app, 2 map_filter_nil; auto.
+        1,2:simpl_Forall; auto.
+        simpl_In; auto.
+    - (* local *)
+      repeat inv_scope. repeat constructor.
+      do 2 esplit; eauto.
+      2:{ unfold lasts_of_decls in *. rewrite map_filter_map.
+          erewrite map_filter_ext; eauto.
+          intros; destruct_conjs; auto. }
+      apply mmap_values, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H2; eauto. simpl_Forall; eauto.
+  Qed.
+
   (** *** Preservation of st_follows *)
 
   Lemma cond_eq_st_follows : forall e tx bck xcs eqs' st st',
@@ -522,6 +564,7 @@ Module Type CLOCKSWITCH
     induction blk using block_ind2; intros * Hst;
       repeat inv_bind; simpl in *; auto.
     - (* equation *) reflexivity.
+    - (* last *) reflexivity.
     - (* reset *)
       eapply mmap_st_follows; eauto.
       eapply Forall_impl; [|eauto]; intros; eauto.
@@ -838,8 +881,8 @@ Module Type CLOCKSWITCH
     Opaque switch_scope.
     induction blk using block_ind2; intros * Hsub Hgood Hsw;
       inv Hgood; simpl in *; repeat inv_bind.
-    - (* equation *)
-      constructor.
+    - (* equation *) constructor.
+    - (* last *) constructor.
     - (* reset *)
       constructor.
       eapply mmap_values, Forall2_ignore1 in H0.
@@ -941,6 +984,12 @@ Module Type CLOCKSWITCH
     - rewrite <-Perm, map_app, map_fst_senv_of_decls. now solve_incl_app.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - rewrite <-Perm. eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    pose proof (n_lastd n) as (?&Last&Perm).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? Syn1 Syn2 _].
+    destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
+    do 2 esplit; eauto using switch_block_LastsDefined.
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.

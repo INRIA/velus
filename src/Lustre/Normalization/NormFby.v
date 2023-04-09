@@ -284,9 +284,9 @@ Module Type NORMFBY
   Proof.
     induction blk using block_ind2; intros * Hvars Hun; inv Hvars; repeat inv_bind.
     - exists (map fst x). split.
-      + rewrite Forall2_map_1, Forall2_map_2. apply Forall2_same.
-        eapply Forall_forall; intros. constructor.
+      + simpl_Forall. constructor.
       + eapply normfby_equation_vars_perm in H. now rewrite flat_map_concat_map in H.
+    - exists [[]]. repeat constructor; auto.
     - simpl in Hun. cases; repeat inv_bind.
       1-3,5-15:(exists [(concat xs0)]; simpl; rewrite app_nil_r; split; auto; repeat constructor; auto).
       inv H; inv H5. inv H3; inv H6.
@@ -315,6 +315,42 @@ Module Type NORMFBY
     intros * Hvars Hun. unfold normfby_blocks in Hun. repeat inv_bind.
     eapply mmap_vars_perm; [|eauto|eauto].
     solve_forall. eapply normfby_block_vars_perm; eauto.
+  Qed.
+
+  (** *** LastsDefined *)
+
+  Lemma normfby_block_lasts_perm : forall G blk blks' xs st st',
+      LastsDefined blk xs ->
+      normfby_block G blk st = (blks', st') ->
+      exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) xs.
+  Proof.
+    induction blk using block_ind2; intros * Hvars Hun; inv Hvars; repeat inv_bind.
+    - exists (map (fun _ => []) x). split.
+      + simpl_Forall. constructor.
+      + rewrite concat_map_nil. auto.
+    - exists [[x]]. repeat constructor; auto.
+    - simpl in Hun. cases; repeat inv_bind.
+      all:simpl_Forall; try now do 2 esplit; [repeat (constructor; eauto)|simpl; try rewrite app_nil_r; auto].
+      rewrite app_nil_r.
+      eapply H4 in H0 as (?&Last&Perm); eauto.
+      do 2 esplit.
+      + simpl_Forall. erewrite Forall2_map_2. instantiate (1:=x0). simpl_Forall.
+        repeat constructor; eauto.
+      + simpl. setoid_rewrite app_nil_r. now rewrite map_id.
+    - exists [[]]. repeat constructor; auto.
+    - exists [[]]. repeat constructor; auto.
+    - exists [xs]. repeat (constructor; auto).
+      simpl; rewrite app_nil_r; auto.
+  Qed.
+
+  Corollary normfby_blocks_lasts_perm : forall G blks blks' xs st st',
+      Forall2 LastsDefined blks xs ->
+      normfby_blocks G blks st = (blks', st') ->
+      exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) (concat xs).
+  Proof.
+    intros * Hvars Hun. unfold normfby_blocks in Hun. repeat inv_bind.
+    eapply mmap_lasts_perm; [|eauto|eauto].
+    solve_forall. eapply normfby_block_lasts_perm; eauto.
   Qed.
 
   (** *** Additional props *)
@@ -556,7 +592,9 @@ Module Type NORMFBY
   Proof.
     induction blk using block_ind2; intros * Hgood Hun; inv Hgood; repeat inv_bind.
     - (* equation *)
-      eapply Forall_map, Forall_forall; intros * Hin. constructor.
+      simpl_Forall. constructor.
+    - (* last *)
+      repeat constructor.
     - (* reset *)
       simpl in Hun. cases; repeat inv_bind; repeat (constructor; auto).
       apply Forall_singl in H. apply Forall_singl in H1.
@@ -729,9 +767,22 @@ Module Type NORMFBY
     rewrite map_map; reflexivity.
   Qed.
   Next Obligation.
+    pose proof (n_lastd n) as (?&Last&Perm).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? Syn1 Syn2 _].
+    inv Syn2. rewrite <-H in *. inv Last. inv_scope.
+    destruct (normfby_blocks _ _) as (blks'&st') eqn:Heqs.
+    do 2 esplit; [|eauto].
+    repeat constructor.
+    eapply normfby_blocks_lasts_perm in Heqs as (?&Last'&Perm'); eauto.
+    do 2 esplit; eauto.
+    rewrite Perm', H3.
+    unfold lasts_of_decls. rewrite map_filter_app, map_filter_nil with (xs:=map _ _), app_nil_r; auto.
+    simpl_Forall; auto.
+  Qed.
+  Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto.
+    destruct (n_block n) as [| | | | |[locs blks]] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. inv H1.
@@ -758,7 +809,7 @@ Module Type NORMFBY
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using Forall_AtomOrGensym_add.
-    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (n_block n) as [| | | | |[locs blks]] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     inv Hgood2. inv H0.
     do 2 constructor.

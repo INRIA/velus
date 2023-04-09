@@ -3,12 +3,9 @@
    Colaço, Pagano, and Pouzet, EMSOFT 2005 *)
 
 node chrono (stst, rst : bool) returns (disp_1, disp_2 : int);
-var last s : int = 0;
-    last m : int = 0;
-    last d1 : int = 0;
-    last d2 : int = 0;
-    run : bool;
+var s, m : int; run : bool;
 let
+  last s = 0; last m = 0;
   automaton
     initially CHRONO
     state CHRONO do
@@ -33,17 +30,15 @@ let
     until rst and not run then CHRONO
   end;
 
+  last disp_1 = 0; last disp_2 = 0;
   automaton
     initially TIME
     state TIME do
-      d1 = s;
-      d2 = m;
+      disp_1 = s;
+      disp_2 = m;
     until rst and run then LAP
 
     state LAP do
-      d1 = last d1;
-      d2 = last d2;
     until rst then TIME
   end;
-  (disp_1, disp_2) = (d1, d2);
 tel

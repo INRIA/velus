@@ -51,6 +51,9 @@ Module Type COMPCLOCKING
       - (* equation *)
         constructor; eauto with lclocking.
 
+      - (* last *)
+        econstructor; eauto with lclocking.
+
       - (* reset *)
         econstructor; eauto with lclocking.
         simpl_Forall. inv_VarsDefined.
@@ -156,14 +159,10 @@ Module Type COMPCLOCKING
         { intros * L. apply InclL. take (Permutation _ xs) and rewrite <-it. apply IsLast_app; auto. }
         assert (forall x, IsLast ysl x -> IsLast Γ x) as InclL2.
         { intros * L. apply InclL. take (Permutation _ xs) and rewrite <-it. apply IsLast_app; auto. }
-        econstructor; eauto. 3:split.
+        econstructor; eauto. 2:split.
         1:{ simpl_Forall. eapply wc_clock_incl; [|eauto].
             eapply HasClock_idck_incl. intros * Ck. rewrite HasClock_app in *.
             destruct Ck; eauto using map_filter_clo_HasClock1. }
-        1:{ simpl_Forall. destruct o as [(?&?)|]; simpl in *; destruct_conjs; auto. split; auto.
-            eapply wc_exp_incl; [| |eauto using iface_incl_wc_exp].
-            1,2:intros * In; rewrite HasClock_app in *||rewrite IsLast_app in *;
-            destruct In; eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1. }
         2:{ simpl_Forall. split; auto.
             eapply wc_exp_incl; [| |eauto using iface_incl_wc_exp].
             1,2:intros * In; rewrite HasClock_app in *||rewrite IsLast_app in *;
@@ -191,7 +190,7 @@ Module Type COMPCLOCKING
           { inv In. simpl_Exists. Syn.inv_branch.
             specialize (Wc' _ Hin). inv_branch. destruct s.
             take (Is_defined_in_scope _ _ _) and eapply wc_scope_Is_defined_in in it; eauto with senv.
-            intros. destruct_conjs. eapply Exists_Is_defined_in_wx_In; [|eauto].
+            intros. destruct_conjs. eapply Exists_Is_defined_in_wx_In in H24; eauto.
             simpl_Forall; eauto with lclocking.
           }
           inv V'. simpl_In. edestruct H11 as (Ck&Base); eauto with senv.
@@ -241,8 +240,6 @@ Module Type COMPCLOCKING
       - (* scope *)
         repeat (Syn.inv_scope || inv_scope). subst Γ'.
         do 2 econstructor; auto.
-        + simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
-          destruct_conjs; split; eauto with lclocking.
         + simpl_Forall. inv_VarsDefined.
           eapply H; eauto using NoDupScope_NoDupMembers.
           * intros * In. eapply IsVar_incl in In; [|eauto using incl_concat].
@@ -256,10 +253,9 @@ Module Type COMPCLOCKING
         wc_node G1 n ->
         wc_node G2 (complete_node n).
     Proof.
-      intros * Wc. inversion_clear Wc as [??? Wc1 Wc2 Wc3]. subst Γ.
+      intros * Wc. inversion_clear Wc as [??? Wc1 Wc2].
       pose proof (n_defd n) as (?&Vars&Perm).
       repeat econstructor; simpl; eauto.
-      - simpl_Forall. destruct o as [(?&?)|]; simpl in *; destruct_conjs; auto. split; eauto with lclocking.
       - eapply complete_block_wc; eauto using node_NoDupMembers, node_NoDupLocals.
         1,2:intros *; rewrite Perm, ?IsVar_app, ?IsLast_app; auto.
     Qed.

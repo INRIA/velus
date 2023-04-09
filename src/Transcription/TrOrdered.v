@@ -45,7 +45,7 @@ Module Type TRORDERED
   Proof.
     intros * Htr Hord.
     destruct n'. simpl in Hord.
-    tonodeInv Htr. cases. do 2 constructor. right.
+    tonodeInv Htr. cases. do 2 constructor.
     clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. revert dependent n_eqs.
     induction l1; intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.
@@ -100,7 +100,7 @@ Module Type TRORDERED
     constructor.
     - intros f Hin.
       assert (Lord.Is_node_in f x) as Hfin.
-      { right. eapply inin_l_nl; eauto. }
+      { eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.
       + assert (L.find_node f {| L.types := types; L.externs := externs; L.nodes := l |} = Some x0) as Hfind'.

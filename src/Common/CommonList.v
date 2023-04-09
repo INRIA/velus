@@ -1446,6 +1446,12 @@ Section ConcatMap.
         eapply IHl; eauto. lia.
   Qed.
 
+  Fact concat_map_nil : forall (l : list A),
+      @concat B (map (fun _ => []) l) = [].
+  Proof.
+    induction l; simpl; auto.
+  Qed.
+
   Fact concat_map_singl1 : forall (l : list A),
     (concat (map (fun x => [x]) l)) = l.
   Proof.

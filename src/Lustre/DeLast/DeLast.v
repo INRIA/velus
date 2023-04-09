@@ -100,33 +100,31 @@ Module Type DELAST
 
   Definition FreshAnn A := Fresh last A (type * clock).
 
-  Definition fresh_idents (lasts : list (ident * (type * clock * exp))) : FreshAnn _ :=
-    mmap (fun '(x, (ty, ck, e)) => do lx <- fresh_ident (Some x) (ty, ck);
-                                ret (x, lx, (ty, ck, e))) lasts.
+  Definition fresh_idents (lasts : list (ident * (type * clock))) : FreshAnn _ :=
+    mmap (fun '(x, (ty, ck)) => do lx <- fresh_ident (Some x) (ty, ck);
+                             ret (x, lx, (ty, ck))) lasts.
 
   Section delast_scope.
     Context {A : Type}.
     Variable f_delast : Env.t ident -> A -> FreshAnn A.
-    Variable f_add_eqs : list block -> A -> A.
 
     Definition delast_scope sub (s : scope A) : FreshAnn (scope A) :=
       let 'Scope locs blks := s in
-      let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) locs in
+      let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun _ => (x, (ty, ck))) o) locs in
       do lasts' <- fresh_idents lasts;
       let sub' := Env.adds' (map fst lasts') sub in
       do blks' <- f_delast sub' blks;
-      let fbyeqs :=
-        map (fun '(x, lx, (ty, ck, e)) =>
-               ([lx], [Efby [rename_in_exp sub' e]
-                            [Evar x (ty, ck)] [(ty, ck)]])) lasts' in
       ret (Scope (map (fun '(x, (ty, ck, cx, _)) => (x, (ty, ck, cx, None))) locs
-                      ++ map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, None))) lasts')
-                  (f_add_eqs (map Beq fbyeqs) blks')).
+                      ++ map (fun '(_, lx, (ty, ck)) => (lx, (ty, ck, xH, None))) lasts')
+                 blks').
   End delast_scope.
 
   Fixpoint delast_block sub (blk : block) : FreshAnn block :=
     match blk with
     | Beq eq => ret (Beq (rename_in_equation sub eq))
+    | Blast x e =>
+        let '(ty, ck) := List.hd (OpAux.bool_velus_type, Cbase) (annot e) in
+        ret (Beq ([rename_in_var sub x], [Efby [rename_in_exp sub e] [Evar x (ty, ck)] [(ty, ck)]]))
     | Breset blks er =>
         do blks' <- mmap (delast_block sub) blks;
         ret (Breset blks' (rename_in_exp sub er))
@@ -141,37 +139,30 @@ Module Type DELAST
                              do scope' <- delast_scope (fun sub '(blks, trans) =>
                                                         do blks' <- mmap (delast_block sub) blks;
                                                         ret (blks', map (fun '(e, k) => (rename_in_exp sub e, k)) trans))
-                                                     (fun eqs '(blks, trans) => (eqs++blks, trans))
                                                      sub scope;
                              ret (k, Branch [] (unl', scope'))) states;
         ret (Bauto type ck (map (fun '(e, k) => (rename_in_exp sub e, k)) ini, oth) states')
     | Blocal scope =>
-        do scope' <- delast_scope (fun sub => mmap (delast_block sub))
-                                 (fun eqs blks => eqs++blks) sub scope;
+        do scope' <- delast_scope (fun sub => mmap (delast_block sub)) sub scope;
         ret (Blocal scope')
     end.
 
   Definition delast_outs_and_block (outs : list decl) blk : FreshAnn block :=
-    let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) outs in
+    let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun _ => (x, (ty, ck))) o) outs in
     do lasts' <- fresh_idents lasts;
     let sub := Env.from_list (map fst lasts') in
     do blk' <- delast_block sub blk;
-    let fbyeqs :=
-      map (fun '(x, lx, (ty, ck, e)) =>
-             ([lx], [Efby [rename_in_exp sub e]
-                       [Evar x (ty, ck)] [(ty, ck)]])) lasts' in
     if is_nil lasts' then
       ret blk'
     else
-      ret (Blocal (Scope (map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, None))) lasts')
-                     (map Beq fbyeqs ++ [blk']))).
+      ret (Blocal (Scope (map (fun '(_, lx, (ty, ck)) => (lx, (ty, ck, xH, None))) lasts') [blk'])).
 
   (** ** Some properties *)
 
   Lemma fresh_idents_In : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
-      forall x ty ck e, In (x, (ty, ck, e)) lasts ->
-                   exists lx, In (x, lx, (ty, ck, e)) lasts'.
+      forall x ty ck, In (x, (ty, ck)) lasts ->
+                 exists lx, In (x, lx, (ty, ck)) lasts'.
   Proof.
     intros * Hfresh * Hin.
     apply mmap_values, Forall2_ignore2 in Hfresh. simpl_Forall.
@@ -180,8 +171,8 @@ Module Type DELAST
 
   Lemma fresh_idents_In' : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
-      forall x lx ty ck e, In (x, lx, (ty, ck, e)) lasts' ->
-                      In (x, (ty, ck, e)) lasts.
+      forall x lx ty ck, In (x, lx, (ty, ck)) lasts' ->
+                    In (x, (ty, ck)) lasts.
   Proof.
     intros * Hfresh * Hin.
     apply mmap_values, Forall2_ignore1 in Hfresh. simpl_Forall.
@@ -214,8 +205,8 @@ Module Type DELAST
   Lemma fresh_idents_In_rename sub : forall lasts lasts' st st',
       NoDupMembers lasts ->
       fresh_idents lasts st = (lasts', st') ->
-      forall x ty ck e, In (x, (ty, ck, e)) lasts ->
-                   In (x, (rename_in_var (Env.adds' (map fst lasts') sub) x), (ty, ck, e)) lasts'.
+      forall x ty ck, In (x, (ty, ck)) lasts ->
+                 In (x, (rename_in_var (Env.adds' (map fst lasts') sub) x), (ty, ck)) lasts'.
   Proof.
     intros * Hnd Hfresh * Hin.
     assert (Hf:=Hfresh). apply mmap_values, Forall2_ignore2 in Hf. simpl_Forall.
@@ -226,14 +217,30 @@ Module Type DELAST
   Lemma fresh_idents_In'_rename sub : forall lasts lasts' st st',
       NoDupMembers lasts ->
       fresh_idents lasts st = (lasts', st') ->
-      forall x lx ty ck e, In (x, lx, (ty, ck, e)) lasts' ->
-                      In (x, (ty, ck, e)) lasts /\ lx = rename_in_var (Env.adds' (map fst lasts') sub) x.
+      forall x lx ty ck, In (x, lx, (ty, ck)) lasts' ->
+                    In (x, (ty, ck)) lasts /\ lx = rename_in_var (Env.adds' (map fst lasts') sub) x.
   Proof.
     intros * Hnd Hfresh * Hin.
     assert (Hf:=Hfresh). apply mmap_values, Forall2_ignore1 in Hf. simpl_Forall.
     repeat inv_bind. split; eauto.
     unfold rename_in_var. erewrite Env.In_find_adds'. 1,3:simpl; eauto; solve_In.
     eapply fresh_idents_NoDupMembers; eauto.
+  Qed.
+
+  Import Permutation.
+
+  Lemma fresh_idents_Perm : forall lasts lasts' sub st st',
+      NoDupMembers lasts ->
+      fresh_idents lasts st = (lasts', st') ->
+      Permutation (map (fun '((_, lx), _) => lx) lasts')
+        (map (rename_in_var (Env.adds' (map fst lasts') sub)) (map fst lasts)).
+  Proof.
+    induction lasts as [|(?&?&?)]; intros * Nd Fr; inv Nd; repeat inv_bind; auto.
+    simpl.
+    rewrite IHlasts; eauto.
+    rewrite not_in_union_rename2.
+    2:{ intros InM. eapply fresh_idents_InMembers in InM; eauto. }
+    unfold rename_in_var. now rewrite Env.gss.
   Qed.
 
   (** ** State properties *)
@@ -247,8 +254,8 @@ Module Type DELAST
     simpl_Forall. repeat inv_bind; eauto with fresh.
   Qed.
 
-  Fact delast_scope_st_follows {A} f_dl f_add : forall sub locs (blks : A) s' st st',
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Fact delast_scope_st_follows {A} f_dl : forall sub locs (blks : A) s' st st',
+      delast_scope f_dl sub (Scope locs blks) st = (s', st') ->
       (forall sub blks' st st',
           f_dl sub blks st = (blks', st') ->
           st_follows st st') ->
@@ -264,6 +271,8 @@ Module Type DELAST
   Proof.
     Opaque delast_scope.
     induction blk using block_ind2; intros * Hdl; repeat inv_bind; try reflexivity.
+    - (* last *)
+      simpl in *. cases. now repeat inv_bind.
     - (* reset *)
       eapply mmap_st_follows; eauto.
       simpl_Forall; eauto.
@@ -290,104 +299,227 @@ Module Type DELAST
 
   (** *** VarsDefinedComp *)
 
-  Import Permutation.
+  (* Fact mmap_vars_perm : forall (f : (Env.t ident) -> block -> FreshAnn block) blks sub blks' xs st st', *)
+  (*     Forall *)
+  (*       (fun blk => forall sub blk' xs st st', *)
+  (*            VarsDefinedComp blk xs -> *)
+  (*            f sub blk st = (blk', st') -> *)
+  (*            VarsDefinedComp blk' xs) blks -> *)
+  (*     Forall2 VarsDefinedComp blks xs -> *)
+  (*     mmap (f sub) blks st = (blks', st') -> *)
+  (*     Forall2 VarsDefinedComp blks' xs. *)
+  (* Proof. *)
+  (*   induction blks; intros * Hf (* Hns *) Hvars (* Hnd *) Hnorm; *)
+  (*     inv Hf; inv Hvars; repeat inv_bind; simpl; constructor; eauto. *)
+  (* Qed. *)
 
-  Fact mmap_vars_perm : forall (f : (Env.t ident) -> block -> FreshAnn block) blks sub blks' xs st st',
-      Forall
-        (fun blk => forall sub blk' xs st st',
-             VarsDefinedComp blk xs ->
-             f sub blk st = (blk', st') ->
-             VarsDefinedComp blk' xs) blks ->
-      Forall2 VarsDefinedComp blks xs ->
-      mmap (f sub) blks st = (blks', st') ->
-      Forall2 VarsDefinedComp blks' xs.
-  Proof.
-    induction blks; intros * Hf (* Hns *) Hvars (* Hnd *) Hnorm;
-      inv Hf; inv Hvars; repeat inv_bind; simpl; constructor; eauto.
-  Qed.
-
-  Lemma delast_scope_vars_perm {A} P_vd f_dl f_add : forall locs (blks: A) sub s' xs st st',
+  Lemma delast_scope_vars_perm {A} P_vd P_ld P_nd f_dl : forall locs (blks: A) sub s' xs ls Γ st st',
       VarsDefinedCompScope P_vd (Scope locs blks) xs ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
-      (forall xs sub blks' st st',
+      LastsDefinedScope P_ld (Scope locs blks) ls ->
+      NoDupScope P_nd Γ (Scope locs blks) ->
+      incl ls Γ ->
+      delast_scope f_dl sub (Scope locs blks) st = (s', st') ->
+      (forall blks xs ys, Permutation xs ys -> P_vd blks xs -> P_vd blks ys) ->
+      (forall sub blks' xs ls Γ st st',
           P_vd blks xs ->
+          P_ld blks ls ->
+          P_nd Γ blks ->
+          incl ls Γ ->
           f_dl sub blks st = (blks', st') ->
-          P_vd blks' xs) ->
-      (forall xs1 xs2 blks1 blks2,
-          Forall2 VarsDefinedComp blks1 xs2 ->
-          P_vd blks2 xs1 ->
-          P_vd (f_add blks1 blks2) (xs1 ++ concat xs2)) ->
-      VarsDefinedCompScope P_vd s' xs.
+          exists ys, P_vd blks' ys /\ Permutation ys (xs ++ map (rename_in_var sub) ls)) ->
+      VarsDefinedCompScope P_vd s' (xs ++ map (rename_in_var sub) ls).
   Proof.
-    intros * Hvd Hdl Hind Hadd; inv Hvd. repeat inv_bind.
-    eapply Hind in H0; eauto.
-    econstructor; eauto using incl_nil'. rewrite map_app, app_assoc, map_map.
-    rewrite <-concat_map_singl1 with (l:=map _ (map _ x)).
-    eapply Hadd.
-    - simpl_Forall. constructor.
-    - erewrite map_map, map_ext; eauto.
-      intros; destruct_conjs; auto.
+    intros * Hvd Hld Hnd Hincl Hdl Hperm Hind; inv Hvd; inv Hld; inv Hnd; repeat inv_bind.
+    eapply Hind in H2 as (?&Vars&Perm); eauto using incl_app, incl_appl, incl_appr, lasts_of_decls_incl.
+    econstructor. eapply Hperm in Vars; eauto.
+    rewrite Perm. simpl_app.
+    apply Permutation_app_head.
+    erewrite Permutation_swap, 2 map_map, map_ext_in with (l:=ls), map_ext_in with (l:=locs).
+    apply Permutation_app_head, Permutation_app_head.
+    2:{ intros []; destruct_conjs; auto. }
+    2:{ intros * In. eapply not_in_union_rename2.
+        intros InM. eapply fresh_idents_InMembers in InM; eauto.
+        eapply H6; eauto. solve_In. }
+    eapply fresh_idents_Perm in H.
+    2:{ eapply NoDupMembers_map_filter; eauto.
+        intros; destruct_conjs. destruct o; simpl; auto. }
+    symmetry. erewrite map_ext with (l:=x), H. 2:intros; destruct_conjs; auto.
+    unfold lasts_of_decls. erewrite map_map_filter, map_filter_ext; eauto.
+    intros; destruct_conjs; auto. destruct o; simpl; auto.
   Qed.
 
-  Lemma delast_block_vars_perm : forall blk sub blk' xs st st',
+  Fact mmap_vars_perm : forall blks sub blks' xs ls Γ st st',
+      Forall
+        (fun blk => forall sub blk' xs ls Γ st st',
+             VarsDefinedComp blk xs ->
+             LastsDefined blk ls ->
+             NoDupLocals Γ blk ->
+             incl ls Γ ->
+             delast_block sub blk st = (blk', st') ->
+             exists ys, VarsDefinedComp blk' ys /\ Permutation ys (xs ++ map (rename_in_var sub) ls)) blks ->
+      Forall2 VarsDefinedComp blks xs ->
+      Forall2 LastsDefined blks ls ->
+      Forall (NoDupLocals Γ) blks ->
+      incl (concat ls) Γ ->
+      mmap (delast_block sub) blks st = (blks', st') ->
+      exists ys, Forall2 VarsDefinedComp blks' ys /\ Permutation (concat ys) (concat xs ++ map (rename_in_var sub) (concat ls)).
+  Proof.
+    induction blks; intros * Hf Hvd Hld Hnd Hincl Hnorm; inv Hf; inv Hvd; inv Hld; inv Hnd; repeat inv_bind; simpl.
+    - exists []. split; auto.
+    - eapply H1 in H as (ys1&Hvars1&Hperm1); eauto.
+      2:etransitivity; eauto; apply incl_appl, incl_refl.
+      eapply IHblks in H2 as (ys2&Hvars2&Hperm2); eauto. clear IHblks.
+      2:etransitivity; eauto; apply incl_appr, incl_refl.
+      exists (ys1::ys2). split; [constructor; auto|].
+      simpl. rewrite Hperm1, Hperm2. solve_Permutation_app.
+  Qed.
+
+  Lemma delast_block_vars_perm : forall blk sub blk' xs ls Γ st st',
       VarsDefinedComp blk xs ->
+      LastsDefined blk ls ->
+      NoDupLocals Γ blk ->
+      incl ls Γ ->
       delast_block sub blk st = (blk', st') ->
-      VarsDefinedComp blk' xs.
+      exists ys, VarsDefinedComp blk' ys /\ Permutation ys (xs ++ map (rename_in_var sub) ls).
   Proof.
     Opaque delast_scope.
-    induction blk using block_ind2; intros * Hvars Hdl;
-      inv Hvars; repeat inv_bind.
+    induction blk using block_ind2; intros * Hvars Hlast Hnd Hincl Hdl;
+      inv Hvars; inv Hlast; inv Hnd; repeat inv_bind.
     - (* equation *)
-      destruct eq. simpl. constructor.
+      rewrite app_nil_r.
+      destruct eq. simpl. do 2 esplit; eauto. constructor.
+    - (* last *)
+      simpl in *. cases. repeat inv_bind.
+      do 2 esplit; eauto. constructor.
     - (* reset *)
+      eapply mmap_vars_perm in H as (?&Vars&Perm); eauto.
+      do 2 esplit; eauto. constructor; auto.
+    - (* switch *)
+      rewrite app_nil_r. do 2 esplit; [|reflexivity].
       constructor.
-      eapply mmap_vars_perm in H0; eauto.
+      + apply mmap_values in H0. inv H0; congruence.
+      + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
+        repeat inv_branch. repeat inv_bind. repeat constructor; simpl; auto using incl_nil'.
+        eapply mmap_vars_perm in H as (?&Vars&Perm); eauto.
+        2:now eapply Forall2_map_2 with (f:=fun _ => []), Forall2_same.
+        2:{ rewrite concat_map_nil; auto using incl_nil'. }
+        rewrite concat_map_nil, app_nil_r in Perm.
+        do 2 esplit; eauto. etransitivity; eauto.
+    - (* automaton *)
+      rewrite app_nil_r. do 2 esplit; [|reflexivity].
+      simpl in *. cases. repeat inv_bind.
+      constructor.
+      + apply mmap_values in H0. inv H0; congruence.
+      + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
+        repeat inv_branch. repeat inv_bind. constructor; eauto using incl_nil'.
+        destruct s. eapply delast_scope_vars_perm in H2; eauto.
+        * now rewrite app_nil_r in H2.
+        * intros * Perm (?&?&?); eauto using Permutation_trans.
+        * intros * (?&?&Perm1) (?&?&Perm2) Nd Incl MMap. cases. repeat inv_bind.
+          eapply mmap_vars_perm in H8 as (?&Vars&Perm); eauto.
+          2:{ rewrite Perm2; auto. }
+          repeat (esplit; eauto).
+          now rewrite Perm1, Perm2.
+    - (* local *)
+      eapply delast_scope_vars_perm in H0; eauto using VarsDefinedComp.
+      + intros * Perm (?&?&?); eauto using Permutation_trans.
+      + intros * (?&?&Perm1) (?&?&Perm2) Nd Incl MMap.
+        eapply mmap_vars_perm in MMap as (?&Vars&Perm); eauto.
+        2:{ rewrite Perm2; auto. }
+        repeat (esplit; eauto).
+        now rewrite Perm1, Perm2.
+      Transparent delast_scope.
+  Qed.
+
+  Lemma delast_outs_and_block_vars_perm : forall outs blk blk' xs ls Γ st st',
+      VarsDefinedComp blk xs ->
+      LastsDefined blk ls ->
+      NoDupLocals Γ blk ->
+      incl ls Γ ->
+      NoDupMembers outs ->
+      Permutation ls (lasts_of_decls outs) ->
+      delast_outs_and_block outs blk st = (blk', st') ->
+      exists ys, VarsDefinedComp blk' ys /\ Permutation ys xs.
+  Proof.
+    unfold delast_outs_and_block.
+    intros * VD LD ND1 Incl ND2 Perm DL. repeat inv_bind.
+    cases_eqn Nil; repeat inv_bind.
+    - eapply delast_block_vars_perm in H0 as (?&Vars&Perm1); eauto.
+      do 2 esplit; eauto. rewrite Perm1, Perm.
+      unfold lasts_of_decls. rewrite map_filter_nil, app_nil_r; auto.
+      simpl_Forall.
+      destruct o; simpl; auto. exfalso.
+      eapply fresh_idents_In in H as (?&In). 2:solve_In; simpl; auto.
+      apply is_nil_spec in Nil; subst. inv In.
+    - eapply delast_block_vars_perm in H0 as (?&Vars&Perm1); eauto.
+      do 2 esplit; eauto.
+      repeat (econstructor; eauto). simpl. rewrite app_nil_r.
+      eapply fresh_idents_Perm in H.
+      2:{ eapply NoDupMembers_map_filter; eauto.
+          intros; destruct_conjs. destruct o; simpl; auto. }
+      rewrite Perm1. apply Permutation_app_head.
+      symmetry. erewrite map_map, map_ext, H. 2:intros; destruct_conjs; auto.
+      rewrite Perm. unfold lasts_of_decls.
+      unfold Env.from_list. erewrite map_map_filter, map_filter_ext; eauto.
+      intros; destruct_conjs. destruct o; simpl; auto.
+  Qed.
+
+  (** *** No more LastsDefined ! *)
+
+  Lemma delast_block_lasts : forall blk sub blk' st st' ls,
+      LastsDefined blk ls ->
+      delast_block sub blk st = (blk', st') ->
+      LastsDefined blk' [].
+  Proof.
+    induction blk using block_ind2; intros * Hld Hdl; inv Hld; simpl in *; repeat inv_bind.
+    - (* equation *) constructor.
+    - (* last *)
+      cases. repeat inv_bind.
+      constructor.
+    - (* reset *)
+      eapply mmap_values, Forall2_ignore1 in H0.
+      rewrite <-concat_map_nil with (l:=x). constructor.
+      simpl_Forall. inv_VarsDefined. eauto.
     - (* switch *)
       constructor.
       + apply mmap_values in H0. inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
-        destruct b0. repeat inv_bind. take (VarsDefinedCompBranch _ _ _) and inv it. inv_VarsDefined.
-        constructor; simpl; auto using incl_nil'.
-        eapply mmap_vars_perm in H3; eauto.
+        repeat inv_branch. repeat inv_bind. constructor.
+        eapply mmap_values, Forall2_ignore1 in H3.
+        simpl_Forall. eauto.
     - (* automaton *)
-      destruct ini; repeat inv_bind.
-      constructor.
+      cases. repeat inv_bind. constructor.
       + apply mmap_values in H0. inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
-        destruct b0 as [?(?&[?(?&?)])]. repeat inv_bind.
-        take (VarsDefinedCompBranch _ _ _) and inv it. inv_VarsDefined.
-        econstructor; simpl; auto using incl_nil'.
-        eapply delast_scope_vars_perm; eauto.
-        * intros; repeat inv_bind; destruct_conjs. do 2 esplit; [|eauto].
-          eapply mmap_vars_perm; eauto.
-        * intros; destruct_conjs.
-          do 2 esplit. eapply Forall2_app; eauto.
-          now rewrite concat_app, Permutation_app_comm, H7.
+        repeat inv_branch. repeat inv_scope. repeat inv_bind. do 2 constructor. simpl.
+        exists (map (fun _ => []) x3); split.
+        * eapply mmap_values, Forall2_ignore1 in H6.
+          simpl_Forall. inv_VarsDefined. eauto.
+        * unfold lasts_of_decls.
+          rewrite concat_map_nil, map_filter_app, 2 map_filter_nil; auto.
+          1,2:simpl_Forall; auto.
     - (* local *)
-      constructor. eapply delast_scope_vars_perm; eauto.
-      * intros; simpl in *; destruct_conjs. do 2 esplit; [|eauto].
-        eapply mmap_vars_perm; eauto.
-      * intros; destruct_conjs.
-        do 2 esplit. eapply Forall2_app; eauto.
-        now rewrite concat_app, Permutation_app_comm, H4.
-      Transparent delast_scope.
+      repeat inv_scope. repeat constructor.
+      exists (map (fun _ => []) x2); split.
+      + eapply mmap_values, Forall2_ignore1 in H2.
+        simpl_Forall. inv_VarsDefined. eauto.
+      + unfold lasts_of_decls.
+        rewrite concat_map_nil, map_filter_app, 2 map_filter_nil; auto.
+        1,2:simpl_Forall; auto.
   Qed.
 
-  Lemma delast_outs_and_block_vars_perm : forall outs blk blk' xs st st',
-      VarsDefinedComp blk xs ->
+  Lemma delast_outs_and_block_lasts : forall outs blk blk' ls st st',
+      LastsDefined blk ls ->
       delast_outs_and_block outs blk st = (blk', st') ->
-      VarsDefinedComp blk' xs.
+      LastsDefined blk' [].
   Proof.
     unfold delast_outs_and_block.
     intros * VF DL. repeat inv_bind.
-    cases; repeat inv_bind; eauto using delast_block_vars_perm.
-    do 2 econstructor. do 2 esplit. apply Forall2_app.
-    - instantiate (1:=map (fun '(_, x, _) => [x]) x). simpl_Forall. constructor.
-    - econstructor; eauto using delast_block_vars_perm.
-    - rewrite concat_app; simpl.
-      rewrite app_nil_r, Permutation_app_comm. apply Permutation_app_head.
-      erewrite map_ext, <-map_map, concat_map_singl1, map_map. reflexivity.
-      intros; destruct_conjs; auto.
+    cases; repeat inv_bind; eauto using delast_block_lasts.
+    do 2 econstructor. do 2 esplit; eauto using delast_block_lasts.
+    unfold lasts_of_decls.
+    rewrite map_filter_nil; auto.
+    simpl_Forall. auto.
   Qed.
 
   (** *** GoodLocals *)
@@ -401,30 +533,24 @@ Module Type DELAST
     eapply fresh_ident_prefixed in H1; auto.
   Qed.
 
-  Lemma delast_scope_GoodLocals {A} P_good1 (P_good2: _ -> Prop) f_dl f_add : forall locs (blks: A) sub s' st st',
+  Lemma delast_scope_GoodLocals {A} P_good1 (P_good2: _ -> Prop) f_dl : forall locs (blks: A) sub s' st st',
       GoodLocalsScope P_good1 elab_prefs (Scope locs blks) ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+      delast_scope f_dl sub (Scope locs blks) st = (s', st') ->
       (forall sub blks' st st',
           P_good1 blks ->
           f_dl sub blks st = (blks', st') ->
           P_good2 blks') ->
-      (forall blks1 blks2,
-          Forall (GoodLocals last_prefs) blks1 ->
-          P_good2 blks2 ->
-          P_good2 (f_add blks1 blks2)) ->
       GoodLocalsScope P_good2 last_prefs s'.
   Proof.
-    intros * Hgood Hdl Hind Hadd; inv Hgood. repeat inv_bind.
-    eapply Hind in H0; eauto.
-    econstructor.
+    intros * Hgood Hdl Hind; inv Hgood. repeat inv_bind.
+    eapply Hind in H2; eauto.
+    econstructor; eauto.
     - rewrite map_app. apply Forall_app; split.
       + erewrite map_map, map_ext; eauto using Forall_AtomOrGensym_add.
         intros; destruct_conjs; auto.
       + apply fresh_idents_prefixed in H.
         simpl_Forall; subst.
         right. repeat esplit; eauto. apply PSF.add_iff; auto.
-    - apply Hadd; auto.
-      simpl_Forall. constructor.
   Qed.
 
   Lemma delast_block_GoodLocals : forall blk sub blk' st st',
@@ -435,7 +561,10 @@ Module Type DELAST
     Opaque delast_scope.
     induction blk using block_ind2; intros * Hg Hdl; inv Hg; repeat inv_bind.
     - (* equation *)
-      repeat constructor.
+      constructor.
+    - (* last *)
+      unfold delast_block in *. cases. repeat inv_bind.
+      constructor.
     - (* reset *)
       repeat constructor.
       eapply mmap_values, Forall2_ignore1 in H0.
@@ -454,13 +583,11 @@ Module Type DELAST
       eapply delast_scope_GoodLocals; eauto.
       + intros; repeat inv_bind. eapply mmap_values, Forall2_ignore1 in H5.
         simpl_Forall; eauto.
-      + intros. destruct blks2. apply Forall_app; auto.
     - (* local *)
       constructor.
       eapply delast_scope_GoodLocals; eauto.
       + intros. eapply mmap_values, Forall2_ignore1 in H3.
         simpl_Forall; eauto.
-      + intros. apply Forall_app; auto.
         Transparent delast_scope.
   Qed.
 
@@ -472,10 +599,10 @@ Module Type DELAST
     unfold delast_outs_and_block.
     intros * VF DL. repeat inv_bind.
     cases; repeat inv_bind; eauto using delast_block_GoodLocals.
-    do 2 constructor. 2:apply Forall_app; split. all:simpl_Forall; eauto using delast_block_GoodLocals.
+    do 2 constructor.
     - eapply fresh_idents_prefixed in H. simpl_Forall; subst.
       right. do 2 esplit; eauto using PSF.add_1.
-    - constructor.
+    - eauto using delast_block_GoodLocals.
   Qed.
 
   (** *** NoDupLocals *)
@@ -516,7 +643,7 @@ Module Type DELAST
 
   Fact fresh_idents_NoDup : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
-      NoDupMembers (map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, @None (exp * ident)))) lasts').
+      NoDupMembers (map (fun '(_, lx, (ty, ck)) => (lx, (ty, ck, xH, @None ident))) lasts').
   Proof.
     unfold fresh_idents.
     induction lasts; intros * Hfresh;
@@ -550,12 +677,12 @@ Module Type DELAST
     right. eapply incl_map; eauto. apply st_follows_incl; eauto with fresh.
   Qed.
 
-  Lemma delast_scope_NoDupLocals {A} P_good P_nd f_dl f_add :
+  Lemma delast_scope_NoDupLocals {A} P_good P_nd f_dl :
     forall locs (blks: A) xs sub s' st st',
       Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
       GoodLocalsScope P_good elab_prefs (Scope locs blks) ->
       NoDupScope P_nd xs (Scope locs blks) ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+      delast_scope f_dl sub (Scope locs blks) st = (s', st') ->
       (forall xs ys,
           P_good blks ->
           (forall x : ident, In x ys -> In x xs \/ (exists id hint, x = gensym last hint id)) ->
@@ -567,20 +694,15 @@ Module Type DELAST
           P_nd xs blks ->
           f_dl sub blks st = (blks', st') ->
           P_nd xs blks') ->
-      (forall xs blks1 blks2,
-          Forall (NoDupLocals xs) blks1 ->
-          P_nd xs blks2 ->
-          P_nd xs (f_add blks1 blks2)) ->
       NoDupScope P_nd xs s'.
   Proof.
-    intros * Hat Hgood Hnd Hdl Hincl' Hind Hadd; inv Hgood; inv Hnd;
+    intros * Hat Hgood Hnd Hdl Hincl' Hind; inv Hgood; inv Hnd;
       repeat inv_bind.
     assert (Forall (fun '(_, lx, _) => exists n hint, lx = gensym last hint n) x) as Hgen.
     { eapply mmap_values, Forall2_ignore1 in H. simpl_Forall. repeat inv_bind.
       eapply fresh_ident_prefixed in H7; auto. }
     constructor.
-    - apply Hadd. 1:simpl_Forall; constructor.
-      eapply Hind in H0; eauto.
+    - eapply Hind in H0; eauto.
       + simpl_app. repeat rewrite Forall_app. repeat split.
         * simpl_Forall. destruct Hat; eauto. right.
           eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows.
@@ -617,6 +739,9 @@ Module Type DELAST
       inv Hgood; inv Hnd; repeat inv_bind.
     - (* equation *)
       constructor.
+    - (* last *)
+      unfold delast_block in *. cases. repeat inv_bind.
+      constructor.
     - (* reset *)
       constructor.
       eapply mmap_delast_NoDupLocals; eauto.
@@ -648,14 +773,12 @@ Module Type DELAST
       + intros; simpl in *. simpl_Forall.
         eapply NoDupLocals_incl'; eauto using last_not_in_elab_prefs.
       + intros; repeat inv_bind. eapply mmap_delast_NoDupLocals; eauto.
-      + intros. destruct blks2. apply Forall_app; auto.
     - (* local *)
       constructor.
       eapply delast_scope_NoDupLocals; eauto.
       * intros. simpl_Forall.
         eapply NoDupLocals_incl'; eauto using last_not_in_elab_prefs.
       * intros; simpl in *. eapply mmap_delast_NoDupLocals; eauto.
-      * intros. apply Forall_app; auto.
         Transparent delast_scope.
   Qed.
 
@@ -672,9 +795,9 @@ Module Type DELAST
     { simpl_Forall. destruct At as [|In]; eauto.
       right. eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows. }
     cases; repeat inv_bind; eauto using delast_block_NoDupLocals.
-    do 2 constructor. apply Forall_app; split. all:simpl_Forall; eauto using delast_block_GoodLocals.
-    - constructor.
-    - eapply delast_block_NoDupLocals; eauto.
+    do 2 constructor.
+    - simpl_Forall.
+      eapply delast_block_NoDupLocals; eauto.
       + apply Forall_app; split; auto.
         simpl_Forall. eapply fresh_idents_In_ids in H. simpl_Forall; auto.
       + eapply NoDupLocals_incl'. 4:eauto. 1-3:eauto using last_not_in_elab_prefs.
@@ -691,22 +814,16 @@ Module Type DELAST
 
   (** *** No last remaining *)
 
-  Fact delast_scope_nolast {A} f_dl f_add (P_nl: _ -> Prop) : forall sub locs (blks : A) s' st st',
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Fact delast_scope_nolast {A} f_dl (P_nl: _ -> Prop) : forall sub locs (blks : A) s' st st',
+      delast_scope f_dl sub (Scope locs blks) st = (s', st') ->
       (forall sub blks' st st',
           f_dl sub blks st = (blks', st') ->
           P_nl blks') ->
-      (forall blks1 blks2,
-          Forall nolast_block blks1 ->
-          P_nl blks2 ->
-          P_nl (f_add blks1 blks2)) ->
       nolast_scope P_nl s'.
   Proof.
-    intros * Hdl Hind Hadd; repeat inv_bind.
-    constructor.
-    - apply Forall_app. split; simpl_Forall; auto.
-    - eapply Hadd; eauto.
-      simpl_Forall. constructor.
+    intros * Hdl Hind; repeat inv_bind.
+    constructor; eauto.
+    apply Forall_app. split; simpl_Forall; auto.
   Qed.
 
   Lemma delast_block_nolast : forall blk sub blk' st st',
@@ -716,6 +833,9 @@ Module Type DELAST
     Opaque delast_scope.
     induction blk using block_ind2; intros * Hdl; repeat inv_bind.
     - (* equation *)
+      constructor.
+    - (* last *)
+      unfold delast_block in *. cases. repeat inv_bind.
       constructor.
     - (* reset *)
       constructor.
@@ -734,12 +854,10 @@ Module Type DELAST
       eapply delast_scope_nolast; eauto.
       + intros; repeat inv_bind. eapply mmap_values, Forall2_ignore1 in H3.
         simpl_Forall; eauto.
-      + intros. destruct blks2. apply Forall_app; auto.
     - (* local *)
       constructor. eapply delast_scope_nolast; eauto.
       + intros. eapply mmap_values, Forall2_ignore1 in H1.
         simpl_Forall; eauto.
-      + intros. apply Forall_app; auto.
         Transparent delast_scope.
   Qed.
 
@@ -750,9 +868,8 @@ Module Type DELAST
     unfold delast_outs_and_block.
     intros * DL. repeat inv_bind.
     cases; repeat inv_bind; eauto using delast_block_nolast.
-    do 2 constructor. 2:apply Forall_app; split.
+    do 2 constructor.
     all:simpl_Forall; eauto using delast_block_nolast.
-    constructor.
   Qed.
 
   (** ** Transformation of node and program *)
@@ -773,17 +890,34 @@ Module Type DELAST
   Qed.
   Next Obligation.
     pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hvars Hperm].
-    pose proof (n_nodup n) as (_&Hndup).
+    pose proof (n_lastd n) as (?&Last&PermL).
+    pose proof (n_nodup n) as (Nd&Hndup).
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
     apply Permutation_map_inv in Hperm as (?&?&Hperm); subst.
-    repeat esplit.
-    2:{ unfold senv_of_decls. rewrite Hperm. erewrite map_map. reflexivity. }
     destruct (delast_outs_and_block _ _ _) as (?&?) eqn:Hdl.
-    eapply VarsDefinedComp_VarsDefined. 1,2:erewrite map_map; simpl.
-    - rewrite <-Hperm. eapply NoDupLocals_incl, delast_outs_and_block_NoDupLocals. 3-5:eauto.
+    assert (Hdl':=Hdl). eapply delast_outs_and_block_vars_perm in Hdl as (?&Vars&Perm); eauto.
+    2:{ rewrite PermL. apply incl_appr, lasts_of_decls_incl. }
+    2:{ apply fst_NoDupMembers. eauto using NoDup_app_r. }
+    apply Permutation_map_inv in Perm as (?&?&Perm); subst.
+    do 2 esplit.
+    - eapply VarsDefinedComp_VarsDefined
+        with (Γ:=senv_of_decls (map (fun '(x, (ty, ck, cx, o)) => (x, (ty, ck, xH, None))) x2)); simpl; eauto.
+      1,2:erewrite map_fst_senv_of_decls, map_map, map_ext with (g:=fst); eauto.
+      2,3:intros; destruct_conjs; auto.
+      rewrite <-Perm, <-Hperm.
+      eapply NoDupLocals_incl, delast_outs_and_block_NoDupLocals. 3-5:eauto.
       2:simpl_Forall; auto.
       solve_incl_app; reflexivity.
-    - eapply delast_outs_and_block_vars_perm; eauto.
+    - unfold senv_of_decls.
+      rewrite <-Perm, <-Hperm.
+      erewrite 2 map_map, map_ext; eauto. intros; destruct_conjs; auto.
+  Qed.
+  Next Obligation.
+    pose proof (n_lastd n) as (?&Last&_).
+    destruct (delast_outs_and_block _ _ _) as (?&st') eqn:Hdl.
+    do 2 esplit; eauto using delast_outs_and_block_lasts.
+    unfold lasts_of_decls. rewrite map_filter_nil; auto.
+    simpl_Forall; auto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
@@ -803,11 +937,16 @@ Module Type DELAST
   Qed.
   Next Obligation.
     pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hvars Hperm].
+    pose proof (n_lastd n) as (?&Last&PermL).
+    pose proof (n_nodup n) as (Nd&Hndup).
     destruct (delast_outs_and_block _ _) as (?&?) eqn:Hdl.
     constructor; eauto using delast_outs_and_block_nolast.
     - simpl_Forall; auto.
-    - do 2 esplit. 2:erewrite map_map; eauto.
-      eapply delast_outs_and_block_vars_perm; eauto.
+    - eapply delast_outs_and_block_vars_perm in Hdl as (?&?&Perm). 2-7:eauto.
+      + do 2 esplit; eauto.
+        rewrite Perm, Hperm, map_map; auto.
+      + rewrite PermL; auto using incl_appr, lasts_of_decls_incl.
+      + apply fst_NoDupMembers; eauto using NoDup_app_r.
   Qed.
 
   Global Program Instance delast_node_transform_unit: TransformUnit (@node complete elab_prefs) node :=

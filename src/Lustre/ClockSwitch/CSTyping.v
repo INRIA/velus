@@ -213,7 +213,6 @@ Module Type CSTYPING
           right. clear - Hin. inv Hin. simpl_In. econstructor; solve_In. auto.
         + eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app. auto.
       - simpl_Forall; auto.
-      - simpl_Forall. subst; auto.
       - eapply Hind with (Γty:=Γty++senv_of_decls _) (Γck:=Γck++senv_of_decls _); eauto.
         + intros ? Hin. apply InMembers_app; auto.
         + intros ??? Hfind Hin.
@@ -333,15 +332,13 @@ Module Type CSTYPING
           apply Forall_app; split.
           * eapply new_idents_wt_type in H; simpl_Forall; simpl_In; simpl_Forall; eauto.
           * eapply new_idents_wt_type in H0; simpl_Forall; simpl_In; simpl_Forall; eauto.
-        + simpl_Forall. auto.
-        + simpl_Forall. simpl_In. auto.
         + simpl_Forall.
           eapply merge_defs_wt; eauto.
           * eapply HasType_incl; [|eauto]. apply incl_appr'.
             simpl_app. apply incl_appl. intros ??. solve_In.
           * apply HasType_app. left.
             eapply rename_var_wt; eauto.
-            assert (Is_defined_in i0 (Bswitch ec branches)) as Hdef.
+            assert (Is_defined_in (FunctionalEnvironment.Var i0) (Bswitch ec branches)) as Hdef.
             { eapply vars_defined_Is_defined_in.
               eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
               apply PSF.mem_2; auto. }
@@ -464,9 +461,8 @@ Module Type CSTYPING
     pose proof (n_syn n) as Hsyn. inv Hsyn.
     econstructor; simpl; auto.
     1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-    - simpl_Forall. subst. auto.
     - eapply iface_incl_wt_block; eauto.
-      eapply switch_block_wt in H3; eauto using node_NoDupMembers, node_NoDupLocals, surjective_pairing.
+      eapply switch_block_wt in H2; eauto using node_NoDupMembers, node_NoDupLocals, surjective_pairing.
       + intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
       + intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
       + apply NoLast_app; split; auto using senv_of_ins_NoLast.
