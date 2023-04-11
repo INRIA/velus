@@ -266,7 +266,7 @@ Module Type LSEMANTICS
         sem_exp H bs e [vs] ->
         bools_of vs bs' ->
           sem_transitions H bs trans default stres1 ->
-          stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+          stres ≡ first_of (C, r) bs' stres1 ->
           sem_transitions H bs ((e, (C, r))::trans) default stres
 
     with sem_block: history -> Stream bool -> block -> Prop :=
@@ -1050,7 +1050,7 @@ Module Type LSEMANTICS
         bools_of vs bs' ->
         sem_transitions G Hi bs trans default stres1 ->
         P_transitions Hi bs trans default stres1 ->
-        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+        stres ≡ first_of (C, r) bs' stres1 ->
         P_transitions Hi bs ((e, (C, r))::trans) default stres.
 
     Hypothesis BautoWeakCase:
@@ -2332,7 +2332,7 @@ Module Type LSEMANTICS
       destruct default0. apply in_seq in Hwt2; simpl in *. lia.
     - apply IHtrans in H8; auto.
       apply SForall_forall; intros.
-      apply eqst_ntheq with (n:=n) in H11. rewrite choose_first_nth in H11. setoid_rewrite Str_nth_map in H11.
+      apply eqst_ntheq with (n:=n) in H11. rewrite first_of_nth in H11.
       apply SForall_forall with (n:=n) in H8.
       eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
       2:symmetry; apply H11. destruct (bs' # n); simpl; auto.

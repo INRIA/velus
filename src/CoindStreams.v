@@ -3541,33 +3541,29 @@ Module Type COINDSTREAMS
     unfold const_stres. rewrite 2 Str_nth_map, Heq; auto.
   Qed.
 
-  CoFixpoint choose_first {A} (xs ys : Stream (synchronous A)) : Stream (synchronous A) :=
-    match xs, ys with
-    | present x ⋅ xs, _ ⋅ ys => present x ⋅ choose_first xs ys
-    | absent ⋅ xs, y ⋅ ys => y ⋅ choose_first xs ys
+  CoFixpoint first_of {A} (v : A) (bs : Stream bool) (ys : Stream (synchronous A)) : Stream (synchronous A) :=
+    match bs, ys with
+    | true ⋅ bs, _ ⋅ ys => present v ⋅ first_of v bs ys
+    | false ⋅ bs, y ⋅ ys => y ⋅ first_of v bs ys
     end.
 
-  Lemma choose_first_nth {A} n : forall xs ys,
-      (@choose_first A xs ys) # n =
-        match (xs # n) with
-        | present x => present x
-        | _ => (ys # n)
-        end.
+  Lemma first_of_nth {A} n : forall (v : A) bs ys,
+      (first_of v bs ys) # n = if bs # n then present v else ys # n.
   Proof.
-    induction n; intros (?&?) (?&?).
+    induction n; intros ? (?&?) (?&?).
     - rewrite Str_nth_0, Str_nth_0_hd; simpl.
-      destruct s; auto.
+      destruct b; auto.
     - rewrite Str_nth_S, Str_nth_S_tl; simpl.
-      destruct s; eauto.
+      destruct b; eauto.
   Qed.
 
-  Add Parametric Morphism {A} : (@choose_first A)
-      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as choose_first_EqSt.
+  Add Parametric Morphism {A} : (@first_of A)
+      with signature eq ==> @EqSt _ ==> @EqSt _ ==> @EqSt _
+        as first_of_EqSt.
   Proof.
     intros * Heq1 * Heq2.
     apply ntheq_eqst. intros n. apply eqst_ntheq with (n:=n) in Heq1. apply eqst_ntheq with (n:=n) in Heq2.
-    rewrite 2 choose_first_nth. rewrite Heq1, Heq2. reflexivity.
+    rewrite 2 first_of_nth. rewrite Heq1, Heq2. reflexivity.
   Qed.
 
 End COINDSTREAMS.

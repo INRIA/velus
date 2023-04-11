@@ -1035,17 +1035,16 @@ Module Type LCLOCKCORRECTNESS
       induction trans; intros * HwG Hnd Hwt Hwc Hsc Hsem;
         inv Hwt; inv Hwc; inv Hsem; destruct_conjs.
       - rewrite H0, const_stres_ac. reflexivity.
-      - rewrite H13. apply choose_first_ac; eauto.
-        eapply sc_exp' with (k:=0) in H6; eauto.
+      - eapply IHtrans in H10 as Ac; eauto.
+        rewrite H13, first_of_ac; eauto.
+        intros * Bs'.
+        eapply sc_exp' in H6; eauto.
         2:{ rewrite <-length_clockof_numstreams. take (clockof _ = _) and rewrite it; auto. }
-        take (clockof _ = _) and rewrite it in H6. simpl in *.
-        eapply sc_slower in H6; eauto using ac_aligned.
-        apply slower_nth; intros * Hbs. setoid_rewrite Str_nth_map.
-        apply slower_nth with (n:=n) in H6; auto.
-        apply bools_of_nth with (n:=n) in H7 as [(Hv&Hx)|[(Hv&Hx)|(?&Hx)]].
-        + setoid_rewrite H6 in Hv; congruence.
-        + setoid_rewrite H6 in Hv; congruence.
-        + rewrite Hx; auto.
+        take (clockof _ = _) and rewrite it in H6. simpl in *. simpl_Forall. inv H6.
+        rewrite H3 in Ac.
+        apply eqst_ntheq with (n:=n) in Ac. rewrite 2 ac_nth in Ac.
+        apply bools_of_nth with (n:=n) in H7 as [(Hv&Hb)|[(Hv&Hx)|(?&Hb)]]; try congruence.
+        setoid_rewrite Hv in Ac. cases; congruence.
     Qed.
 
     Lemma sc_var_inv_subclock Γ Γ' : forall Hi bs bs' cx ck,
@@ -2058,16 +2057,15 @@ Module Type LCLOCKCORRECTNESS
       induction trans; intros * HwG Hnd Hwt Hwc Hsc Hsem;
         inv Hwt; inv Hwc; inv Hsem; destruct_conjs.
       - rewrite H0, const_stres_ac. reflexivity.
-      - rewrite H13. apply choose_first_ac; eauto.
+      - eapply IHtrans in H10 as Ac; eauto.
+        rewrite H13, first_of_ac; eauto.
+        intros * Bs'.
         eapply sc_exp'' in H6; eauto.
-        take (clockof _ = _) and rewrite it in H6. simpl in *. simpl_Forall.
-        eapply sc_slower in H8; eauto using ac_aligned.
-        apply slower_nth; intros * Hbs. setoid_rewrite Str_nth_map.
-        apply slower_nth with (n:=n) in H8; auto.
-        apply bools_of_nth with (n:=n) in H7 as [(Hv&Hx)|[(Hv&Hx)|(?&Hx)]].
-        + setoid_rewrite H8 in Hv; congruence.
-        + setoid_rewrite H8 in Hv; congruence.
-        + rewrite Hx; auto.
+        take (clockof _ = _) and rewrite it in H6. simpl in *. simpl_Forall. inv H8.
+        rewrite H3 in Ac.
+        apply eqst_ntheq with (n:=n) in Ac. rewrite 2 ac_nth in Ac.
+        apply bools_of_nth with (n:=n) in H7 as [(Hv&Hb)|[(Hv&Hx)|(?&Hb)]]; try congruence.
+        setoid_rewrite Hv in Ac. cases; congruence.
     Qed.
 
   End sc_inv.

@@ -1258,15 +1258,15 @@ Module Type LSEMDETERMINISM
     setoid_rewrite Str_nth_map. now rewrite Heq.
   Qed.
 
-  Lemma choose_first_detn {A} n : forall xs1 xs2 ys1 ys2,
-      EqStN n xs1 xs2 ->
+  Lemma first_of_detn {A} n : forall (v : A) bs1 bs2 ys1 ys2,
+      EqStN n bs1 bs2 ->
       EqStN n ys1 ys2 ->
-      EqStN n (@choose_first A xs1 ys1) (choose_first xs2 ys2).
+      EqStN n (first_of v bs1 ys1) (first_of v bs2 ys2).
   Proof.
     intros * Heq1 Heq2.
     apply EqStN_spec; intros * Hlt.
     eapply EqStN_spec in Heq1; eauto. eapply EqStN_spec in Heq2; eauto.
-    rewrite 2 choose_first_nth, Heq1, Heq2; auto.
+    rewrite 2 first_of_nth, Heq1, Heq2; auto.
   Qed.
 
   Lemma sem_transitions_detn {PSyn prefs} (G: @global PSyn prefs) Γ n :
@@ -1282,7 +1282,7 @@ Module Type LSEMDETERMINISM
     induction trans; intros * HdetG Hwt Hsc Hbs Htr1 Htr2; inv Hwt; inv Htr1; inv Htr2.
     - rewrite H0, H1. apply const_stres_detn; auto.
     - rewrite H11, H17.
-      apply choose_first_detn; eauto. apply const_stres_detn.
+      apply first_of_detn; eauto.
       eapply bools_of_detn; eauto. eapply det_exp_n in H12; eauto.
       simpl_Forall; auto.
   Qed.
@@ -1301,7 +1301,7 @@ Module Type LSEMDETERMINISM
     induction trans; intros * HdetG Hwt Hsc1 Hsc2 Hbs Htr1 Htr2; inv Hwt; inv Htr1; inv Htr2.
     - rewrite H0, H1. apply const_stres_detn; auto.
     - destruct_conjs. rewrite H11, H17.
-      apply choose_first_detn; eauto. apply const_stres_detn.
+      apply first_of_detn; eauto.
       eapply bools_of_detn; eauto.
       eapply det_exp_S with (k:=0) in H4; eauto. specialize (H4 H12); eauto.
       + rewrite <-length_typeof_numstreams, H0; auto.

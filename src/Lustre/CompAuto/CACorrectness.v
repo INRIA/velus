@@ -123,11 +123,11 @@ Module Type CACORRECTNESS
          end; repeat inv_bind);
         eauto.
 
-    Fact case_choose_first1 : forall e r bs vs bs' stres,
+    Fact case_first_of1 : forall e r bs vs bs' stres,
         bools_of vs bs' ->
         abstract_clock vs ≡ bs ->
         abstract_clock stres ≡ bs ->
-        case vs [(true_tag, enum bs e); (false_tag, stres_proj1 stres)] None (stres_proj1 (choose_first (const_stres bs' (e, r)) stres)).
+        case vs [(true_tag, enum bs e); (false_tag, stres_proj1 stres)] None (stres_proj1 (first_of (e, r) bs' stres)).
     Proof.
       intros * Hbools Hac1 Hac2.
       apply case_spec; intros; simpl.
@@ -142,7 +142,7 @@ Module Type CACORRECTNESS
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
         + left. split; auto.
           rewrite enum_nth', <-Hac1; eauto.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb; auto.
       - do 2 esplit. repeat (split; eauto).
         + repeat constructor; simpl.
@@ -150,22 +150,22 @@ Module Type CACORRECTNESS
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
         + right; left. split; auto.
           setoid_rewrite Str_nth_map. rewrite Hst; eauto.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb, Hst; auto.
       - repeat split; auto.
         + repeat constructor; simpl.
           * rewrite enum_nth', <-Hac1; congruence.
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb. rewrite Hst; auto.
     Qed.
 
-    Fact case_choose_first2 : forall e r bs vs bs' stres,
+    Fact case_first_of2 : forall e r bs vs bs' stres,
         bools_of vs bs' ->
         abstract_clock vs ≡ bs ->
         abstract_clock stres ≡ bs ->
         case vs [(true_tag, enum bs (if (r : bool) then true_tag else false_tag));
-                (false_tag, stres_proj2 stres)] None (stres_proj2 (choose_first (const_stres bs' (e, r)) stres)).
+                (false_tag, stres_proj2 stres)] None (stres_proj2 (first_of (e, r) bs' stres)).
     Proof.
       intros * Hbools Hac1 Hac2.
       apply case_spec; intros; simpl.
@@ -180,7 +180,7 @@ Module Type CACORRECTNESS
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
         + left. split; auto.
           rewrite enum_nth', <-Hac1; eauto.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb; auto.
       - do 2 esplit. repeat (split; eauto).
         + repeat constructor; simpl.
@@ -188,13 +188,13 @@ Module Type CACORRECTNESS
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
         + right; left. split; auto.
           setoid_rewrite Str_nth_map. rewrite Hst; eauto.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb, Hst; auto.
       - repeat split; auto.
         + repeat constructor; simpl.
           * rewrite enum_nth', <-Hac1; congruence.
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.
-        + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
+        + setoid_rewrite Str_nth_map. rewrite first_of_nth.
           rewrite Hb. rewrite Hst; auto.
     Qed.
 
@@ -214,7 +214,7 @@ Module Type CACORRECTNESS
           econstructor; eauto. 2,3:simpl; repeat constructor; eauto.
           constructor; eauto.
         + simpl. repeat constructor.
-          rewrite H13. eapply case_choose_first1; eauto.
+          rewrite H13. eapply case_first_of1; eauto.
           * eapply sc_exp in H8; eauto.
             take (clockof _ = _) and rewrite it in H8; simpl_Forall. inv H4.
             now symmetry.
@@ -250,9 +250,9 @@ Module Type CACORRECTNESS
           take (clockof _ = _) and rewrite it in H5; simpl_Forall. inv H4.
           eapply sc_transitions in Htrans; eauto.
           simpl. repeat constructor.
-          * rewrite H12. apply case_choose_first1; eauto.
+          * rewrite H12. apply case_first_of1; eauto.
             now symmetry.
-          * rewrite H12. apply case_choose_first2; eauto.
+          * rewrite H12. apply case_first_of2; eauto.
             now symmetry.
     Qed.
 
@@ -271,7 +271,7 @@ Module Type CACORRECTNESS
         assert (abstract_clock vs ≡ bs') as Hac.
         { eapply sc_exp in H8; eauto. take (clockof _ = _) and rewrite it in H8; simpl_Forall.
           inv H4. now symmetry. }
-        setoid_rewrite Str_nth_map. rewrite H13, enum_nth', choose_first_nth. setoid_rewrite Str_nth_map.
+        setoid_rewrite Str_nth_map. rewrite H13, enum_nth', first_of_nth.
         eapply IHini, eqst_ntheq with (n:=n) in H12 as Hind; eauto.
         setoid_rewrite Str_nth_map in Hind. rewrite enum_nth' in Hind.
         apply eqst_ntheq with (n:=n) in Hac. rewrite ac_nth in Hac.
@@ -403,7 +403,7 @@ Module Type CACORRECTNESS
         destruct default0. apply in_seq in Hwt2; simpl in *. lia.
       - apply IHtrans in H8; auto.
         apply SForall_forall; intros.
-        apply eqst_ntheq with (n:=n) in H11. rewrite choose_first_nth in H11. setoid_rewrite Str_nth_map in H11.
+        apply eqst_ntheq with (n:=n) in H11. rewrite first_of_nth in H11.
         apply SForall_forall with (n:=n) in H8.
         eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
         2:symmetry; apply H11. destruct (bs' # n); simpl; auto.

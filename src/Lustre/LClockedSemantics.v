@@ -216,7 +216,7 @@ Module Type LCLOCKEDSEMANTICS
         sem_exp_ck H bs e [vs] ->
         bools_of vs bs' ->
         sem_transitions_ck H bs trans default stres1 ->
-        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+        stres ≡ first_of (C, r) bs' stres1 ->
         sem_transitions_ck H bs ((e, (C, r))::trans) default stres
 
     with sem_block_ck: Sem.history -> Stream bool -> block -> Prop :=
@@ -520,7 +520,7 @@ Module Type LCLOCKEDSEMANTICS
         bools_of vs bs' ->
         sem_transitions_ck G Hi bs trans default stres1 ->
         P_transitions Hi bs trans default stres1 ->
-        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+        stres ≡ first_of (C, r) bs' stres1 ->
         P_transitions Hi bs ((e, (C, r))::trans) default stres.
 
     Hypothesis BautoWeakCase:
@@ -2322,18 +2322,17 @@ Module Type LCLOCKEDSEMANTICS
     destruct (bs # n); auto.
   Qed.
 
-  Fact choose_first_ac {A} : forall bs xs ys,
-      slower xs bs ->
-      abstract_clock ys ≡ bs ->
-      @abstract_clock A (choose_first xs ys) ≡ bs.
+  Fact first_of_ac {A} : forall (v : A) bs ys,
+      (* slower ys bs -> *)
+      (forall n, bs # n = true -> ys # n <> absent) ->
+      abstract_clock (first_of v bs ys) ≡ abstract_clock ys.
   Proof.
-    intros * Hslow Hac.
-    apply ntheq_eqst; intros n. apply eqst_ntheq with (n:=n) in Hac.
-    rewrite ac_nth in Hac.
-    rewrite ac_nth, choose_first_nth.
-    destruct (xs # n) eqn:Hx; auto.
+    intros * Fast.
+    apply ntheq_eqst; intros n.
+    rewrite 2 ac_nth, first_of_nth.
     destruct (bs # n) eqn:Hb; auto.
-    eapply slower_nth in Hslow; eauto. congruence.
+    specialize (Fast _ Hb).
+    destruct (ys # n); auto. congruence.
   Qed.
 
   Lemma sc_transitions {PSyn prefs} (G: @global PSyn prefs) Γ : forall Hi bs' trans def stres,
@@ -2347,16 +2346,15 @@ Module Type LCLOCKEDSEMANTICS
     induction trans; intros * HwG Hsc Hwc Hsem;
       inv Hwc; inv Hsem; destruct_conjs.
     - rewrite H0, const_stres_ac. reflexivity.
-    - rewrite H11. apply choose_first_ac; eauto.
+    - eapply IHtrans in H8 as Ac; eauto.
+      rewrite H11, first_of_ac; eauto.
+      intros * Bs'.
       eapply sc_exp in H4; eauto.
-      take (clockof _ = _) and rewrite it in H4. simpl in *. simpl_Forall.
-      eapply sc_slower in H6; eauto using ac_aligned.
-      apply slower_nth; intros * Hbs. setoid_rewrite Str_nth_map.
-      apply slower_nth with (n:=n) in H6; auto.
-      apply bools_of_nth with (n:=n) in H5 as [(Hv&Hx)|[(Hv&Hx)|(?&Hx)]].
-      + setoid_rewrite H6 in Hv; congruence.
-      + setoid_rewrite H6 in Hv; congruence.
-      + rewrite Hx; auto.
+      take (clockof _ = _) and rewrite it in H4. simpl in *. simpl_Forall. inv H6.
+      rewrite H1 in Ac.
+      apply eqst_ntheq with (n:=n) in Ac. rewrite 2 ac_nth in Ac.
+      apply bools_of_nth with (n:=n) in H5 as [(Hv&Hb)|[(Hv&Hx)|(?&Hb)]]; try congruence.
+      setoid_rewrite Hv in Ac. cases; congruence.
   Qed.
 
   Fact wc_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),
@@ -2780,7 +2778,7 @@ Module Type LCLOCKEDSEMANTICS
       - (* transition *)
         econstructor; eauto using bools_of_absent.
         apply ntheq_eqst; intros.
-        rewrite choose_first_nth. setoid_rewrite Str_nth_map. rewrite 2 const_nth; auto.
+        rewrite first_of_nth. rewrite 2 const_nth; auto.
       - (* Bauto (weak) *)
         econstructor; eauto using sem_clock_absent, fby_absent.
         simpl_Forall. specialize (H4 k); destruct_conjs.
