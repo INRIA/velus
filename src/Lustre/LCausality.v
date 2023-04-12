@@ -2551,19 +2551,18 @@ Module Type LCAUSALITY
 
     Lemma causal_ind {v a} : forall (g : AcyGraph v a),
         graph_of_node n g ->
-        (forall xs ys, Permutation xs ys -> P_vars xs -> P_vars ys) ->
         P_vars [] ->
         (forall x xs,
             In x (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
             P_vars xs ->
             (forall y, depends_on_node x y n -> In y xs) ->
             P_vars (x::xs)) ->
-        P_vars (PS.elements (vertices g)).
+        exists lord, Permutation lord (PS.elements (vertices g)) /\ P_vars lord.
     Proof.
-      intros * [Hv Ha] Hperm Hnil Hdep.
+      intros * [Hv Ha] Hnil Hdep.
       specialize (has_TopoOrder g) as (xs'&Heq&Hpre).
-      eapply Hperm. rewrite Heq, Permutation_PS_elements_of_list. reflexivity.
-      eapply TopoOrder_NoDup; eauto.
+      do 2 esplit. rewrite Heq, Permutation_PS_elements_of_list. reflexivity.
+      1:{ eapply TopoOrder_NoDup; eauto. }
       assert (incl xs' (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ (idcaus_of_locals (n_block n))))) as Hincl.
       { rewrite Hv in Heq.
         repeat rewrite <- ps_from_list_ps_of_list in Heq.
@@ -2580,20 +2579,20 @@ Module Type LCAUSALITY
 
     Corollary node_causal_ind :
         node_causal n ->
-        (forall xs ys, Permutation xs ys -> P_vars xs -> P_vars ys) ->
         P_vars [] ->
         (forall x xs,
             In x (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
             P_vars xs ->
             (forall y, depends_on_node x y n -> In y xs) ->
             P_vars (x::xs)) ->
-        P_vars (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ idcaus_of_locals (n_block n))).
+        exists lord, Permutation lord (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ idcaus_of_locals (n_block n)))
+                /\ P_vars lord.
     Proof.
-      intros * (Hnd&?&?&g&Hcaus) Hperm Hnil Hdep.
-      assert (Hvars:=Hcaus). eapply causal_ind in Hvars; eauto.
+      intros * (Hnd&?&?&g&Hcaus) Hnil Hdep.
+      assert (Hvars:=Hcaus). eapply causal_ind in Hvars as (?&Perm&Vars); eauto.
       destruct Hcaus as (Heq&_).
-      eapply Hperm; [|eauto].
-      rewrite Heq, Permutation_PS_elements_of_list; auto.
+      do 2 esplit; [|eauto].
+      rewrite Perm, Heq, Permutation_PS_elements_of_list; auto.
     Qed.
   End node_causal_ind.
 

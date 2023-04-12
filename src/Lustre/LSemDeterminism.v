@@ -2593,9 +2593,10 @@ Module Type LSEMDETERMINISM
     Proof.
       intros * HdetG Hwtn Hcaus Γ caus Hins Hbs Hn Hblk; subst Γ caus; rewrite <-app_assoc in *.
 
-      eapply node_causal_ind; eauto.
-      - intros ?? Hperm (Hblk'&Hvars'). split.
-        + rewrite <-Hperm; auto.
+      epose proof (conj (Forall_nil _) Hblk) as Hbase.
+      eapply node_causal_ind in Hbase as (?&Perm&(Vars&Blk)); eauto.
+      - split.
+        + rewrite <-Perm; eauto.
         + eapply sem_block_det_Perm; eauto.
       - intros * Hin (HSn&Hblk') Hdep.
         pose proof (n_syn nd) as Syn. inversion_clear Syn as [??? Hdef Hperm].

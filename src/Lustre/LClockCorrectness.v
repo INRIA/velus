@@ -1854,10 +1854,13 @@ Module Type LCLOCKCORRECTNESS
           1,2:rewrite app_assoc, map_app, in_app_iff; left.
           1,2:unfold idcaus_of_decls; rewrite <-idcaus_of_senv_ins, <-idcaus_of_senv_app.
           1,2:eapply in_map_iff; do 2 esplit; [|eapply idcaus_of_senv_In; eauto]; auto. }
-      eapply node_causal_ind; eauto.
-      - intros ?? Hperm (Hvars&Hlocs). split. rewrite <-Hperm; auto.
-        eapply sem_block_ck'_Perm; eauto.
-      - split; auto. apply sem_block_sem_block_ck'; auto.
+
+      eapply sem_block_sem_block_ck' in Hsem.
+      epose proof (conj (Forall_nil _) Hsem) as Hbase.
+      eapply node_causal_ind in Hbase as (?&Perm&(Vars&Blk)); eauto.
+      - split.
+        + rewrite <-Perm; eauto.
+        + eapply sem_block_ck'_Perm; eauto.
       - intros ?? Hin (Hvars&Hlocs) Hdep.
         pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hdef Hperm].
         pose proof (n_lastd n) as (?&Last&PermL).
