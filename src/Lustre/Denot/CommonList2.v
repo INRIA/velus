@@ -466,6 +466,31 @@ Section Forall2_relation.
     induction 1; simpl; auto.
   Qed.
 
+  Global Add Parametric Morphism : (@Forall2 A B)
+         with signature (RA ==> RB ==> Basics.impl) ==> Forall2 RA ==> Forall2 RB ==> Basics.impl
+           as F2_morph2.
+  Proof.
+    intros P Q PQ xs1 xs2 Ha ys1 ys2 Hb Hf.
+    revert dependent xs2.
+    revert dependent ys2.
+    induction Hf; intros; inv Ha; inv Hb; constructor; eauto.
+    eapply PQ; eauto.
+  Qed.
+
+  Global Add Parametric Morphism : (@Forall2 A B)
+         with signature (RA ==> RB ==> iff) ==> Forall2 RA ==> Forall2 RB ==> iff
+           as F2_morph2_iff.
+  Proof.
+    intros P Q PQ xs1 xs2 Ha ys1 ys2 Hb.
+    split; intro Hf.
+    - refine (F2_morph2 _ _ _ _ _ _ _ _ _ _); eauto.
+      intros ???????; edestruct PQ; eauto.
+    - revert dependent xs1.
+      revert dependent ys1.
+      induction Hf; intros; inv Ha; inv Hb; constructor; eauto.
+      eapply PQ; eauto.
+  Qed.
+
 End Forall2_relation.
 
 Global Instance : forall A, subrelation (Forall2 (@eq A)) (@eq (list A)).
@@ -476,7 +501,7 @@ Qed.
 
 Global Add Parametric Morphism A B : (@Forall2 A B)
     with signature (@eq A ==> @eq B ==> iff) ==> @eq (list A) ==> @eq (list B) ==> iff
-      as F2_morph2.
+      as F2_morph_eq.
 Proof.
   intros P Q PQ xs ys.
   split; induction 1; constructor; auto.
