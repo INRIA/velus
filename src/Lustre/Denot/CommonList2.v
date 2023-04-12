@@ -677,10 +677,31 @@ Section Forall2t.
     (eqA : relation A) (eqB : relation B)
     (EqA : Equivalence eqA)
     (reB : Reflexive eqB)
+    (P_compat : Proper (Forall2 eqA ==> eqB ==> Basics.impl) P)
+    : Forall2t
+         with signature (Forall2 (Forall2 eqA)) ==> Forall2 eqB ==> Basics.impl
+           as F2t_morph.
+  Proof.
+    intros xss xss' Hxy ys ys' Heq Hf.
+    revert Hxy Hf. revert xss xss'.
+    induction Heq; intros * Hxy Hf; inv Hf.
+    - constructor.
+      induction Hxy; auto.
+      inv H; constructor; auto; now simpl_Forall.
+    - constructor.
+      + rewrite <- Hxy, <- H; auto.
+      + eapply IHHeq; eauto.
+        now rewrite <- Hxy.
+  Qed.
+
+  Global Add Parametric Morphism
+    (eqA : relation A) (eqB : relation B)
+    (EqA : Equivalence eqA)
+    (reB : Reflexive eqB)
     (P_compat : Proper (Forall2 eqA ==> eqB ==> iff) P)
     : Forall2t
          with signature (Forall2 (Forall2 eqA)) ==> Forall2 eqB ==> iff
-           as F2t_morph.
+           as F2t_morph_iff.
   Proof.
     intros xss xss' Hxy ys ys' Heq.
     revert Hxy. revert xss xss'.
