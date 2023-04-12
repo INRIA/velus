@@ -1568,6 +1568,78 @@ Proof.
         intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite H.
 Qed.
 
+Lemma sem_sub_exps :
+  forall ins G H envI envG bs bsi env,
+  forall Infe (es : list exp) Infes,
+    Forall (fun e => sem_exp G H (S_of_DS id bs bsi) e
+                    (Ss_of_nprod (denot_exp G ins e envG envI bs env) (Infe e))) es ->
+    exists sss,
+      EqSts (concat sss) (Ss_of_nprod (denot_exps G ins es envG envI bs env) Infes)
+      /\ Forall2 (sem_exp G H (S_of_DS id bs bsi)) es sss.
+Proof.
+  clear.
+  induction es as [| e1 es]; intros * Hsem.
+  - exists []; split; now auto.
+  - edestruct (Ss_of_nprod_eq _ Infes) as [Inf1 Eq1].
+    { rewrite denot_exps_eq. reflexivity. }
+    edestruct (Ss_app _ _ Inf1) as (Inf2 & Inf3 & Eq2).
+    setoid_rewrite Eq1.
+    setoid_rewrite Eq2.
+    clear Eq1 Eq2.
+    inv Hsem.
+    destruct (IHes Inf3) as (sss & Heq & Hsem); auto.
+    eexists (_ :: sss); split; eauto.
+    apply Forall2_app; auto.
+    now apply _Ss_of_nprod_eq.
+Qed.
+
+Lemma sem_sub_expss :
+  forall ins G H envI envG bs bsi env,
+  forall Infe (ess : list (enumtag * list exp)) n Infes,
+    Forall (fun es => length (annots (snd es)) = n) ess ->
+    Forall (Forall (fun e => sem_exp G H (S_of_DS id bs bsi) e
+                            (Ss_of_nprod (denot_exp G ins e envG envI bs env) (Infe e))))
+      (map snd ess) ->
+    Forall2 (fun '(_, es) ss => exists sss,
+                 EqSts ss (concat sss)
+                 /\ Forall2 (sem_exp G H (S_of_DS id bs bsi)) es sss)
+      ess (Ss_of_nprods (denot_expss G ins ess n envG envI bs env) Infes).
+Proof.
+  clear.
+  intros *.
+  induction ess as [|[t es] ess]; intros * Hl Hsem; inv Hl; inv Hsem. now simpl.
+  constructor.
+  - (* es *)
+    destruct (Nat.eq_dec (list_sum (map numstreams es)) (length (annots es)))
+      as [Heq|Hneq] eqn:Hdec.
+    2: clear Hdec; rewrite annots_numstreams in Hneq; congruence.
+    remember (forall_nprod_hd _ _ _) as Inf1 eqn:HH; clear HH.
+    assert (Inf : forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env0)).
+    { simpl (snd _) in *.
+      rewrite denot_expss_eq, Hdec in Infes.
+      apply (@app_forall_nprod _ _ 1) in Infes as [Inf].
+      unfold eq_rect in Inf; cases. }
+    take (Forall _ es) and unshelve eapply sem_sub_exps in it as (sss & Hsss & Hsem); auto.
+    exists sss; split; auto.
+    rewrite Hsss.
+    edestruct (Ss_of_nprod_eq _ Inf1) as [Inf2 ->].
+    { simpl (snd _).
+      rewrite denot_expss_eq, Hdec, (nprod_hd_app 0), ID_simpl, Id_simpl.
+      reflexivity. }
+    clear; revert Inf2 Inf.
+    gen_sub_exps.
+    rewrite Heq; auto using _Ss_of_nprod_eq.
+  - (* tail *)
+    destruct ess as [|es2 ess]; auto.
+    eapply (Forall2_morph _ _ _ _ EqSts) in IHess; eauto.
+    + (* morphisme à la con *)
+      clear; intros [] [] HH x ?? (?&?&?); inv HH.
+      esplit; split; eauto; now transitivity x.
+    + constructor; [apply _Ss_of_nprod_eq | apply _Ss_of_nprods_eq].
+      Unshelve.
+      all: repeat rewrite denot_expss_eq in *; cases.
+      all: contradict n; simpl; now rewrite annots_numstreams.
+Qed.
 
 Lemma ok_sem_exp :
   forall Γ ins env Inf envI InfI bs bsi,
