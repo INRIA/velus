@@ -761,7 +761,7 @@ Qed.
 
 Lemma Forall2t_lift_nprod :
   forall (P : list (Stream svalue) -> Stream svalue -> Prop)
-    (P_compat : Proper (EqSts ==> @EqSt _ ==> iff) P),
+    (P_compat : Proper (EqSts ==> @EqSt _ ==> Basics.impl) P),
   forall n (F : nprod n -C-> DS (sampl value)),
   forall (Q : DS (sampl value) -> Prop),
     (forall (np : nprod n) Inf1 Inf2, Q (F np) -> P (Ss_of_nprod np Inf1) (S_of_DSv (F np) Inf2)) ->
@@ -1525,48 +1525,298 @@ Qed.
 
 (* idem *)
 Global Add Parametric Morphism cs tags : (fun l o => merge cs (combine tags l) o)
-       with signature EqSts ==> @EqSt _ ==> iff
+       with signature EqSts ==> @EqSt _ ==> Basics.impl
          as merge_morph.
 Proof.
   clear.
   intros xs ys Eq1 zs ts Eq2.
   rewrite 2 merge_spec.
-  split.
-  - intros Hm n.
-    destruct (Hm n) as [(?&?&?) | (t & v &?&?&?&?)]; clear Hm.
-    + rewrite <- Eq2.
-      left. repeat split; auto.
+  intros Hm n.
+  destruct (Hm n) as [(?&?&?) | (t & v &?&?&?&?)]; clear Hm.
+  + rewrite <- Eq2.
+    left. repeat split; auto.
+    revert dependent tags.
+    induction Eq1; simpl; eauto.
+    intros []; simpl; intro Hf; inv Hf; constructor; eauto. now rewrite <- H0.
+  + setoid_rewrite <- Eq2.
+    right. exists t, v. repeat split; eauto.
+    * clear - H0 Eq1.
       revert dependent tags.
       induction Eq1; simpl; eauto.
-      intros []; simpl; intro Hf; inv Hf; constructor; eauto. now rewrite <- H0.
-    + setoid_rewrite <- Eq2.
-      right. exists t, v. repeat split; eauto.
-      * clear - H0 Eq1.
-        revert dependent tags.
-        induction Eq1; simpl; eauto.
-        intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite <- H.
-      * clear - H1 Eq1.
-        revert dependent tags.
-        induction Eq1; simpl; eauto.
-        intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite <- H.
-  - intros Hm n.
-    destruct (Hm n) as [(?&?&?) | (t & v &?&?&?&?)]; clear Hm.
-    + rewrite Eq2.
-      left. repeat split; auto.
+      intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite <- H.
+    * clear - H1 Eq1.
       revert dependent tags.
       induction Eq1; simpl; eauto.
-      intros []; simpl; intro Hf; inv Hf; constructor; eauto. now rewrite H0.
-    + setoid_rewrite Eq2.
-      right. exists t, v. repeat split; eauto.
-      * clear - H0 Eq1.
-        revert dependent tags.
-        induction Eq1; simpl; eauto.
-        intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite H.
-      * clear - H1 Eq1.
-        revert dependent tags.
-        induction Eq1; simpl; eauto.
-        intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite H.
+      intros []; simpl; intro Hf; inv Hf; constructor; eauto; now rewrite <- H.
 Qed.
+
+Global Add Parametric Morphism cs tags od : (fun l o => case cs (combine tags l) od o)
+       with signature EqSts ==> @EqSt _ ==> Basics.impl
+         as case_morph.
+Proof.
+  clear.
+  intros xs1 xs2 Eq1.
+  intros ys1 ys2 ->.
+  eapply case_EqStS_Proper; auto.
+  revert ys1 ys2 tags.
+  induction Eq1.
+  - setoid_rewrite combine_nil_r; auto.
+  - destruct tags; constructor; auto.
+Qed.
+
+
+    Set Nested Proofs Allowed.
+Lemma Forall3_same_1_2:
+  forall A B P (xs: list A) (ys : list B),
+    Forall3 P xs xs ys <-> Forall2 (fun x y => P x x y) xs ys.
+Proof.
+  induction xs as [|x xs IH]; split; intros * H; inv H; constructor; auto.
+  rewrite <- IH; auto.
+  rewrite IH; auto.
+Qed.
+Lemma EqSts_concat_eq :
+  forall (s : list (Stream svalue)) (ss : list (list (Stream svalue))),
+    EqSts s (concat ss) ->
+    exists ss', Forall2 EqSts ss' ss
+           /\ s = concat ss'.
+Proof.
+  clear.
+  intros ??; revert s.
+  induction ss; intros * Heq.
+  - inv Heq; eauto.
+  - apply Forall2_app_inv_r in Heq as (?&?&?& Happ &?); subst.
+    apply IHss in Happ as (?&?&?); subst; eauto.
+Qed.
+Lemma Smerge_alt2 :
+  forall (G : global) H b x tx ess lann os,
+  forall d (xs : Stream svalue) (vss : list (list (Stream svalue))),
+    sem_var (fst H) x xs ->
+    vss <> [] ->
+    Forall (fun l => length l = length os) vss ->
+    Forall2 (fun '(_,es) vs =>
+               exists xss, EqSts vs (concat xss)
+                      /\ Forall2 (sem_exp G H b) es xss) ess vss  ->
+    Forall2t d (fun ss => merge xs (combine (map fst ess) ss)) vss os ->
+    sem_exp G H b (Emerge (x, tx) ess lann) os.
+Proof.
+  clear.
+  intros * Hx Nnil Hl Hf Ht.
+  eapply Smerge_alt  with (d := (56, Streams.const absent)) (xs := xs);
+    try assumption.
+  4: eapply Forall2t_combine in Ht; eauto.
+  - destruct vss, ess; simpl in *; try congruence; inv Hf.
+  - apply Forall2_length in Hf.
+    apply Forall_map, Forall2_combine', Forall2_map_1.
+    setoid_rewrite map_length.
+    apply Forall2_ignore1'; auto.
+  - apply Forall2_map_2.
+    apply Forall3_combine'2.
+    apply Forall3_map_2.
+    apply Forall3_same_1_2.
+    simpl_Forall; eauto.
+    edestruct EqSts_concat_eq as (?& Heq &?); eauto; subst.
+    eexists; split; auto; now rewrite Heq.
+Qed.
+Lemma ScaseTotal_alt2 :
+  forall (G : global) H b e ess tys ck os,
+  forall d (s : Stream svalue) (vss : list (list (Stream svalue))),
+    sem_exp G H b e [s] ->
+    vss <> [] ->
+    length tys = length os ->
+    Forall (fun l => length l = length os) vss ->
+    Forall2 (fun '(_,es) vs =>
+               exists xss, EqSts vs (concat xss)
+                      /\ Forall2 (sem_exp G H b) es xss) ess vss  ->
+    Forall2t d (fun ss => case s (combine (map fst ess) ss) None) vss os ->
+    sem_exp G H b (Ecase e ess None (tys, ck)) os.
+Proof.
+  clear.
+  intros * He Nnil Hl Hl2 Hf Ht.
+  eapply ScaseTotal_alt  with (d := (56, Streams.const absent)) (s := s);
+    try assumption.
+  4: eapply Forall2t_combine with (P := fun ts => case s ts None) in Ht; eauto.
+  - destruct vss, ess; simpl in *; try congruence; inv Hf.
+  - apply Forall2_length in Hf.
+    apply Forall_map, Forall2_combine', Forall2_map_1.
+    setoid_rewrite map_length.
+    apply Forall2_ignore1'; auto.
+  - apply Forall2_map_2.
+    apply Forall3_combine'2.
+    apply Forall3_map_2.
+    apply Forall3_same_1_2.
+    simpl_Forall; eauto.
+    edestruct EqSts_concat_eq as (?& Heq &?); eauto; subst.
+    eexists; split; auto; now rewrite Heq.
+Qed.
+
+Lemma ScaseDefault_alt2 :
+  forall (G : global) H b e ess eds tys ck,
+  forall d (s : Stream svalue) (sds : list (list (Stream svalue))) (vss : list (list (Stream svalue))) os,
+    vss <> [] ->
+    sem_exp G H b e [s] ->
+    wt_streams [s] (typeof e) ->
+    Forall2 (sem_exp G H b) eds sds ->
+    length (concat sds) = length os ->
+    Forall (fun l => length l = length os) vss ->
+    Forall2 (fun '(_,es) vs =>
+               exists xss, EqSts vs (concat xss)
+                      /\ Forall2 (sem_exp G H b) es xss) ess vss  ->
+    Forall2t d (fun ss dos => case s (combine (map fst ess) ss) (Some (fst dos)) (snd dos)) vss (combine (concat sds) os) ->
+    sem_exp G H b (Ecase e ess (Some eds) (tys, ck)) os.
+Proof.
+  clear.
+  intros * Nnil He Hwt Heds Hld Hl Hf Ht.
+  eapply ScaseDefault_alt  with (d := (56, Streams.const absent)) (s := s) (sds := sds);
+    try assumption.
+  4: eapply Forall2t_combine with (P := fun ts => fun _ => case s ts _ _) in Ht; eauto.
+  - destruct vss, ess; simpl in *; try congruence; inv Hf.
+  - apply Forall2_length in Hf.
+    apply Forall_map, Forall2_combine', Forall2_map_1.
+    setoid_rewrite map_length.
+    apply Forall2_ignore1'; auto.
+  - apply Forall2_map_2.
+    apply Forall3_combine'2.
+    apply Forall3_map_2.
+    apply Forall3_same_1_2.
+    simpl_Forall; eauto.
+    edestruct EqSts_concat_eq as (?& Heq &?); eauto; subst.
+    eexists; split; auto; now rewrite Heq.
+  - rewrite combine_length, Hld.
+    simpl_Forall; lia.
+Qed.
+From Coq Require Import RelationPairs.
+Global Add Parametric Morphism A B (eqA : relation A) (eqB : relation B) : (@combine A B)
+       with signature Forall2 eqA ==> Forall2 eqB ==> Forall2 (eqA * eqB)
+         as combine_morph.
+Proof.
+  clear.
+  intros la1 la2 Eqa.
+  induction Eqa; simpl; auto.
+  intros lb1 lb2 Eqb.
+  induction Eqb; constructor; eauto.
+Qed.
+
+(* TODO: move to CommonList2 *)
+Global Add Parametric Morphism A (R : relation A) : (@Forall A)
+       with signature (R ==> Basics.impl) ==> Forall2 R ==> Basics.impl
+         as F_morph3.
+Proof.
+  intros P Q PQ xs ys.
+  induction 1; intro Hf; inv Hf; constructor; auto.
+  eapply PQ; eauto.
+Qed.
+
+(* TODO: si c'est prouvable, remplacer l'autre *)
+Global Add Parametric Morphism : case
+       with signature
+       @EqSt _ ==> Forall2 (eq * (@EqSt _)) ==> orel (@EqSt _) ==> @EqSt _ ==> Basics.impl
+         as case_morph1.
+Proof.
+  clear.
+  cofix Cofix.
+  intros cs cs' Ecs lxs lxs' Elxs ds ds' Eds os os' Eos Hc.
+  destruct cs' as [[]], os' as [[]];
+    inv Hc; inv Ecs; inv Eos; simpl in *;
+    try discriminate.
+  - constructor.
+    + eapply Cofix; eauto.
+      * simpl_Forall.
+        take ((eq * _)%signature _ _) and destruct it as [? HH].
+        unfold RelCompFun in *; simpl in *; now rewrite HH.
+      * inv Eds; constructor; eauto using tl_EqSt.
+    + simpl_Forall.
+      eapply Forall2_in_right in Elxs as (?&?& [? HH]); eauto.
+      unfold RelCompFun in *; simpl in *; rewrite <- HH.
+      simpl_Forall; auto.
+    + inv Eds; simpl; auto; erewrite <- hd_EqSt; eauto.
+  - repeat take (_ = _) and inv it.
+    constructor.
+    + eapply Cofix; eauto.
+      * simpl_Forall.
+        take ((eq * _)%signature _ _) and destruct it as [? HH].
+        unfold RelCompFun in *; simpl in *; now rewrite HH.
+      * inv Eds; constructor; eauto using tl_EqSt.
+    + simpl_Forall.
+      eapply Forall2_in_right in Elxs as (?&?& [? HH]); eauto.
+      unfold RelCompFun in *; simpl in *; rewrite <- HH.
+      simpl_Forall; auto.
+    + inv Eds; simpl; auto; erewrite <- hd_EqSt; eauto.
+    + take (Exists _ _) and apply Exists_exists in it as ([] &?&?&?); subst.
+      eapply Forall2_in_left in Elxs as ([] &?& [? HH]); eauto.
+      unfold RelCompFun in *; simpl in *; subst.
+      solve_Exists; eauto; now rewrite <- HH.
+  - repeat take (_ = _) and inv it.
+    inv Eds.
+    destruct sy; take (_ ⋅ _ ≡ _) and destruct it as [HHH Htl].
+    simpl in *; inv HHH.
+    apply CasePDef.
+    + eapply Cofix; eauto.
+      * simpl_Forall.
+        take ((eq * _)%signature _ _) and destruct it as [? HH].
+        unfold RelCompFun in *; simpl in *; now rewrite HH.
+      * now constructor.
+    + simpl_Forall.
+      eapply Forall2_in_right in Elxs as (?&?& [? HH]); eauto.
+      unfold RelCompFun in *; simpl in *; rewrite <- HH.
+      simpl_Forall; auto.
+    + simpl_Forall.
+      eapply Forall2_in_right in Elxs as (?&?& [HH]); eauto.
+      unfold RelCompFun in *; simpl in *; subst.
+      simpl_Forall; auto.
+Qed.
+
+(* Deux morphismes très ad hoc pour case *)
+Add Parametric Morphism l s : (fun ss dos => case s (combine l ss) (Some (fst dos)) (snd dos))
+    with signature EqSts ==> RelProd (@EqSt _) (@EqSt _) ==> Basics.impl
+      as case_morph2.
+Proof.
+  unfold EqSts.
+  intros xs1 xs2 Eq1.
+  intros ys1 ys2 Eq2 Hc.
+  now rewrite <- Eq2, <- Eq1.
+Qed.
+Add Parametric Morphism l s d : (fun ss b => case s (combine l (tl ss)) (Some (hd d ss)) b)
+       with signature Forall2 (@EqSt _) ==> (@EqSt _) ==> Basics.impl
+         as case_morph3.
+Proof.
+  unfold EqSts.
+  intros xs1 xs2 Eq1.
+  intros ys1 ys2 Eq2 Hc.
+  now rewrite <- Eq2, <- Eq1.
+Qed.
+    (* TODO: expliquer *)
+    Lemma Forall2t_more_col :
+      forall {A B},
+      forall (P : list A -> A -> B -> Prop) d lb ma la,
+        length la = length lb ->
+        Forall2t d (fun l b => P (tl l) (hd d l) b) (la :: ma) lb ->
+        Forall2t d (fun l ab => P l (fst ab) (snd ab)) ma (combine la lb).
+    Proof.
+      clear.
+      induction lb; intros * Hl Hft; inv Hft.
+      - destruct la; simpl in *; try congruence.
+        constructor; inv H; auto.
+      - destruct la; simpl in *; try congruence.
+        constructor; auto.
+    Qed.
+      Lemma ty_DS_wt_stream :
+        forall ty s si,
+          ty_DS ty s ->
+          wt_stream (S_of_DSv s si) ty.
+      Proof.
+        clear.
+        unfold ty_DS.
+        intros * Hty.
+        remember_st (S_of_DSv s si) as t.
+        revert_all; cofix Cof; intros.
+        destruct t.
+        apply S_of_DS_Cons in Ht as (?&?& Hs &?&?&?).
+        rewrite Hs in *.
+        inv Hty.
+        constructor.
+        - cases.
+        - eapply Cof; eauto.
+      Qed.
 
 Lemma sem_sub_exps :
   forall ins G H envI envG bs bsi env,
@@ -1704,30 +1954,28 @@ Proof.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0, H1; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0, H1; auto.
-    econstructor; simpl in *.
-    + erewrite Forall2_map_2, <- Forall2_same. apply H0.
-    + erewrite Forall2_map_2, <- Forall2_same. apply H1.
-    + rewrite <- 2 flat_map_concat_map.
-      unshelve rewrite <- 2 Ss_exps; auto using DS_of_S_inf, infinite_exps.
-      revert Infe Hs.
-      save_denot_exp se Hse.
-      setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
-      gen_sub_exps.
-      rewrite annots_numstreams in *.
-      unfold eq_rect.
-      cases; intros; subst; try congruence.
-      clear - Hs.
-      induction (list_sum (map numstreams es)); constructor.
-      * edestruct (S_of_DSv_eq) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
-        { rewrite lift2_hd. reflexivity. }
-        apply forall_nprod_hd in Hs.
-        rewrite lift2_hd in Hs.
-        apply ok_fby; auto.
-      * edestruct (@Ss_of_nprod_eq n) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
-        { rewrite lift2_tl. reflexivity. }
-        apply forall_nprod_tl in Hs.
-        rewrite lift2_tl in Hs.
-        eapply IHn; eauto.
+    unshelve eapply sem_sub_exps in H0 as (s0ss & Eq0 & Sem0), H1 as (sss & Eq1 & Sem);
+      auto using infinite_exps.
+    econstructor; eauto.
+    rewrite Eq0, Eq1.
+    revert Infe Hs.
+    save_denot_exp se Hse.
+    setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+    gen_sub_exps.
+    rewrite annots_numstreams in *.
+    unfold eq_rect; cases; intros; subst; try congruence.
+    clear - Hs.
+    induction (list_sum (map numstreams es)); constructor.
+    * edestruct (S_of_DSv_eq) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
+      { rewrite lift2_hd. reflexivity. }
+      apply forall_nprod_hd in Hs.
+      rewrite lift2_hd in Hs.
+      apply ok_fby; auto.
+    * edestruct (@Ss_of_nprod_eq n) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
+      { rewrite lift2_tl. reflexivity. }
+      apply forall_nprod_tl in Hs.
+      rewrite lift2_tl in Hs.
+      eapply IHn; eauto.
   - (* Ewhen *)
     destruct x as [x ty].
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
@@ -1737,18 +1985,17 @@ Proof.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
-    econstructor; simpl.
-    + erewrite Forall2_map_2, <- Forall2_same. apply H0.
+    unshelve eapply sem_sub_exps in H0 as (s0ss & Eq0 & Sem0);
+      auto using infinite_exps.
+    econstructor; simpl; eauto.
     + unshelve apply sem_hist_of_envs; auto using denot_var_inf.
-    + rewrite <- flat_map_concat_map.
-      unshelve rewrite <- Ss_exps; auto using DS_of_S_inf, infinite_exps.
+    + rewrite Eq0.
       revert Infe Hs.
       save_denot_exp se Hse.
       setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
       gen_sub_exps.
       rewrite annots_numstreams in *.
-      unfold eq_rect.
-      cases; intros; subst; try congruence.
+      unfold eq_rect; cases; intros; subst; try congruence.
       clear - Hs.
       induction (list_sum (map numstreams es)); constructor.
       * edestruct (S_of_DSv_eq) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
@@ -1766,40 +2013,106 @@ Proof.
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
-    pose (vss := map (fun '(t,es) => map (pair t) (flat_map (fun e => Ss_of_nprod (denot_exp G ins e envG envI bs env) (infinite_exp _ _ _ _ _ _ InfG bsi InfI Inf _)) es)) es).
-    eapply Smerge_alt with (d := (56, Streams.const absent)) (vss := vss); simpl.
+    rewrite <- Forall_map, <- Forall_concat in *.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
+    take (Forall restr_exp _) and rewrite map_map in it.
+    apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+    unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
+    eapply Smerge_alt2 with (d:= (Streams.const absent)) in H0; simpl; eauto.
     + unshelve apply sem_hist_of_envs; auto using denot_var_inf.
-    + now apply map_eq_nnil.
-    + subst vss; simpl_Forall; subst.
-      rewrite flat_map_concat_map, Ss_of_nprod_length, length_typesof_annots,
-        annots_numstreams, map_length, concat_length_sum, map_map.
-      f_equal.
-      apply map_ext; intro; now rewrite Ss_of_nprod_length.
-    + subst vss.
-      simpl_Forall.
-      esplit; split.
-      2: rewrite flat_map_concat_map; f_equal.
-      simpl_Forall; auto.
-    + clear - Hs H22.
-      setoid_rewrite annots_numstreams in H22.
-      subst vss.
-      rewrite (combine_fst_snd es) at 1.
-      rewrite combine_map_2 with (f := fun t es => map (pair t) es).
-      apply Forall2t_combine with (d1 := Streams.const absent).
-      { setoid_rewrite Ss_of_nprod_length.
-        simpl_Forall.
-        rewrite flat_map_concat_map, concat_length_sum, map_map.
-        now setoid_rewrite Ss_of_nprod_length. }
-      revert Infe Hs.
+    + destruct es; simpl; congruence.
+    + clear; gen_sub_exps.
+      induction (length es); constructor; auto; now rewrite 2 Ss_of_nprod_length.
+    + revert Infe Hs.
       save_denot_exp se Hse.
       setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
-      unshelve setoid_rewrite Ss_expss with (n := length tys); auto.
-      { now apply infinite_expss. }
       gen_sub_exps.
-      unfold eq_rect_r, eq_rect, eq_sym.
-      cases; intros; subst.
-      eapply Forall2t_lift_nprod in Hs; eauto using merge_morph_Proper.
-      intros; now apply ok_merge.
+      unfold eq_rect_r, eq_rect, eq_sym; cases; intros; subst; try congruence.
+      eapply Forall2t_lift_nprod; eauto using ok_merge, merge_morph_Proper.
+  - (* Ecase *)
+    eapply safe_exp in Hoc as Hs; eauto using restr_exp.
+    apply wt_exp_wl_exp in Hwt as Hwl.
+    inv Hwt. inv Hwc. inv Hoc. inv Hwl.
+    take (restr_exp e) and apply IHe in it as He; auto; clear IHe.
+    rewrite <- Forall_map, <- Forall_concat in *.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
+    take (Forall restr_exp _) and rewrite map_map in it.
+    apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+    unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
+    revert Infe Hs He H0.
+    save_denot_exp se Hse.
+    setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+    gen_sub_exps.
+    unfold eq_rect_r, eq_rect, eq_sym; cases; intros; subst; try congruence.
+    eapply ScaseTotal_alt2 with (d:= (Streams.const absent)) in H0;
+      eauto using Ss_of_nprod_length.
+    + destruct es; simpl; congruence.
+    + clear; revert Inf0.
+      rewrite Ss_of_nprod_length.
+      generalize t0; clear.
+      induction (length (map fst es)); constructor; auto using Ss_of_nprod_length.
+    + eapply Forall2t_lift_nprod; eauto using ok_case, map_eq_nnil, case_morph_Proper.
+  - (* Ecase défaut *)
+    eapply safe_exp in Hoc as Hs; eauto using restr_exp.
+    apply wt_exp_wl_exp in Hwt as Hwl.
+    inv Hwt. inv Hwc. inv Hoc. inv Hwl.
+    take (restr_exp e) and eapply safe_exp_ in it as HH; eauto.
+    destruct HH as (Tye & _&_). (* on en aura besoin pour prouver wt_streams *)
+    take (restr_exp e) and apply IHe in it as He; auto; clear IHe.
+    rewrite <- Forall_map, <- Forall_concat in *.
+    rewrite map_id in *.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0, H1; auto.
+    unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
+    unshelve eapply sem_sub_exps in H1 as (vd & Eqvd & Semd); eauto using infinite_exps.
+    revert Infe Hs He Tye H0 Semd Eqvd.
+    save_denot_exp se Hse.
+    setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+    gen_sub_exps.
+    unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence; intros.
+    2: now rewrite length_typesof_annots, annots_numstreams in n.
+    rewrite curry_nprod_simpl in Hse; subst.
+    eapply ScaseDefault_alt2 with (d:= (Streams.const absent)) in H0;
+      eauto using Ss_of_nprod_length.
+    + destruct es; simpl; congruence.
+    + (* wt_streams *)
+      take (typeof e = _) and rewrite it in *; inv Tye.
+      constructor; auto using ty_DS_wt_stream.
+    + (* ça va virer *)
+      apply Forall2_length in Eqvd.
+      rewrite Ss_of_nprod_length in *; auto.
+    + clear; revert Inf0.
+      rewrite Ss_of_nprod_length.
+      generalize t0; clear.
+      induction (length (map fst es)); constructor; auto using Ss_of_nprod_length.
+    + unfold EqSts in Eqvd. (* pas normal... *)
+      rewrite Eqvd.
+      (* ici on veut à tout prix utiliser Forall2t_lift_nprod,
+         il faut arranger un peu le but pour qu'il ait la bonne forme *)
+      apply (Forall2t_more_col (fun ss ds => case _ (combine _ ss) (Some ds))).
+      { now rewrite 2 Ss_of_nprod_length. }
+      (* FIXME: c'est horrible de devoir écrire ça *)
+      assert (exists Inf,
+                 Forall2 EqSts
+                   (Ss_of_nprod t0 Inf1 :: Ss_of_nprods t1 Inf0)
+                   (Ss_of_nprods (@nprod_app _ 1 _ t0 t1) Inf)
+             ) as [? ->].
+      { clear.
+        exists (@forall_nprod_app _ _ 1 _ _ _ Inf1 Inf0).
+        revert_all; intros ??.
+        destruct (length (map fst es)).
+        - cbn; constructor; auto using _Ss_of_nprod_eq.
+        - (* pourquoi deux fois ? j'aimerais savoir *)
+          do 2 (constructor; eauto using _Ss_of_nprod_eq, _Ss_of_nprods_eq). }
+      eapply Forall2t_lift_nprod; eauto using case_morph3_Proper.
+      (* pourquoi ça ne fonctionne avec using ? j'aimerais savoir *)
+      intros; eapply ok_case_def; eauto using map_eq_nnil.
   - (* Eapp *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
