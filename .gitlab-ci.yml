@@ -20,17 +20,12 @@ proof-job:
   stage: proof
   artifacts:
     untracked: true
-  dependencies:
-    - CompCert
   script:
     - echo "Hello"
     - make -j 4 proof
 
 build-job:
   stage: build
-  dependencies:
-    - proof
-    - Compcert
   script:
     - echo "Hello"
     - make -j 4
