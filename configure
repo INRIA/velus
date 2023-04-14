@@ -8,6 +8,10 @@ coqproject="$BASEDIR/_CoqProject"
 compcertdir="$BASEDIR/CompCert"
 srcdir="$BASEDIR/src"
 
+# if true, execute CompCert/configure script, that forces to recompile
+# the whole submodule
+configure_compcert=true
+
 # Parse command-line arguments
 
 while : ; do
@@ -29,16 +33,21 @@ while : ; do
         standard_headers="-no-standard-headers";;
     -clightgen)
         clightgen="-clightgen";;
+    --velus-only)
+	configure_compcert=false;;
     *)
         target="$1";;
   esac
   shift
 done
 
+if $configure_compcert; then
 # Configure CompCert and extract relevant values into Makefile.config
-(cd "$compcertdir" &&
- ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
+    (cd "$compcertdir" &&
+     ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
      $standard_headers $clightgen $target)
+fi
+
 if [ -f "$compcertdir"/Makefile.config ]; then
     export "$(grep ARCH= < "$compcertdir"/Makefile.config)"
     export "$(grep BITSIZE= < "$compcertdir"/Makefile.config)"
