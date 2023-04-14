@@ -14,7 +14,7 @@ CompCert-job:
       - ./CompCert/
   script:
     - echo "Hello"
-    - test -f "./CompCert/Makefile.config" || ./configure x86_64-linux
+    - test -f "./CompCert/Makefile.config" || ./Compcert/configure x86_64-linux
     - make -C CompCert -j
 
 proof-job:
@@ -25,6 +25,8 @@ proof-job:
       - ./src/
   script:
     - echo "Hello"
+    - ./configure x86_64-linux --velus-only
+    - make clean
     - make -j 4 proof
 
 build-job:
