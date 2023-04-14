@@ -21,7 +21,7 @@ proof-job:
   artifacts:
     untracked: true
   dependencies:
-    - CompCert-job
+    - CompCert
   script:
     - echo "Hello"
     - make -j 4 proof
@@ -29,7 +29,7 @@ proof-job:
 build-job:
   stage: build
   dependencies:
-    - proof-job Compcert-job
+    - proof Compcert
   script:
     - echo "Hello"
     - make -j 4
