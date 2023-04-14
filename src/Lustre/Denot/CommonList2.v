@@ -1,4 +1,4 @@
-From Coq Require Import Lia List Setoid Morphisms.
+From Coq Require Import Lia List Setoid Morphisms RelationPairs.
 Import ListNotations.
 
 From Velus Require Import Common CommonList.
@@ -99,6 +99,15 @@ Proof.
     + now injection (Hn O).
     + eapply IHl1; intros; auto.
       apply (Hn (S n)).
+Qed.
+
+Lemma Forall3_same_1_2:
+  forall A B P (xs: list A) (ys : list B),
+    Forall3 P xs xs ys <-> Forall2 (fun x y => P x x y) xs ys.
+Proof.
+  induction xs as [|x xs IH]; split; intros * H; inv H; constructor; auto.
+  rewrite <- IH; auto.
+  rewrite IH; auto.
 Qed.
 
 Lemma Forall3_same_2_3:
@@ -466,6 +475,15 @@ Section Forall2_relation.
     induction 1; simpl; auto.
   Qed.
 
+  Global Add Parametric Morphism : (@Forall A)
+         with signature (RA ==> Basics.impl) ==> Forall2 RA ==> Basics.impl
+           as F_morph3.
+  Proof.
+    intros P Q PQ xs ys.
+    induction 1; intro Hf; inv Hf; constructor; auto.
+    eapply PQ; eauto.
+  Qed.
+
   Global Add Parametric Morphism : (@Forall2 A B)
          with signature (RA ==> RB ==> Basics.impl) ==> Forall2 RA ==> Forall2 RB ==> Basics.impl
            as F2_morph2.
@@ -489,6 +507,16 @@ Section Forall2_relation.
       revert dependent ys1.
       induction Hf; intros; inv Ha; inv Hb; constructor; eauto.
       eapply PQ; eauto.
+  Qed.
+
+  Global Add Parametric Morphism : (@combine A B)
+         with signature Forall2 RA ==> Forall2 RB ==> Forall2 (RA * RB)
+           as combine_morph.
+  Proof.
+    intros la1 la2 Eqa.
+    induction Eqa; simpl; auto.
+    intros lb1 lb2 Eqb.
+    induction Eqb; constructor; eauto.
   Qed.
 
 End Forall2_relation.
@@ -757,4 +785,22 @@ Proof.
   eapply Forall_forall in Hl; eauto.
   erewrite nth_indep, map_nth; eauto.
   rewrite map_length; lia.
+Qed.
+
+(** On peut simuler un Forall3t en ajoutant une colonne supplémentaire
+    grâce à un appel à [combine] sur le dernier argument.
+    Ou encore en ajoutant la colonne en tête de la matrice, et dans
+    ce cas il faut ajuster les arguments de [P]. *)
+Lemma Forall2t_more_col :
+  forall A B (P : list A -> A -> B -> Prop) d lb ma la,
+    length la = length lb ->
+    Forall2t d (fun l b => P (tl l) (hd d l) b) (la :: ma) lb ->
+    Forall2t d (fun l ab => P l (fst ab) (snd ab)) ma (combine la lb).
+Proof.
+  clear.
+  induction lb; intros * Hl Hft; inv Hft.
+  - destruct la; simpl in *; try congruence.
+    constructor; inv H; auto.
+  - destruct la; simpl in *; try congruence.
+    constructor; auto.
 Qed.
