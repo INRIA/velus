@@ -11,6 +11,8 @@ CompCert-job:
   stage: CompCert
   artifacts:
     untracked: true
+    paths:
+      - ./CompCert/
   script:
     - echo "Hello"
     - ./configure x86_64-linux
