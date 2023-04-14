@@ -2,15 +2,22 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
+  - CompCert
   - proof
   - build
   - test
+
+CompCert-job:
+  stage: CompCert
+  script:
+    - echo "Hello"
+    - ./configure x86_64-linux
+    - make -C CompCert -j
 
 proof-job:
   stage: proof
   script:
     - echo "Hello"
-    - make -C CompCert -j
     - make -j 4 proof
 
 build-job:
