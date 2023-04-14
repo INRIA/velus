@@ -9,32 +9,33 @@ stages:
 
 CompCert-job:
   stage: CompCert
-  artifacts:
-    untracked: true
+  cache:
     paths:
       - ./CompCert/
   script:
     - echo "Hello"
-    - ./configure x86_64-linux
+    - test -f "./CompCert/Makefile.config" || ./configure x86_64-linux
     - make -C CompCert -j
 
 proof-job:
   stage: proof
   artifacts:
     untracked: true
+    paths:
+      - ./src/
   script:
     - echo "Hello"
     - make -j 4 proof
 
 build-job:
   stage: build
-  script:
-    - echo "Hello"
-    - make -j 4
   artifacts:
     paths:
       - ./_build/
       - ./velus
+  script:
+    - echo "Hello"
+    - make -j 4
 
 test-job:
   stage: test
