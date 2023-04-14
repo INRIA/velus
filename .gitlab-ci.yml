@@ -1,6 +1,10 @@
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
+cache:
+  paths:
+    - ./CompCert/
+
 stages:
   - CompCert
   - proof
@@ -9,9 +13,6 @@ stages:
 
 CompCert-job:
   stage: CompCert
-  cache:
-    paths:
-      - ./CompCert/
   script:
     - echo "Hello"
     - test -f "./CompCert/Makefile.config" || ./Compcert/configure x86_64-linux
