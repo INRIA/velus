@@ -29,7 +29,8 @@ proof-job:
 build-job:
   stage: build
   dependencies:
-    - proof Compcert
+    - proof
+    - Compcert
   script:
     - echo "Hello"
     - make -j 4
