@@ -27,8 +27,8 @@ proof-job:
   script:
     - echo "Hello"
     - ./configure x86_64-linux --velus-only
-    - make clean
-    - make -j 4 proof
+    - TERM=xterm-mono make clean
+    - TERM=xterm-mono make -j 4 proof
 
 build-job:
   stage: build
