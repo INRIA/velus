@@ -2129,6 +2129,14 @@ Proof.
   destruct n; auto.
 Qed.
 
+Lemma lift_cons :
+  forall f n x (np : nprod n),
+    lift f (nprod_cons x np) =
+      nprod_cons (f x) (lift f np).
+Proof.
+  destruct n; auto.
+Qed.
+
 Lemma forall_nprod_lift :
   forall (F : D1 -C-> D2),
   forall (P : D2 -> Prop),

@@ -243,15 +243,6 @@ Module Type LDENOTINF
     now rewrite <- annots_numstreams.
   Qed.
 
-        Set Nested Proofs Allowed.
-        (* XXX *)
-        Lemma lift_cons :
-          forall D1 D2 (F : D1 -C-> D2) x n (np : nprod n),
-            lift F (nprod_cons x np) =
-              nprod_cons (F x) (lift F np).
-        Proof.
-          destruct n; auto.
-        Qed.
 
   Ltac solve_err :=
     try (
