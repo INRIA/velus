@@ -1579,19 +1579,6 @@ Fixpoint nprod (n : nat) : cpo :=
   | S n => Dprod D (nprod n)
   end.
 
-(** nprod concatenation *)
-Definition nprod_app : forall {n p}, nprod n -C-> nprod p -C-> nprod (n + p).
-  induction n as [|[]]; intro p.
-  - exact (CURRY _ _ _ (SND _ _ )).
-  - destruct p.
-    + exact (CTE _ _).
-    + exact (PAIR _ _).
-  - apply curry.
-    exact ((PAIR _ _ @2_ (FST _ _ @_ FST _ _))
-             ((IHn p @2_ (SND _ _ @_ FST _ _)) (SND _ _))).
-Defined.
-Opaque nprod_app.
-
 (** extract the first element *)
 Definition nprod_hd {n} : nprod (S n) -C-> D :=
   match n with
@@ -1612,6 +1599,28 @@ Definition nprod_tl {n} : nprod (S n) -C-> nprod n :=
   | O => ID _
   | (S n) => SND _ _
   end.
+
+(** cons function *)
+Definition nprod_cons {n} : D -C-> nprod n -C-> nprod (S n) :=
+   match n with
+   | O => CTE _ _
+   | S _ => PAIR _ _
+   end.
+
+Lemma nprod_hd_tl : forall {n} (np : nprod (S n)),
+    np = nprod_cons (nprod_hd np) (nprod_tl np).
+Proof.
+  destruct n; auto.
+  destruct np; auto.
+Qed.
+
+(** nprod concatenation *)
+Definition nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p).
+  apply curry.
+  induction n.
+  - apply SND.
+  - refine ((nprod_cons @2_ nprod_hd @_ FST _ _) ((curry IHn @2_ nprod_tl @_ FST _ _) (SND _ _))).
+Defined.
 
 Lemma nprod_hd_app :
   forall m n (mp : nprod (S m)) (np : nprod n),
@@ -1780,6 +1789,23 @@ Proof.
   destruct n as [|[]]; intros * Hh Ht; now simpl in *.
 Qed.
 
+Lemma forall_nprod_cons :
+  forall {n} d (np : nprod n),
+    P d ->
+    forall_nprod np ->
+    forall_nprod (nprod_cons d np).
+Proof.
+  destruct n; simpl; auto.
+Qed.
+
+Lemma forall_nprod_cons_iff :
+  forall {n} d (np : nprod n),
+    forall_nprod (nprod_cons d np)
+    <-> P d /\ forall_nprod np.
+Proof.
+  split; destruct n; cbn; tauto.
+Qed.
+
 Lemma k_forall_nprod :
   forall {n} (np : nprod n),
     (forall k d, k < n -> P (get_nth k d np)) ->
@@ -1943,6 +1969,35 @@ Proof.
   split; apply hd_tl_forall; eauto.
 Qed.
 
+Lemma forall_nprod_and_iff :
+  forall (P Q : D -> Prop),
+  forall {n} (np : nprod n),
+    (forall_nprod P np /\ forall_nprod Q np)
+    <-> forall_nprod (fun x => P x /\ Q x) np.
+Proof.
+  split; intros.
+  - now apply forall_nprod_and.
+  - now apply and_forall_nprod.
+Qed.
+
+Global Instance :
+  Proper (pointwise_relation D iff ==>
+            forall_relation (fun n : nat => eq ==> iff)) forall_nprod.
+Proof.
+  intros P Q PQ ??? Heq; subst.
+  split; intro Hf.
+  { induction a as [|[]]; auto.
+    - apply PQ; auto.
+    - inversion_clear Hf; split.
+      + apply PQ; auto.
+      + apply IHa; auto. }
+  { induction a as [|[]]; auto.
+    - apply PQ; auto.
+    - inversion_clear Hf; split.
+      + apply PQ; auto.
+      + apply IHa; auto. }
+Qed.
+
 
 (** From n-uplets, build lists of length n *)
 Section List_of_nprod.
@@ -1960,6 +2015,13 @@ Lemma list_of_nprod_length :
     length (list_of_nprod np) = n.
 Proof.
   induction n; simpl; auto.
+Qed.
+
+Lemma list_of_nprod_cons :
+  forall {n} d (np : nprod n),
+    list_of_nprod (nprod_cons d np) = d :: list_of_nprod np.
+Proof.
+  destruct n; auto.
 Qed.
 
 Lemma list_of_nprod_app :
