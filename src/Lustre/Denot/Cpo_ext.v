@@ -1980,6 +1980,8 @@ Proof.
   - now apply and_forall_nprod.
 Qed.
 
+(* TODO: pas sûr de bien comprendre tout ça... Et peut-être
+   que c'est un peu faible avec eq ? *)
 Global Instance :
   Proper (pointwise_relation D iff ==>
             forall_relation (fun n : nat => eq ==> iff)) forall_nprod.
