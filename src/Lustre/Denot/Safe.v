@@ -1482,7 +1482,7 @@ Section SDfuns_safe.
     apply is_cons_elim in Hcc as (vc & cs' & Hc); rewrite Hc in *.
     rewrite AC_cons in Cc.
     apply DSle_cons_elim in Cc as (cks' & Hck & Cc); rewrite Hck in *.
-    (* setoid_rewrite Hck in Cn. (* un jour, peut-être ! *) *)
+    setoid_rewrite Hck in Cn.
     rewrite scase_cons with (Hc := Hcn), AC_cons in Hu.
     setoid_rewrite Hu; clear Hu U.
     setoid_rewrite Hv; clear Hv V.
@@ -1503,7 +1503,7 @@ Section SDfuns_safe.
         auto using Nat.eqb_eq, hds_length.
       eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
       intros ??? ->.
-      rewrite Hck, AC_cons.
+      rewrite AC_cons.
       intros [HH]%Con_le_simpl; cases.
     - (* rem *)
       exists (lift (REM _) np), cs', cks'.
@@ -1511,7 +1511,6 @@ Section SDfuns_safe.
       + eapply forall_nprod_impl in Sn; eauto.
         now apply DSForall_rem.
       + eapply forall_nprod_impl in Cn; eauto.
-        setoid_rewrite Hck.
         intros ? Hl%rem_le_compat.
         now rewrite rem_AC, rem_cons in Hl.
   Qed.
@@ -1626,11 +1625,11 @@ Section SDfuns_safe.
       ty_DS (Tenum tx tn) cs ->
       ty_DS ty ds ->
       forall_nprod (ty_DS ty) np ->
-      ty_DS ty (scase_defv l cs ds np).
+      ty_DS ty (scase_defv l cs (nprod_cons ds np)).
   Proof.
     intros * Wtc Wtd Wtnp.
     unfold ty_DS, DSForall_pres, scase_defv in *.
-    rewrite scase_def_eq.
+    rewrite scase_def_eq, scase_def__eq.
     revert Wtnp.
     revert np.
     induction l; intros.
@@ -1646,13 +1645,13 @@ Section SDfuns_safe.
 
   (* wrapper *)
   Corollary ty_scase_defv :
-    forall ty tx tn l cs np,
+    forall ty tx tn l cs dnp,
       ty_DS (Tenum tx tn) cs ->
-      forall_nprod (ty_DS ty) np ->
-      ty_DS ty (uncurry_nprod (scase_defv l cs) np).
+      forall_nprod (ty_DS ty) dnp ->
+      ty_DS ty (scase_defv l cs dnp).
   Proof.
     intros * ? [?] % forall_nprod_inv.
-    rewrite uncurry_nprod_simpl.
+    setoid_rewrite nprod_hd_tl.
     eapply ty_scase_defv_; eauto.
   Qed.
 
@@ -1666,10 +1665,11 @@ Section SDfuns_safe.
       cl_DS ck ds ->
       forall_nprod safe_DS np ->
       forall_nprod (cl_DS ck) np ->
-      cl_DS ck (scase_defv l cs ds np).
+      cl_DS ck (scase_defv l cs (nprod_cons ds np)).
   Proof.
     unfold cl_DS, scase_defv.
     intros *.
+    rewrite scase_def_eq.
     generalize (denot_clock ck) as cks; clear ck.
     intros cks Nnil Tc Sc Cc Sd Cd Sn Cn.
     eapply DSle_rec_eq2 with
@@ -1681,7 +1681,7 @@ Section SDfuns_safe.
                 /\ AC ds <= cks
                 /\ forall_nprod safe_DS np
                 /\ forall_nprod (fun s => AC s <= cks) np
-                /\ U == AC (scase_def _ _ _ l cs ds np)
+                /\ U == AC (scase_def_ _ _ _ l cs ds np)
                 /\ V == cks).
     3: exists np, cs, ds, cks; do 4 (split; auto).
     { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
@@ -1694,8 +1694,8 @@ Section SDfuns_safe.
     rewrite AC_cons in Cc, Cd.
     apply DSle_cons_elim in Cc as (cks' & Hck & Cc); rewrite Hck in *.
     apply Con_le_simpl in Cd as (Heq & Cd).
-    (* setoid_rewrite Hck in Cn. (* un jour, peut-être ! *) *)
-    rewrite scase_def_cons with (Hc := Hcn), AC_cons in Hu.
+    setoid_rewrite Hck in Cn.
+    rewrite scase_def__cons with (Hc := Hcn), AC_cons in Hu.
     setoid_rewrite Hu; clear Hu U.
     setoid_rewrite Hv; clear Hv V.
     inv Tc. inv Sc. inv Sd.
@@ -1715,7 +1715,7 @@ Section SDfuns_safe.
       edestruct (@fcase_def_pres_ok value) as [? ->]; try congruence; eauto.
       eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
       intros ??? ->.
-      rewrite Hck, AC_cons.
+      rewrite AC_cons.
       intros [HH]%Con_le_simpl; cases.
     - (* rem *)
       exists (lift (REM _) np), cs', ds', cks'.
@@ -1723,25 +1723,22 @@ Section SDfuns_safe.
       + eapply forall_nprod_impl in Sn; eauto.
         now apply DSForall_rem.
       + eapply forall_nprod_impl in Cn; eauto.
-        setoid_rewrite Hck.
         intros ? Hl%rem_le_compat.
         now rewrite rem_AC, rem_cons in Hl.
   Qed.
 
-  (* wrapper pour [cl_scasev_], qui passe mieux dans [safe_exp_] *)
-  Lemma cl_scase_defv :
-    forall tid tn ck l cs np,
+  (* wrapper *)
+  Corollary cl_scase_defv :
+    forall tid tn ck l cs dnp,
       l <> [] ->
       ty_DS (Tenum tid tn) cs ->
       safe_DS cs ->
       cl_DS ck cs ->
-      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) np ->
-      cl_DS ck (uncurry_nprod (scase_defv l cs) np).
+      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) dnp ->
+      cl_DS ck (scase_defv l cs dnp).
   Proof.
-    intros * Nnil Tc Sc Cc SCn.
-    apply and_forall_nprod in SCn as [[Sn] % forall_nprod_inv
-                                      [Cn] % forall_nprod_inv].
-    rewrite uncurry_nprod_simpl.
+    intros * ???? [[] [] % and_forall_nprod] % forall_nprod_inv.
+    rewrite (nprod_hd_tl dnp).
     eapply cl_scase_defv_; eauto.
   Qed.
 
@@ -1755,7 +1752,7 @@ Section SDfuns_safe.
       cl_DS ck ds ->
       forall_nprod safe_DS np ->
       forall_nprod (cl_DS ck) np ->
-      safe_DS (scase_defv l cs ds np).
+      safe_DS (scase_defv l cs (nprod_cons ds np)).
   Proof.
     clear.
     intros * Nnil Tc Sc Cc Sd Cd Sn Cn.
@@ -1764,7 +1761,9 @@ Section SDfuns_safe.
     generalize (denot_clock ck) as cks; intros.
     clear ck ins envI bs env.
     unfold safe_DS.
-    remember_ds (scase_defv l cs ds np) as t.
+    unfold scase_defv.
+    rewrite scase_def_eq.
+    remember_ds (scase_def_ _ _ _ l cs ds np) as t.
     revert_all; cofix Cof; intros.
     destruct t as [| b t].
     { constructor; rewrite <- eqEps in Ht; eauto. }
@@ -1777,7 +1776,7 @@ Section SDfuns_safe.
       destruct (@is_cons_elim _ ds) as (d & ds' & Heqd); auto.
       rewrite Heqc in *; clear Heqc cs Icc.
       rewrite Heqd in *; clear Heqd ds Icd.
-      unshelve rewrite scase_def_cons in Ht; auto.
+      unshelve rewrite scase_def__cons in Ht; auto.
       apply Con_eq_simpl in Ht as [Hb _]; cases.
       rewrite AC_cons in Cc, Cd.
       apply DSle_cons_elim in Cc as (cks' & Hck & Cc).
@@ -1803,7 +1802,7 @@ Section SDfuns_safe.
         rewrite Hck, AC_cons.
         intros [HH]%Con_le_simpl; cases.
     - apply rem_eq_compat in Ht.
-      rewrite rem_cons, rem_scase_def in Ht.
+      rewrite rem_cons, rem_scase_def_ in Ht.
       apply rem_le_compat in Cc, Cd.
       rewrite rem_AC in Cc, Cd.
       eapply Cof with (cks := rem cks) in Ht; auto using DSForall_rem.
@@ -1817,20 +1816,20 @@ Section SDfuns_safe.
         now rewrite rem_AC in Hc.
   Qed.
 
-  (* wrapper pour [safe_scase_defv_], qui passe mieux dans [safe_exp_] *)
-  Lemma safe_scase_defv :
-    forall tid tn ck l cs np,
+  (* wrapper *)
+  Corollary safe_scase_defv :
+    forall tid tn ck l cs dnp,
       l <> [] ->
       safe_DS cs ->
       ty_DS (Tenum tid tn) cs ->
       cl_DS ck cs ->
-      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) np ->
-      safe_DS (uncurry_nprod (scase_defv l cs) np).
+      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) dnp ->
+      safe_DS (scase_defv l cs dnp).
   Proof.
     intros * Nnil Sc Tc Cc SCn.
     apply and_forall_nprod in SCn as [[Sn] % forall_nprod_inv
-                                      [Cn] % forall_nprod_inv].
-    rewrite uncurry_nprod_simpl.
+                                        [Cn] % forall_nprod_inv].
+    rewrite (nprod_hd_tl dnp).
     eapply safe_scase_defv_; eauto.
   Qed.
 
@@ -1892,7 +1891,7 @@ Section SDfuns_safe.
     - inv Hf. inv Hl.
       rewrite denot_expss_eq.
       unfold eq_rect; cases.
-      + rewrite (@list_of_nprod_app _ 1 (length es)).
+      + setoid_rewrite list_of_nprod_cons.
         constructor; auto.
         now apply Forall_ty_exp.
       + now rewrite annots_numstreams in n.
@@ -1911,7 +1910,7 @@ Section SDfuns_safe.
     - inv Hf. inv Hl.
       rewrite denot_expss_eq.
       unfold eq_rect; cases.
-      + rewrite (@list_of_nprod_app _ 1 (length es)).
+      + setoid_rewrite list_of_nprod_cons.
         constructor; auto.
         now apply Forall_cl_exp.
       + now rewrite annots_numstreams in n.
@@ -1934,7 +1933,7 @@ Section SDfuns_safe.
         simpl (Forall _ _).
         rewrite Forall_cons2.
         rewrite <- (IHess (list_sum (List.map numstreams es))); auto.
-        rewrite (@forall_app_nprod _ _ 1 (length ess)).
+        setoid_rewrite forall_nprod_cons_iff.
         now rewrite <- Forall_denot_exps.
       + now rewrite annots_numstreams in n.
   Qed.
@@ -2872,25 +2871,27 @@ Section Node_safe.
       take (typeof e = _) and rewrite it in Tye; inv Tye.
       take (clockof e = _) and rewrite it in Cle; inv Cle.
       change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
+      (* utile dans les deux dernières branches *)
+      assert (forall_nprod (forall_nprod (cl_DS ins envI bs env nck)) t0).
+      { apply Forall_forall_nprod; simpl_Forall.
+        eapply Forall2_in_right in Wc as (?&?& Hcl); eauto.
+        simpl_Forall; eauto using Forall_forall_nprod, Forall2_Forall_eq. }
       repeat split.
       + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
           by (simpl_Forall; auto).
         eapply Forall2_Forall_eq in Wt; eauto.
         eapply Forall2_lift_nprod; eauto using ty_scasev.
       + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
-        apply forall_nprod_Forall.
-        eapply forall_lift_nprod; eauto using cl_scasev, map_eq_nnil.
-        repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
-        eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
-        eapply Forall2_in_right in Hcl as (?&?&?); eauto.
-        simpl_Forall; subst; auto.
-      + apply Forall_forall_nprod.
-        apply forall_nprod_Forall.
-        eapply forall_lift_nprod; eauto using safe_scasev, map_eq_nnil.
-        repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
-        eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
-        eapply Forall2_in_right in Hcl as (?&?&?); eauto.
-        simpl_Forall; subst; auto.
+        eapply forall_nprod_Forall, forall_lift_nprod; eauto using cl_scasev, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and.
+        apply forall_nprod_and; split;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq.
+      + eapply forall_lift_nprod; eauto using safe_scasev, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and.
+        apply forall_nprod_and; split;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq.
     - (* Ecase défaut *)
       destruct a as [tys nck].
       apply wt_exp_wl_exp in Hwt as Hwl.
@@ -2919,46 +2920,44 @@ Section Node_safe.
       apply Forall_denot_expss with (n := length tys) in Sf; auto.
       rewrite denot_exp_eq.
       simpl (typeof _); simpl (clockof _).
+      take (typeof e = _) and rewrite it in IHe.
+      take (clockof e = _) and rewrite it in IHe.
+      assert (Hl : list_sum (List.map numstreams des) = length tys)
+        by (subst tys; now rewrite length_typesof_annots, annots_numstreams).
       revert IHe Wtd Wcd Sfd Wt Wc Sf.
       gen_sub_exps.
-      simpl; intros; unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence.
-      2:{ contradict n; subst tys.
-          now rewrite length_typesof_annots, annots_numstreams. }
+      rewrite Hl.
+      simpl; unfold eq_rect_r, eq_rect, eq_sym; cases ; intros; try congruence.
       destruct IHe as (Tye & Cle & Sfe).
-      take (typeof e = _) and rewrite it in Tye; inv Tye.
-      take (clockof e = _) and rewrite it in Cle; inv Cle.
+      inv Tye.
+      inv Cle.
       change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
-      assert (list_sum (List.map numstreams des) = length tys) as Hl
-          by (subst tys; now rewrite length_typesof_annots, annots_numstreams).
-      rewrite curry_nprod_simpl.
+      assert (Forall (eq tys) (List.map typesof (List.map snd es)))
+        by (simpl_Forall; auto).
+      eapply Forall2_Forall_eq in Wt; eauto.
+      (* utile dans les deux dernières branches *)
+      assert (forall_nprod (forall_nprod (cl_DS ins envI bs env nck)) t1).
+      { apply Forall_forall_nprod; simpl_Forall.
+        eapply Forall2_in_right in Wc as (?&?& Hcl); eauto.
+        simpl_Forall; eauto using Forall_forall_nprod, Forall2_Forall_eq. }
       repeat split.
-      + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
-          by (simpl_Forall; auto).
-        eapply Forall2_Forall_eq in Wt; eauto.
-
-        eapply @Forall2_lift_nprod; eauto using ty_scase_defv.
-        rewrite (@list_of_nprod_app _ 1), Forall_app; simpl; auto.
-      + apply Forall2_map_1, Forall2_ignore1'.
+      + eapply Forall2_lift_nprod with (F := scase_defv _ _);
+          eauto using ty_scase_defv; eauto.
+        rewrite list_of_nprod_cons; constructor; auto.
+      + apply Forall2_map_1, Forall2_ignore1', forall_nprod_Forall.
         { rewrite list_of_nprod_length; auto. }
-        apply forall_nprod_Forall.
-        eapply @forall_lift_nprod; eauto using cl_scase_defv, map_eq_nnil.
-        apply (@forall_nprod_app _  _ 1); simpl.
-        * apply forall_nprod_and; auto.
-          apply Forall_forall_nprod; eauto using Forall2_Forall_eq.
-        * repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
-          eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
-          eapply Forall2_in_right in Hcl as (?&?&?); eauto.
-          simpl_Forall; subst; auto.
-      + apply Forall_forall_nprod.
-        apply forall_nprod_Forall.
-        eapply @forall_lift_nprod; eauto using safe_scase_defv, map_eq_nnil.
-        apply (@forall_nprod_app _  _ 1); simpl.
-        * apply forall_nprod_and; auto.
-          apply Forall_forall_nprod; eauto using Forall2_Forall_eq.
-        * repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
-          eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
-          eapply Forall2_in_right in Hcl as (?&?&?); eauto.
-          simpl_Forall; subst; auto.
+        eapply forall_lift_nprod with (F := scase_defv _ _);
+          eauto using cl_scase_defv, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and.
+        apply forall_nprod_cons, forall_nprod_and;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq.
+      + eapply forall_lift_nprod with (F := scase_defv _ _);
+          eauto using safe_scase_defv, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and.
+        apply forall_nprod_cons2, forall_nprod_and;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq.
      - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
