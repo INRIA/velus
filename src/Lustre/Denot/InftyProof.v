@@ -365,7 +365,7 @@ Module Type LDENOTINF
         unfold eq_rect_r, eq_sym, eq_rect.
         cases; try congruence; intros; solve_err.
         setoid_rewrite lift_nprod_nth with (F := scase_defv _ _); auto.
-        rewrite lift_cons.
+        rewrite @lift_cons.
         apply is_ncons_scase_def, forall_nprod_cons, forall_nprod_lift; eauto.
       + (* total *)
         revert Hc H.
@@ -514,7 +514,7 @@ Module Type LDENOTINF
         cases; intros; solve_err.
         setoid_rewrite lift_nprod_nth with (F := scase_defv _ _); auto.
         unfold eq_rect_r, eq_sym, eq_rect; cases.
-        rewrite lift_cons.
+        rewrite @lift_cons.
         apply is_ncons_scase_def with (n := S n),
             forall_nprod_cons, forall_nprod_lift; eauto.
       + (* total *)
