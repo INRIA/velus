@@ -28,6 +28,7 @@ Local Hint Rewrite
      Curry_simpl
      fcont_comp_simpl
      fcont_comp2_simpl
+     fcont_comp3_simpl
      fcont_comp4_simpl
      SND_simpl Snd_simpl
      FST_simpl Fst_simpl
@@ -993,8 +994,8 @@ Section SStream_functions.
     | _, _ => err error_Cl
     end.
 
-  (* avec une branche par défaut, on initialise avec [defcon2] *)
-  Definition scase_def (l : list enumtag) :
+  (* avec une branche par défaut, on utilise [defcon2] pour l'initialisation *)
+  Definition scase_def_ (l : list enumtag) :
     (* flot de condition -> flot par defaut -> flots des branches -> résultat *)
     DS (sampl B) -C-> DS (sampl A) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
     apply curry.
@@ -1005,11 +1006,32 @@ Section SStream_functions.
     apply (ZIP3 (fcase j) @_ FST _ _).
   Defined.
 
-  Lemma scase_def_eq :
+  Lemma scase_def__eq :
     forall l cs ds np,
-      scase_def l cs ds np = nprod_Foldi l (fun j => ZIP3 (fcase j) cs) (ZIP defcon2 cs ds) np.
+      scase_def_ l cs ds np =
+        nprod_Foldi l (fun j => ZIP3 (fcase j) cs) (ZIP defcon2 cs ds) np.
   Proof.
     trivial.
+  Qed.
+
+  (* wrapper pour [scase_def_], qui permet son utilisation avec des
+     fonctions telles que [lift_nprod] (on charge le 2ème argument) *)
+  Definition scase_def (l : list enumtag) :
+    DS (sampl B) -C-> @nprod (DS (sampl A)) (S (length l)) -C-> DS (sampl A).
+    apply curry.
+    refine ((scase_def_ l @3_ FST _ _) _ _).
+    - exact (nprod_hd @_ SND _ _).
+    - exact (nprod_tl @_ SND _ _).
+  Defined.
+
+  Lemma scase_def_eq :
+    forall l cs ds np,
+      scase_def l cs (nprod_cons ds np) = scase_def_ l cs ds np.
+  Proof.
+    intros.
+    unfold scase_def.
+    autorewrite with localdb.
+    destruct l; auto.
   Qed.
 
   Lemma scase_is_cons :
@@ -1086,19 +1108,19 @@ Section SStream_functions.
   Lemma scase_def_is_cons :
     forall l cs ds np,
       l <> [] ->
-      is_cons (scase_def l cs ds np) ->
+      is_cons (scase_def_ l cs ds np) ->
       is_cons cs /\ is_cons ds /\ forall_nprod (@is_cons _) np.
   Proof.
     induction l as [|? []].
     - congruence.
     - intros * _.
-      rewrite scase_def_eq, Foldi_cons.
+      rewrite scase_def__eq, Foldi_cons.
       intros (?& Hc & HH) % zip3_is_cons.
       rewrite Foldi_nil in HH.
       apply zip_is_cons in HH.
       tauto.
     - intros * _.
-      rewrite scase_def_eq, Foldi_cons.
+      rewrite scase_def__eq, Foldi_cons.
       intros (?&? & Hc) % zip3_is_cons.
       apply (IHl cs ds (nprod_tl np)) in Hc as (?&?&?); try congruence.
       do 2 (split; eauto using hd_tl_forall).
@@ -1109,37 +1131,37 @@ Section SStream_functions.
       is_cons cs ->
       is_cons ds ->
       forall_nprod (@is_cons _) xs ->
-      is_cons (scase_def l cs ds xs).
+      is_cons (scase_def_ l cs ds xs).
   Proof.
     intros * Hc Hd Hx.
-    rewrite scase_def_eq.
+    rewrite scase_def__eq.
     eapply forall_nprod_Foldi in Hx; eauto using is_cons_zip.
     simpl; intros.
     now apply is_cons_zip3.
   Qed.
 
-  Lemma rem_scase_def :
+  Lemma rem_scase_def_ :
     forall l cs ds np,
-      rem (scase_def l cs ds np)
-      == scase_def l (rem cs) (rem ds) (lift (REM _) np).
+      rem (scase_def_ l cs ds np)
+      == scase_def_ l (rem cs) (rem ds) (lift (REM _) np).
   Proof.
     induction l; intros.
-    - now rewrite 2 scase_def_eq, 2 Foldi_nil, rem_zip.
-    - rewrite 2 scase_def_eq, 2 Foldi_cons, <- 2 scase_def_eq.
+    - now rewrite 2 scase_def__eq, 2 Foldi_nil, rem_zip.
+    - rewrite 2 scase_def__eq, 2 Foldi_cons, <- 2 scase_def__eq.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
   Qed.
 
-  Lemma scase_def_cons :
+  Lemma scase_def__cons :
     forall l c cs d ds np,
     forall (Hc : forall_nprod (@is_cons _) np),
-      scase_def l (cons c cs) (cons d ds) np
+      scase_def_ l (cons c cs) (cons d ds) np
       == cons (fold_right (fun '(j,x) => fcase j c x) (defcon2 c d)
                  (combine l (nprod_hds np Hc)))
-           (scase_def l cs ds (lift (REM _) np)).
+           (scase_def_ l cs ds (lift (REM _) np)).
   Proof.
     intros.
     apply first_rem_eq.
-    - rewrite first_cons, scase_def_eq, Foldi_fold_right.
+    - rewrite first_cons, scase_def__eq, Foldi_fold_right.
       revert dependent np; clear.
       induction l; intros.
       + simpl. now rewrite first_zip, 2 first_cons, zip_cons, zip_bot1.
@@ -1154,7 +1176,7 @@ Section SStream_functions.
           apply decomp_eqCon in Hd; rewrite Hd in Heq.
           now apply Con_eq_simpl in Heq. }
         rewrite Heq, first_cons, zip3_cons, zip3_bot1 at 1; auto.
-    - now rewrite rem_scase_def, 3 rem_cons.
+    - now rewrite rem_scase_def_, 3 rem_cons.
   Qed.
 
   (** Caractérisation de [fcase] itéré sur la têtes des flots *)

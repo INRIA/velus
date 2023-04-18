@@ -200,7 +200,6 @@ Section Denot_exps.
     + exact ((nprod_app @2_ (denot_exp_ a)) IHes).
   Defined.
 
-  (* TEST *)
   (* vérifie que chaque sous-liste d'expressions calcule exactement n flots et
    retourne un produit d'éléments de type (nprod n) *)
   (* FIXME: ess n'a pas le type list(list exp) car ça empêche la décroissance
@@ -211,44 +210,11 @@ Section Denot_exps.
     induction ess as [|[? es]].
     + exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
     + destruct (Nat.eq_dec (list_sum (List.map numstreams es)) n) as [<-|].
-      * exact ((@nprod_app _ 1 _ @2_ (denot_exps_ es)) IHess).
+      * exact ((nprod_cons @2_ (denot_exps_ es)) IHess).
       * exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
   Defined.
 
 End Denot_exps.
-
-
-
-Set Nested Proofs Allowed.
-(* TODO: move, expliquer pourquoi c'est utile avec lift_nprod *)
-      Definition curry_nprod :
-        forall {D1 D2 n}, (@nprod D1 (S n) -C-> D2) -C-> D1 -C-> @nprod D1 n -C-> D2.
-        intros.
-        apply curry, curry.
-        refine ((AP _ _ @2_ FST _ _ @_ FST _ _) _).
-        exact ((@nprod_app _ 1 _ @2_ SND _ _ @_ FST _ _) (SND _ _)).
-      Defined.
-      Definition uncurry_nprod :
-        forall {D1 D2 n}, (D1 -C-> @nprod D1 n -C-> D2) -C-> @nprod D1 (S n) -C-> D2.
-        intros.
-        apply curry.
-        exact ((FST _ _ @3_ ID _) (nprod_hd @_ SND _ _) (nprod_tl @_ SND _ _)).
-      Defined.
-      (* TODO: move *)
-      Lemma curry_nprod_simpl :
-        forall (D D2 : cpo) n (F : @nprod D (S n) -C-> D2) (d : D) (np : @nprod D n),
-          curry_nprod F d np = F (@nprod_app _ 1 n d np).
-      Proof.
-        trivial.
-      Qed.
-      (* TODO: move *)
-      Lemma uncurry_nprod_simpl :
-        forall (D D2 : cpo) n (F : D -C-> @nprod D n -C-> D2) (np : @nprod D (S n)),
-          uncurry_nprod F np = F (nprod_hd np) (nprod_tl np).
-      Proof.
-        trivial.
-      Qed.
-
 
 
 Definition denot_exp_ (ins : list ident)
@@ -342,16 +308,17 @@ Definition denot_exp_ (ins : list ident)
     rewrite <- (map_length fst) in ses.
     destruct o as [d_es|].
     + (* avec une branche par défaut *)
-      (* condition, flot par défaut, branches *)
-      refine ((_ @3_ (denot_exp_ e0)) (denot_exps_ denot_exp_ d_es) ses).
-      destruct (numstreams e0) as [|[]].
-      1,3: apply CTE, CTE, CTE, (nprod_const errTy).
+      revert ses.
       destruct (Nat.eq_dec
                   (list_sum (List.map numstreams d_es))
                   (length tys)
                ) as [<-|].
-      2: apply CTE, CTE, CTE, (nprod_const errTy).
-      exact (curry_nprod @_ lift_nprod @_ uncurry_nprod @_ scase_defv (List.map fst ies)).
+      2: apply CTE, CTE, (nprod_const errTy).
+      intro ses.
+      refine ((_ @2_ (denot_exp_ e0)) ((nprod_cons @2_ denot_exps_ denot_exp_ d_es) ses)).
+      destruct (numstreams e0) as [|[]].
+      1,3: apply CTE, CTE, (nprod_const errTy).
+      exact (lift_nprod @_ scase_defv (List.map fst ies)).
     + (* case total *)
       (* condition, branches *)
       refine ((_ @2_ (denot_exp_ e0)) ses).
@@ -409,7 +376,7 @@ Lemma denot_expss_eq :
     denot_expss ins ((x,es) :: ess) n envG envI bs env
     = match Nat.eq_dec (list_sum (List.map numstreams es)) n with
       | left eqn =>
-          @nprod_app _ 1 _
+          nprod_cons
             (eq_rect _ nprod (denot_exps ins es envG envI bs env) _ eqn)
             (denot_expss ins ess n envG envI bs env)
       | _ => nprod_const (nprod_const errTy _) _
@@ -437,8 +404,7 @@ Proof.
   - simpl; auto.
   - rewrite denot_expss_eq.
     unfold eq_rect in *.
-    cases; auto using forall_nprod_const.
-    apply forall_nprod_app with (n := 1); auto.
+    cases; eauto using forall_nprod_const, forall_nprod_cons.
 Qed.
 
 Lemma forall_forall_denot_expss :
@@ -451,8 +417,7 @@ Proof.
   - simpl; auto.
   - rewrite denot_expss_eq.
     unfold eq_rect in *.
-    cases; auto using forall_nprod_const.
-    apply forall_nprod_app with (n := 1); auto.
+    cases; eauto using forall_nprod_const, forall_nprod_cons.
 Qed.
 
 Lemma denot_exps_nil :
@@ -546,8 +511,8 @@ Lemma denot_exp_eq :
           let ds := denot_exps ins eds envG envI bs env in (* défaut *)
           match numstreams ec as n, Nat.eq_dec (list_sum (List.map numstreams eds)) (length tys) return nprod n -> _ with
           | 1, left eqm =>
-              fun cs => curry_nprod (lift_nprod (uncurry_nprod (scase_defv (List.map fst ies) cs)))
-                       (eq_rect _ nprod ds _ eqm) ss
+              fun cs => lift_nprod (scase_defv (List.map fst ies) cs)
+                       (nprod_cons (eq_rect _ nprod ds _ eqm) ss)
           | _,_ => fun _ => nprod_const errTy _
           end cs
       | Eapp f es _ an =>
@@ -653,7 +618,7 @@ Proof.
       fold_denot_exps_ ins.
       gen_denot_sub_exps.
       unfold eq_rect_r, eq_rect, eq_sym.
-      simpl; cases.
+      cases; simpl; cases.
     + (* total *)
       unfold denot_exp, denot_exp_, denot_exps, denot_expss at 1.
       fold_denot_exps_ ins.
