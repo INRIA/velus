@@ -175,7 +175,7 @@ Module Type LDENOTINF
     simpl (snd _) in *.
     rewrite annots_numstreams in *.
     unfold eq_rect; cases; try congruence.
-    apply (@forall_nprod_app _ _ 1).
+    apply forall_nprod_cons.
     - apply P_exps_k; auto.
     - apply IHess; auto.
   Qed.
@@ -243,6 +243,15 @@ Module Type LDENOTINF
     now rewrite <- annots_numstreams.
   Qed.
 
+        Set Nested Proofs Allowed.
+        (* XXX *)
+        Lemma lift_cons :
+          forall D1 D2 (F : D1 -C-> D2) x n (np : nprod n),
+            lift F (nprod_cons x np) =
+              nprod_cons (F x) (lift F np).
+        Proof.
+          destruct n; auto.
+        Qed.
 
   Ltac solve_err :=
     try (
@@ -362,17 +371,11 @@ Module Type LDENOTINF
         revert H0 H Hc.
         unfold P_exp.
         gen_sub_exps.
+        unfold eq_rect_r, eq_sym, eq_rect.
         cases; try congruence; intros; solve_err.
-        rewrite curry_nprod_simpl.
-        setoid_rewrite lift_nprod_nth; auto.
-        rewrite uncurry_nprod_simpl.
-        apply is_ncons_scase_def; auto.
-        * rewrite lift_hd, (nprod_hd_app O).
-          unfold eq_rect; cases; eauto.
-        * rewrite lift_tl.
-          apply forall_nprod_lift.
-          unfold eq_rect_r, eq_rect, eq_sym; cases.
-          apply forall_nprod_tl, (@forall_nprod_app _ _ 1); auto.
+        setoid_rewrite lift_nprod_nth with (F := scase_defv _ _); auto.
+        rewrite lift_cons.
+        apply is_ncons_scase_def, forall_nprod_cons, forall_nprod_lift; eauto.
       + (* total *)
         revert Hc H.
         unfold P_exp.
@@ -518,16 +521,11 @@ Module Type LDENOTINF
         unfold P_exp.
         gen_sub_exps.
         cases; intros; solve_err.
-        rewrite curry_nprod_simpl.
-        setoid_rewrite lift_nprod_nth; auto.
-        rewrite uncurry_nprod_simpl.
-        apply is_ncons_scase_def with (n := S n); auto.
-        * rewrite lift_hd, (nprod_hd_app O).
-          unfold eq_rect; cases; eauto.
-        * rewrite lift_tl.
-          apply forall_nprod_lift.
-          unfold eq_rect_r, eq_rect, eq_sym; cases.
-          apply forall_nprod_tl, (@forall_nprod_app _ _ 1); auto.
+        setoid_rewrite lift_nprod_nth with (F := scase_defv _ _); auto.
+        unfold eq_rect_r, eq_sym, eq_rect; cases.
+        rewrite lift_cons.
+        apply is_ncons_scase_def with (n := S n),
+            forall_nprod_cons, forall_nprod_lift; eauto.
       + (* total *)
         revert H0 Hess.
         unfold P_exp.
@@ -912,12 +910,7 @@ Proof.
       gen_sub_exps.
       unfold eq_rect_r, eq_rect, eq_sym; cases; intros;
         eauto using forall_nprod_const, DS_const_inf.
-      rewrite curry_nprod_simpl.
-      eapply forall_lift_nprod.
-      { intros; rewrite uncurry_nprod_simpl.
-        apply scase_def_inf; eauto using forall_nprod_tl.
-        now apply forall_nprod_hd. }
-      apply forall_nprod_app with (n := 1); auto.
+      eapply forall_lift_nprod; eauto using scase_def_inf, forall_nprod_cons.
     + (* total *)
       revert Hess IHe.
       gen_sub_exps.
@@ -959,7 +952,7 @@ Proof.
   setoid_rewrite denot_expss_eq.
   unfold eq_rect.
   cases; eauto using forall_nprod_const, DS_const_inf.
-  eapply (@forall_nprod_app _ _ 1); eauto using infinite_exps.
+  apply forall_nprod_cons; eauto using infinite_exps.
 Qed.
 
 End LDENOTINF.

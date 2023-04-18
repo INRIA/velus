@@ -471,32 +471,30 @@ Proof.
   apply is_ncons_scase; eauto using inf_nrem, forall_nprod_impl.
 Qed.
 
-Lemma is_ncons_scase_def_ :
+Lemma is_ncons_scase_def :
   forall T OT TB,
-  forall l n xs cs ds,
+  forall l n cs dxs,
     is_ncons n cs ->
-    is_ncons n ds ->
-    forall_nprod (@is_ncons _ n) xs ->
-    is_ncons n (@scase_def_ A B T OT TB l cs ds xs).
+    forall_nprod (@is_ncons _ n) dxs ->
+    is_ncons n (@scase_def A B T OT TB l cs dxs).
 Proof.
-  intros * Hc Hd Hx.
-  rewrite scase_def__eq.
-  eapply forall_nprod_Foldi in Hx; eauto 2 using is_ncons_zip.
-  simpl; intros.
-  now apply is_ncons_zip3.
+  intros * Hc [Hh Ht] % forall_nprod_inv.
+  rewrite (nprod_hd_tl dxs).
+  rewrite scase_def_eq, scase_def__eq.
+  apply forall_nprod_Foldi with (Q := is_ncons n);
+    auto using is_ncons_zip3, is_ncons_zip.
 Qed.
 
-Lemma scase_def__inf :
+Lemma scase_def_inf :
   forall T OT TB,
-  forall l xs cs ds,
+  forall l cs dxs,
     infinite cs ->
-    infinite ds ->
-    forall_nprod (@infinite _) xs ->
-    infinite (@scase_def_ A B T OT TB l cs ds xs).
+    forall_nprod (@infinite _) dxs ->
+    infinite (@scase_def A B T OT TB l cs dxs).
 Proof.
   setoid_rewrite <- nrem_inf_iff.
-  intros * Infc Infd Hf n.
-  apply is_ncons_scase_def_; eauto using inf_nrem, forall_nprod_impl.
+  intros * Infc Infd n.
+  apply is_ncons_scase_def; eauto using inf_nrem, forall_nprod_impl.
 Qed.
 
 End Ncons_ops.
