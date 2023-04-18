@@ -2884,13 +2884,13 @@ Section Node_safe.
       + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
         eapply forall_nprod_Forall, forall_lift_nprod; eauto using cl_scasev, map_eq_nnil.
         match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and.
-        apply forall_nprod_and; split;
+        setoid_rewrite <- forall_nprod_and_iff.
+        apply forall_nprod_and;
           eauto using Forall_forall_nprod, Forall2_Forall_eq.
       + eapply forall_lift_nprod; eauto using safe_scasev, map_eq_nnil.
         match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and.
-        apply forall_nprod_and; split;
+        setoid_rewrite <- forall_nprod_and_iff.
+        apply forall_nprod_and;
           eauto using Forall_forall_nprod, Forall2_Forall_eq.
     - (* Ecase défaut *)
       destruct a as [tys nck].
@@ -2943,20 +2943,20 @@ Section Node_safe.
       repeat split.
       + eapply Forall2_lift_nprod with (F := scase_defv _ _);
           eauto using ty_scase_defv; eauto.
-        rewrite list_of_nprod_cons; constructor; auto.
+        setoid_rewrite list_of_nprod_cons; constructor; auto.
       + apply Forall2_map_1, Forall2_ignore1', forall_nprod_Forall.
         { rewrite list_of_nprod_length; auto. }
         eapply forall_lift_nprod with (F := scase_defv _ _);
           eauto using cl_scase_defv, map_eq_nnil.
         match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and.
+        setoid_rewrite <- forall_nprod_and_iff.
         apply forall_nprod_cons, forall_nprod_and;
           eauto using Forall_forall_nprod, Forall2_Forall_eq.
       + eapply forall_lift_nprod with (F := scase_defv _ _);
           eauto using safe_scase_defv, map_eq_nnil.
         match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and.
-        apply forall_nprod_cons2, forall_nprod_and;
+        setoid_rewrite <- forall_nprod_and_iff.
+        apply forall_nprod_cons, forall_nprod_and;
           eauto using Forall_forall_nprod, Forall2_Forall_eq.
      - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
