@@ -1105,7 +1105,7 @@ Section SStream_functions.
     - now rewrite rem_scase, 2 rem_cons.
   Qed.
 
-  Lemma scase_def_is_cons :
+  Lemma scase_def__is_cons :
     forall l cs ds np,
       l <> [] ->
       is_cons (scase_def_ l cs ds np) ->
@@ -1126,7 +1126,20 @@ Section SStream_functions.
       do 2 (split; eauto using hd_tl_forall).
   Qed.
 
-  Lemma is_cons_scase_def :
+  Lemma scase_def_is_cons :
+    forall l cs dnp,
+      l <> [] ->
+      is_cons (scase_def l cs dnp) ->
+      is_cons cs /\ forall_nprod (@is_cons _) dnp.
+  Proof.
+    intros *.
+    rewrite (nprod_hd_tl dnp), scase_def_eq.
+    intros * ? Hc.
+    eapply scase_def__is_cons in Hc as (?&?&?);
+      eauto using forall_nprod_cons.
+  Qed.
+
+  Lemma is_cons_scase_def_ :
     forall l cs ds xs,
       is_cons cs ->
       is_cons ds ->
@@ -1140,6 +1153,18 @@ Section SStream_functions.
     now apply is_cons_zip3.
   Qed.
 
+  Lemma is_cons_scase_def :
+    forall l cs dxs,
+      is_cons cs ->
+      forall_nprod (@is_cons _) dxs ->
+      is_cons (scase_def l cs dxs).
+  Proof.
+    intros * Hc Hdx.
+    rewrite (nprod_hd_tl dxs), scase_def_eq in *.
+    apply forall_nprod_cons_iff in Hdx as [].
+    apply is_cons_scase_def_; auto.
+  Qed.
+
   Lemma rem_scase_def_ :
     forall l cs ds np,
       rem (scase_def_ l cs ds np)
@@ -1149,6 +1174,16 @@ Section SStream_functions.
     - now rewrite 2 scase_def__eq, 2 Foldi_nil, rem_zip.
     - rewrite 2 scase_def__eq, 2 Foldi_cons, <- 2 scase_def__eq.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
+  Qed.
+
+  Lemma rem_scase_def :
+    forall l cs dnp,
+      rem (scase_def l cs dnp)
+      == scase_def l (rem cs) (lift (REM _) dnp).
+  Proof.
+    intros.
+    now rewrite (nprod_hd_tl dnp), scase_def_eq, rem_scase_def_,
+      lift_cons, <- scase_def_eq.
   Qed.
 
   Lemma scase_def__cons :
