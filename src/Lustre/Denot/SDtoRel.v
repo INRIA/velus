@@ -838,15 +838,20 @@ Lemma _Ss_app :
       ((Ss_of_nprod np Hn) ++ (Ss_of_nprod mp Hm)).
 Proof.
   intros.
-  induction n as [|[]]; intros; auto.
+  induction n; simpl; intros.
   - apply _Ss_of_nprod_eq; auto.
-  - destruct m.
-    + simpl. constructor; auto. now apply _S_of_DS_eq.
-    + constructor.
-      * now apply _S_of_DS_eq.
-      * unshelve eapply IHn. split.
-  - constructor. now apply _S_of_DS_eq.
-    apply IHn.
+  - constructor.
+    + apply _S_of_DS_eq.
+      now setoid_rewrite nprod_hd_app.
+    + destruct n.
+      * destruct m; constructor; auto.
+        apply _S_of_DS_eq; auto.
+        apply _Ss_of_nprod_eq; auto.
+      * setoid_rewrite <- IHn.
+        apply _Ss_of_nprod_eq; auto.
+  Unshelve.
+  apply forall_nprod_app; auto.
+  now apply forall_nprod_tl in Hn.
 Qed.
 
 Corollary Ss_app :
@@ -1026,9 +1031,9 @@ Proof.
   cases; try (simpl in *; congruence).
   subst; intros; constructor.
   - unshelve rewrite <- Ss_exps.
-    { now apply (@app_forall_nprod _ _ 1) in Inf as []. }
+    { now apply forall_nprod_cons_iff in Inf as []. }
     apply _Ss_of_nprod_eq.
-    now rewrite (nprod_hd_app O).
+    now rewrite nprod_hd_cons.
   - (* pour réécrire [nprod_tl_app_1] et utiliser IHess, il faut que le
        membre droit du nprod_app soit de taille > 0. On doit donc détruire
        ess une fois de plus. *)
@@ -1385,8 +1390,10 @@ Qed.
 
 Lemma ok_case_def :
   forall l, l <> [] ->
-  forall (cs ds : DS (sampl value)) (np : nprod (length l)),
-    let rs := scase_defv l cs ds np in
+  forall (cs : DS (sampl value)) (dnp : nprod (S (length l))),
+    let rs := scase_defv l cs dnp in
+    let ds := nprod_hd dnp in
+    let np := nprod_tl dnp in
     forall (npi : forall_nprod (@infinite _) np)
       (csi : infinite cs)
       (dsi : infinite ds)
@@ -1394,6 +1401,18 @@ Lemma ok_case_def :
       safe_DS rs ->
       case (S_of_DSv cs csi) (combine l (Ss_of_nprod np npi)) (Some (S_of_DSv ds dsi)) (S_of_DSv rs rsi).
 Proof.
+  intros l Nnil cs dnp.
+  (* d'abord, mettons [rs] sous la forme [scase_def_ l cs ds np] *)
+  rewrite (nprod_hd_tl dnp), nprod_hd_cons.
+  intros rs ds' np'.
+  assert (np' = nprod_tl dnp) as Hnp.
+  { destruct l; try congruence; subst np'.
+    now rewrite nprod_tl_cons with (np := nprod_tl dnp). }
+  revert rs.
+  rewrite <- Hnp; clear Hnp; fold ds'.
+  generalize np' as np, ds' as ds; clear - Nnil; intros ???.
+  unfold scase_defv in rs; revert rs; rewrite scase_def_eq; intro.
+  (* c'est bon *)
   intros.
   remember_st (S_of_DSv cs csi) as cs'.
   remember_st (S_of_DSv ds dsi) as ds'.
@@ -1414,10 +1433,10 @@ Proof.
     apply forall_nprod_lift in np'i.
     apply DSForall_rem in Sr.
     apply rem_eq_compat in Hcs, Hrs.
-    unfold scase_defv in rs; subst rs.
-    rewrite rem_scase_def, rem_cons in *.
+    subst rs.
+    rewrite rem_scase_def_, rem_cons in *.
     unshelve eapply Cof with (cs := rem cs) (ds := rem ds) (np := lift _ _);
-      eauto using rem_infinite, scase_def_inf.
+      eauto using rem_infinite, scase_def__inf.
     - rewrite <- Eqc; eauto using _S_of_DS_eq.
     - rewrite <- Eqd; eauto using _S_of_DS_eq.
     - rewrite <- Eqr; eauto using _S_of_DS_eq.
@@ -1425,10 +1444,9 @@ Proof.
       rewrite Ss_map; auto using tl_rem; reflexivity. }
   rewrite Hrs in *; inv Sr.
   subst rs.
-  unfold scase_defv in Hrs.
   assert (forall_nprod (@is_cons _) np) as npc.
   { clear - npi. eapply forall_nprod_impl in npi; eauto. now inversion 1. }
-  rewrite Hcs, Hds, (scase_def_cons _ _ _ _ _ _ _ _ _ npc) in Hrs.
+  rewrite Hcs, Hds, (scase_def__cons _ _ _ _ _ _ _ _ _ npc) in Hrs.
   apply Con_eq_simpl in Hrs as [Hr Heq].
   destruct r; simpl in *; subst; try tauto.
   - (* absent *)
@@ -1834,7 +1852,7 @@ Proof.
     rewrite Hsss.
     edestruct (Ss_of_nprod_eq _ Inf1) as [Inf2 ->].
     { simpl (snd _).
-      rewrite denot_expss_eq, Hdec, (nprod_hd_app 0), ID_simpl, Id_simpl.
+      rewrite denot_expss_eq, Hdec, nprod_hd_cons.
       reflexivity. }
     clear; revert Inf2 Inf.
     gen_sub_exps.
@@ -2037,7 +2055,7 @@ Proof.
     gen_sub_exps.
     unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence; intros.
     2: now rewrite length_typesof_annots, annots_numstreams in n.
-    rewrite curry_nprod_simpl in Hse; subst.
+    subst.
     eapply ScaseDefault_alt2 with (d:= (Streams.const absent)) in H0;
       eauto using Ss_of_nprod_length.
     + destruct es; simpl; congruence.
@@ -2055,24 +2073,23 @@ Proof.
       rewrite Eqvd.
       (* ici on veut à tout prix utiliser Forall2t_lift_nprod,
          il faut arranger un peu le but pour qu'il ait la bonne forme *)
-      apply (Forall2t_more_col (fun ss ds => case _ (combine _ ss) (Some ds))).
+      apply (Forall2t_more_col _ _ (fun ss ds => case _ (combine _ ss) (Some ds))).
       { now rewrite 2 Ss_of_nprod_length. }
       (* FIXME: c'est horrible de devoir écrire ça *)
       assert (exists Inf,
                  Forall2 EqSts
                    (Ss_of_nprod t0 Inf1 :: Ss_of_nprods t1 Inf0)
-                   (Ss_of_nprods (@nprod_app _ 1 _ t0 t1) Inf)
+                   (Ss_of_nprods (nprod_cons t0 t1) Inf)
              ) as [? ->].
       { clear.
-        exists (@forall_nprod_app _ _ 1 _ _ _ Inf1 Inf0).
+        exists (@forall_nprod_cons _ _ _ _ _ Inf1 Inf0).
         revert_all; intros ??.
         destruct (length (map fst es)).
         - cbn; constructor; auto using _Ss_of_nprod_eq.
         - (* pourquoi deux fois ? j'aimerais savoir *)
           do 2 (constructor; eauto using _Ss_of_nprod_eq, _Ss_of_nprods_eq). }
-      eapply Forall2t_lift_nprod; eauto.
-      (* pourquoi ça ne fonctionne avec using ? j'aimerais savoir *)
-      intros; eapply ok_case_def; eauto using map_eq_nnil.
+      eapply Forall2t_lift_nprod; intros; eauto.
+      eapply ok_case_def; eauto using map_eq_nnil.
   - (* Eapp *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
