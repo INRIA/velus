@@ -1614,6 +1614,12 @@ Proof.
   destruct np; auto.
 Qed.
 
+Lemma nprod_tl_cons : forall x n (np : nprod (S n)),
+    nprod_tl (nprod_cons x np) = np.
+Proof.
+  auto.
+Qed.
+
 (** nprod concatenation *)
 Definition nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p).
   apply curry.
