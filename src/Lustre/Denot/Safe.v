@@ -1688,7 +1688,7 @@ Section SDfuns_safe.
     clear - Nnil.
     intros U V Hc (np & cs & ds & cks & Tc & Sc & Cc & Sd & Cd & Sn & Cn & Hu & Hv).
     rewrite Hu in Hc.
-    apply AC_is_cons, scase_def_is_cons in Hc as (Hcc & Hcd & Hcn); auto.
+    apply AC_is_cons, scase_def__is_cons in Hc as (Hcc & Hcd & Hcn); auto.
     apply is_cons_elim in Hcc as (vc & cs' & Hc); rewrite Hc in *.
     apply is_cons_elim in Hcd as (vd & ds' & Hd); rewrite Hd in *.
     rewrite AC_cons in Cc, Cd.
@@ -1771,7 +1771,7 @@ Section SDfuns_safe.
     constructor.
     - clear Cof.
       apply symmetry, cons_is_cons in Ht as Hc.
-      apply scase_def_is_cons in Hc as (Icc & Icd & Icn); auto.
+      apply scase_def__is_cons in Hc as (Icc & Icd & Icn); auto.
       destruct (@is_cons_elim _ cs) as (c & cs' & Heqc); auto.
       destruct (@is_cons_elim _ ds) as (d & ds' & Heqd); auto.
       rewrite Heqc in *; clear Heqc cs Icc.
