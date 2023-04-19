@@ -1614,6 +1614,12 @@ Proof.
   destruct np; auto.
 Qed.
 
+Lemma nprod_hd_cons : forall x n (np:nprod n),
+    nprod_hd (nprod_cons x np) = x.
+Proof.
+  destruct n; auto.
+Qed.
+
 Lemma nprod_tl_cons : forall x n (np : nprod (S n)),
     nprod_tl (nprod_cons x np) = np.
 Proof.
