@@ -979,7 +979,8 @@ Module Type LSEMDETERMINISM
     - inv H3. apply fst_InMembers in H; simpl_In.
       repeat (take (sem_var (var_history _) _ _) and apply sem_var_history in it).
       eapply Hck in it; eauto using Is_free_in_clock with senv.
-      eapply enums_of_detn; eauto.
+      eapply whenb_detn. 3,4:eauto. 1,2:eauto.
+      eapply IHck; eauto using Is_free_in_clock with senv.
   Qed.
 
   Lemma det_var_inv_mask : forall Γ n rs1 rs2 Hi1 Hi2 x,

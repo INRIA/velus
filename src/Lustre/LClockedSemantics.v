@@ -56,9 +56,9 @@ Module Type LCLOCKEDSEMANTICS
     induction ck; intros * Hwc Hf Hsem; inv Hwc; inv Hsem.
     - constructor; auto.
     - econstructor; eauto.
-      simpl_Forall. inv H9. rewrite H1 in Hf. inv Hf.
+      simpl_Forall. inv H10. rewrite H1 in Hf. inv Hf.
       econstructor. symmetry in H0; apply H0.
-      now rewrite H3, H7.
+      etransitivity; eauto. now symmetry.
   Qed.
 
   (** ** Clocked semantics *)
@@ -1519,15 +1519,14 @@ Module Type LCLOCKEDSEMANTICS
   Proof.
     intros * Hv Hsemck Hwhen.
     econstructor; eauto.
-    - apply ac_when in Hwhen. now rewrite Hwhen.
-    - apply enums_of_nth; intros n.
-      eapply when_spec in Hwhen as [(Hy&Hx&Hr)|[(?&?&Hy&Hx&?&Hr)|(?&Hy&Hx&Hr)]].
-      + left. intuition; eauto.
-        setoid_rewrite ac_nth. setoid_rewrite Hr; auto.
-      + right; right. eexists. intuition; eauto.
-        setoid_rewrite ac_nth. setoid_rewrite Hr; auto.
-      + right; left. intuition; auto.
-        setoid_rewrite ac_nth. setoid_rewrite Hr; auto.
+    apply whenb_nth. intros n.
+    apply when_spec with (n:=n) in Hwhen.
+    destruct Hwhen as [(Hy&Hx&Hr)|[(?&?&Hy&Hx&?&Hr)|(?&Hy&Hx&Hr)]];
+      [left|right;left|right;right].
+    all:repeat rewrite ac_nth.
+    - setoid_rewrite Hy. setoid_rewrite Hr. auto.
+    - setoid_rewrite Hy. setoid_rewrite Hr. eauto.
+    - setoid_rewrite Hy. setoid_rewrite Hr. eauto.
   Qed.
 
   Lemma sc_merge :
@@ -1541,7 +1540,7 @@ Module Type LCLOCKEDSEMANTICS
     intros * Hlen Hsemv Hsv Hmerge.
     inv Hsv; try congruence. inv H0; auto.
     apply ac_merge in Hmerge. rewrite <-Hmerge.
-    rewrite <-H12 in H9.
+    apply ac_whenb in H12. rewrite H12 in *.
     eapply sem_var_det in Hsemv; eauto. rewrite <-Hsemv; auto.
   Qed.
 
@@ -1869,10 +1868,9 @@ Module Type LCLOCKEDSEMANTICS
     induction ck; intros * Hck; inv Hck.
     - constructor. now rewrite H1.
     - econstructor; eauto using sem_var_mask.
-      + now rewrite ac_mask, H9.
-      + apply enums_of_nth; intros. repeat rewrite maskv_nth; repeat rewrite maskb_nth.
-        destruct (_ =? _); auto.
-        apply enums_of_nth with (n:=n) in H10; auto.
+      apply whenb_nth; intros. repeat rewrite maskv_nth; repeat rewrite maskb_nth.
+      destruct (_ =? _); auto.
+      apply whenb_nth with (n:=n) in H9; auto.
   Qed.
 
   Lemma sem_clock_unmask : forall H bs ck bs' r,
@@ -2852,12 +2850,12 @@ Module Type LCLOCKEDSEMANTICS
   Proof.
     intros * Hcl1 Hcl2 Hvar.
     inv Hcl2. eapply sem_clock_det in Hcl1; eauto.
-    eapply sem_var_det in Hvar; eauto. rewrite <-Hcl1. rewrite Hvar in H11, H10.
-    rewrite <-H10, when_spec. intros n. repeat rewrite const_nth'. repeat rewrite ac_nth.
-    apply enums_of_nth with (n:=n) in H11 as [(Hc&Hx)|[(Hc&Hx)|(?&Hc&?&Hx)]];
-      setoid_rewrite Hc; setoid_rewrite Hx; eauto.
-    - right; right. eexists. intuition; eauto.
+    eapply sem_var_det in Hvar; eauto. rewrite <-Hcl1. rewrite <-Hvar.
+    apply when_spec. intros n. repeat rewrite const_nth'.
+    apply whenb_nth with (n:=n) in H10 as [(Hb&Hc&Hx)|[(?&Hb&Hc&?&Hx)|(Hb&Hc&Hx)]];
+      setoid_rewrite Hb; setoid_rewrite Hc; setoid_rewrite Hx; eauto.
     - right; left. do 2 eexists. intuition; eauto.
+    - right; right. eexists. intuition; eauto.
   Qed.
 
   Lemma sem_clock_when_enum : forall H bs bs' bs'' cs ck id x tx c,
@@ -2868,12 +2866,12 @@ Module Type LCLOCKEDSEMANTICS
   Proof.
     intros * Hcl1 Hcl2 Hvar.
     inv Hcl2. eapply sem_clock_det in Hcl1; eauto.
-    eapply sem_var_det in Hvar; eauto. rewrite <-Hcl1. rewrite Hvar in H11, H10.
-    rewrite <-H10, when_spec. intros n. repeat rewrite enum_nth'. repeat rewrite ac_nth.
-    apply enums_of_nth with (n:=n) in H11 as [(Hc&Hx)|[(Hc&Hx)|(?&Hc&?&Hx)]];
-      setoid_rewrite Hc; setoid_rewrite Hx; eauto.
-    - right; right. eexists. intuition; eauto.
+    eapply sem_var_det in Hvar; eauto. rewrite <-Hcl1. rewrite <-Hvar.
+    apply when_spec. intros n. repeat rewrite enum_nth'.
+    apply whenb_nth with (n:=n) in H10 as [(Hb&Hc&Hx)|[(?&Hb&Hc&?&Hx)|(Hb&Hc&Hx)]];
+      setoid_rewrite Hb; setoid_rewrite Hc; setoid_rewrite Hx; eauto.
     - right; left. do 2 eexists. intuition; eauto.
+    - right; right. eexists. intuition; eauto.
   Qed.
 
 End LCLOCKEDSEMANTICS.

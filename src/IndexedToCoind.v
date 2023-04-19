@@ -288,13 +288,10 @@ Module Type INDEXEDTOCOIND
       - destruct p. apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
         econstructor; eauto.
         + apply sem_var_impl_from; eauto.
-        + apply ntheq_eqst. intros n0. rewrite ac_nth. repeat rewrite init_from_nth.
-          specialize (Spec (n0 + n)%nat) as [(Hb&Hx&?)|[(Hb&Hx&?)|(?&Hb&Hx&?&?)]];
-            try rewrite Hb, Hx; auto.
-        + apply enums_of_nth. intros n0.
+        + apply whenb_nth. intros n0.
           repeat rewrite init_from_nth.
           specialize (Spec (n0 + n)%nat) as [(?&?&?)|[(?&?)|(?&?&?&?&?)]]; eauto.
-          right; right. eexists. intuition; eauto.
+          right; left. eexists. intuition; eauto.
     Qed.
 
     Corollary sem_clock_impl:

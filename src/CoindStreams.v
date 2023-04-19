@@ -1767,38 +1767,38 @@ Module Type COINDSTREAMS
 
   (** ** sem_clock and its properties *)
 
-  CoInductive enums_of (e : enumtag) : Stream svalue -> Stream bool -> Prop :=
-  | enums_of_abs : forall xs ys,
-      enums_of e xs ys ->
-      enums_of e (absent ⋅ xs) (false ⋅ ys)
-  | enums_of_eq : forall xs ys,
-      enums_of e xs ys ->
-      enums_of e (present (Venum e) ⋅ xs) (true ⋅ ys)
-  | enums_of_neq : forall e' xs ys,
-      enums_of e xs ys ->
+  CoInductive whenb (e : enumtag) : Stream bool -> Stream svalue -> Stream bool -> Prop :=
+  | WhenbA : forall bs xs ys,
+      whenb e bs xs ys ->
+      whenb e (false ⋅ bs) (absent ⋅ xs) (false ⋅ ys)
+  | WhenbPA : forall e' bs xs ys,
+      whenb e bs xs ys ->
       e' <> e ->
-      enums_of e (present (Venum e') ⋅ xs) (false ⋅ ys).
+      whenb e (true ⋅ bs) (present (Venum e') ⋅ xs) (false ⋅ ys)
+  | WhenbPP : forall bs xs ys,
+      whenb e bs xs ys ->
+      whenb e (true ⋅ bs) (present (Venum e) ⋅ xs) (true ⋅ ys).
 
-  Lemma enums_of_nth e : forall xs bs,
-      enums_of e xs bs
-      <-> (forall n, (xs # n = absent /\ bs # n = false)
-              \/ (xs # n = present (Venum e) /\ bs # n = true)
-              \/ (exists e', xs # n = present (Venum e') /\ e' <> e /\ bs # n = false)).
+  Lemma whenb_nth e : forall bs xs ys,
+      whenb e bs xs ys
+      <-> (forall n, (bs # n = false /\ xs # n = absent /\ ys # n = false)
+              \/ (exists e', bs # n = true /\ xs # n = present (Venum e') /\ e' <> e /\ ys # n = false)
+              \/ (bs # n = true /\ xs # n = present (Venum e) /\ ys # n = true)).
   Proof.
     split.
-    - intros Henum n. revert dependent xs; revert bs.
+    - intros Henum n. revert bs xs ys Henum.
       induction n; intros.
       + inv Henum; intuition.
-        right; right. eexists; intuition; auto.
+        right; left. eexists; intuition; auto.
       + inv Henum; repeat rewrite Str_nth_S; auto.
-    - revert xs bs.
+    - revert bs xs ys.
       cofix CoFix; intros * Henum.
-      unfold_Stv xs; unfold_Stv bs;
+      unfold_Stv bs; unfold_Stv xs; unfold_Stv ys;
         try (specialize (Henum 0) as H0; repeat rewrite Str_nth_0 in H0;
-             destruct H0 as [(?&?)|[(?&?)|(?&?&?&?)]]; try discriminate).
-      + constructor; cofix_step CoFix Henum.
-      + rewrite H. constructor; cofix_step CoFix Henum.
-      + rewrite H. econstructor; eauto. cofix_step CoFix Henum.
+             destruct H0 as [(?&?&?)|[(?&?&?&?&?)|(?&?&?)]]; try discriminate).
+      + rewrite H0. constructor; cofix_step CoFix Henum.
+      + rewrite H0. constructor; eauto. cofix_step CoFix Henum.
+      + econstructor; eauto. cofix_step CoFix Henum.
   Qed.
 
   Inductive sem_clock: history -> Stream bool -> clock -> Stream bool -> Prop :=
@@ -1810,31 +1810,31 @@ Module Type COINDSTREAMS
       forall H b bs ck x t k xs bs',
         sem_clock H b ck bs ->
         sem_var H x xs ->
-        abstract_clock xs ≡ bs -> (* Otherwise would be weaker than previous definition *)
-        enums_of k xs bs' ->
+        whenb k bs xs bs' ->
         sem_clock H b (Con ck x (t, k)) bs'.
 
-  Add Parametric Morphism e : (enums_of e)
-      with signature @EqSt _ ==> @EqSt _ ==> Basics.impl
-        as enums_of_EqSt.
+  Add Parametric Morphism e : (whenb e)
+      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
+        as whenb_EqSt.
   Proof.
     cofix CoFix.
-    intros (?&?) (?&?) Hvs (?&?) (?&?) Hbs Henums.
-    inv Henums; inv Hvs; inv Hbs; simpl in *; subst.
+    intros (?&?) (?&?) Hbs (?&?) (?&?) Hxs (?&?) (?&?) Hys Henums.
+    inv Henums; inv Hbs; inv Hxs; inv Hys; simpl in *; subst.
     all:constructor; eauto; eapply CoFix; eauto.
   Qed.
 
-  Lemma enums_of_detn e n : forall xs1 xs2 bs1 bs2,
+  Lemma whenb_detn e n : forall xs1 xs2 bs1 bs2 ys1 ys2,
+      EqStN n bs1 bs2 ->
       EqStN n xs1 xs2 ->
-      enums_of e xs1 bs1 ->
-      enums_of e xs2 bs2 ->
-      EqStN n bs1 bs2.
+      whenb e bs1 xs1 ys1 ->
+      whenb e bs2 xs2 ys2 ->
+      EqStN n ys1 ys2.
   Proof.
-    intros * Heq Henums1 Henums2.
-    apply EqStN_spec. intros k Hlt. rewrite enums_of_nth in *.
-    eapply EqStN_spec in Heq; eauto.
-    edestruct (Henums1 k) as [(?&?)|[(?&?)|(?&?&?&?)]];
-      edestruct (Henums2 k) as [(?&?)|[(?&?)|(?&?&?&?)]]; congruence.
+    intros * EqB EqX When1 When2.
+    apply EqStN_spec. intros k Hlt. rewrite whenb_nth in *.
+    eapply EqStN_spec in EqB; eauto. eapply EqStN_spec in EqX; eauto.
+    edestruct (When1 k) as [(?&?&?)|[(?&?&?&?&?)|(?&?&?)]];
+      edestruct (When2 k) as [(?&?&?)|[(?&?&?&?&?)|(?&?&?)]]; congruence.
   Qed.
 
   Add Parametric Morphism : sem_clock
@@ -1845,8 +1845,8 @@ Module Type COINDSTREAMS
     induction ck; intros bk bk' Ebk Sem; inv Sem.
     - constructor. rewrite <-Eb, <-Ebk; auto.
     - econstructor; eauto.
-      + eapply IHck in H4; eauto. reflexivity.
-      + now rewrite <-Hequiv.
+      + eapply IHck in H6; eauto. reflexivity.
+      + rewrite <-Hequiv; eauto.
       + now rewrite <-Ebk.
   Qed.
 
@@ -1858,20 +1858,19 @@ Module Type COINDSTREAMS
     induction ck; intros * Hsem; inv Hsem.
     - inv H1. constructor; auto.
     - destruct bs, xs; simpl in *. econstructor; eauto using sem_var_step.
-      + inv H9; simpl in *; auto.
-        destruct s0; simpl in *; auto.
-      + inv H10; auto.
+      inv H9; simpl in *; auto.
   Qed.
 
-  Lemma enums_of_det e : forall xs bs1 bs2,
-      enums_of e xs bs1 ->
-      enums_of e xs bs2 ->
-      bs1 ≡ bs2.
+  Lemma whenb_det e : forall bs xs ys1 ys2,
+      whenb e bs xs ys1 ->
+      whenb e bs xs ys2 ->
+      ys1 ≡ ys2.
   Proof.
-    intros * Henum1 Henum2.
+    intros * When1 When2.
     apply ntheq_eqst; intros n.
-    rewrite enums_of_nth in *.
-    specialize (Henum1 n) as [(?&?)|[(?&?)|(?&?&?&?)]]; specialize (Henum2 n) as [(?&?)|[(?&?)|(?&?&?&?)]];
+    rewrite whenb_nth in *.
+    specialize (When1 n) as [(?&?&?)|[(?&?&?&?&?)|(?&?&?)]];
+      specialize (When2 n) as [(?&?&?)|[(?&?&?&?&?)|(?&?&?)]];
       try congruence.
   Qed.
 
@@ -1884,8 +1883,9 @@ Module Type COINDSTREAMS
   Proof.
     induction ck; intros * Hsem1 Hsem2; inv Hsem1; inv Hsem2.
     - rewrite <-H1, <-H2. reflexivity.
-    - eapply sem_var_det in H7; eauto. rewrite H7 in H15.
-      eapply enums_of_det; eauto.
+    - eapply IHck in H6; eauto. rewrite H6 in *.
+      eapply sem_var_det in H8; eauto. rewrite H8 in *.
+      eapply whenb_det; eauto.
   Qed.
 
   Fact sem_clock_true_inv : forall H ck b bs bs',
@@ -1894,8 +1894,8 @@ Module Type COINDSTREAMS
   Proof.
     induction ck; intros * Hsem; inv Hsem.
     - inv H1; auto.
-    - destruct bs0. inv H10. inv H9; simpl in *; subst.
-      eapply IHck in H4; eauto.
+    - destruct bs0. inv H9; simpl in *; subst.
+      eapply IHck in H6; eauto.
   Qed.
 
   (** *** sub_clock *)
@@ -1944,10 +1944,10 @@ Module Type COINDSTREAMS
   Proof.
     intros * Hsc Hsc'.
     inv Hsc'. eapply sem_clock_det in Hsc; eauto. rewrite <-Hsc.
-    clear - H9 H10.
-    revert xs s' bs H9 H10.
-    cofix CoFix; intros (?&?) (?&?) (?&?) Hac Henums;
-      inv Hac; inv Henums; simpl in *; subst.
+    clear - H9.
+    revert xs s' bs H9.
+    cofix CoFix; intros (?&?) (?&?) (?&?) When;
+      inv When; simpl in *; subst.
     - econstructor; eauto.
     - econstructor; eauto.
     - econstructor; eauto.
@@ -2051,6 +2051,14 @@ Module Type COINDSTREAMS
   Lemma ac_when :
     forall k cs xs rs,
       when k cs xs rs -> abstract_clock cs ≡ abstract_clock xs.
+  Proof.
+    cofix Cofix.
+    intros * Hwhen. inv Hwhen; econstructor; simpl; eauto.
+  Qed.
+
+  Lemma ac_whenb :
+    forall k cs xs rs,
+      whenb k cs xs rs -> cs ≡ abstract_clock xs.
   Proof.
     cofix Cofix.
     intros * Hwhen. inv Hwhen; econstructor; simpl; eauto.
@@ -2821,14 +2829,15 @@ Module Type COINDSTREAMS
   Proof.
     induction ck; intros * Hck Hal; inv Hck.
     - rewrite H1; auto using aligned_slower.
-    - eapply IHck in H4. 2:rewrite <-H9; apply ac_aligned.
-      clear - Hal H10 H4.
-      rewrite slower_nth in *. rewrite aligned_spec in Hal. rewrite enums_of_nth in H10.
-      intros * Hfalse. specialize (Hal n). specialize (H10 n). specialize (H4 n Hfalse).
-      destruct H10 as [(?&?)|[(Hx&?)|(?&Hx&?&?)]].
+    - eapply IHck in H6.
+      2:{ take (whenb _ _ _ _) and apply ac_whenb in it. rewrite it. apply ac_aligned. }
+      clear - Hal H9 H6.
+      rewrite slower_nth in *. rewrite aligned_spec in Hal. rewrite whenb_nth in H9.
+      intros * Hfalse. specialize (Hal n). specialize (H9 n). specialize (H6 n Hfalse).
+      destruct H9 as [(?&?&?)|[(?&?&Hx&?&?)|(?&Hx&?)]].
       + destruct Hal as [(?&?&?)|(?&?)]; try congruence.
-      + setoid_rewrite H4 in Hx; congruence.
-      + setoid_rewrite H4 in Hx; congruence.
+      + setoid_rewrite H6 in Hx; congruence.
+      + setoid_rewrite H6 in Hx; congruence.
   Qed.
 
   Lemma slower_mask : forall vs bs k r,
