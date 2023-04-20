@@ -20,11 +20,11 @@ Module Type LDENOT
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn).
 
-(* TODO: faire ça partout !! *)
-Context {PSyn : block -> Prop}.
 Context {Prefs : PS.t}.
-Definition node := @node PSyn Prefs.
-Definition global := @global PSyn Prefs.
+(* [nolocal] pour des variables locales à top-level seulement
+   et pas de last dans les variables de sortie *)
+Definition node := @node nolocal Prefs.
+Definition global := @global nolocal Prefs.
 
 (** We always use this specialized version of mem_nth *)
 (* TODO: c'est vraiment une bonne idée de redéfinir des trucs, comme ça ? *)
@@ -329,13 +329,13 @@ Definition denot_exp_ (ins : list ident)
     rename l into es, l0 into er, l1 into anns.
     clear He.
     destruct (find_node i G) as [n|].
-    destruct (Nat.eq_dec (length (idents n.(n_out))) (length anns)) as [<-|].
+    destruct (Nat.eq_dec (length (List.map fst n.(n_out))) (length anns)) as [<-|].
     2,3: apply CTE, (nprod_const errTy).
     (* dénotation du nœud *)
     pose (f := PROJ _ i @_ FST _ _ @_ FST _ _ @_ FST _ _ : ctx -C-> FI i).
     pose (ss := denot_exps_ denot_exp_ es).
     (* chaînage *)
-    exact ((np_of_env (idents (n_out n))
+    exact ((np_of_env (List.map fst (n_out n))
               @_ (f @2_ ID ctx) (env_of_np (idents (n_in n)) @_ ss))).
 Defined.
 
@@ -519,10 +519,10 @@ Lemma denot_exp_eq :
           let ss := denot_exps ins es envG envI bs env in
           match find_node f G with
           | Some n =>
-              match Nat.eq_dec (length (idents n.(n_out))) (length an) with
+              match Nat.eq_dec (length (List.map fst n.(n_out))) (length an) with
               | left eqan =>
                   eq_rect _ nprod
-                    (np_of_env (idents n.(n_out)) (envG f (env_of_np (idents n.(n_in)) ss)))
+                    (np_of_env (List.map fst n.(n_out)) (envG f (env_of_np (idents n.(n_in)) ss)))
                     _ eqan
               | _ => nprod_const errTy _
               end
@@ -631,7 +631,7 @@ Proof.
     fold_denot_exps_ ins.
     gen_denot_sub_exps.
     cases.
-    generalize (np_of_env (idents (n_out n))).
+    generalize (np_of_env (List.map fst (n_out n))).
     unfold eq_rect.
     simpl; cases.
 Qed.
@@ -799,14 +799,14 @@ Definition denot_node (n : node) :
   (* envG -> envI -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry.
-  refine ((denot_block (idents n.(n_in)) n.(n_block) @3_ _) _ _).
+  refine ((denot_block (List.map fst n.(n_in)) n.(n_block) @3_ _) _ _).
   - exact (FST _ _). (* envG *)
   - exact (SND _ _). (* envI *)
-  - exact (bss (idents n.(n_in)) @_ SND _ _).
+  - exact (bss (List.map fst n.(n_in)) @_ SND _ _).
 Defined.
 
 Lemma denot_node_eq : forall n envG envI,
-    let ins := idents n.(n_in) in
+    let ins := List.map fst n.(n_in) in
     denot_node n envG envI = denot_block ins n.(n_block) envG envI (bss ins envI).
 Proof.
   trivial.
@@ -820,7 +820,8 @@ Lemma denot_node_input :
 Proof.
   intros * Hwl Hin.
   unfold denot_node, denot_block.
-  inv Hwl; auto.
+  inversion_clear Hwl as (?& Hwl').
+  inv Hwl'; auto.
   autorewrite with cpodb.
   eapply denot_equation_input; eauto.
 Qed.
@@ -1099,7 +1100,7 @@ Proof.
   intros * Hnin.
   unfold denot_node, denot_block.
   destruct n.(n_block).
-  2-5: trivial.
+  2-6: trivial.
   destruct e as (xs,es).
   apply fcont_eq_intro; intro envG.
   apply fcont_eq_intro; intro envI.

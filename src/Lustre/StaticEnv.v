@@ -318,13 +318,6 @@ Module Type STATICENV
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
-  Lemma senv_of_inout_app : forall l1 l2,
-      senv_of_inout (l1 ++ l2) = senv_of_inout l1 ++ senv_of_inout l2.
-  Proof.
-    unfold senv_of_inout.
-    apply map_app.
-  Qed.
-
   Lemma map_fst_senv_of_decls : forall l,
       map fst (senv_of_decls l) = map fst l.
   Proof.
@@ -464,10 +457,10 @@ Module Type STATICENV
   Lemma senv_HasType :
     forall l x ty ck i,
       In (x,(ty,ck,i)) l ->
-      HasType (senv_of_inout l) x ty.
+      HasType (senv_of_ins l) x ty.
   Proof.
     intros * Hin.
-    unfold senv_of_inout.
+    unfold senv_of_ins.
     econstructor; eauto.
     apply in_map_iff.
     exists (x,(ty,ck,i)); auto. auto.
@@ -476,10 +469,10 @@ Module Type STATICENV
   Lemma senv_HasClock :
     forall l x ty ck i,
       In (x,(ty,ck,i)) l ->
-      HasClock (senv_of_inout l) x ck.
+      HasClock (senv_of_ins l) x ck.
   Proof.
     intros * Hin.
-    unfold senv_of_inout.
+    unfold senv_of_ins.
     econstructor; eauto.
     apply in_map_iff.
     exists (x,(ty,ck,i)); auto. auto.
@@ -487,9 +480,9 @@ Module Type STATICENV
 
   Lemma In_HasType :
     forall x l, In x (List.map fst l) ->
-           exists ty, HasType (senv_of_inout l) x ty.
+           exists ty, HasType (senv_of_ins l) x ty.
   Proof.
-    unfold senv_of_inout.
+    unfold senv_of_ins.
     intros * Hin.
     apply in_map_iff in Hin as ((?&(ty,?)&?)&?&?); simpl in *; subst.
     exists ty.
@@ -523,7 +516,7 @@ Module Type STATICENV
     now subst.
   Qed.
 
-  Global Hint Rewrite map_fst_senv_of_inout : list.
+  Global Hint Rewrite map_fst_senv_of_ins : list.
 
 End STATICENV.
 

@@ -33,8 +33,9 @@ Module Type SDTOREL
 (* TODO: ajouter à Vélus *)
 Global Instance : Symmetric history_equiv.
 Proof.
-  intros H1 H2 [].
-  constructor; symmetry; auto.
+  intros H1 H2 Eq v.
+  destruct (Eq v); constructor.
+  now symmetry.
 Qed.
 
 (* TODO: ajouter à Vélus *)
@@ -218,7 +219,7 @@ Section Sem_alt.
   Lemma Smerge_alt :
     forall (G : global) H b x tx ess lann os,
     forall d (xs : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
-      sem_var (fst H) x xs ->
+      sem_var H (Var x) xs ->
       vss <> [] ->
       Forall (fun l => length l = length os) vss ->
       Forall2 (fun '(t,es) vs =>
@@ -260,7 +261,6 @@ Section Sem_alt.
     destruct (transp d vss _) as (vsst & HH); intros; simpl in *.
     destruct HH as ([Hlt Hllt] & Hnm); auto.
     apply ScaseTotal with s vsst; auto.
-    apply Forall3_map_2, Forall3_ignore2'; auto; congruence.
   Qed.
 
   (* Dans l'idéal il faudrait un Forall3t pour gérer aussi les flots
@@ -313,7 +313,7 @@ Qed.
 Lemma Smerge_alt2 :
   forall (G : global) H b x tx ess lann os,
   forall d (xs : Stream svalue) (vss : list (list (Stream svalue))),
-    sem_var (fst H) x xs ->
+    sem_var H (Var x) xs ->
     vss <> [] ->
     Forall (fun l => length l = length os) vss ->
     Forall2 (fun '(_,es) vs =>
@@ -485,7 +485,7 @@ Lemma sem_exp_absent :
     forall e,
     restr_exp e ->
     wt_exp G Γ e ->
-    let H := (fun _ => Some (Streams.const absent), FEnv.empty (Stream svalue)) in
+    let H := fun _ => Some (Streams.const absent) in
     sem_exp G H (Streams.const false) e (repeat (Streams.const absent) (numstreams e)).
 Proof.
   intros * HG.
@@ -704,8 +704,8 @@ Proof.
     apply sem_block_cons'; eauto using find_node_not_Is_node_in, find_node_now.
     inv Hr. take (restr_node _) and inv it.
     apply wt_global_cons in Hwt as Hwt'.
-    apply wt_global_uncons in Hwt as (?&?&?& Hwt).
-    rewrite <- H in Hwt. inv Hwt.
+    apply wt_global_uncons in Hwt. inversion_clear Hwt as [????? Hwt''].
+    rewrite <- H in Hwt''. inv Hwt''.
     take (wt_equation _ _ _) and inv it.
     constructor.
     apply Seq with
@@ -1503,12 +1503,15 @@ Definition hist_of_envs
   (ins : list ident)
   (envI : DS_prod SI) (InfI : all_infinite envI)
   (env : DS_prod SI) (Inf : all_infinite env) : Str.history :=
-  fun x => Some (if mem_ident x ins
-              then S_of_DSv (envI x) (InfI x)
-              else S_of_DSv (env x) (Inf x)).
+  fun vx => match vx with
+         | Var x => Some (if mem_ident x ins
+                         then S_of_DSv (envI x) (InfI x)
+                         else S_of_DSv (env x) (Inf x))
+         | Last _ => None
+         end.
 
 Lemma sem_hist_of_envs : forall ins envI InfI env Inf x Infx,
-    sem_var (hist_of_envs ins envI InfI env Inf) x
+    sem_var (hist_of_envs ins envI InfI env Inf) (Var x)
       (S_of_DSv (denot_var ins envI env x) Infx).
 Proof.
   intros.
@@ -1525,7 +1528,7 @@ Lemma _hist_of_envs_eq :
 Proof.
   intros * Heq.
   unfold hist_of_envs.
-  constructor.
+  intros []; constructor.
   cases; apply _S_of_DS_eq; auto.
 Qed.
 
@@ -1545,7 +1548,7 @@ Qed.
 Lemma sem_var_ins : forall ins envI InfI env Inf x s,
     In x ins ->
     s ≡ S_of_DSv (envI x) (InfI x) ->
-    sem_var (hist_of_envs ins envI InfI env Inf) x s.
+    sem_var (hist_of_envs ins envI InfI env Inf) (Var x) s.
 Proof.
   intros * Hin Heq.
   econstructor; try reflexivity.
@@ -1556,7 +1559,7 @@ Qed.
 Lemma sem_var_nins : forall ins envI InfI env Inf x s,
     ~ In x ins ->
     s ≡ S_of_DSv (env x) (Inf x) ->
-    sem_var (hist_of_envs ins envI InfI env Inf) x s.
+    sem_var (hist_of_envs ins envI InfI env Inf) (Var x) s.
 Proof.
   intros * Hin Heq.
   econstructor; try reflexivity.
@@ -1569,7 +1572,7 @@ Qed.
     et respecter leurs annotations d'horloge. *)
 Definition correct_ins (n : node) envI bs :=
   let ins := List.map fst n.(n_in) in
-  let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+  let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
   env_correct Γ ins envI bs 0.
 
 
@@ -1593,7 +1596,7 @@ Hypothesis CorrectG :
     forall f n envI,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
-      let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
       forall bs, bss ins envI <= bs ->
       env_correct Γ ins envI bs 0 ->
       env_correct Γ ins envI bs (envG f envI).
@@ -1603,7 +1606,7 @@ Hypothesis Hnode :
     find_node f G = Some n ->
     let ins := idents (n_in n) in
     let envI := env_of_np ins ss in
-    let os := np_of_env (idents (n_out n)) (envG f envI) in
+    let os := np_of_env (List.map fst (n_out n)) (envG f envI) in
     correct_ins n envI (bss ins envI) ->
     forall infI infO,
       sem_node G f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
@@ -1615,7 +1618,8 @@ Lemma wc_env_in :
     wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
 Proof.
   intros * Hfind.
-  now destruct (wc_find_node _ _ _ Wcg Hfind) as (?&?&?&?).
+  eapply wc_find_node in Hfind as (? & Hc); eauto.
+  now inv Hc.
 Qed.
 
 (** Deux tactiques bien pratiques pour la suite *)
@@ -1661,7 +1665,7 @@ Ltac gen_inf_sub_exps :=
 Lemma ok_sem_Eapp :
   forall Γ ins env Inf envI InfI bs bsi,
     env_correct Γ ins envI bs env ->
-    let H := (hist_of_envs ins envI InfI env Inf, FEnv.empty _) in
+    let H := hist_of_envs ins envI InfI env Inf in
     forall f n es anns bck sub,
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) (typesof es) (n_in n) ->
       Forall2 (WellInstantiated bck sub) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof es) ->
@@ -1714,7 +1718,7 @@ Proof.
     setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
     gen_sub_exps.
     rewrite Hfind, Hli.
-    rewrite <- (map_length fst) in Hlo.
+    unfold decl in Hlo. rewrite <- (map_length fst) in Hlo.
     unfold idents, eq_rect.
     cases; intros; subst; try congruence; eauto.
   - (* k <> 0, on utilise sem_global_absent *)
@@ -1872,7 +1876,7 @@ Qed.
 Lemma ok_sem_exp :
   forall Γ ins env Inf envI InfI bs bsi,
     env_correct Γ ins envI bs env ->
-    let H := (hist_of_envs ins envI InfI env Inf, FEnv.empty _) in
+    let H := hist_of_envs ins envI InfI env Inf in
     forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
       op_correct_exp G ins envG envI bs env e ->
       let ss := denot_exp G ins e envG envI bs env in
@@ -2107,7 +2111,7 @@ Qed.
 Corollary ok_sem_exps :
   forall Γ ins env Inf envI InfI bs bsi,
     env_correct Γ ins envI bs env ->
-    let H := (hist_of_envs ins envI InfI env Inf, FEnv.empty _) in
+    let H := hist_of_envs ins envI InfI env Inf in
     forall es,
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
@@ -2136,7 +2140,7 @@ Lemma ok_sem_equation :
     env_correct Γ ins envI bs env ->
     Forall (op_correct_exp G ins envG envI bs env) es ->
     forall InfI Inf,
-    let H := (hist_of_envs ins envI InfI env Inf, FEnv.empty _) in
+    let H := hist_of_envs ins envI InfI env Inf in
     sem_equation G H (S_of_DS id bs bsi) (xs,es).
 Proof.
   intros * Hr Wc Wt Nd env Hc Oc ???.
@@ -2156,13 +2160,15 @@ Proof.
     eapply ok_sem_Eapp; eauto using wc_env_in, ok_sem_exps, Forall2_length.
   - (* sem_var *)
     subst H; simpl.
+    apply Forall2_map_1.
     unshelve rewrite <- flat_map_concat_map, <- Ss_exps; eauto using infinite_exps.
     edestruct (hist_of_envs_eq ) as [Inf2 ->].
     { unfold env. rewrite FIXP_eq. fold env. apply denot_equation_Oeq. }
     assert (length xs = list_sum (map numstreams es)) as Hl.
     { rewrite <- annots_numstreams, <- length_typesof_annots.
       inv Wt. eauto using Forall2_length. }
-    apply Forall2_forall2; rewrite Ss_of_nprod_length; split; intros; subst; auto.
+    apply Forall2_map_1, Forall2_forall2.
+    rewrite Ss_of_nprod_length; split; intros; subst; auto.
     rewrite Permutation_app_comm in Nd.
     apply sem_var_nins; eauto using NoDup_app_In, nth_In.
     edestruct Ss_of_nprod_nth as [Inf3 ->]; try lia.
@@ -2277,11 +2283,11 @@ Lemma nodup_equation :
     end.
 Proof.
   destruct n; simpl in *.
-  destruct n_defd0 as (xs & Vd & Hxs).
+  destruct n_syn0 as [???? (xs & Vd & Hperm) ].
   destruct n_nodup0 as [ND].
   cases; simpl in *.
   inversion Vd; subst.
-  now rewrite Hxs, <- map_app, <- fst_NoDupMembers.
+  now rewrite Hperm.
 Qed.
 
 (** Pour pouvoir utiliser InfG, CorrectG, Hnode, on considère
@@ -2294,13 +2300,13 @@ Lemma ok_sem_node :
     wc_node G n ->
     wt_node G n ->
     let f := n_name n in
-    let Γ := senv_of_inout (n_in n ++ n_out n) in
+    let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
     let ins := idents (n_in n) in
     forall (ss : nprod (length (n_in n))),
     let envI := env_of_np ins ss in
     let bs := bss ins envI in
     let envn := FIXP _ (denot_node G n envG envI) in
-    let os := np_of_env (idents (n_out n)) envn in
+    let os := np_of_env (List.map fst (n_out n)) envn in
     env_correct Γ ins envI bs envn ->
     op_correct G ins envG envI bs envn n ->
     all_infinite envn ->
@@ -2376,7 +2382,7 @@ Theorem _ok_global :
       find_node f G = Some n ->
       let ins := idents (n_in n) in
       let envI := env_of_np ins ss in
-      let os := np_of_env (idents (n_out n)) (denot_global G f envI) in
+      let os := np_of_env (List.map fst (n_out n)) (denot_global G f envI) in
       let bs := bss ins envI in
       correct_ins n envI bs ->
       forall InfSs InfO,
@@ -2460,7 +2466,7 @@ Definition correct_inputs (n : node) (ss : nprod (length (n_in n))) :=
   let ins := idents (n_in n) in
   let envI := env_of_np ins ss in
   let bs := bss ins envI in
-  let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+  let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
   env_correct Γ ins envI bs 0.
 
 (** Witness of the relational semantics *)
@@ -2481,6 +2487,7 @@ Proof.
   intros ?? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
   unshelve eapply _ok_global with (InfSs := InfXs) in Hins; eauto.
   { apply forall_np_of_env, denot_inf; auto using env_of_np_inf. }
+  unfold decl.
   rewrite <- (map_length fst (n_out n)); eauto.
 Qed.
 

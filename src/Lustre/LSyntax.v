@@ -1787,17 +1787,15 @@ Module Type LSYNTAX
   Proof.
     intros n.
     eapply NoDup_app_l.
-    setoid_rewrite <- map_app.
-    apply node_NoDup.
+    apply n_nodup.
   Qed.
 
   Lemma node_NoDup_out {PSyn prefs} : forall (n : @node PSyn prefs),
-      NoDup (idents (n_out n)).
+      NoDup (map fst (n_out n)).
   Proof.
     intros n.
     eapply NoDup_app_r.
-    setoid_rewrite <- map_app.
-    apply node_NoDup.
+    apply n_nodup.
   Qed.
 
   Lemma not_in_out {PSyn prefs} :
@@ -1807,8 +1805,7 @@ Module Type LSYNTAX
       False.
   Proof.
     intros * Hin Hout.
-    pose proof (node_NoDup n) as ND.
-    rewrite map_app in ND.
+    pose proof (n_nodup n) as [ND].
     eapply NoDup_app_In; eauto.
   Qed.
 
