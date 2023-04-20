@@ -12,32 +12,32 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 
 
-(** ** Vertices and arcs *)
+(** ** Vertices and edges *)
 
 (** Vertices *)
 Definition V_set : Type := PS.t.
 
-(** Arcs *)
-Definition A_set : Type := Env.t PS.t.
+(** Edges *)
+Definition E_set : Type := Env.t PS.t.
 
-Definition empty_arc_set : A_set := Env.empty _.
+Definition empty_edge_set : E_set := Env.empty _.
 
-(** There is an arc between x and y in the arc set *)
-Definition has_arc (a : A_set) (x y : ident) :=
-  exists s, Env.MapsTo x s a /\ PS.In y s.
+(** There is an edge between x and y in the edge set *)
+Definition has_edge (e : E_set) (x y : ident) :=
+  exists s, Env.MapsTo x s e /\ PS.In y s.
 
-(** Decision procedure to find if an arc exists *)
-Definition has_arcb (a : A_set) (x y : ident) :=
-  match (Env.find x a) with
+(** Decision procedure to find if an edge exists *)
+Definition has_edgeb (e : E_set) (x y : ident) :=
+  match (Env.find x e) with
   | Some s => PS.mem y s
   | None => false
   end.
 
-Lemma has_arcb_spec : forall a x y,
-    has_arcb a x y = true <-> has_arc a x y.
+Lemma has_edgeb_spec : forall a x y,
+    has_edgeb a x y = true <-> has_edge a x y.
 Proof.
   intros a x y.
-  unfold has_arcb, has_arc.
+  unfold has_edgeb, has_edge.
   split; [intros H|intros (?&Hmap&Hin)]; destruct (Env.find _ _) eqn:Hfind.
   - eauto.
   - inv H.
@@ -46,26 +46,26 @@ Proof.
   - rewrite Hmap in Hfind. inv Hfind.
 Qed.
 
-Lemma nhas_arc_empty : forall x y,
-    ~has_arc empty_arc_set x y.
+Lemma nhas_edge_empty : forall x y,
+    ~has_edge empty_edge_set x y.
 Proof.
   intros * (?&Hmap&_).
   rewrite Env.Props.P.F.empty_mapsto_iff in Hmap; auto.
 Qed.
 
-(** Add a single arc *)
-Definition add_arc (x y : ident) (a : A_set) :=
+(** Add a single edge *)
+Definition add_edge (x y : ident) (a : E_set) :=
   match (Env.find x a) with
   | Some s => Env.add x (PS.add y s) a
   | None => Env.add x (PS.singleton y) a
   end.
 
-Lemma add_arc_spec : forall a x y x' y',
-    has_arc (add_arc x y a) x' y' <->
-    has_arc a x' y' \/
+Lemma add_edge_spec : forall a x y x' y',
+    has_edge (add_edge x y a) x' y' <->
+    has_edge a x' y' \/
     (x = x' /\ y = y').
 Proof.
-  intros *. unfold add_arc, has_arc, Env.MapsTo in *.
+  intros *. unfold add_edge, has_edge, Env.MapsTo in *.
   split; intros H;
     [(destruct H as (s&Hm&Hin);
       (destruct (ident_eq_dec x x'), (ident_eq_dec y y'); subst;
@@ -86,54 +86,54 @@ Proof.
   - rewrite H in Hfind. congruence.
 Qed.
 
-Definition has_trans_arc a := clos_trans_n1 _ (has_arc a).
+Definition has_trans_edge a := clos_trans_n1 _ (has_edge a).
 
 Global Hint Constructors clos_trans_n1 : acygraph.
-Global Hint Unfold has_trans_arc : acygraph.
+Global Hint Unfold has_trans_edge : acygraph.
 
-Global Instance has_trans_arc_Transitive : forall a,
-    Transitive (has_trans_arc a).
+Global Instance has_trans_edge_Transitive : forall a,
+    Transitive (has_trans_edge a).
 Proof.
   intros ? ??? Ha1 Ha2.
   induction Ha2; eauto with acygraph.
 Qed.
 
-Lemma nhas_trans_arc_empty : forall x y,
-    ~has_trans_arc empty_arc_set x y.
+Lemma nhas_trans_edge_empty : forall x y,
+    ~has_trans_edge empty_edge_set x y.
 Proof.
   intros * contra.
-  induction contra; eapply nhas_arc_empty; eauto.
+  induction contra; eapply nhas_edge_empty; eauto.
 Qed.
 
-Fact add_arc_has_trans_arc1 : forall a x y,
-    has_trans_arc (add_arc x y a) x y.
+Fact add_edge_has_trans_edge1 : forall a x y,
+    has_trans_edge (add_edge x y a) x y.
 Proof.
   left.
-  rewrite add_arc_spec; auto.
+  rewrite add_edge_spec; auto.
 Qed.
 
-Fact add_arc_has_trans_arc2 : forall a x y x' y',
-    has_trans_arc a x' y' ->
-    has_trans_arc (add_arc x y a) x' y'.
+Fact add_edge_has_trans_edge2 : forall a x y x' y',
+    has_trans_edge a x' y' ->
+    has_trans_edge (add_edge x y a) x' y'.
 Proof.
   intros * Ha.
   induction Ha.
-  - left. rewrite add_arc_spec; auto.
+  - left. rewrite add_edge_spec; auto.
   - eapply tn1_trans; eauto.
-    rewrite add_arc_spec; eauto.
+    rewrite add_edge_spec; eauto.
 Qed.
-Global Hint Resolve add_arc_has_trans_arc1 add_arc_has_trans_arc2 : acygraph.
+Global Hint Resolve add_edge_has_trans_edge1 add_edge_has_trans_edge2 : acygraph.
 
-Lemma add_arc_spec2 : forall a x y x' y',
-    has_trans_arc (add_arc x y a) x' y' <->
-    has_trans_arc a x' y' \/
+Lemma add_edge_spec2 : forall a x y x' y',
+    has_trans_edge (add_edge x y a) x' y' <->
+    has_trans_edge a x' y' \/
     (x = x' /\ y = y') \/
-    (x = x' /\ has_trans_arc a y y') \/
-    (has_trans_arc a x' x /\ y = y') \/
-    (has_trans_arc a x' x /\ has_trans_arc a y y').
+    (x = x' /\ has_trans_edge a y y') \/
+    (has_trans_edge a x' x /\ y = y') \/
+    (has_trans_edge a x' x /\ has_trans_edge a y y').
 Proof.
   intros *; split; intros Ha.
-  - induction Ha; try rewrite add_arc_spec in *.
+  - induction Ha; try rewrite add_edge_spec in *.
     + destruct H as [?|(?&?)]; subst; auto with acygraph.
     + destruct H as [?|(?&?)];
         destruct IHHa as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]];
@@ -147,144 +147,142 @@ Qed.
 (** ** Acyclic graph *)
 
 (** Transitive, Directed Acyclic Graph *)
-Inductive AcyGraph : V_set -> A_set -> Prop :=
-| AGempty : AcyGraph PS.empty empty_arc_set
-| AGaddv : forall v a x,
-    AcyGraph v a ->
-    (* ~PS.In x v -> *)
-    AcyGraph (PS.add x v) a
-| AGadda : forall v a x y,
-    AcyGraph v a ->
+Inductive AcyGraph : V_set -> E_set -> Prop :=
+| AGempty : AcyGraph PS.empty empty_edge_set
+| AGaddv : forall v e x,
+    AcyGraph v e ->
+    AcyGraph (PS.add x v) e
+| AGadda : forall v e x y,
+    AcyGraph v e ->
     x <> y ->
     PS.In x v ->
     PS.In y v ->
-    (* ~has_arc a x y -> *)
-    ~has_trans_arc a y x ->
-    AcyGraph v (add_arc x y a).
+    ~has_trans_edge e y x ->
+    AcyGraph v (add_edge x y e).
 Global Hint Constructors AcyGraph : acygraph.
 
-Definition vertices {v a} (g : AcyGraph v a) : V_set := v.
-Definition arcs {v a} (g : AcyGraph v a) : A_set := a.
+Definition vertices {v e} (g : AcyGraph v e) : V_set := v.
+Definition edges {v e} (g : AcyGraph v e) : E_set := e.
 
-Definition is_vertex {v a} (g : AcyGraph v a) (x : ident) : Prop :=
+Definition is_vertex {v e} (g : AcyGraph v e) (x : ident) : Prop :=
   PS.In x v.
 
-Definition is_arc {v a} (g : AcyGraph v a) x y : Prop :=
-  has_arc a x y.
+Definition is_edge {v e} (g : AcyGraph v e) x y : Prop :=
+  has_edge e x y.
 
-Lemma nis_arc_Gempty : forall x y,
-  ~is_arc AGempty x y.
+Lemma nis_edge_Gempty : forall x y,
+  ~is_edge AGempty x y.
 Proof.
   intros * (?&contra&_).
   rewrite Env.Props.P.F.empty_mapsto_iff in contra; auto.
 Qed.
 
-Definition is_trans_arc {v a} (g : AcyGraph v a) x y : Prop :=
-  has_trans_arc a x y.
+Definition is_trans_edge {v e} (g : AcyGraph v e) x y : Prop :=
+  has_trans_edge e x y.
 
-Lemma nis_trans_arc_Gempty : forall x y,
-    ~is_trans_arc AGempty x y.
+Lemma nis_trans_edge_Gempty : forall x y,
+    ~is_trans_edge AGempty x y.
 Proof.
   intros * contra; simpl in contra.
-  apply nhas_trans_arc_empty in contra; auto.
+  apply nhas_trans_edge_empty in contra; auto.
 Qed.
 
-(** ** Major properties of is_arc : transitivity, irreflexivity, asymmetry *)
+(** ** Major properties of is_edge : transitivity, irreflexivity, asymmetry *)
 
-Global Instance is_trans_arc_Transitive {v a} (g : AcyGraph v a) :
-    Transitive (is_trans_arc g).
-Proof. eapply has_trans_arc_Transitive; eauto. Qed.
+Global Instance is_trans_edge_Transitive {v e} (g : AcyGraph v e) :
+    Transitive (is_trans_edge g).
+Proof. eapply has_trans_edge_Transitive; eauto. Qed.
 
-Lemma has_arc_irrefl : forall v a,
-    AcyGraph v a ->
-    Irreflexive (has_arc a).
+Lemma has_edge_irrefl : forall v e,
+    AcyGraph v e ->
+    Irreflexive (has_edge e).
 Proof.
   fix irrefl 3.
   intros * g. destruct g.
   - intros ? Ha.
-    apply nis_arc_Gempty in Ha; auto.
+    apply nis_edge_Gempty in Ha; auto.
   - specialize (irrefl _ _ g); auto.
   - specialize (irrefl _ _ g).
-    intros x' Harc.
-    apply add_arc_spec in Harc as [?|(?&?)]; subst.
+    intros x' Hedge.
+    apply add_edge_spec in Hedge as [?|(?&?)]; subst.
     + eapply irrefl; eauto.
     + congruence.
 Qed.
 
-Global Instance is_arc_Irreflexive {v a} (g : AcyGraph v a) :
-    Irreflexive (is_arc g).
-Proof. eapply has_arc_irrefl; eauto. Qed.
+Global Instance is_edge_Irreflexive {v e} (g : AcyGraph v e) :
+    Irreflexive (is_edge g).
+Proof. eapply has_edge_irrefl; eauto. Qed.
 
-Global Instance is_trans_arc_Asymmetric {v a} (g : AcyGraph v a) :
-    Asymmetric (is_trans_arc g).
+Global Instance is_trans_edge_Asymmetric {v e} (g : AcyGraph v e) :
+    Asymmetric (is_trans_edge g).
 Proof.
-  revert v a g.
+  revert v e g.
   fix trans 3.
   intros *. destruct g.
   - intros ? ? ? Ha1.
-    exfalso. eapply nhas_trans_arc_empty; eauto.
+    exfalso. eapply nhas_trans_edge_empty; eauto.
   - specialize (trans _ _ g); auto.
   - specialize (trans _ _ g).
-    intros x' y' Harc1 Harc2.
-    apply add_arc_spec2 in Harc1; apply add_arc_spec2 in Harc2.
-    destruct Harc1 as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]];
-      destruct Harc2 as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto 10.
+    intros x' y' Hedge1 Hedge2.
+    apply add_edge_spec2 in Hedge1; apply add_edge_spec2 in Hedge2.
+    destruct Hedge1 as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]];
+      destruct Hedge2 as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto 10.
     1-7:eapply n0.
     1-7:etransitivity; eauto.
     1,2:etransitivity; eauto.
 Qed.
 
-Global Instance is_trans_arc_Irreflexive {v a} (g : AcyGraph v a) :
-  Irreflexive (is_trans_arc g).
+Global Instance is_trans_edge_Irreflexive {v e} (g : AcyGraph v e) :
+  Irreflexive (is_trans_edge g).
 Proof.
-  revert v a g.
+  revert v e g.
   fix irrefl 3.
   intros * x. destruct g.
-  - apply nis_trans_arc_Gempty.
+  - apply nis_trans_edge_Gempty.
   - eapply (irrefl _ _ g).
   - intros contra.
     specialize (irrefl _ _ g).
-    apply add_arc_spec2 in contra as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto.
+    apply add_edge_spec2 in contra as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto.
     + eapply irrefl; eauto.
     + eapply n0. etransitivity; eauto.
 Qed.
 
-Lemma is_arc_is_vertex : forall {v a} (g : AcyGraph v a) x y,
-    is_arc g x y ->
+Lemma is_edge_is_vertex : forall {v e} (g : AcyGraph v e) x y,
+    is_edge g x y ->
     is_vertex g x /\ is_vertex g y.
 Proof.
-  fix is_arc_is_vertex 3.
-  intros * Hisarc.
+  fix is_edge_is_vertex 3.
+  intros * Hisedge.
   destruct g; simpl in *.
-  - exfalso. destruct Hisarc as (?&contra&_).
+  - exfalso. destruct Hisedge as (?&contra&_).
     rewrite Env.Props.P.F.empty_mapsto_iff in contra; auto.
-  - specialize (is_arc_is_vertex _ _ g).
-    apply is_arc_is_vertex in Hisarc as (Hvx&Hvy).
+  - specialize (is_edge_is_vertex _ _ g).
+    apply is_edge_is_vertex in Hisedge as (Hvx&Hvy).
     split; apply PSF.add_2; auto.
-  - specialize (is_arc_is_vertex _ _ g).
-    unfold is_arc in Hisarc.
-    apply add_arc_spec in Hisarc as [?|(?&?)]; subst; auto.
-    apply is_arc_is_vertex in H; auto.
+  - specialize (is_edge_is_vertex _ _ g).
+    unfold is_edge in Hisedge.
+    apply add_edge_spec in Hisedge as [?|(?&?)]; subst; auto.
+    apply is_edge_is_vertex in H; auto.
 Qed.
 
-Corollary is_trans_arc_is_vertex : forall {v a} (g : AcyGraph v a) x y,
-    is_trans_arc g x y ->
+Corollary is_trans_edge_is_vertex : forall {v e} (g : AcyGraph v e) x y,
+    is_trans_edge g x y ->
     is_vertex g x /\ is_vertex g y.
 Proof.
   intros * Ha.
   induction Ha.
-  - apply is_arc_is_vertex; auto.
+  - apply is_edge_is_vertex; auto.
   - destruct IHHa.
-    eapply is_arc_is_vertex in H as (_&?).
+    eapply is_edge_is_vertex in H as (_&?).
     eauto.
 Qed.
 
-Lemma is_trans_arc_neq : forall {v a} (g : AcyGraph v a) x y,
-    is_trans_arc g x y ->
+Lemma is_trans_edge_neq : forall {v e} (g : AcyGraph v e) x y,
+    is_trans_edge g x y ->
     x <> y.
 Proof.
   intros * Ha contra; subst.
-  eapply is_trans_arc_Irreflexive; eauto.
+  eapply is_trans_edge_Irreflexive; eauto.
 Qed.
 
 Local Ltac destruct_conj_disj :=
@@ -293,19 +291,19 @@ Local Ltac destruct_conj_disj :=
     | H : _ \/ _ |- _ => destruct H
     end; subst.
 
-(** is_trans_arc is decidable ! *)
-Lemma is_trans_arc_dec : forall {v a} (g : AcyGraph v a),
-    forall x y, (is_trans_arc g x y) \/ (~ is_trans_arc g x y).
+(** is_trans_edge is decidable ! *)
+Lemma is_trans_edge_dec : forall {v e} (g : AcyGraph v e),
+    forall x y, (is_trans_edge g x y) \/ (~ is_trans_edge g x y).
 Proof.
-  fix is_trans_arc_dec 3.
+  fix is_trans_edge_dec 3.
   intros *. destruct g.
-  - right. eapply nis_trans_arc_Gempty.
-  - specialize (is_trans_arc_dec _ _ g x y) as [?|?]; auto.
-  - specialize (is_trans_arc_dec _ _ g).
-    destruct (is_trans_arc_dec x y), (is_trans_arc_dec x x0), (is_trans_arc_dec y0 y),
+  - right. eapply nis_trans_edge_Gempty.
+  - specialize (is_trans_edge_dec _ _ g x y) as [?|?]; auto.
+  - specialize (is_trans_edge_dec _ _ g).
+    destruct (is_trans_edge_dec x y), (is_trans_edge_dec x x0), (is_trans_edge_dec y0 y),
     (ident_eq_dec y y0), (ident_eq_dec x x0); subst.
-    1-32: try solve [left; apply add_arc_spec2; auto 10].
-    1-7:(right; intro contra; apply add_arc_spec2 in contra;
+    1-32: try solve [left; apply add_edge_spec2; auto 10].
+    1-7:(right; intro contra; apply add_edge_spec2 in contra;
          repeat destruct_conj_disj; auto).
 Qed.
 
@@ -320,12 +318,12 @@ Qed.
 
 From compcert Require Import common.Errors.
 
-Definition add_after (preds : PS.t) (x : ident) (a : A_set) : A_set :=
-  PS.fold (fun p a => add_arc p x a) preds a.
+Definition add_after (preds : PS.t) (x : ident) (a : E_set) : E_set :=
+  PS.fold (fun p a => add_edge p x a) preds a.
 
 Lemma add_after_spec : forall a preds y x' y',
-    has_arc (add_after preds y a) x' y' <->
-    has_arc a x' y' \/
+    has_edge (add_after preds y a) x' y' <->
+    has_edge a x' y' \/
     (PS.In x' preds /\ y = y').
 Proof.
   Local Ltac simpl_ps_add :=
@@ -344,7 +342,7 @@ Proof.
     intros [?|(Hin&?)]; subst; auto.
     destruct (Hemp _ Hin).
   - intros p * Hin Hnin Hadd Hrec *.
-    rewrite add_arc_spec.
+    rewrite add_edge_spec.
     split; intros [?|(?&?)]; subst; auto.
     + apply Hrec in H as [?|(?&?)]; subst; auto; unfold PS.Exists.
       repeat simpl_ps_add; eauto 10.
@@ -357,30 +355,30 @@ Proof.
       apply Hadd in H as [?|?]; auto. congruence.
 Qed.
 
-Corollary add_after_has_arc1 : forall a x y x' preds,
-    has_arc a x y ->
-    has_arc (add_after preds x' a) x y.
+Corollary add_after_has_edge1 : forall a x y x' preds,
+    has_edge a x y ->
+    has_edge (add_after preds x' a) x y.
 Proof.
   intros * Ha.
   rewrite add_after_spec; auto.
 Qed.
 
-Corollary add_after_has_arc2 : forall a x y preds,
+Corollary add_after_has_edge2 : forall a x y preds,
     PS.In y preds ->
-    has_arc (add_after preds x a) y x.
+    has_edge (add_after preds x a) y x.
 Proof.
   intros * Hin.
   rewrite add_after_spec; auto.
 Qed.
 
-Lemma add_after_AcyGraph : forall v a x preds,
+Lemma add_after_AcyGraph : forall v e x preds,
     PS.In x v ->
     ~PS.In x preds ->
     PS.For_all (fun x => PS.In x v) preds ->
-    PS.For_all (fun p => ~has_trans_arc a x p) preds ->
-    AcyGraph v a ->
-    AcyGraph v (add_after preds x a) /\
-    PS.For_all (fun p => ~has_trans_arc (add_after preds x a) x p) preds.
+    PS.For_all (fun p => ~has_trans_edge e x p) preds ->
+    AcyGraph v e ->
+    AcyGraph v (add_after preds x e) /\
+    PS.For_all (fun p => ~has_trans_edge (add_after preds x e) x p) preds.
 Proof.
   intros * Hin1 Hnin2 Hpreds Hna Hacy.
   revert Hacy.
@@ -392,15 +390,15 @@ Proof.
     + intro contra; subst; auto.
     + intros ? Hin contra.
       apply Hna' in Hin. apply Hin.
-      rewrite add_arc_spec2 in contra. repeat destruct_conj_disj; auto.
+      rewrite add_edge_spec2 in contra. repeat destruct_conj_disj; auto.
       * exfalso; auto.
       * exfalso; auto.
         apply Hna' in Hin'; auto.
 Qed.
 
-Definition acgraph_of_graph g v a :=
+Definition acgraph_of_graph g v e :=
   (forall x, Env.In x g <-> PS.In x v) /\
-  (forall x y, (exists xs, Env.find y g = Some xs /\ In x xs) -> has_arc a x y).
+  (forall x y, (exists xs, Env.find y g = Some xs /\ In x xs) -> has_edge e x y).
 
 Section Dfs.
 
@@ -433,7 +431,7 @@ Section Dfs.
     revert Hag Hnds Hndg.
     generalize (map fst (Env.elements graph)) as g.
     generalize (PS.elements p) as n.
-    induction n as [|x n IH]; auto using le_0_n.
+    induction n as [|x n IH]; auto using Nat.le_0_l.
     intros g Hin NDn NDg. simpl.
     inversion_clear NDn as [|?? Hnx NDn'].
     assert (In x g) as Hxg by auto.
@@ -472,17 +470,17 @@ Section Dfs.
   Qed.
 
   Definition visited (p : PS.t) (v : PS.t) : Prop :=
-    (forall x, PS.In x p -> ~PS.In x v)
-    /\ exists a, AcyGraph v a
+    (forall x, PS.In x p -> ~PS.In x v) (* The visited variables will not be treated again *)
+    /\ exists e, AcyGraph v e
            /\ (forall x, PS.In x v ->
                    exists zs, Env.find x graph = Some zs
-                         /\ (forall y, In y zs -> has_arc a y x)).
+                         /\ (forall y, In y zs -> has_edge e y x)).
 
   Definition none_visited : { v | visited PS.empty v }.
   Proof.
     exists PS.empty.
     repeat split; auto using not_In_empty.
-    exists empty_arc_set.
+    exists empty_edge_set.
     repeat split; auto using not_In_empty with acygraph.
     intros * Hin. now apply not_In_empty in Hin.
   Defined.
@@ -600,16 +598,16 @@ Section Dfs.
           eapply P1; eauto using PSF.add_1.
         * intros ? Hin. rewrite ps_of_list_In in Hin.
           apply PSF.add_2. unfold In_ps in *. simpl_Forall. eauto.
-        * intros ? _ HasArc.
-          eapply is_trans_arc_is_vertex with (g:=P2) in HasArc as (Ver&_); eauto.
+        * intros ? _ HasEdge.
+          eapply is_trans_edge_is_vertex with (g:=P2) in HasEdge as (Ver&_); eauto.
           eapply P1 in Ver; eauto using PSF.add_1.
       + intros y Hyin.
         apply PS.add_spec in Hyin as [HH|HH].
         * subst. exists zs; split; auto.
-          intros z HH. apply add_after_has_arc2.
+          intros z HH. apply add_after_has_edge2.
           rewrite ps_of_list_In; auto.
         * destruct (P3 _ HH) as (? & ? & ?).
-          exists x0. split; eauto using add_after_has_arc1.
+          exists x0. split; eauto using add_after_has_edge1.
   Defined.
   Next Obligation.
     simpl in *. split.
@@ -639,7 +637,7 @@ Program Definition build_acyclic_graph (graph : Env.t (list positive)) (get_msgs
 
 Lemma build_acyclic_graph_spec : forall graph msgs v,
     build_acyclic_graph graph msgs = OK v ->
-    exists a, acgraph_of_graph graph v a /\ AcyGraph v a.
+    exists e, acgraph_of_graph graph v e /\ AcyGraph v e.
 Proof.
   unfold build_acyclic_graph.
   intros * Hcheck.
@@ -689,15 +687,20 @@ Qed.
     which is simply encoded as a list, with the head variable only depending on the tail ones.
  *)
 
-Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
+Definition TopoOrder {v e} (g : AcyGraph v e) (xs : list ident) :=
   Forall' (fun xs x => ~In x xs
                     /\ is_vertex g x
-                    /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
+                    /\ (forall y, is_trans_edge g y x -> In y xs)) xs.
+
+Definition TopoOrder' {v e} (g : AcyGraph v e) (xs : list ident) :=
+  Forall' (fun xs x => ~In x xs
+                    /\ is_vertex g x
+                    /\ (forall y, is_edge g y x -> In y xs)) xs.
 Global Hint Unfold TopoOrder : acygraph.
 
-Lemma TopoOrder_weaken : forall {v a} (g : AcyGraph v a) xs,
+Lemma TopoOrder_weaken : forall {v e} (g : AcyGraph v e) xs,
     TopoOrder g xs ->
-    Forall (fun x => forall y, is_trans_arc g y x -> In y xs) xs.
+    Forall (fun x => forall y, is_trans_edge g y x -> In y xs) xs.
 Proof.
   intros * Hpref.
   induction Hpref; auto.
@@ -707,7 +710,23 @@ Proof.
   intros * ? ? ?. right; auto.
 Qed.
 
-Lemma TopoOrder_NoDup : forall {v a} (g : AcyGraph v a) xs,
+Lemma TopoOrder_equiv {v e} (g : AcyGraph v e) : forall xs,
+    TopoOrder g xs <-> TopoOrder' g xs.
+Proof.
+  split; intros Top.
+  - induction Top; constructor; eauto.
+    destruct_conjs. repeat split; auto.
+    intros * Edge. apply H1. constructor; auto.
+  - induction Top; constructor; eauto.
+    destruct_conjs. repeat split; auto.
+    intros * Trans.
+    inv Trans; eauto.
+    specialize (H1 _ H2).
+    apply TopoOrder_weaken in IHTop.
+    simpl_Forall. eauto.
+Qed.
+
+Lemma TopoOrder_NoDup : forall {v e} (g : AcyGraph v e) xs,
     TopoOrder g xs ->
     NoDup xs.
 Proof.
@@ -716,9 +735,9 @@ Proof.
   destruct H; auto.
 Qed.
 
-Fact TopoOrder_AGaddv : forall {v a} (g : AcyGraph v a) x xs,
+Fact TopoOrder_AGaddv : forall {v e} (g : AcyGraph v e) x xs,
     TopoOrder g xs ->
-    TopoOrder (AGaddv v a x g) xs.
+    TopoOrder (AGaddv v e x g) xs.
 Proof.
   induction xs; intros * Hpre; inv Hpre; auto with acygraph datatypes.
   destruct H1 as (?&?&?).
@@ -727,10 +746,10 @@ Proof.
   apply PSF.add_2; auto.
 Qed.
 
-Lemma TopoOrder_insert : forall {v a} (g : AcyGraph v a) xs1 xs2 x,
+Lemma TopoOrder_insert : forall {v e} (g : AcyGraph v e) xs1 xs2 x,
     is_vertex g x ->
     ~In x (xs1++xs2) ->
-    (forall y, is_trans_arc g y x -> In y xs2) ->
+    (forall y, is_trans_edge g y x -> In y xs2) ->
     TopoOrder g (xs1 ++ xs2) ->
     TopoOrder g (xs1 ++ x :: xs2).
 Proof.
@@ -784,8 +803,8 @@ Import Permutation.
 
 (** Given a prefix of the form xs1 ++ y :: xs2, we can split xs1
     into two list: xs1l depends on y and xs1r doesnt *)
-Fact TopoOrder_Partition_split : forall {v a} (g : AcyGraph v a) xs1 xs2 xs1l xs1r y,
-    Partition (fun z => is_trans_arc g y z) xs1 xs1l xs1r ->
+Fact TopoOrder_Partition_split : forall {v e} (g : AcyGraph v e) xs1 xs2 xs1l xs1r y,
+    Partition (fun z => is_trans_edge g y z) xs1 xs1l xs1r ->
     TopoOrder g (xs1 ++ y :: xs2) ->
     TopoOrder g (xs1l ++ y :: xs1r ++ xs2).
 Proof.
@@ -811,14 +830,14 @@ Proof.
     + apply IHxs1; auto.
 Qed.
 
-(* Is there is no arc between y and x, it is possible to reorganize the TopoOrder *)
+(* Is there is no edge between y and x, it is possible to reorganize the TopoOrder *)
 (* so that x ends up before y *)
-Lemma TopoOrder_reorganize : forall {v a} (g : AcyGraph v a) xs x y,
+Lemma TopoOrder_reorganize : forall {v e} (g : AcyGraph v e) xs x y,
     x <> y ->
     In x xs ->
     In y xs ->
     TopoOrder g xs ->
-    ~is_trans_arc g y x ->
+    ~is_trans_edge g y x ->
     exists xs', Permutation.Permutation xs' xs /\
            TopoOrder g xs' /\
            Before x y xs'.
@@ -834,8 +853,8 @@ Proof.
        All the xs1r do not depend on y
        We produce a new list of the form xs1l ++ y :: x :: xs1r ++ xs2
      *)
-    assert (exists xs1l xs1r, Partition (fun z => is_trans_arc g y z) xs1 xs1l xs1r) as (xs1l&xs1r&Hpart).
-    { eapply dec_Partition, is_trans_arc_dec. }
+    assert (exists xs1l xs1r, Partition (fun z => is_trans_edge g y z) xs1 xs1l xs1r) as (xs1l&xs1r&Hpart).
+    { eapply dec_Partition, is_trans_edge_dec. }
     exists (xs1l ++ y :: x :: xs1r ++ xs2).
     assert (Permutation xs1 (xs1l ++ xs1r)) as Hperm.
     { eapply Partition_Permutation; eauto. }
@@ -869,7 +888,7 @@ Proof.
     constructor; eauto.
     intro contra; subst; congruence.
   - specialize (IHxs _ _ Hneq H H0 H1 Hna) as (xs'&Hperm&Hpre&Hbef).
-    exists (a0::xs'); repeat split; auto.
+    exists (a::xs'); repeat split; auto.
     + repeat constructor; auto.
       2:intros ? Ha'.
       1,2:rewrite Hperm; auto.
@@ -878,7 +897,7 @@ Proof.
       rewrite Hperm; auto.
 Qed.
 
-Lemma TopoOrder_AGadda : forall {v a} (g : AcyGraph v a) xs x y Hneq Hin1 Hin2 Hna,
+Lemma TopoOrder_AGadda : forall {v e} (g : AcyGraph v e) xs x y Hneq Hin1 Hin2 Hna,
     Before x y xs ->
     TopoOrder g xs ->
     TopoOrder (AGadda _ _ x y g Hneq Hin1 Hin2 Hna) xs.
@@ -888,7 +907,7 @@ Proof.
   constructor. 2:eapply IHxs; eauto.
   repeat split; auto.
   intros ? Ha.
-  apply add_arc_spec2 in Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; auto.
+  apply add_edge_spec2 in Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; auto.
   - apply H3 in H5; auto.
     eapply Before_In in H2; eauto.
   - specialize (H1 eq_refl).
@@ -899,13 +918,13 @@ Proof.
 Qed.
 
 (** Every Directed Acyclic Graph has at least one complete TopoOrder *)
-Lemma has_TopoOrder {v a} :
-  forall g : AcyGraph v a,
+Lemma has_TopoOrder {v e} :
+  forall g : AcyGraph v e,
   exists xs,
     PS.Equal (vertices g) (PSP.of_list xs)
     /\ TopoOrder g xs.
 Proof.
-  revert v a.
+  revert v e.
   fix has_TopoOrder 3.
   intros *.
   destruct g.
@@ -923,9 +942,9 @@ Proof.
         rewrite Heq. reflexivity.
       * rewrite Heq, <- ps_from_list_ps_of_list, ps_from_list_In in n; auto.
       * apply PSF.add_1; auto.
-      * intros y Hisarc.
-        assert (Hneq:=Hisarc). apply is_trans_arc_neq in Hneq.
-        apply is_trans_arc_is_vertex in Hisarc as (?&?).
+      * intros y Hisedge.
+        assert (Hneq:=Hisedge). apply is_trans_edge_neq in Hneq.
+        apply is_trans_edge_is_vertex in Hisedge as (?&?).
         apply PSF.add_3 in H; auto.
         rewrite <- ps_from_list_ps_of_list in Heq.
         rewrite <- ps_from_list_In, <- Heq; auto.

@@ -371,7 +371,7 @@ Module Type CECLOCKINGSEMANTICS
     forall Ω bkn Hn Hn' ss,
       Forall2 (fun xtc => sem_var_instant Hn (fst xtc)) Ω ss ->
       Forall2 (fun xtc => sem_var_instant Hn' (fst xtc)) Ω ss ->
-      wc_env (idck Ω) ->
+      wc_env (idsnd Ω) ->
       forall x (xty: type) xck v,
         In (x, (xty, xck)) Ω ->
         sem_clock_instant bkn Hn xck v ->
@@ -379,7 +379,7 @@ Module Type CECLOCKINGSEMANTICS
   Proof.
     intros Ω bkn Hn Hn' ss HHn HHn' WCenv x xty xck v Hin Hsi.
     assert (exists xty, In (x, (xty, xck)) Ω) as Hin' by eauto.
-    apply In_idck_exists in Hin'.
+    apply In_idsnd_exists in Hin'.
     apply wc_env_var with (2:=Hin') in WCenv.
     clear Hin Hin' xty.
     apply Forall2_Forall2 with (1:=HHn') in HHn. clear HHn'.
@@ -387,7 +387,7 @@ Module Type CECLOCKINGSEMANTICS
     - inversion_clear 1; eauto using sem_clock_instant.
     - inversion_clear WCenv as [|? ? ? WCx Hin].
       specialize (IHxck WCx).
-      apply In_idck_exists in Hin as (xty & Hin).
+      apply In_idsnd_exists in Hin as (xty & Hin).
       apply Forall2_in_left with (2:=Hin) in HHn.
       destruct HHn as (s & Hsin & Hv' & Hv).
       inversion_clear 1.

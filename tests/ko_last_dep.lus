@@ -1,6 +1,7 @@
 node f(b : bool) returns (y : int)
-var last x : int = x;
+var x : int;
 let
+    last x = x;
     x = last x;
     y = x;
 tel

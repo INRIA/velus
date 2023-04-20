@@ -295,12 +295,12 @@ rule initial = parse
   | "'"                           { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
                                     CONSTANT
-                                          (LustreAst.CONST_CHAR(false, l),
+                                          (LustreAst.CONST_CHAR(Cabs.EncNone, l),
                                                     currentLoc lexbuf) }
   | "L'"                          { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
                                    CONSTANT
-                                          (LustreAst.CONST_CHAR(true, l),
+                                          (LustreAst.CONST_CHAR(Cabs.EncWide, l),
                                                     currentLoc lexbuf) }
   | "<>"                          { NEQ (currentLoc lexbuf) }
   | "<="                          { LEQ (currentLoc lexbuf) }

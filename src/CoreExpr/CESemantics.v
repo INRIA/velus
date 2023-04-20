@@ -32,7 +32,7 @@ environment.
 
    *)
 
-  Definition env := FEnv.t svalue.
+  Definition env := @FEnv.t ident svalue.
   Definition history := stream env.
 
   (** ** Instantaneous semantics *)

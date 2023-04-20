@@ -21,7 +21,7 @@ Module Type DLTYPING
        (Import IL  : DELAST Ids Op OpAux Cks Senv Syn).
 
   Section rename.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
@@ -83,14 +83,14 @@ Module Type DLTYPING
 
   Import Fresh Facts Tactics.
 
-  Fact delast_scope_wt {A} P_nd P_wt1 (P_wt2: _ -> _ -> Prop) f_dl f_add {PSyn prefs} (G: @global PSyn prefs) :
+  Fact delast_scope_wt {A} P_nd P_wt1 (P_wt2: _ -> _ -> Prop) f_dl {PSyn prefs} (G: @global PSyn prefs) :
     forall locs (blk: A) sub Γ Γ' s' st st',
       (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
       (forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty) ->
       (forall x, Env.In x sub -> IsLast Γ x) ->
       NoDupScope P_nd (map fst Γ) (Scope locs blk) ->
       wt_scope P_wt1 G Γ (Scope locs blk) ->
-      delast_scope f_dl f_add sub (Scope locs blk) st = (s', st') ->
+      delast_scope f_dl sub (Scope locs blk) st = (s', st') ->
       (forall Γ Γ' sub blk' st st',
           (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
           (forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty) ->
@@ -99,37 +99,33 @@ Module Type DLTYPING
           P_wt1 Γ blk ->
           f_dl sub blk st = (blk', st') ->
           P_wt2 Γ' blk') ->
-      (forall Γ blks1 blks2,
-          Forall (wt_block G Γ) blks1 ->
-          P_wt2 Γ blks2 ->
-          P_wt2 Γ (f_add blks1 blks2)) ->
       wt_scope P_wt2 G Γ' s'.
   Proof.
-    intros * Hvar Hlast Hsubin Hnd Hwt Hdl Hind Hadd; inv Hnd; inv Hwt; repeat inv_bind.
-    assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_locs locs) y) as Hsubin'.
-    { intros *. rewrite Env.In_from_list.
+    intros * Hvar Hlast Hsubin Hnd Hwt Hdl Hind; inv Hnd; inv Hwt; repeat inv_bind. subst Γ'0.
+    assert (forall y, InMembers y (map fst x) -> IsLast (senv_of_decls locs) y) as Hsubin'.
+    { intros *.
       eapply fresh_idents_InMembers in H. erewrite <-H, fst_InMembers.
       intros; simpl_In. econstructor; solve_In. simpl. congruence. }
     assert (forall x2 ty,
-               HasType (Γ ++ senv_of_locs locs) x2 ty ->
+               HasType (Γ ++ senv_of_decls locs) x2 ty ->
                HasType
-                 (Γ' ++ @senv_of_locs exp
+                 (Γ' ++ senv_of_decls
                      (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
-                          map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x)) x2 ty) as Hvar'.
+                          map (fun '(_, lx, (ty0, ck)) => (lx, (ty0, ck, 1%positive, None))) x)) x2 ty) as Hvar'.
     { intros *. rewrite 2 HasType_app. intros [|Hty]; auto.
       right. inv Hty; simpl_In.
       econstructor. solve_In. 2:apply in_app_iff, or_introl; solve_In.
       1,2:eauto.
     }
     assert (forall x2 ty,
-               HasType (Γ ++ senv_of_locs locs) x2 ty ->
-               IsLast (Γ ++ senv_of_locs locs) x2 ->
+               HasType (Γ ++ senv_of_decls locs) x2 ty ->
+               IsLast (Γ ++ senv_of_decls locs) x2 ->
                HasType
                  (Γ' ++
-                     @senv_of_locs exp
+                     senv_of_decls
                      (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
-                          map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x))
-                 (rename_in_var (Env.union sub (Env.from_list (map fst x))) x2) ty) as Hlast'.
+                          map (fun '(_, lx, (ty0, ck)) => (lx, (ty0, ck, 1%positive, None))) x))
+                 (rename_in_var (Env.adds' (map fst x) sub) x2) ty) as Hlast'.
     { intros *. rewrite 2 HasType_app, IsLast_app.
       intros [Hty|Hty] [Hl|Hl]; eauto.
       - left. rewrite not_in_union_rename2; eauto.
@@ -144,15 +140,13 @@ Module Type DLTYPING
         eapply H4; eauto using In_InMembers. solve_In.
       - right. simpl_app. apply HasType_app. right.
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
-        destruct o0 as [(?&?)|]; simpl in *; try congruence.
-        eapply fresh_idents_In_rename in H. 3:solve_In; simpl; auto.
+        destruct o0 as [|]; simpl in *; try congruence.
+        eapply fresh_idents_In_rename in H as Hren. 3:solve_In; simpl; auto.
         2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
-            destruct o as [(?&?)|]; simpl in *; auto. }
-        econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
-        intro contra. apply Hsubin in contra.
-        inv contra. eapply H4; eauto using In_InMembers. solve_In.
+            destruct o as [|]; simpl in *; auto. }
+        econstructor. solve_In. auto.
     }
-    econstructor; eauto. 4:apply Hadd.
+    econstructor; eauto.
     - simpl_app. unfold wt_clocks in *. apply Forall_app; split; auto.
       + simpl_Forall. eapply wt_clock_incl; eauto.
       + eapply mmap_values, Forall2_ignore1 in H; simpl_Forall.
@@ -163,24 +157,9 @@ Module Type DLTYPING
       + eapply mmap_values, Forall2_ignore1 in H; simpl_Forall.
         repeat inv_bind. simpl_In.
         simpl_Forall; eauto.
-    - apply Forall_app; split; simpl_Forall; auto.
-    - simpl_Forall. repeat constructor; simpl.
-      + eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall.
-        eapply rename_in_exp_wt in H; eauto.
-      + eapply fresh_idents_In' in H; eauto. simpl_app. simpl_In.
-        right; left. econstructor; solve_In. auto.
-      + eapply fresh_idents_In' in H; eauto. simpl_In.
-        eapply Forall_forall in H5; [|solve_In]; simpl in *.
-        eapply wt_clock_incl; eauto.
-      + rewrite rename_in_exp_typeof, app_nil_r.
-        eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall. auto.
-      + eapply fresh_idents_In' in H; eauto. simpl_In.
-        eapply Forall_forall in H5; [|solve_In]; simpl in *.
-        eapply wt_clock_incl; eauto.
-      + simpl_app. repeat rewrite HasType_app. right; right. econstructor; solve_In. auto.
     - eapply Hind; eauto.
-      + intros * Hin. rewrite IsLast_app. apply Env.union_In in Hin as [|]; eauto.
-      + rewrite map_app, map_fst_senv_of_locs; auto.
+      + intros * Hin. rewrite IsLast_app. apply Env.In_adds_spec' in Hin as [|]; eauto.
+      + rewrite map_app, map_fst_senv_of_decls; auto.
   Qed.
 
   Lemma delast_block_wt {PSyn prefs} (G: @global PSyn prefs) : forall blk sub Γ Γ' blk' st st',
@@ -199,6 +178,16 @@ Module Type DLTYPING
     - (* equation *)
       constructor.
       eapply rename_in_equation_wt; eauto.
+
+    - (* last *)
+      simpl in *. cases_eqn Eq. repeat inv_bind.
+      take (typeof _ = [_]) and assert (Ty:=it); rewrite typeof_annot in it.
+      take (wt_exp _ _ _) and eapply wt_exp_clockof in it as Hck.
+      rewrite clockof_annot in Hck.
+      destruct (annot e) as [|? [|]]; simpl in *; try congruence. inv it0.
+      simpl_Forall.
+      repeat constructor; eauto using rename_in_exp_wt, wt_clock_incl.
+      simpl. now rewrite app_nil_r, rename_in_exp_typeof.
 
     - (* reset *)
       constructor.
@@ -244,7 +233,6 @@ Module Type DLTYPING
              split; [|split]; eauto using rename_in_exp_wt.
              ++ now rewrite rename_in_exp_typeof.
              ++ setoid_rewrite Heq. solve_In.
-        * intros. destruct_conjs. split; auto. apply Forall_app; auto.
 
     - (* automaton (strong) *)
       assert (map fst x = map fst states) as Heq.
@@ -268,16 +256,63 @@ Module Type DLTYPING
           -- intros; destruct_conjs; subst; repeat inv_bind; split; auto.
              eapply mmap_values, Forall2_ignore1 in H17; eauto.
              simpl_Forall; eauto.
-          -- intros; destruct_conjs; subst.
-             split; auto. apply Forall_app; auto.
 
     - (* local *)
       constructor.
       eapply delast_scope_wt; eauto.
       * intros. eapply mmap_values, Forall2_ignore1 in H8; eauto.
         simpl_Forall; eauto.
-      * intros. apply Forall_app; auto.
       Transparent delast_scope.
+  Qed.
+
+  Lemma delast_outs_and_block_wt {PSyn prefs} (G: @global PSyn prefs) : forall ins outs blk blk' st st',
+      let Γ := senv_of_ins ins ++ senv_of_decls outs in
+      let Γ' := senv_of_ins ins ++ senv_of_decls (map (fun xtc => (fst xtc, (fst (fst (fst (snd xtc))), snd (fst (fst (snd xtc))), 1%positive, None))) outs) in
+      NoDupMembers Γ ->
+      NoDupLocals (map fst Γ) blk ->
+      wt_clocks (types G) Γ (senv_of_decls outs) ->
+      Forall (fun '(_, ann) => OpAux.wt_type (types G) (typ ann)) Γ ->
+      wt_block G Γ blk ->
+      delast_outs_and_block outs blk st = (blk', st') ->
+      wt_block G Γ' blk'.
+  Proof.
+    unfold delast_outs_and_block in *.
+    intros * ND1 ND2 WtC WtT Wt DL. repeat inv_bind.
+    remember (senv_of_ins _ ++ senv_of_decls _) as Γ.
+    remember (senv_of_ins ins ++ senv_of_decls (map (fun xtc => (fst xtc, (fst (fst (fst (snd xtc))), snd (fst (fst (snd xtc))), 1%positive, None))) outs)) as Γ'.
+    assert (forall x2 ty, HasType Γ x2 ty ->
+                     HasType (Γ' ++ senv_of_decls (map (fun '(_, lx, (ty0, ck)) => (lx, (ty0, ck, xH, None))) x)) x2 ty) as Types.
+    { intros * Ty. subst Γ Γ'. repeat rewrite HasType_app in *. destruct Ty as [Ty|Ty]; auto.
+      left; right. inv Ty. simpl_In. econstructor; solve_In. auto. }
+    assert (forall x2 ty, HasType Γ x2 ty ->
+                     IsLast Γ x2 ->
+                     HasType (Γ' ++ senv_of_decls (map (fun '(_, lx, (ty0, ck)) => (lx, (ty0, ck, 1%positive, None))) x)) (rename_in_var (Env.from_list (map fst x)) x2) ty) as Lasts.
+    { intros * Ty L. subst Γ Γ'. repeat rewrite HasType_app. right.
+      inv L. inv Ty. eapply NoDupMembers_det in H2; eauto; subst.
+      apply in_app_iff in H4 as [In|In]; simpl_In. congruence.
+      destruct o as [|]; simpl in *; try congruence.
+      eapply fresh_idents_In_rename in H. 3:solve_In; simpl; eauto.
+      2:{ apply NoDupMembers_map_filter. intros; destruct_conjs; auto. destruct o as [|]; simpl; auto.
+          eapply NoDupMembers_senv_of_decls; eauto using NoDupMembers_app_r. }
+      econstructor. unfold Env.from_list. solve_In. auto. }
+
+    cases_eqn Eq; repeat inv_bind.
+    - apply is_nil_spec in Eq; subst. simpl in *.
+      rewrite app_nil_r in *.
+      eapply delast_block_wt in Wt; eauto.
+      + intros * In. apply Env.Props.P.F.empty_in_iff in In as [].
+    - repeat econstructor.
+      + unfold wt_clocks, senv_of_decls in *. simpl_Forall. simpl_In.
+        eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall.
+        eapply wt_clock_incl; [|eauto].
+        intros * Ty. repeat rewrite HasType_app in *. destruct Ty as [Ty|Ty]; auto.
+        left. right. inv Ty. simpl_In. econstructor. solve_In. auto.
+      + apply Forall_app in WtT as (_&WtT). unfold senv_of_decls in *. simpl_Forall.
+        eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall. auto.
+      + simpl_Forall. eapply delast_block_wt; eauto.
+        intros * In. apply Env.In_from_list in In. simpl_In.
+        eapply fresh_idents_In' in H; eauto. simpl_In.
+        right. econstructor. solve_In. simpl. congruence.
   Qed.
 
   (** Typing of the node *)
@@ -287,18 +322,19 @@ Module Type DLTYPING
       wt_node G1 n ->
       wt_node G2 (delast_node n).
   Proof.
-    intros * Hiface (Hwt1&Hwt2&Hwt3&Hwt4).
+    intros * Hiface Wt. inversion_clear Wt as [??? Wt1 Wt2 Wt3]. subst Γ.
     pose proof (n_nodup n) as (_&Hnd2).
     pose proof (n_good n) as (_&Hgood&_).
-    pose proof (n_syn n) as Hsyn.
     repeat econstructor; simpl; eauto.
-    1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-    - eapply delast_block_wt in Hwt4. 6:apply surjective_pairing.
-      + eapply iface_incl_wt_block, Hwt4; eauto.
-      + auto.
-      + intros * _ Hl. apply senv_of_inout_NoLast in Hl as [].
-      + intros. rewrite Env.Props.P.F.empty_in_iff in H. inv H.
-      + rewrite map_fst_senv_of_inout; auto.
+    1-3:unfold wt_clocks, senv_of_decls in *; simpl_Forall; eauto with ltyping.
+    - eapply wt_clock_incl; [|eauto with ltyping].
+      intros *. rewrite 2 HasType_app. intros [|Ty]; auto. right.
+      inv Ty. simpl_In. econstructor. solve_In. auto.
+    - apply Forall_app in Wt2 as (?&?). unfold senv_of_ins, senv_of_decls in *.
+      apply in_app_iff in H0 as [|]; simpl_In; simpl_Forall; eauto with ltyping.
+    - eapply delast_outs_and_block_wt in Wt3; eauto with ltyping. 3:apply surjective_pairing.
+      + apply node_NoDupMembers.
+      + apply node_NoDupLocals.
   Qed.
 
   Theorem delast_global_wt : forall G,

@@ -12,6 +12,7 @@
 (* *********************************************************************)
 
 (* From Coq Require Numbers.BinNums. *)
+From compcert Require cparser.Cabs.
 From Velus Require Import Common.
 
 (* Definition ident := Coq.Numbers.BinNums.positive. *)
@@ -66,7 +67,7 @@ Inductive constant :=
 | CONST_ENUM  : ident -> constant
 | CONST_INT   : string -> constant
 | CONST_FLOAT : floatInfo -> constant
-| CONST_CHAR  : bool -> list char_code -> constant.
+| CONST_CHAR  : Cabs.encoding -> list char_code -> constant.
 
 Inductive clock :=
 | BASE  : clock
@@ -109,7 +110,6 @@ Definition expression_loc (e: expression) : astloc :=
   end.
 
 Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
-Definition local_decls : Type := list (ident * (type_name * preclock * list expression * astloc)).
 
 Definition equation : Type := (list ident * list expression * astloc)%type.
 
@@ -117,10 +117,11 @@ Definition transition : Type := (list expression * (ident * bool) * astloc).
 
 Inductive block :=
 | BEQ      : equation -> block
+| BLAST    : ident -> list expression -> astloc -> block
 | BRESET   : list block -> list expression -> astloc -> block
 | BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
-| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (local_decls * list block * list transition * list transition)) -> astloc -> block
-| BLOCAL   : local_decls -> list block -> astloc -> block.
+| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (var_decls * list block * list transition * list transition)) -> astloc -> block
+| BLOCAL   : var_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
@@ -239,7 +240,10 @@ Section block_ind2.
   Variable P : block -> Prop.
 
   Hypothesis EQCase : forall equ,
-    P (BEQ equ).
+      P (BEQ equ).
+
+  Hypothesis LASTCase : forall x e loc,
+      P (BLAST x e loc).
 
   Hypothesis RESETCase : forall blks er loc,
       Forall P blks ->
@@ -261,6 +265,7 @@ Section block_ind2.
   Proof.
     destruct bck.
     - apply EQCase; auto.
+    - apply LASTCase; auto.
     - apply RESETCase.
       induction l; auto.
     - apply SWITCHCase.
@@ -268,8 +273,8 @@ Section block_ind2.
       induction l0; auto.
     - apply AUTOCase.
       induction l as [|]; destruct_conjs; constructor; eauto; simpl.
-      induction l3; auto.
+      induction l2; auto.
     - apply LOCALCase.
-      induction l0; auto.
+      induction l; auto.
   Qed.
 End block_ind2.

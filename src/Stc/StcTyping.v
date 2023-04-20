@@ -66,12 +66,12 @@ Module Type STCTYPING
     Forall (fun '(_, (c, t, _)) => wt_const P.(types) c t).
 
   Definition wt_system (P: program) (s: system) : Prop :=
-        Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
+        Forall (wt_trconstr P (idfst (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
                             (mems_of_nexts s.(s_nexts)))
                s.(s_tcs)
         /\ wt_nexts P s.(s_nexts)
         /\ forall x ty,
-            In (x, ty) (idty (s_in s ++ s_vars s ++ s_out s)) -> wt_type P.(types) ty.
+            In (x, ty) (idfst (s_in s ++ s_vars s ++ s_out s)) -> wt_type P.(types) ty.
 
   Definition wt_program := CommonTyping.wt_program wt_system.
 

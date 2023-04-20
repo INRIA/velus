@@ -74,10 +74,10 @@ Module Type STCCLOCKING
         wc_trconstr P vars (TcStep i xs ck rst f es).
 
   Definition wc_system (P: program) (s: system) : Prop :=
-    wc_env (idck (s.(s_in))) /\
-    wc_env (idck (s.(s_in) ++ s.(s_out))) /\
-    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_nexts)) /\
-    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_nexts)))
+    wc_env (idsnd (s.(s_in))) /\
+    wc_env (idsnd (s.(s_in) ++ s.(s_out))) /\
+    wc_env (idsnd (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idsnd s.(s_nexts)) /\
+    Forall (wc_trconstr P (idsnd (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idsnd s.(s_nexts)))
            s.(s_tcs).
 
   Definition wc_program (P: program) :=

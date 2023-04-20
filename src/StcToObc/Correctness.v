@@ -1599,7 +1599,7 @@ Module Type CORRECTNESS
       inversion WT as [|?? [WTb]]; simpl in *; subst.
     assert (Well_defined (Stc.Syn.Program types0 externs0 systems0)) by (split; auto).
     assert (correct_program (Stc.Syn.Program types0 externs0 systems0)) by (unfold correct_program; intros; auto).
-    destruct WCb as (?&?&?& WCtcs); rewrite 2 idck_app, <-2 app_assoc in WCtcs.
+    destruct WCb as (?&?&?& WCtcs); rewrite 2 idsnd_app, <-2 app_assoc in WCtcs.
     destruct WTb as (WTtcs &?).
     eapply find_unit_cons in Find as [[E' Find]|[E' Find]]; simpl in *; eauto.
     - inv Find.
@@ -1634,7 +1634,7 @@ Module Type CORRECTNESS
         take (~ InMembers _ _) and apply it.
         apply fst_InMembers.
         change a with (fst (a, (c, t, ck))); now apply in_map.
-      + rewrite <-2 idty_app, NoDupMembers_idty.
+      + rewrite <-2 idfst_app, NoDupMembers_idfst.
         apply s_nodup_vars.
       + apply s_nodup_subs.
       + apply s_trconstr_mems_spec.
@@ -1643,15 +1643,15 @@ Module Type CORRECTNESS
         apply in_app in Hxin as [Hxin|Hxin].
         * rewrite <-Clock; eapply Forall_forall in Hscv; eauto.
         * eapply sem_clocked_var_instant_tcs with (4 := Htcs); eauto.
-          -- apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idck.
+          -- apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idsnd.
              apply s_nodup.
           -- rewrite s_defined, <-s_vars_out_in_tcs, <-s_nexts_in_tcs, mems_of_nexts_fst,
-             <-app_assoc, 2 map_app, 3 map_fst_idck; auto.
+             <-app_assoc, 2 map_app, 3 map_fst_idsnd; auto.
       + intros y ? Hin Hnin.
         rewrite ps_from_list_In in Hnin.
         pose proof (s_nodup system) as Nodup.
         rewrite 3 in_app in Hin; destruct Hin as [Hin|[Hin|[Hin|Hin]]];
-          apply In_idck_exists in Hin as (?&?).
+          apply In_idsnd_exists in Hin as (?&?).
         * apply (NoDup_app_In y) in Nodup.
           -- unfold Env.from_list_with.
              rewrite 2 Env.gsso_with.
@@ -1699,8 +1699,8 @@ Module Type CORRECTNESS
       + eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
       + intro. now rewrite ps_from_list_In, s_nexts_in_tcs_fst, nexts_of_In.
       + intros; apply s_ins_not_var, fst_InMembers; auto.
-      + simpl; intros; eapply eq_if_present_adds_opt; eauto; rewrite map_fst_idty; auto.
-      + simpl; rewrite map_fst_idty; intros * Find.
+      + simpl; intros; eapply eq_if_present_adds_opt; eauto; rewrite map_fst_idfst; auto.
+      + simpl; rewrite map_fst_idfst; intros * Find.
         apply not_None_is_Some in Find as (?& Find); apply Env.find_adds_opt_spec_Some in Find.
         * rewrite Env.gempty in Find; destruct Find as [Hin|]; try discriminate.
           eapply in_combine_l; eauto.
@@ -1708,7 +1708,7 @@ Module Type CORRECTNESS
       + rewrite E; simpl in *.
         now apply transform_units_wt_memory in WTS.
       + eapply wt_env_adds_opt.
-        * rewrite <-2 idty_app, NoDupMembers_idty.
+        * rewrite <-2 idfst_app, NoDupMembers_idfst.
           apply s_nodup_vars.
         * apply fst_NoDupMembers, m_nodupin.
         * apply wt_env_empty.
@@ -1716,17 +1716,17 @@ Module Type CORRECTNESS
           apply Forall2_map_1, Forall2_same, Forall_forall.
           intros (x, t) Hin; simpl.
           apply in_app; auto.
-        * unfold idty; apply Forall2_swap_args, Forall2_map_1; auto.
+        * unfold idfst; apply Forall2_swap_args, Forall2_map_1; auto.
       + exists me'; split.
         * apply find_unit_transform_units_forward in Find'.
           econstructor; eauto.
           -- apply exists_step_method.
           -- simpl; transitivity (length xs).
              ++ symmetry; eapply Forall2_length; eauto.
-             ++ rewrite length_idty, <-map_length with (f := fst);
+             ++ rewrite length_idfst, <-map_length with (f := fst);
                   symmetry; eapply Forall2_length; eauto.
           -- simpl; eauto.
-          -- simpl; rewrite map_fst_idty.
+          -- simpl; rewrite map_fst_idfst.
              clear - Outs Equiv.
              rewrite Forall2_map_2.
              eapply Forall2_impl_In; eauto; intros.

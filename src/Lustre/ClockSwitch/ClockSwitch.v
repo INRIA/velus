@@ -115,7 +115,7 @@ Module Type CLOCKSWITCH
     Definition switch_scope (env : static_env) bck sub scop : FreshAnn (scope A) :=
       let 'Scope locs blks := scop in
       let locs' := map (fun '(x, (ty, ck, cx, o)) => (x, (ty, subclock_clock bck sub ck, cx, o))) locs in
-      let env := env++senv_of_locs locs in
+      let env := env++senv_of_decls locs in
       do blks' <- f_s env blks;
       ret (Scope locs' blks').
 
@@ -168,7 +168,7 @@ Module Type CLOCKSWITCH
       let locs := flat_map (fun '(_, _, nfrees, ndefs) => (map (fun '(_, x, (ty, ck)) => (x, (ty, ck, xH, None))) (nfrees++ndefs))) xs' in
       ret (Blocal (Scope (List.map (fun '(xc, (ty, ck)) => (xc, (ty, ck, xH, None))) xcs++locs) (mergeeqs++concat blks'++map Beq condeqs)))
 
-    | Bauto _ _ _ _ => ret blk
+    | _ => ret blk
     end.
 
   (** *** Some properties *)
@@ -228,7 +228,7 @@ Module Type CLOCKSWITCH
     eapply NoDupMembers_app_InMembers in Hnd; eauto using filter_InMembers'.
   Qed.
 
-  (** *** VarsDefined *)
+  (** *** VarsDefinedComp *)
 
   Import Permutation.
 
@@ -291,22 +291,22 @@ Module Type CLOCKSWITCH
       + eapply NoDup_cons'. rewrite app_comm_cons, Permutation_Add; eauto.
   Qed.
 
-  Lemma cond_eq_VarsDefined: forall e tx bck xc xcs eqs st st',
+  Lemma cond_eq_VarsDefinedComp: forall e tx bck xc xcs eqs st st',
       cond_eq e tx bck st = ((xc, xcs), eqs, st') ->
-      Forall2 VarsDefined (map Beq eqs) (map (fun '(x, _) => [x])  xcs).
+      Forall2 VarsDefinedComp (map Beq eqs) (map (fun '(x, _) => [x])  xcs).
   Proof.
     unfold cond_eq. intros * Hcond.
     cases; repeat inv_bind; simpl; repeat constructor; auto.
   Qed.
 
-  Lemma switch_scope_VarsDefined {A} P_na P_vd P_nd f_switch :
+  Lemma switch_scope_VarsDefinedComp {A} P_na P_vd P_nd f_switch :
     forall xs env bck sub locs (blk: A) s' st st',
       incl xs (map fst env) ->
       (forall x, Env.In x sub -> InMembers x env) ->
       NoDupMembers env ->
       NoDup xs ->
       noauto_scope P_na (Scope locs blk) ->
-      VarsDefinedScope P_vd (Scope locs blk) xs ->
+      VarsDefinedCompScope P_vd (Scope locs blk) xs ->
       NoDupScope P_nd (map fst env) (Scope locs blk) ->
       switch_scope f_switch env bck sub (Scope locs blk) st = (s', st') ->
       (forall xs env blk' st st',
@@ -319,7 +319,7 @@ Module Type CLOCKSWITCH
           P_nd (map fst env) blk ->
           f_switch env blk st = (blk', st') ->
           P_vd blk' (map (rename_var sub) xs)) ->
-      VarsDefinedScope P_vd s' (map (rename_var sub) xs).
+      VarsDefinedCompScope P_vd s' (map (rename_var sub) xs).
   Proof.
     intros * Hincl Hsub Hnd1 Hnd2 Hnauto Hvars Hnd3 Hf Hind;
       inv Hnauto; inv Hvars; inv Hnd3; repeat inv_bind.
@@ -329,30 +329,30 @@ Module Type CLOCKSWITCH
       rewrite map_map, map_ext with (g:=fst). 2:intros; destruct_conjs; auto.
       rewrite map_app, rename_vars_idem with (xs:=map fst locs) in H; auto.
       intros * Hsub' Hnin. eapply Hnd'; apply fst_InMembers; eauto.
-    - rewrite map_app, map_fst_senv_of_locs.
+    - rewrite map_app, map_fst_senv_of_decls.
       eapply incl_appl'; eauto.
     - intros. rewrite InMembers_app; auto.
     - apply NoDupMembers_app; auto.
-      + now apply NoDupMembers_senv_of_locs.
+      + now apply NoDupMembers_senv_of_decls.
       + intros * Hinm1 Hinm2.
-        eapply Hnd', fst_InMembers; eauto. apply InMembers_senv_of_locs; auto.
+        eapply Hnd', fst_InMembers; eauto. apply InMembers_senv_of_decls; auto.
     - apply NoDup_app'; auto.
       + now apply fst_NoDupMembers.
       + simpl_Forall. eapply Hincl in H0. intros ?.
         eapply Hnd'; eauto. now apply fst_InMembers.
-    - now rewrite map_app, map_fst_senv_of_locs.
+    - now rewrite map_app, map_fst_senv_of_decls.
   Qed.
 
-  Lemma switch_block_VarsDefined : forall blk xs bck sub env blk' st st',
+  Lemma switch_block_VarsDefinedComp : forall blk xs bck sub env blk' st st',
       incl xs (map fst env) ->
       (forall x, Env.In x sub -> InMembers x env) ->
       NoDupMembers env ->
       NoDup xs ->
       noauto_block blk ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       NoDupLocals (map fst env) blk ->
       switch_block env bck sub blk st = (blk', st') ->
-      VarsDefined blk' (map (rename_var sub) xs).
+      VarsDefinedComp blk' (map (rename_var sub) xs).
   Proof.
     Opaque switch_scope.
     induction blk using block_ind2; intros * Hincl Hsub Hnd1 Hnd2 Hnauto Hvd Hnd3 Hsw;
@@ -378,19 +378,19 @@ Module Type CLOCKSWITCH
         assert (Hperm:=Hpart). apply Partition_Permutation in Hperm.
         rewrite Hperm, map_app in Hincl.
         symmetry. eapply incl_Permutation; eauto.
-        - assert (VarsDefined (Bswitch ec branches) xs) as Hdef by (constructor; auto).
+        - assert (VarsDefinedComp (Bswitch ec branches) xs) as Hdef by (constructor; auto).
           assert (NoDupLocals xs (Bswitch ec branches)) as Hnd'.
           { eapply NoDupLocals_incl; [|constructor; eauto].
             now rewrite Hperm, map_app. }
           intros ?; split; intros Hin.
-          + eapply VarsDefined_Is_defined in Hdef; eauto.
+          + eapply VarsDefinedComp_Is_defined in Hdef; eauto.
             apply Is_defined_in_vars_defined in Hdef; simpl in *.
             apply Hincl, in_app_iff in Hin as [|Hin]; auto.
             eapply in_map_iff in Hin as ((?&?)&?&?); subst; simpl in *.
             eapply Partition_Forall2, Forall_forall in Hpart; eauto; simpl in *.
             apply Bool.not_true_is_false, PSF.not_mem_iff in Hpart. congruence.
           + eapply in_map_iff in Hin as ((?&?)&?&?); subst; simpl in *.
-            eapply VarsDefined_Is_defined'; eauto.
+            eapply VarsDefinedComp_Is_defined'; eauto.
             eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
             eapply PSF.mem_2 in Hpart.
             eapply vars_defined_Is_defined_in; simpl; auto.
@@ -398,7 +398,7 @@ Module Type CLOCKSWITCH
       }
 
       assert (Forall2 (fun blks '(_, _, nfree, ndefs) =>
-                           exists ndefs', Forall2 VarsDefined blks (ndefs'++map (fun '(_, x, _) => [x]) nfree)
+                           exists ndefs', Forall2 VarsDefinedComp blks (ndefs'++map (fun '(_, x, _) => [x]) nfree)
                                      /\ Permutation (concat ndefs') (map (fun '(_, x, _) => x) ndefs))
                   x3 x) as Hdef'.
       { eapply mmap2_values in H5. eapply mmap_values in H1.
@@ -417,7 +417,7 @@ Module Type CLOCKSWITCH
             eapply NoDupMembers_app_InMembers in Hnd1; eauto. }
         do 2 esplit. apply Forall2_app.
         - eapply mmap_values, Forall2_swap_args in H8.
-          take (Forall2 VarsDefined _ _) and eapply Forall2_trans_ex in it; eauto.
+          take (Forall2 VarsDefinedComp _ _) and eapply Forall2_trans_ex in it; eauto.
           instantiate (1:=map (map (rename_var _)) x4). simpl_Forall.
           eapply H in H15; eauto.
           + simpl_app. apply incl_appl.
@@ -443,13 +443,13 @@ Module Type CLOCKSWITCH
       } clear H1 H5.
 
       assert (exists vars',
-                 Forall2 (fun blks '(nfree, ndefs) => Forall2 VarsDefined blks (ndefs++nfree)) x3 vars'
+                 Forall2 (fun blks '(nfree, ndefs) => Forall2 VarsDefinedComp blks (ndefs++nfree)) x3 vars'
                  /\ Permutation (concat (concat (map (fun '(nfree, ndefs) => ndefs ++ nfree) vars')))
                      (concat
                         (map
                            (fun '(_, _, nfrees, ndefs) =>
                               map fst
-                                (map (fun '(_, x5, (ty, ck)) => (x5, (ty, ck, 1%positive, @None (exp * ident)))) (nfrees ++ ndefs))) x)))
+                                (map (fun '(_, x5, (ty, ck)) => (x5, (ty, ck, 1%positive, @None ident))) (nfrees ++ ndefs))) x)))
         as (vars'&Hdef''&Hperm').
       { clear - Hdef'. induction Hdef'; destruct_conjs; do 2 esplit; try constructor; eauto.
         instantiate (1:=(_,_)); simpl; eauto. simpl.
@@ -468,7 +468,7 @@ Module Type CLOCKSWITCH
       + apply Forall2_concat. instantiate (1:=map (fun '(nfree, ndefs) => ndefs++nfree) vars').
         simpl_Forall; eauto.
       + instantiate (1:=map (fun '(x, _) => [x]) l).
-        eapply cond_eq_VarsDefined in H0. simpl_Forall; eauto.
+        eapply cond_eq_VarsDefinedComp in H0. simpl_Forall; eauto.
       + rewrite 2 concat_app, map_app. apply Permutation_app; [|rewrite Permutation_app_comm; apply Permutation_app].
         * erewrite map_ext, <-map_map, concat_map_singl1, <-Hdefs, map_map. reflexivity.
           intros; destruct_conjs; auto.
@@ -480,7 +480,7 @@ Module Type CLOCKSWITCH
 
     - (* local *)
       constructor.
-      eapply switch_scope_VarsDefined; eauto.
+      eapply switch_scope_VarsDefinedComp; eauto.
       intros; simpl; destruct_conjs.
       do 2 esplit; eauto. 2:rewrite <-H12, concat_map; reflexivity.
       simpl_Forall.
@@ -490,6 +490,48 @@ Module Type CLOCKSWITCH
       + etransitivity; [|eauto]. rewrite <-H12; eauto using incl_concat.
       + rewrite <-H12 in *; eauto using NoDup_concat.
         Transparent switch_scope.
+  Qed.
+
+  (* LastsDefined *)
+
+  Lemma switch_block_LastsDefined : forall blk xs bck sub env blk' st st',
+      noauto_block blk ->
+      LastsDefined blk xs ->
+      switch_block env bck sub blk st = (blk', st') ->
+      LastsDefined blk' xs.
+  Proof.
+    induction blk using block_ind2; intros * NoAuto VD Switch; try destruct type0;
+      inv NoAuto; inv VD; destruct_conjs; repeat inv_bind.
+    - (* equation *) constructor.
+    - (* reset *)
+      constructor.
+      apply mmap_values, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H4; eauto. simpl_Forall; eauto.
+    - (* switch *)
+      cases. repeat inv_bind. cases. repeat inv_bind.
+      repeat constructor; simpl.
+      do 2 esplit. repeat apply Forall2_app.
+      + instantiate (1:=map (fun _ => []) l). simpl_Forall. constructor.
+      + eapply mmap2_values, Forall3_ignore12 in H4.
+        2:{ apply mmap_length in H2; auto. }
+        instantiate (1:=map (fun _ => []) (concat x3)).
+        simpl_Forall. take (In _ (concat _)) and apply in_concat in it as (?&?&?).
+        simpl_Forall. repeat inv_branch. repeat inv_bind.
+        take (In _ (_ ++ _)) and apply in_app_iff in it as [|]; simpl_In; [|constructor].
+        eapply mmap_values, Forall2_ignore1 in H1. simpl_Forall. eauto.
+      + instantiate (1:=map (fun _ => []) x0). simpl_Forall. constructor.
+      + rewrite 2 concat_app, 3 concat_map_nil; simpl.
+        unfold lasts_of_decls. rewrite map_filter_app, 2 map_filter_nil; auto.
+        1,2:simpl_Forall; auto.
+        simpl_In; auto.
+    - (* local *)
+      repeat inv_scope. repeat constructor.
+      do 2 esplit; eauto.
+      2:{ unfold lasts_of_decls in *. rewrite map_filter_map.
+          erewrite map_filter_ext; eauto.
+          intros; destruct_conjs; auto. }
+      apply mmap_values, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H2; eauto. simpl_Forall; eauto.
   Qed.
 
   (** *** Preservation of st_follows *)
@@ -522,6 +564,7 @@ Module Type CLOCKSWITCH
     induction blk using block_ind2; intros * Hst;
       repeat inv_bind; simpl in *; auto.
     - (* equation *) reflexivity.
+    - (* last *) reflexivity.
     - (* reset *)
       eapply mmap_st_follows; eauto.
       eapply Forall_impl; [|eauto]; intros; eauto.
@@ -838,8 +881,8 @@ Module Type CLOCKSWITCH
     Opaque switch_scope.
     induction blk using block_ind2; intros * Hsub Hgood Hsw;
       inv Hgood; simpl in *; repeat inv_bind.
-    - (* equation *)
-      constructor.
+    - (* equation *) constructor.
+    - (* last *) constructor.
     - (* reset *)
       constructor.
       eapply mmap_values, Forall2_ignore1 in H0.
@@ -914,8 +957,8 @@ Module Type CLOCKSWITCH
 
   (** ** Transformation of a node and program *)
 
-  Program Definition switch_node (n: @node noauto_block auto_prefs) : @node noswitch_block switch_prefs :=
-    let res := switch_block (senv_of_inout (n_in n ++ n_out n)) Cbase (@Env.empty _) (n_block n) init_st in
+  Program Definition switch_node (n: @node noauto auto_prefs) : @node noswitch switch_prefs :=
+    let res := switch_block (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) Cbase (@Env.empty _) (n_block n) init_st in
     {| n_name := n_name n;
        n_hasstate := n_hasstate n;
        n_in := n_in n;
@@ -926,17 +969,27 @@ Module Type CLOCKSWITCH
     |}.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
-    pose proof (n_defd n) as (xs&Hperm&Hvars).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? Syn1 Syn2 (xs&Vars&Perm)].
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    eapply switch_block_VarsDefined with (xs:=xs) in Hsw; eauto.
-    do 2 esplit; eauto.
-    - now rewrite rename_vars_empty.
-    - rewrite Hvars, map_fst_senv_of_inout. solve_incl_app.
+    pose proof (n_good n) as (Hgood1&Hgood2&_).
+    apply Permutation_map_inv in Perm as (?&?&Perm); auto; subst.
+    assert (VD':=Hsw). eapply switch_block_VarsDefinedComp with (xs:=map _ x) in VD';
+      eauto using node_NoDupMembers, node_NoDupLocals.
+    do 2 esplit.
+    - rewrite rename_vars_empty, <-map_fst_senv_of_decls in VD'.
+      eapply VarsDefinedComp_VarsDefined; [|eauto].
+      eapply NoDupLocals_incl, switch_block_NoDupLocals; eauto. 2:simpl_Forall; auto.
+      rewrite map_fst_senv_of_decls, Perm. solve_incl_app.
+    - apply Permutation_map. now symmetry.
+    - rewrite <-Perm, map_app, map_fst_senv_of_decls. now solve_incl_app.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
-    - apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-    - rewrite Hvars. apply fst_NoDupMembers; eauto using NoDupMembers_app_r.
-    - apply n_syn.
-    - eapply NoDupLocals_incl; [|eauto]. rewrite map_fst_senv_of_inout. solve_incl_app.
+    - rewrite <-Perm. eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    pose proof (n_lastd n) as (?&Last&Perm).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? Syn1 Syn2 _].
+    destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
+    do 2 esplit; eauto using switch_block_LastsDefined.
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
@@ -944,30 +997,36 @@ Module Type CLOCKSWITCH
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     split; auto.
     eapply switch_block_NoDupLocals; eauto.
-    + apply fst_NoDupMembers; auto.
     + eapply Forall_impl; eauto.
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
-    repeat split; eauto using AtomOrGensym_add.
-    eapply switch_block_GoodLocals; eauto using GoodLocals_add, AtomOrGensym_add.
+    repeat split; eauto using Forall_AtomOrGensym_add.
+    eapply switch_block_GoodLocals; eauto using GoodLocals_add, Forall_AtomOrGensym_add.
     intros ?? Hfind. apply Env.Props.P.F.empty_mapsto_iff in Hfind. inv Hfind.
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw.
-    pose proof (n_syn n) as Hsyn.
-    eapply switch_noswitch; eauto.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (?&Vars&Perm)].
+    econstructor; eauto using switch_noswitch.
+    do 2 esplit; eauto.
+    pose proof (n_nodup n) as (Hnd1&Hnd2).
+    eapply switch_block_VarsDefinedComp with (xs:=x) in Hsw; eauto using node_NoDupMembers, node_NoDupLocals.
+    - rewrite rename_vars_empty in Hsw; eauto.
+    - rewrite Perm, map_app, map_fst_senv_of_decls. now solve_incl_app.
+    - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
+    - rewrite Perm. eauto using NoDup_app_r.
   Qed.
 
   Global Program Instance switch_node_transform_unit: TransformUnit node node :=
     { transform_unit := switch_node }.
 
-  Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto_block auto_prefs) (@global noswitch_block switch_prefs) :=
+  Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto auto_prefs) (@global noswitch switch_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition switch_global : @global noauto_block auto_prefs -> @global noswitch_block switch_prefs :=
+  Definition switch_global : @global noauto auto_prefs -> @global noswitch switch_prefs :=
     transform_units.
 
   (** *** Equality of interfaces *)

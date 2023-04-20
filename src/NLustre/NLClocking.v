@@ -64,10 +64,10 @@ Module Type NLCLOCKING
         wc_equation G Ω (EqFby x ck v0 le xrs).
 
   Definition wc_node (G: global) (n: node) : Prop :=
-    wc_env (idck (n.(n_in))) /\
-    wc_env (idck (n.(n_in) ++ n.(n_out))) /\
-    wc_env (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) /\
-    Forall (wc_equation G (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
+    wc_env (idsnd (n.(n_in))) /\
+    wc_env (idsnd (n.(n_in) ++ n.(n_out))) /\
+    wc_env (idsnd (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) /\
+    Forall (wc_equation G (idsnd (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
            n.(n_eqs).
 
   Definition wc_global (G: global) :=

@@ -689,6 +689,17 @@ Section Extra.
     - apply incl_app; eauto using incl_appl, incl_appr.
   Qed.
 
+  Fact map_eq_concat {B} (f : A -> B) : forall (xs: list (list B)) (ys: list A),
+      concat xs = map f ys ->
+      exists ys', ys = concat ys' /\ xs = map (map f) ys'.
+  Proof.
+    induction xs; intros * Eq; simpl in *.
+    - symmetry in Eq. apply map_eq_nil in Eq; subst.
+      exists []; auto.
+    - symmetry in Eq. apply map_eq_app in Eq as (ys1&ys2&?&?&Eq); subst.
+      edestruct IHxs as (ys'&?&?); eauto; subst.
+      exists (ys1::ys'). auto.
+  Qed.
 End Extra.
 
 Section is_nil.
@@ -1445,6 +1456,12 @@ Section ConcatMap.
       + destruct (f a); simpl in *; try congruence.
         destruct l0; simpl in *; try congruence.
         eapply IHl; eauto. lia.
+  Qed.
+
+  Fact concat_map_nil : forall (l : list A),
+      @concat B (map (fun _ => []) l) = [].
+  Proof.
+    induction l; simpl; auto.
   Qed.
 
   Fact concat_map_singl1 : forall (l : list A),
@@ -2296,7 +2313,7 @@ Section SkipnDropn.
     - destruct n; simpl.
       + now rewrite <-plus_n_O.
       + destruct n'; simpl; rewrite IHxs; auto.
-        now rewrite Plus.plus_Snm_nSm.
+        now rewrite Nat.add_succ_r.
   Qed.
 
   Lemma nth_firstn_1: forall (xs: list A) n' n x_d,
@@ -2575,9 +2592,9 @@ Section AppLength.
     rewrite app_length in H.
     exists (firstn (length l1) l),(skipn (length l1) l). split; [|split].
     - symmetry. apply firstn_skipn.
-    - rewrite firstn_length. apply Min.min_l. lia.
+    - rewrite firstn_length. lia.
     - apply app_length_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
-      rewrite firstn_length. apply Min.min_l. lia.
+      rewrite firstn_length. lia.
       rewrite firstn_skipn. now rewrite app_length.
   Qed.
 
@@ -2969,7 +2986,7 @@ Section Forall2.
       apply Hin.
       subst x' y'. rewrite <-combine_nth with (1:=Hlen).
       apply nth_In.
-      now rewrite combine_length, <-Hlen, Min.min_idempotent.
+      now rewrite combine_length, <-Hlen, Nat.min_id.
     - intros H; split.
       + intros * Hin.
         apply Forall2_combine in H.
@@ -3543,6 +3560,16 @@ Proof.
   induction Hf1; inv Hf2; constructor; auto.
 Qed.
 
+Lemma Forall3_combine1 {A B C} : forall (P : A -> B -> C -> Prop) xs ys zs,
+    length xs = length ys ->
+    Forall2 (fun '(x, y) z => P x y z) (combine xs ys) zs ->
+    Forall3 P xs ys zs.
+Proof.
+  induction xs; intros * Hlen Hf;
+    destruct ys; simpl in *; try congruence;
+      inv Hf; constructor; auto.
+Qed.
+
 Lemma Forall3_combine2 {A B C} : forall (P : A -> B -> C -> Prop) ys xs zs,
     length ys = length zs ->
     Forall2 (fun x '(y, z) => P x y z) xs (combine ys zs) ->
@@ -3594,6 +3621,31 @@ Lemma Forall3_ignore3' {A B C} : forall P (xs : list A) (ys : list B) (zs : list
 Proof.
   intros * Hlen Hf. revert zs Hlen.
   induction Hf; intros; destruct zs; simpl in *; try congruence; constructor; auto.
+Qed.
+
+Lemma Forall3_ignore2'' {A B C} : forall (P : _ -> _ -> _ -> Prop) (xs : list A) (ys : list B) (zs : list C),
+    length ys = length xs ->
+    Forall2 (fun x z => forall y, P x y z) xs zs ->
+    Forall3 P xs ys zs.
+Proof.
+  induction xs; intros * L F2; destruct ys; simpl in *; try congruence.
+  1,2:inv F2; constructor; eauto.
+Qed.
+
+Lemma Forall3_trans_ex1 {A B C D} : forall Q P (xs : list A) (ys : list B) (zs : list C) (ts : list D),
+    Forall3 P xs ys zs ->
+    Forall2 Q xs ts ->
+    Forall3 (fun t y z => exists x, P x y z /\ Q x t) ts ys zs.
+Proof.
+  induction xs; intros * F3 F2; inv F3; inv F2; constructor; eauto.
+Qed.
+
+Lemma Forall3_trans_ex2 {A B C D} : forall Q P (xs : list A) (ys : list B) (zs : list C) (ts : list D),
+    Forall3 P xs ys zs ->
+    Forall2 Q ys ts ->
+    Forall3 (fun x t z => exists y, P x y z /\ Q y t) xs ts zs.
+Proof.
+  induction xs; intros * F3 F2; inv F3; inv F2; constructor; eauto.
 Qed.
 
 Global Instance Forall3_Proper' {A B C}:
@@ -4266,6 +4318,25 @@ Section InMembers.
       constructor; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
   Qed.
 
+  Lemma InMembers_concat: forall (ls : list (list (A * B))) x,
+      InMembers x (concat ls) <-> (exists l, InMembers x l /\ In l ls).
+  Proof.
+    induction ls; simpl.
+    - split; intros; destruct_conjs; take False and inv it.
+    - intros ?. rewrite InMembers_app, IHls.
+      split; intros; destruct_conjs; take (_ \/ _) and destruct it; subst; destruct_conjs; eauto.
+  Qed.
+
+  Lemma NoDupMembers_concat : forall xss xs,
+      In xs xss ->
+      NoDupMembers (concat xss) ->
+      NoDupMembers xs.
+  Proof.
+    induction xss; intros * Hin Hnd; simpl in *; inv Hin.
+    - apply NoDupMembers_app_l in Hnd; auto.
+    - apply NoDupMembers_app_r in Hnd; eauto.
+  Qed.
+
 End InMembers.
 Global Hint Constructors NoDupMembers : datatypes.
 Global Hint Rewrite -> @fst_InMembers : list.
@@ -4280,18 +4351,6 @@ Proof.
   constructor; auto.
   contradict H.
   apply filter_InMembers in H as (?&?&_); eauto using In_InMembers.
-Qed.
-
-Fact find_some' : forall {A} (xs : list (positive * A)) x v ,
-    NoDupMembers xs ->
-    In (x, v) xs ->
-    find (fun xtc => (fst xtc =? x)%positive) xs = Some (x, v).
-Proof.
-  induction xs; intros * Hndup Hin; inv Hin; inv Hndup; simpl.
-  - rewrite Pos.eqb_refl. reflexivity.
-  - destruct (Pos.eq_dec a0 x); subst.
-    + apply In_InMembers in H. contradiction.
-    + eapply Pos.eqb_neq in n. rewrite n; auto.
 Qed.
 
 Section OptionLists.
@@ -4631,7 +4690,7 @@ Section LL.
     revert Hlen. generalize (length ls) at 2.
     intro len; revert ls.
     unfold ll. induction len; intros ls Hlen; constructor;
-                 try apply Le.le_n_0_eq in Hlen; intuition.
+                 try apply Nat.le_0_r in Hlen; intuition.
     - lia.
     - eapply IHlen; lia.
   Defined.

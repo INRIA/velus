@@ -16,7 +16,7 @@ From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Interface.
+From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Instantiator.
 From Velus Require Import Velus.
 Import Stc.Syn.
@@ -103,12 +103,12 @@ Section WtStream.
   Definition wt_ins :=
     forall node,
       find_node main G = Some node ->
-      wt_streams ins (idty node.(n_in)).
+      wt_streams ins (idfst node.(n_in)).
 
   Definition wt_outs :=
     forall node,
       find_node main G = Some node ->
-      wt_streams outs (idty node.(n_out)).
+      wt_streams outs (idfst node.(n_out)).
 
 End WtStream.
 
@@ -171,7 +171,7 @@ Section NLTrace.
 
   Program Definition trace_node (n: nat): traceinf :=
     mk_trace (tr_Streams ins) (tr_Streams outs)
-             (idty node.(n_in)) (idty node.(n_out))
+             (idfst node.(n_in)) (idfst node.(n_out))
              _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
@@ -179,17 +179,17 @@ Section NLTrace.
     - right; intro E; apply map_eq_nil in E; auto.
   Defined.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 2 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 2 map_length; auto.
   Defined.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 2 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 2 map_length; auto.
   Defined.
 
   (** Simply link the trace of a Lustre node with the trace of an Obc step method with the same parameters *)
   Lemma trace_inf_sim_step_node:
     forall n m Spec_in_out_m Len_ins_m Len_outs_m,
-      m_in m = idty (n_in node) ->
-      m_out m = idty (n_out node) ->
+      m_in m = idfst (n_in node) ->
+      m_out m = idfst (n_out node) ->
       traceinf_sim (trace_step m (tr_Streams ins) (tr_Streams outs) Spec_in_out_m Len_ins_m Len_outs_m n)
                    (trace_node n).
   Proof.
@@ -197,9 +197,9 @@ Section NLTrace.
     apply traceinf_sim'_sim.
     revert n; cofix COFIX; intro.
     rewrite unfold_mk_trace.
-    rewrite unfold_mk_trace with (xs := idty (n_in node)).
+    rewrite unfold_mk_trace with (xs := idfst (n_in node)).
     simpl.
-    replace (load_events (tr_Streams ins n) (idty (n_in node)) ** store_events (tr_Streams outs n) (idty (n_out node)))
+    replace (load_events (tr_Streams ins n) (idfst (n_in node)) ** store_events (tr_Streams outs n) (idfst (n_out node)))
       with (load_events (tr_Streams ins n) (m_in m) ** store_events (tr_Streams outs n) (m_out m)); try congruence.
     constructor.
     - intro E; eapply Eapp_E0_inv in E.
@@ -558,7 +558,7 @@ Proof.
   assert (n_in main_node <> [] \/ n_out main_node <> []) as Node_in_out_spec by apply node_in_out_not_nil.
   assert (m_in main_step' <> nil \/ m_out main_step' <> nil) as Step_in_out_spec.
   { rewrite Eq_step.
-    assert (idty (n_in main_node) <> [] \/ idty (n_out main_node) <> [])
+    assert (idfst (n_in main_node) <> [] \/ idfst (n_out main_node) <> [])
       by (destruct Node_in_out_spec as [Neq|Neq];
           ((now left; intro; eapply Neq, map_eq_nil; eauto)
            || (right; intro; eapply Neq, map_eq_nil; eauto))).
@@ -587,16 +587,16 @@ Proof.
       apply wt_memory_add_defaults;
         unfold total_if; cases; eauto.
 
-  - assert (m_in m_step = idty main_node.(n_in)) as Ein by auto.
-    assert (m_out m_step = idty main_node.(n_out)) as Eout by auto.
+  - assert (m_in m_step = idfst main_node.(n_in)) as Ein by auto.
+    assert (m_out m_step = idfst main_node.(n_out)) as Eout by auto.
     assert (length ins = length (n_in main_node)) as Len_ins.
-    { transitivity (length (idty main_node.(n_in))); try apply map_length.
+    { transitivity (length (idfst main_node.(n_in))); try apply map_length.
       rewrite <-Ein.
       specialize (Hwt_in 0); unfold ins' in Hwt_in; setoid_rewrite Forall2_map_1 in Hwt_in.
       eapply Forall2_length; eauto.
     }
     assert (length outs = length (n_out main_node)) as Len_outs.
-    { transitivity (length (idty main_node.(n_out))); try apply map_length.
+    { transitivity (length (idfst main_node.(n_out))); try apply map_length.
       rewrite <-Eout.
       specialize (Hwt_out 0); unfold outs' in Hwt_out; setoid_rewrite Forall2_map_1 in Hwt_out.
       eapply Forall2_length; eauto.

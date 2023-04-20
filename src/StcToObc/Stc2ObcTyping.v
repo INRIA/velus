@@ -358,9 +358,9 @@ Module Type STC2OBCTYPING
   Lemma s_type_env_spec:
     forall s,
       type_env_spec
-        (idty (s_in s ++ s_vars s ++ s_out s) ++ map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
+        (idfst (s_in s ++ s_vars s ++ s_out s) ++ map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
         (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
-        (idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s))
+        (idfst (s_in s) ++ idfst (s_vars s) ++ idfst (s_out s))
         (ps_from_list (map fst (s_nexts s))).
   Proof.
     intros s x t Hin.
@@ -371,12 +371,12 @@ Module Type STC2OBCTYPING
       eapply NoDup_app_In in N; eauto.
       rewrite Permutation_app_comm in Hin.
       eapply not_In2_app; eauto.
-      intro Hin'; apply idty_InMembers in Hin'.
+      intro Hin'; apply idfst_InMembers in Hin'.
       rewrite <-2 map_app, <-app_assoc, <-fst_InMembers in N.
       contradiction.
     - apply PSE.mem_4 in E; rewrite ps_from_list_In in E.
       unfold meth_vars, step_method; simpl.
-      rewrite <-2 idty_app.
+      rewrite <-2 idfst_app.
       eapply not_In2_app; eauto.
       intro Hin'; apply E.
       apply in_map_iff in Hin' as ((?&((?&?)&?))& E' &?); simpl in *; inv E'.
@@ -396,7 +396,7 @@ Module Type STC2OBCTYPING
       unfold meth_vars, step_method; simpl.
       apply s_type_env_spec.
     - unfold meth_vars, step_method; simpl.
-      do 2 setoid_rewrite <-idty_app; auto.
+      do 2 setoid_rewrite <-idfst_app; auto.
   Qed.
   Local Hint Resolve step_wt : obctyping.
 

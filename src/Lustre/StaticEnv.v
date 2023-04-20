@@ -36,6 +36,14 @@ Module Type STATICENV
       InMembers x senv ->
       IsVar senv x.
 
+  Lemma IsVar_fst : forall Γ x,
+      IsVar Γ x <-> In x (map fst Γ).
+  Proof.
+    split.
+    - intros []. now rewrite <-fst_InMembers.
+    - intros. constructor. now rewrite fst_InMembers.
+  Qed.
+
   Inductive HasType : static_env -> ident -> type -> Prop :=
   | HasTypeC : forall senv x ty e,
       In (x, e) senv ->
@@ -212,6 +220,26 @@ Module Type STATICENV
       1,2:constructor; apply InMembers_app; auto.
   Qed.
 
+  Fact IsVar_concat : forall env1 env2 x,
+      In env1 env2 ->
+      IsVar env1 x ->
+      IsVar (concat env2) x.
+  Proof.
+    intros * Hin Hv. inv Hv.
+    eapply InMembers_In in H as (?&?).
+    econstructor. eapply In_InMembers; eauto using in_concat'.
+  Qed.
+  Global Hint Resolve IsVar_concat : senv.
+
+  Fact IsVar_concat' : forall env2 x,
+      IsVar (concat env2) x ->
+      exists env1, In env1 env2 /\ IsVar env1 x.
+  Proof.
+    intros * Hv. inv Hv.
+    eapply InMembers_In in H as (?&In). apply in_concat in In as (?&?&?).
+    do 2 esplit; eauto. econstructor; eauto using In_InMembers.
+  Qed.
+
   Fact IsLast_app : forall env1 env2 x,
       IsLast (env1 ++ env2) x <-> IsLast env1 x \/ IsLast env2 x.
   Proof.
@@ -262,13 +290,19 @@ Module Type STATICENV
   Definition senv_of_tyck (l : list (ident * (type * clock))) : static_env :=
     List.map (fun '(x, (ty, ck)) => (x, Build_annotation ty ck xH None)) l.
 
-  Definition senv_of_inout (l : list (ident * (type * clock * ident))) : static_env :=
+  Definition senv_of_ins (l : list (ident * (type * clock * ident))) : static_env :=
     List.map (fun '(x, (ty, ck, cx)) => (x, Build_annotation ty ck cx None)) l.
 
-  Definition senv_of_locs {A} (l : list (ident * (type * clock * ident * option (A * ident)))) : static_env :=
-    List.map (fun '(x, (ty, ck, cx, o)) => (x, Build_annotation ty ck cx (option_map snd o))) l.
+  Definition senv_of_decls (l : list (ident * (type * clock * ident * option ident))) : static_env :=
+    List.map (fun '(x, (ty, ck, cx, o)) => (x, Build_annotation ty ck cx o)) l.
 
-  Global Hint Unfold senv_of_inout senv_of_locs : list.
+  Global Hint Unfold senv_of_ins senv_of_decls : list.
+
+  Lemma senv_of_decls_app : forall xs ys,
+      senv_of_decls (xs ++ ys) = senv_of_decls xs ++ senv_of_decls ys.
+  Proof.
+    intros. apply map_app.
+  Qed.
 
   Lemma map_fst_senv_of_tyck : forall l,
       map fst (senv_of_tyck l) = map fst l.
@@ -277,10 +311,10 @@ Module Type STATICENV
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
-  Lemma map_fst_senv_of_inout : forall l,
-      map fst (senv_of_inout l) = map fst l.
+  Lemma map_fst_senv_of_ins : forall l,
+      map fst (senv_of_ins l) = map fst l.
   Proof.
-    intros *. unfold senv_of_inout.
+    intros *. unfold senv_of_ins.
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
@@ -291,42 +325,42 @@ Module Type STATICENV
     apply map_app.
   Qed.
 
-  Lemma map_fst_senv_of_locs {A} : forall l,
-      map fst (@senv_of_locs A l) = map fst l.
+  Lemma map_fst_senv_of_decls : forall l,
+      map fst (senv_of_decls l) = map fst l.
   Proof.
-    intros *. unfold senv_of_locs.
+    intros *. unfold senv_of_decls.
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
   Global Hint Rewrite -> map_fst_senv_of_tyck.
-  Global Hint Rewrite -> map_fst_senv_of_inout.
-  Global Hint Rewrite -> @map_fst_senv_of_locs.
+  Global Hint Rewrite -> map_fst_senv_of_ins.
+  Global Hint Rewrite -> @map_fst_senv_of_decls.
 
-  Lemma InMembers_senv_of_locs {A} : forall x locs,
-      InMembers x (@senv_of_locs A locs) <-> InMembers x locs.
+  Lemma InMembers_senv_of_decls : forall x locs,
+      InMembers x (senv_of_decls locs) <-> InMembers x locs.
   Proof.
     intros *. symmetry.
-    symmetry. autorewrite with list. now rewrite map_fst_senv_of_locs.
+    symmetry. autorewrite with list. now rewrite map_fst_senv_of_decls.
   Qed.
 
-  Global Hint Rewrite -> @InMembers_senv_of_locs : list.
+  Global Hint Rewrite -> InMembers_senv_of_decls : list.
 
-  Lemma NoDupMembers_senv_of_locs {A} : forall locs,
-      NoDupMembers (@senv_of_locs A locs) <-> NoDupMembers locs.
+  Lemma NoDupMembers_senv_of_decls : forall locs,
+      NoDupMembers (senv_of_decls locs) <-> NoDupMembers locs.
   Proof.
-    intros *. now rewrite fst_NoDupMembers, map_fst_senv_of_locs, <-fst_NoDupMembers.
+    intros *. now rewrite fst_NoDupMembers, map_fst_senv_of_decls, <-fst_NoDupMembers.
   Qed.
 
-  Lemma IsVar_senv_of_locs {A} : forall x locs,
-      IsVar (@senv_of_locs A locs) x <-> InMembers x locs.
+  Lemma IsVar_senv_of_decls : forall x locs,
+      IsVar (senv_of_decls locs) x <-> InMembers x locs.
   Proof.
     split; intros * Hiv; [inv Hiv|constructor]; autorewrite with list in *; auto.
   Qed.
 
-  Global Hint Rewrite -> @IsVar_senv_of_locs.
+  Global Hint Rewrite -> @IsVar_senv_of_decls.
 
-  Lemma IsLast_senv_of_locs {A} : forall x locs,
-      IsLast (@senv_of_locs A locs) x -> InMembers x locs.
+  Lemma IsLast_senv_of_decls : forall x locs,
+      IsLast (senv_of_decls locs) x -> InMembers x locs.
   Proof.
     intros * Hiv; inv Hiv; solve_In.
   Qed.
@@ -411,8 +445,8 @@ Module Type STATICENV
     intros * Hl. inv Hl. simpl_In. auto.
   Qed.
 
-  Lemma senv_of_inout_NoLast : forall Γ,
-    forall x, ~IsLast (senv_of_inout Γ) x.
+  Lemma senv_of_ins_NoLast : forall Γ,
+    forall x, ~IsLast (senv_of_ins Γ) x.
   Proof.
     intros * Hl. inv Hl. simpl_In. auto.
   Qed.

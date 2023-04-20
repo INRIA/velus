@@ -46,8 +46,8 @@ Module Type CATYPING
   Import Permutation.
 
   Section wt_node.
-    Variable G1 : @global nolast_block last_prefs.
-    Variable G2 : @global noauto_block auto_prefs.
+    Variable G1 : @global nolast last_prefs.
+    Variable G2 : @global noauto auto_prefs.
 
     Hypothesis HwtG1 : wt_global G1.
     Hypothesis Hiface : global_iface_incl G1 G2.
@@ -121,14 +121,13 @@ Module Type CATYPING
             Forall (wt_block G2 (Γ'++Γ)) blks') ->
         wt_scope (fun Γ => Forall (wt_block G2 Γ)) G2 (Γ'++Γ) s'.
     Proof.
-      intros * Hnl1 Hnl3 Hwt Hincl Hat Hind; inv Hnl3; inv Hwt; repeat inv_bind.
+      intros * Hnl1 Hnl3 Hwt Hincl Hat Hind; inv Hnl3; inv Hwt; subst Γ'0; repeat inv_bind.
       econstructor; eauto.
       - unfold wt_clocks in *. simpl_Forall.
         eapply wt_clock_incl; [|eauto with ltyping].
         intros. repeat rewrite HasType_app in *. intuition.
       - simpl_Forall; subst; eauto with ltyping.
-      - simpl_Forall; subst; eauto.
-      - eapply Hind in H8; eauto.
+      - eapply Hind in H6; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
           intros ? Hl; inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -195,11 +194,10 @@ Module Type CATYPING
             by (eapply iface_incl_wt_type, HwtG1; eauto).
 
         do 2 econstructor; eauto; simpl.
-        4:repeat (apply Forall_cons); auto.
+        3:repeat (apply Forall_cons); auto.
         + unfold wt_clocks; repeat constructor; simpl.
           all:wt_automaton.
         + repeat (apply Forall_cons); auto.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wt_automaton.
           * eapply init_state_exp_wt; eauto; wt_automaton.
@@ -256,11 +254,10 @@ Module Type CATYPING
             by (eapply iface_incl_wt_type, HwtG1; eauto).
 
         do 2 econstructor; eauto; simpl.
-        4:repeat (apply Forall_cons); auto.
+        3:repeat (apply Forall_cons); auto.
         + unfold wt_clocks; repeat constructor; simpl.
           all:wt_automaton.
         + repeat (apply Forall_cons); auto.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wt_automaton.
           * apply add_whens_wt; auto; wt_automaton.
@@ -321,15 +318,16 @@ Module Type CATYPING
         incl (snd (auto_node n)) G2.(types) ->
         wt_node G2 (fst (auto_node n)).
     Proof.
-      intros * Hwtn Htypes.
-      destruct Hwtn as (Hwt1&Hwt2&Hwt3&Hwt4).
+      intros * Hwtn Htypes. inv Hwtn; subst Γ.
+      pose proof (n_syn n) as Hsyn. inv Hsyn.
       repeat split.
       1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-      unfold auto_node in *; simpl in *.
-      destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
-      eapply auto_block_wt; eauto.
-      - apply senv_of_inout_NoLast.
-      - apply n_syn.
+      - unfold auto_node in *; simpl in *.
+        destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
+        eapply auto_block_wt; eauto.
+        apply NoLast_app; split; auto using senv_of_ins_NoLast.
+        intros * Hl. inv Hl. simpl_In. simpl_Forall.
+        subst; simpl in *; congruence.
     Qed.
 
   End wt_node.

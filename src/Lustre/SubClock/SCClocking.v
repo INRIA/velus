@@ -49,7 +49,7 @@ Module Type SCCLOCKING
       destruct (Env.find _ _) eqn:Hfind; simpl in *; eauto.
     Qed.
 
-    Context {PSyn : block -> Prop} {prefs : PS.t}.
+    Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
     Hypothesis Hwbck : wc_clock (idck Γ') bck.

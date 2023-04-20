@@ -75,8 +75,8 @@ Module Type STCCLOCKINGSEMANTICS
                          base = clock_of_instant xs ->
                          sem_vars_instant R (map fst s.(s_in)) xs ->
                          sem_vars_instant R (map fst s.(s_out)) ys ->
-                         sem_clocked_vars_instant base R (idck s.(s_in)) ->
-                         sem_clocked_vars_instant base R (idck s.(s_out)));
+                         sem_clocked_vars_instant base R (idsnd s.(s_in)) ->
+                         sem_clocked_vars_instant base R (idsnd s.(s_out)));
       intros;
       try inv Def;
       try inversion WC
@@ -98,16 +98,16 @@ Module Type STCCLOCKINGSEMANTICS
       inversion_clear System as [?????? R' ?? Hfind Hvi Hvo Hsck].
       specialize (IH _ _ _ _ Hfind eq_refl Hvi Hvo).
       assert (Hvi' := Hvi).
-      rewrite <-map_fst_idck in Hvi'.
+      rewrite <-map_fst_idsnd in Hvi'.
       specialize (IH Hsck).
       rewrite Hfind in Hfind'; inv Hfind'.
 
       assert (forall x y ys,
-                 InMembers x (idck (bl'.(s_in) ++ bl'.(s_out))) ->
+                 InMembers x (idsnd (bl'.(s_in) ++ bl'.(s_out))) ->
                  sub x = Some y ->
                  sem_var_instant R' x ys ->
                  sem_var_instant R y ys) as Htranso.
-      { setoid_rewrite InMembers_idck.
+      { setoid_rewrite InMembers_idsnd.
         intros; eapply sem_var_instant_transfer_out_instant
                   with (xin := s_in bl') (xout := s_out bl'); eauto.
         - pose proof bl'.(s_nodup) as Hnd.
@@ -118,7 +118,7 @@ Module Type STCCLOCKINGSEMANTICS
         - apply Forall2_impl_In with (2:=Hfao); intuition.
       }
 
-      rewrite <-map_fst_idck in Hvo. unfold idck in Hvo. rewrite map_map in Hvo.
+      rewrite <-map_fst_idsnd in Hvo. unfold idsnd in Hvo. rewrite map_map in Hvo.
       unfold sem_vars_instant in Hvo.
       rewrite Forall2_map_1 in Hvo.
       apply Forall2_swap_args in Hfao.
@@ -131,12 +131,12 @@ Module Type STCCLOCKINGSEMANTICS
                        (Hotc & yck' & Hin' & Hinst) & Hsvx) & Hsvy); eauto.
       simpl in *.
       eapply NoDupMembers_det with (2:=Hin) in Hin'; eauto; subst yck'.
-      unfold idck in *. setoid_rewrite Forall_map in IH.
+      unfold idsnd in *. setoid_rewrite Forall_map in IH.
       eapply Forall_forall in IH; eauto; simpl in IH.
       apply wc_find_system with (1:=WCP) in Hfind as (WCi & WCo & WCv & WCtcs).
-      assert (In (x', xck) (idck (bl'.(s_in) ++ bl'.(s_out)))) as Hxin'
-        by (rewrite idck_app, in_app; right;
-            apply In_idck_exists; eauto).
+      assert (In (x', xck) (idsnd (bl'.(s_in) ++ bl'.(s_out)))) as Hxin'
+        by (rewrite idsnd_app, in_app; right;
+            apply In_idsnd_exists; eauto).
       apply wc_env_var with (1:=WCo) in Hxin'.
       destruct s.
       + split; intuition; eauto; try by_sem_det;
@@ -153,19 +153,19 @@ Module Type STCCLOCKINGSEMANTICS
       assert (externs P = externs P')
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
       rewrite Find' in Find; inv Find.
-      apply Forall_forall; unfold idck.
+      apply Forall_forall; unfold idsnd.
       intros (x, xck) Hxin.
-      apply In_idck_exists in Hxin as (xty & Hxin). assert (Hxin' := Hxin).
+      apply In_idsnd_exists in Hxin as (xty & Hxin). assert (Hxin' := Hxin).
       apply in_map with (f:=fst), system_output_defined_in_tcs in Hxin.
       apply Is_defined_in_In in Hxin as (tc & Htcin & Hxtc).
       eapply Forall_forall in IH; eauto.
       pose proof Find' as Find; apply find_unit_spec in Find as (?&?&?&?); subst.
       apply wc_find_system with (1:=WCP) in Find' as (WCi & WCo & WCv & WCtcs).
       eapply Forall_forall in WCtcs; eauto.
-      assert (NoDupMembers (idck (s_in s ++ s_vars s ++ s_out s) ++ idck (s_nexts s)))
+      assert (NoDupMembers (idsnd (s_in s ++ s_vars s ++ s_out s) ++ idsnd (s_nexts s)))
         as Hnd.
       { apply fst_NoDupMembers.
-        rewrite map_app, 2 map_fst_idck, 2 map_app, <-2 app_assoc.
+        rewrite map_app, 2 map_fst_idsnd, 2 map_app, <-2 app_assoc.
         apply s_nodup.
       }
       apply IH with (x:=x) (ck:=xck) in Hnd; eauto.
@@ -200,7 +200,7 @@ Module Type STCCLOCKINGSEMANTICS
         apply wc_trconstr_program_cons; auto.
         * apply Ordered_systems_append in Ord; auto.
         * destruct P'; auto.
-      + rewrite in_app; left; apply In_idck_exists.
+      + rewrite in_app; left; apply In_idsnd_exists.
         exists xty; rewrite 2 in_app; auto.
   Qed.
 

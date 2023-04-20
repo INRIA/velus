@@ -4,7 +4,7 @@ Open Scope list_scope.
 From Coq Require Import Setoid Morphisms.
 
 From Velus Require Import Common.
-From Velus Require Import Operators Environment.
+From Velus Require Import Operators Environment FunctionalEnvironment.
 From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import CoindIndexed.
@@ -24,7 +24,7 @@ Module Type SCCORRECTNESS
        (Import Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Import Cl    : LCLOCKING Ids Op OpAux Cks Senv Syn)
        (Import Ord   : LORDERED Ids Op OpAux Cks Senv Syn)
-       (Sem          : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord SCtr)
+       (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord SCtr)
        (Import LSC   : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Cl Ord SCtr Sem)
        (Import SC    : SUBCLOCK Ids Op OpAux Cks Senv Syn).
 
@@ -32,17 +32,27 @@ Module Type SCCORRECTNESS
   Module Import CIStr := CoindIndexedFun Ids Op OpAux Cks SCtr IStr.
 
   Lemma rename_var_sem sub : forall H H' x vs,
+      (forall y vs, Env.find x sub = Some y -> sem_var H (Var x) vs -> sem_var H' (Var y) vs) ->
+      (forall vs, Env.find x sub = None -> sem_var H (Var x) vs -> sem_var H' (Var x) vs) ->
+      sem_var H (Var x) vs ->
+      sem_var H' (Var (rename_var sub x)) vs.
+  Proof.
+    intros * Hsub Hnsub Hv. unfold rename_var.
+    destruct (Env.find x sub) eqn:Hfind; eauto.
+  Qed.
+
+  Lemma rename_var_sem' sub : forall H H' x vs,
       (forall y vs, Env.find x sub = Some y -> sem_var H x vs -> sem_var H' y vs) ->
       (forall vs, Env.find x sub = None -> sem_var H x vs -> sem_var H' x vs) ->
       sem_var H x vs ->
       sem_var H' (rename_var sub x) vs.
   Proof.
     intros * Hsub Hnsub Hv. unfold rename_var.
-    destruct (Env.find x sub) eqn:Hfind; eauto.
+    destruct (Env.find x sub) eqn:Hfind; setoid_rewrite Hfind; eauto.
   Qed.
 
   Section subclock.
-    Context {PSyn1 PSyn2 : block -> Prop} {prefs1 prefs2 : PS.t}.
+    Context {PSyn1 PSyn2 : list decl -> block -> Prop} {prefs1 prefs2 : PS.t}.
     Variable G1 : @global PSyn1 prefs1.
     Variable G2 : @global PSyn2 prefs2.
 
@@ -51,12 +61,12 @@ Module Type SCCORRECTNESS
     Variable bck : clock.
     Variable sub : Env.t ident.
     Variable bs bs' : Stream bool.
-    Variable H H' Hl : history.
+    Variable H H' : history.
 
-    Hypothesis Hbck : sem_clock H' bs' bck bs.
+    Hypothesis Hbck : sem_clock (var_history H') bs' bck bs.
 
     Corollary add_whens_const_sem : forall c ty,
-        sem_exp_ck G2 (H', Hl) bs' (add_whens (Econst c) ty bck) [const bs c].
+        sem_exp_ck G2 H' bs' (add_whens (Econst c) ty bck) [const bs c].
     Proof.
       revert bs bs' H' Hbck.
       induction bck as [|??? (?&?)]; intros * Hbck *; simpl.
@@ -64,11 +74,12 @@ Module Type SCCORRECTNESS
         reflexivity.
       - assert (Hbck':=Hbck). inv Hbck'; simpl.
         eapply Swhen; eauto; simpl.
-        repeat constructor; try eapply IHc; eauto using sem_clock_when_const.
+        + apply sem_var_history; eauto.
+        + repeat constructor; try eapply IHc; eauto using sem_clock_when_const.
     Qed.
 
     Corollary add_whens_enum_sem : forall ty k,
-        sem_exp_ck G2 (H', Hl) bs' (add_whens (Eenum k ty) ty bck) [enum bs k].
+        sem_exp_ck G2 H' bs' (add_whens (Eenum k ty) ty bck) [enum bs k].
     Proof.
       revert bs bs' H' Hbck.
       induction bck as [|??? (?&?)]; intros * Hbck *; simpl.
@@ -76,22 +87,27 @@ Module Type SCCORRECTNESS
         reflexivity.
       - assert (Hbck':=Hbck). inv Hbck'; simpl.
         eapply Swhen; eauto; simpl.
-        repeat constructor; try eapply IHc; eauto using sem_clock_when_enum.
+        + apply sem_var_history; eauto.
+        + repeat constructor; try eapply IHc; eauto using sem_clock_when_enum.
     Qed.
+
+    Hypothesis Hlast : forall x vs,
+        sem_var H (Last x) vs ->
+        sem_var H' (Last x) vs.
 
     Hypothesis Hsub : forall x y vs,
         Env.find x sub = Some y ->
-        sem_var H x vs ->
-        sem_var H' y vs.
+        sem_var H (Var x) vs ->
+        sem_var H' (Var y) vs.
 
     Hypothesis Hnsub : forall x vs,
         Env.find x sub = None ->
-        sem_var H x vs ->
-        sem_var H' x vs.
+        sem_var H (Var x) vs ->
+        sem_var H' (Var x) vs.
 
     Lemma subclock_exp_sem : forall e vs,
-        sem_exp_ck G1 (H, Hl) bs e vs ->
-        sem_exp_ck G2 (H', Hl) bs' (subclock_exp bck sub e) vs.
+        sem_exp_ck G1 H bs e vs ->
+        sem_exp_ck G2 H' bs' (subclock_exp bck sub e) vs.
     Proof.
       induction e using exp_ind2; intros * Hsem; inv Hsem; simpl.
       - (* const *)
@@ -145,8 +161,8 @@ Module Type SCCORRECTNESS
     Qed.
 
     Lemma subclock_equation_sem : forall equ,
-        sem_equation_ck G1 (H, Hl) bs equ ->
-        sem_equation_ck G2 (H', Hl) bs' (subclock_equation bck sub equ).
+        sem_equation_ck G1 H bs equ ->
+        sem_equation_ck G2 H' bs' (subclock_equation bck sub equ).
     Proof.
       intros (?&?) Hsem. inv Hsem.
       eapply Seq with (ss:=ss); simpl_Forall;
@@ -164,7 +180,7 @@ Module Type SCCORRECTNESS
   Proof.
     induction ck; intros * Hsub Hnsub Hbck * Hsemck; simpl; inv Hsemck.
     - rewrite <-H0. assumption.
-    - econstructor; eauto using rename_var_sem.
+    - econstructor; eauto using rename_var_sem'.
   Qed.
 
 End SCCORRECTNESS.

@@ -8,6 +8,7 @@ open Ctypes
 
 let print_c = ref false
 let write_lustre = ref false
+let write_complete = ref false
 let write_nolast = ref false
 let write_noauto = ref false
 let write_noswitch = ref false
@@ -108,6 +109,8 @@ let parse toks =
 let compile source_name out_name =
   if !write_lustre
   then Veluslib.lustre_destination := Some (out_name ^ ".parsed.lus");
+  if !write_complete
+  then Veluslib.complete_destination := Some (out_name ^ ".complete.lus");
   if !write_nolast
   then Veluslib.nolast_destination := Some (out_name ^ ".nolast.lus");
   if !write_noauto
@@ -172,6 +175,7 @@ let speclist = [
   "-header", Arg.Set write_header, " Generate a header file in <output>.h";
 
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
+  "-dcomplete", Arg.Set write_complete, " Save Lustre after completion in <output>.complete.lus";
   "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <output>.nolast.lus";
   "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <output>.noauto.lus";
   "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <output>.noswitch.lus";

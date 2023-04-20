@@ -116,7 +116,7 @@ Module Type TRTYPING
   Qed.
 
   Section wt_node.
-    Variable (G : @L.global L.nolocal_top_block norm2_prefs).
+    Variable (G : @L.global L.nolocal norm2_prefs).
     Hypothesis HwtG : LT.wt_global G.
 
     Lemma wt_lexp :
@@ -365,13 +365,9 @@ Module Type TRTYPING
         eapply vars_of_spec in Eq.
         apply mmap_inversion in EQ.
         econstructor; simpl; eauto; try erewrite to_global_types; eauto.
-        + erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2. setoid_rewrite Forall2_map_2.
-          apply Forall2_forall. split.
-          2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
-              rewrite it2; auto. }
-          intros * Hin; destruct_conjs.
-          eapply Forall2_chain_In in Hin; eauto.
-          destruct Hin as (?&?& <-). inv H1. solve_In.
+        + erewrite <- (to_node_out n); eauto. unfold idfst in *. simpl_Forall.
+          eapply Forall2_trans_ex in H7; eauto. simpl_Forall. subst.
+          inv H11. solve_In.
         + erewrite <- (to_node_in n); eauto.
           clear - HwtG H3 H6 EQ. setoid_rewrite Forall2_map_2.
           remember (L.n_in n). clear Heql0. revert dependent l0.
@@ -410,7 +406,7 @@ Module Type TRTYPING
         Forall (fun xr0 => Senv.HasType vars xr0 bool_velus_type) (map fst xr) ->
         Forall (LT.wt_clock (L.types G) vars) (map snd xr) ->
         Forall (wt_type (L.types G)) (map (fun '(_, a) => a.(Senv.typ)) vars) ->
-        L.VarsDefined d xs ->
+        L.VarsDefinedComp d xs ->
         NoDup xs ->
         LT.wt_block G vars d ->
         NLT.wt_equation P (Senv.idty vars) e'.
@@ -441,25 +437,25 @@ Module Type TRTYPING
         LT.wt_node G n ->
         NLT.wt_node P n'.
     Proof.
-      intros * Htr Hg (Wti& Wto & Wte & Hwt).
+      intros * Htr Hg Wtn. inversion_clear Wtn as [?? Wti Wto Wte Hwt]; subst Γ.
       tonodeInv Htr. unfold NLT.wt_node. simpl.
-      pose proof (L.n_defd n) as (?&Hvars&Hperm). pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      pose proof (L.n_syn n) as Hsyn. inv Hsyn. rename H into Hblk. rewrite <-Hblk in *. symmetry in Hblk.
-      assert (Forall (fun blk => exists xs, L.VarsDefined blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
+      pose proof (L.n_nodup n) as (Hnd1&Hnd2).
+      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 (?&Hvars&Hperm)]. inv Hsyn2.
+      rename H into Hblk. rewrite <-Hblk in *. symmetry in Hblk.
+      assert (Forall (fun blk => exists xs, L.VarsDefinedComp blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
       { clear - Hnd1 Hnd2 Hvars Hperm.
         inv Hvars; inv H0; L.inv_VarsDefined.
         inv Hnd2; inv H1. apply Forall2_ignore2 in Hvars. simpl_Forall.
         do 2 esplit; eauto.
         eapply NoDup_concat; eauto. rewrite Hperm0, Hperm.
-        apply NoDup_app'.
-        - apply NoDupMembers_app_r in Hnd1. apply fst_NoDupMembers; eauto.
+        apply NoDup_app'; eauto using NoDup_app_r.
         - apply fst_NoDupMembers; auto.
         - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.
-          apply Hinm2. rewrite map_app, in_app_iff; auto.
+          apply Hinm2. rewrite in_app_iff; auto.
       }
       monadInv Hmmap.
       split.
-      - inv Hwt. inv H3.
+      - inv Hwt. inv H3. subst Γ'.
         eapply mmap_inversion in EQ.
         eapply envs_eq_node in Hblk.
         induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; auto.
@@ -467,12 +463,12 @@ Module Type TRTYPING
         eapply wt_block_to_equation in H; eauto; simpl; auto.
         + simpl_app. repeat rewrite map_map in *; simpl in *.
           erewrite map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _), Permutation_app_comm with (l:=map _ l); eauto.
-          1-3:intros; destruct_conjs; auto.
+          1-3:unfold L.decl; intros; destruct_conjs; auto.
         + intros ?? Hfind.
           eapply envs_eq_find' in Hfind; eauto.
           erewrite to_global_types; eauto.
-          clear - Wti Wto H5 Hfind. unfold LT.wt_clocks, idty in *.
-          simpl_In. repeat rewrite in_app_iff in Hin0. destruct Hin0 as [|[|]]; simpl_In; simpl_Forall; eauto.
+          clear - Wti Wto H4 Hfind. unfold Senv.senv_of_ins, Senv.senv_of_decls, LT.wt_clocks, idfst in *.
+          simpl_In. repeat rewrite in_app_iff in Hin. destruct Hin as [|[|]]; simpl_In; simpl_Forall; eauto.
           1,2:eapply LT.wt_clock_incl; [|eauto].
           1,2:intros; simpl_app; repeat rewrite Senv.HasType_app in *; intuition.
         + rewrite map_app. apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; auto.

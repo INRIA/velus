@@ -170,7 +170,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       1 <= count r n.
   Proof.
     induction n; simpl; intros * E; rewrite E; auto.
-    apply Le.le_n_S; lia.
+    lia.
   Qed.
 
   Lemma count_positive:
@@ -183,13 +183,13 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct n; try lia.
     simpl; rewrite Rn.
     clear Rn.
-    apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in Lt; destruct Lt.
+    rewrite Nat.lt_succ_r, Nat.lt_eq_cases in Lt. destruct Lt as [Lt|Lt].
     - induction n; try lia.
-      apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in H; destruct H.
-      + eapply Lt.lt_le_trans; eauto.
-        apply Le.le_n_S, count_le.
+      rewrite Nat.lt_succ_r, Nat.lt_eq_cases in Lt. destruct Lt as [Lt|Lt].
+      + eapply Nat.lt_le_trans; eauto.
+        rewrite <-Nat.succ_le_mono. apply count_le.
       + subst.
-        apply Lt.le_lt_n_Sm, count_le.
+        apply Nat.lt_succ_r, count_le.
     - subst; lia.
   Qed.
 
@@ -201,7 +201,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     intros * E.
     unfold mask.
     assert ((k =? count r n) = false) as ->
-        by (apply EqNat.beq_nat_false_iff; lia); auto.
+        by (apply Nat.eqb_neq; lia); auto.
   Qed.
 
   Lemma mask_transparent:
@@ -212,7 +212,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     intros * E.
     unfold mask.
     assert ((k =? count r n) = true) as ->
-        by (apply EqNat.beq_nat_true_iff; lia); auto.
+        by (apply Nat.eqb_eq; lia); auto.
   Qed.
 
   (* [memory_masked k rs] applies iff [n = k = 0] or [k = count rs (n - 1)]. *)
@@ -247,7 +247,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct i; [now inv Hn|].
     inv Hn; auto.
     take (S n <= i) and rewrite Nat.le_succ_l in it.
-    now apply Lt.le_lt_n_Sm, count_le'.
+    now apply Nat.lt_succ_r, count_le'.
   Qed.
 
   Add Parametric Morphism : count
@@ -288,7 +288,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     unfold wf_streams, mask; intros * WF k k'.
     pose proof (WF (count r k) k' k) as WFk;
       pose proof (WF (count r k') k' k) as WFk'.
-    rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
+    rewrite Nat.eqb_refl in WFk, WFk'.
     rewrite Nat.eqb_sym in WFk'.
     destruct (count r k =? count r k'); auto.
     now rewrite WFk, <-WFk'.
@@ -321,8 +321,8 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (** Restrictions of FEnvironments *)
   Section HistoryRestriction.
 
-    Definition env := FEnv.t svalue.
-    Definition history' := FEnv.t (stream svalue).
+    Definition env := @FEnv.t ident svalue.
+    Definition history' := @FEnv.t ident (stream svalue).
 
     Definition restr_hist (H : history') (n: nat): env :=
       FEnv.map (fun xs => xs n) H.

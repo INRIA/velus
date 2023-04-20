@@ -36,6 +36,12 @@ src/Lustre/LSemDeterminism.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
+src/Lustre/Complete/Complete.v
+src/Lustre/Complete/CompTyping.v
+src/Lustre/Complete/CompClocking.v
+src/Lustre/Complete/CompCorrectness.v
+src/Lustre/Complete/LComplete.v
+
 src/Lustre/SubClock/SubClock.v
 src/Lustre/SubClock/SCTyping.v
 src/Lustre/SubClock/SCClocking.v

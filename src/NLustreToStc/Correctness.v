@@ -144,7 +144,7 @@ Module Type CORRECTNESS
   Qed.
 
   Definition sem_trconstrs_n
-             (P: program) (bk: stream bool) (H: history)
+             (P: program) (bk: stream bool) (H: IStr.history)
              (E: stream state) (T: stream state) (E': stream state)
              (tcs: list trconstr) :=
     forall n, Forall (sem_trconstr P (bk n) (H n) (E n) (T n) (E' n)) tcs.
@@ -295,8 +295,7 @@ Module Type CORRECTNESS
         destruct Rst as (?& Node & Mask).
       apply IH in Node.
       rewrite Mask; auto.
-      cases_eqn Hr; apply count_true_ge_1 in Hr.
-      erewrite <-Lt.S_pred; eauto.
+      cases_eqn Hr; apply count_true_ge_1 in Hr. lia.
   Qed.
 
   Lemma msem_node_memory_closed_rec_n:
@@ -394,7 +393,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       Forall (fun y => exists r, svalue_to_bool (y n) = Some r) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Forall (fun ckr => exists r, sem_clock_instant b (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
@@ -418,7 +417,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con_true:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Exists (fun y => svalue_to_bool (y n) = Some true) ys <->
       Exists (fun ckr => sem_clock_instant b (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
@@ -441,7 +440,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con_false:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Forall (fun y => svalue_to_bool (y n) = Some false) ys <->
       Forall (fun ckr => sem_clock_instant b (H n) ckr false) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
@@ -824,15 +823,15 @@ Module Type CORRECTNESS
           eapply state_closed_insts_find_system_other, state_closed_insts_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
         * unfold next; eapply msem_node_state_closed; eauto.
-      + rewrite idck_app.
+      + rewrite idsnd_app.
         intro k; specialize (Ck k); setoid_rewrite Forall_app; split; auto.
         apply Forall_forall; intros (x, ck) ?.
-        rewrite idck_app in WCeqs.
+        rewrite idsnd_app in WCeqs.
         eapply sem_clocked_var_eqs with (5 := WCeqs); eauto.
-        * rewrite <-idck_app, NoDupMembers_idck.
+        * rewrite <-idsnd_app, NoDupMembers_idsnd.
           apply n_nodup.
         * eapply msem_sem_equations; eauto.
-        * rewrite map_fst_idck.
+        * rewrite map_fst_idsnd.
           apply n_defd.
     - eapply msem_node_cons, IH in Hsem; eauto.
       apply sem_system_cons2; eauto.

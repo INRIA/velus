@@ -43,8 +43,8 @@ Module Type CACLOCKING
   Qed.
 
   Section wc_node.
-    Variable G1 : @global nolast_block last_prefs.
-    Variable G2 : @global noauto_block auto_prefs.
+    Variable G1 : @global nolast last_prefs.
+    Variable G2 : @global noauto auto_prefs.
 
     Hypothesis Hiface : global_iface_incl G1 G2.
 
@@ -95,11 +95,10 @@ Module Type CACLOCKING
             Forall (wc_block G2 (Γ'++Γ)) blks') ->
         wc_scope (fun Γ => Forall (wc_block G2 Γ)) G2 (Γ'++Γ) s'.
     Proof.
-      intros * Hnl1 Hnl2 Hnl3 Hwc Hat Hind; repeat inv_scope; repeat inv_bind.
+      intros * Hnl1 Hnl2 Hnl3 Hwc Hat Hind; repeat inv_scope; repeat inv_bind; subst Γ'0.
       econstructor; eauto.
       - simpl_Forall.
         eapply wc_clock_incl; [|eauto]. solve_incl_app.
-      - simpl_Forall; subst; auto.
       - take (P_wc _ _ ) and eapply Hind in it; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
@@ -148,9 +147,8 @@ Module Type CACLOCKING
           end.
 
         do 2 econstructor; eauto; simpl.
-        3:repeat (apply Forall_cons); auto.
+        2:repeat (apply Forall_cons); auto.
         + repeat apply Forall_cons; auto. all:wc_automaton.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wc_automaton.
           *{ eapply init_state_exp_wc in H10; eauto.
@@ -191,9 +189,8 @@ Module Type CACLOCKING
 
       - (* automaton (strong) *)
         do 2 econstructor; eauto; simpl.
-        3:repeat (apply Forall_cons); auto.
+        2:repeat (apply Forall_cons); auto.
         + repeat apply Forall_cons; auto. all:wc_automaton.
-        + repeat constructor.
         + econstructor. repeat constructor.
           all:wc_automaton.
           * apply add_whens_wc; auto. wc_automaton.
@@ -254,14 +251,14 @@ Module Type CACLOCKING
         wc_node G1 n ->
         wc_node G2 (fst (auto_node n)).
     Proof.
-      intros * Hwcn.
-      destruct Hwcn as (Hwc1&Hwc2&Hwc3).
+      intros * Hwcn. inv Hwcn.
+      pose proof (n_syn n) as Hsyn. inv Hsyn.
       repeat split; auto.
-      unfold auto_node in *; simpl in *.
-      destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
-      eapply auto_block_wc; eauto.
-      - apply senv_of_inout_NoLast.
-      - apply n_syn.
+      - unfold auto_node in *; simpl in *.
+        destruct (auto_block _ _) as ((blk'&?)&?) eqn:Haut; simpl in *.
+        eapply auto_block_wc; eauto.
+        apply NoLast_app; split; auto using senv_of_ins_NoLast.
+        intros * IL. inv IL. simpl_In. simpl_Forall. subst; simpl in *; congruence.
     Qed.
 
   End wc_node.

@@ -30,7 +30,7 @@ Module Type CSCLOCKING
 
   Section switch_block.
 
-    Context {PSyn : block -> Prop} {prefs : PS.t}.
+    Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
     Hypothesis HwG : wc_global G.
@@ -55,7 +55,7 @@ Module Type CSCLOCKING
     Lemma cond_eq_wc_clock Γ : forall e ty ck x xcs eqs' st st',
         wc_clock Γ ck ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wc_clock Γ) (map snd (Common.idck xcs)).
+        Forall (wc_clock Γ) (map snd (idsnd xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -178,7 +178,7 @@ Module Type CSCLOCKING
         wc_scope P_wc G Γck' s'.
     Proof.
       intros * Hnl1 Hsubin Hsub Hnsub Hnd1 Hwenv Hbck Hnl2 Hnd3 Hwt Hswitch Hind;
-        inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; simpl in *.
+        inv Hnl2; inv Hnd3; inv Hwt; subst Γ'; repeat inv_bind; simpl in *.
       take (forall x, InMembers x locs -> ~_) and rename it into Hdisj.
       econstructor; eauto.
       - simpl_Forall; subst.
@@ -190,8 +190,7 @@ Module Type CSCLOCKING
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin; simpl_In; econstructor. solve_In. auto.
         * eapply wc_clock_incl; eauto; repeat solve_incl_app.
-      - simpl_Forall. subst; auto.
-      - eapply Hind with (Γck:=Γck++senv_of_locs _); eauto.
+      - eapply Hind with (Γck:=Γck++senv_of_decls _); eauto.
         + rewrite NoLast_app. split; auto; intros * Hil.
           inv Hil. simpl_In. simpl_Forall; subst; simpl in *; congruence.
         + intros ? Hin. apply InMembers_app; auto.
@@ -204,13 +203,13 @@ Module Type CSCLOCKING
         + intros ??? Hin.
           repeat rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin. simpl_In. econstructor; solve_In; auto.
-        + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
+        + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_decls; auto.
           intros ? Hinm1 Hinm2. simpl_In.
           eapply Hdisj; solve_In.
         + simpl_app. apply wc_env_app; auto.
           simpl_Forall; auto.
         + eapply wc_clock_incl; [|eauto]. solve_incl_app.
-        + rewrite map_app, map_fst_senv_of_locs. auto.
+        + rewrite map_app, map_fst_senv_of_decls. auto.
     Qed.
 
     Lemma switch_block_wc : forall blk bck sub Γ Γ' blk' st st',
@@ -257,7 +256,7 @@ Module Type CSCLOCKING
         { rewrite Permutation_app_comm.
           eapply switch_block_NoDupMembers_env; eauto. }
 
-        do 2 econstructor; eauto; repeat rewrite idty_app; repeat rewrite idck_app; repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
+        do 2 econstructor; eauto; repeat rewrite idfst_app; repeat rewrite idsnd_app; repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
         + eapply cond_eq_wc_clock in H0; eauto.
           unfold idty, idck. simpl_Forall.
           eapply Forall_forall in H0; [|solve_In].
@@ -278,15 +277,13 @@ Module Type CSCLOCKING
           * eapply new_idents_wc in H3. simpl_Forall; eauto.
             2:solve_In; eauto; congruence.
             eapply wc_clock_incl; eauto. solve_incl_app.
-        + simpl_Forall; auto.
-        + simpl_Forall; simpl_In; auto.
         + simpl_Forall.
           eapply merge_defs_wc; eauto.
           * simpl_app. repeat rewrite HasClock_app in *. destruct Hini as [Hini|Hini]; eauto.
             right; left; inv Hini; simpl_In. econstructor; solve_In; auto.
           * rewrite HasClock_app; left.
             eapply rename_var_wc; eauto.
-            assert (Is_defined_in i0 (Bswitch ec branches)) as Hdef.
+            assert (Is_defined_in (FunctionalEnvironment.Var i0) (Bswitch ec branches)) as Hdef.
             { eapply vars_defined_Is_defined_in.
               eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
               apply PSF.mem_2; auto. }
@@ -406,18 +403,19 @@ Module Type CSCLOCKING
       wc_node G1 n ->
       wc_node G2 (switch_node n).
   Proof.
-    intros * HwG Heq (Hwc1&Hwc2&Hwc3).
-    repeat split; simpl; auto.
-    eapply iface_incl_wc_block; eauto.
-    eapply switch_block_wc in Hwc3; eauto with clocks. 9:eapply surjective_pairing.
-    - apply senv_of_inout_NoLast.
-    - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
-    - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
-    - intros ?? _ Hin. rewrite subclock_clock_idem; auto.
-    - apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
-    - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-    - apply n_syn.
-    - rewrite map_fst_senv_of_inout. apply n_nodup.
+    intros * HwG Heq Wc. inv Wc.
+    pose proof (n_syn n) as Hsyn. inv Hsyn.
+    constructor; auto.
+    - eapply iface_incl_wc_block; eauto.
+      eapply switch_block_wc in H3; eauto using node_NoDupMembers, node_NoDupLocals with clocks.
+      + apply NoLast_app; split; auto using senv_of_ins_NoLast.
+        intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
+      + intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
+      + intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
+      + intros ?? _ Hin. rewrite subclock_clock_idem; auto.
+      + unfold idck, senv_of_ins, senv_of_decls. erewrite map_app, 2 map_map, map_ext, map_ext with (l:=n_out n); eauto.
+        1,2:unfold decl; intros; destruct_conjs; auto.
+      + eapply surjective_pairing.
   Qed.
 
   Lemma switch_global_wc : forall G,

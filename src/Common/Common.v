@@ -154,6 +154,20 @@ Proof.
   apply ident_eqb_refl.
 Qed.
 
+Corollary mem_assoc_ident_false_iff:
+  forall {A} x (xs: list (ident * A)),
+    mem_assoc_ident x xs = false <->
+    ~ InMembers x xs.
+Proof.
+  intros. split; intros NIn.
+  - intros contra. simpl_In.
+    eapply mem_assoc_ident_false in NIn; eauto.
+  - apply existsb_Forall, forallb_Forall.
+    simpl_Forall.
+    apply negb_true_iff, ident_eqb_neq.
+    contradict NIn; subst. eauto using In_InMembers.
+Qed.
+
 Lemma mem_assoc_ident_true:
   forall {A} x xs,
     mem_assoc_ident x xs = true ->
@@ -529,42 +543,31 @@ Proof.
   pointwise_lifting, subrelation. firstorder.
 Qed.
 
-(** types and clocks *)
+(** Projections from association lists *)
 
-Section TypesAndClocks.
+Section Projections.
 
-  Context {type clock : Type}.
+  Context {A B : Type}.
 
-  (* A Lustre variable is declared with a type and a clock.
-     In the abstract syntax, a declaration is represented as a triple:
-     (x, (ty, ck)) : ident * (type * clock)
-
-     And nodes include lists of triples for lists of declarations.
-     The following definitions and lemmas facilitate working with such
-     values. *)
-
-  (* Definition dty (x : ident * (type * clock)) : type := fst (snd x). *)
-  (* Definition dck (x : ident * (type * clock)) : clock := snd (snd x). *)
-
-  Definition idty : list (ident * (type * clock)) -> list (ident * type) :=
+  Definition idfst : list (ident * (A * B)) -> list (ident * A) :=
     map (fun xtc => (fst xtc, fst (snd xtc))).
 
-  Definition idck : list (ident * (type * clock)) -> list (ident * clock) :=
+  Definition idsnd : list (ident * (A * B)) -> list (ident * B) :=
     map (fun xtc => (fst xtc, snd (snd xtc))).
 
-  (* idty *)
+  (* idfst *)
 
-  Lemma idty_app:
+  Lemma idfst_app:
     forall xs ys,
-      idty (xs ++ ys) = idty xs ++ idty ys.
+      idfst (xs ++ ys) = idfst xs ++ idfst ys.
   Proof.
     induction xs; auto.
     simpl; intro; now rewrite IHxs.
   Qed.
 
-  Lemma InMembers_idty:
+  Lemma InMembers_idfst:
     forall x xs,
-      InMembers x (idty xs) <-> InMembers x xs.
+      InMembers x (idfst xs) <-> InMembers x xs.
   Proof.
     induction xs as [|x' xs]; split; auto; intro HH;
       destruct x' as (x' & tyck); simpl.
@@ -572,34 +575,34 @@ Section TypesAndClocks.
     - rewrite IHxs. destruct HH; auto.
   Qed.
 
-  Lemma NoDupMembers_idty:
+  Lemma NoDupMembers_idfst:
     forall xs,
-      NoDupMembers (idty xs) <-> NoDupMembers xs.
+      NoDupMembers (idfst xs) <-> NoDupMembers xs.
   Proof.
     induction xs as [|x xs]; split; inversion_clear 1;
       eauto using NoDupMembers_nil; destruct x as (x & tyck); simpl in *;
-      constructor; try rewrite InMembers_idty in *;
+      constructor; try rewrite InMembers_idfst in *;
       try rewrite IHxs in *; auto.
   Qed.
 
-  Lemma map_fst_idty:
+  Lemma map_fst_idfst:
     forall xs,
-      map fst (idty xs) = map fst xs.
+      map fst (idfst xs) = map fst xs.
   Proof.
     induction xs; simpl; try rewrite IHxs; auto.
   Qed.
 
-  Lemma length_idty:
+  Lemma length_idfst:
     forall xs,
-      length (idty xs) = length xs.
+      length (idfst xs) = length xs.
   Proof.
     induction xs as [|x xs]; auto.
     destruct x; simpl. now rewrite IHxs.
   Qed.
 
-  Lemma In_idty_exists:
-    forall x (ty : type) xs,
-      In (x, ty) (idty xs) <-> exists (ck: clock), In (x, (ty, ck)) xs.
+  Lemma In_idfst_exists:
+    forall x (ty : A) xs,
+      In (x, ty) (idfst xs) <-> exists (ck: B), In (x, (ty, ck)) xs.
   Proof.
     induction xs as [|x' xs].
     - split; inversion_clear 1. inv H0.
@@ -614,39 +617,39 @@ Section TypesAndClocks.
         * constructor 2; apply IHxs; eauto.
   Qed.
 
-  Lemma idty_InMembers:
-    forall x ty (xs : list (ident * (type * clock))),
-      In (x, ty) (idty xs) ->
+  Lemma idfst_InMembers:
+    forall x ty (xs : list (ident * (A * B))),
+      In (x, ty) (idfst xs) ->
       InMembers x xs.
   Proof.
     intros * Ix.
-    unfold idty in Ix.
+    unfold idfst in Ix.
     apply in_map_iff in Ix as ((y, (yt, yc)) & Dy & Iy). inv Dy.
     apply In_InMembers with (1:=Iy).
   Qed.
 
-  Global Instance idty_Permutation_Proper:
-    Proper (@Permutation (ident * (type * clock))
-            ==> @Permutation (ident * type)) idty.
+  Global Instance idfst_Permutation_Proper:
+    Proper (@Permutation (ident * (A * B))
+            ==> @Permutation (ident * A)) idfst.
   Proof.
     intros xs ys Hperm.
-    unfold idty. rewrite Hperm.
+    unfold idfst. rewrite Hperm.
     reflexivity.
   Qed.
 
-  (* idck *)
+  (* idsnd *)
 
-  Lemma idck_app:
+  Lemma idsnd_app:
     forall xs ys,
-      idck (xs ++ ys) = idck xs ++ idck ys.
+      idsnd (xs ++ ys) = idsnd xs ++ idsnd ys.
   Proof.
     induction xs; auto.
     simpl; intro; now rewrite IHxs.
   Qed.
 
-  Lemma InMembers_idck:
+  Lemma InMembers_idsnd:
     forall x xs,
-      InMembers x (idck xs) <-> InMembers x xs.
+      InMembers x (idsnd xs) <-> InMembers x xs.
   Proof.
     induction xs as [|x' xs]; split; auto; intro HH;
       destruct x' as (x' & tyck); simpl.
@@ -654,34 +657,34 @@ Section TypesAndClocks.
     - rewrite IHxs. destruct HH; auto.
   Qed.
 
-  Lemma NoDupMembers_idck:
+  Lemma NoDupMembers_idsnd:
     forall xs,
-      NoDupMembers (idck xs) <-> NoDupMembers xs.
+      NoDupMembers (idsnd xs) <-> NoDupMembers xs.
   Proof.
     induction xs as [|x xs]; split; inversion_clear 1;
       eauto using NoDupMembers_nil; destruct x as (x & tyck); simpl in *;
-      constructor; try rewrite InMembers_idck in *;
+      constructor; try rewrite InMembers_idsnd in *;
       try rewrite IHxs in *; auto.
   Qed.
 
-  Lemma map_fst_idck:
+  Lemma map_fst_idsnd:
     forall xs,
-      map fst (idck xs) = map fst xs.
+      map fst (idsnd xs) = map fst xs.
   Proof.
     induction xs; simpl; try rewrite IHxs; auto.
   Qed.
 
-  Lemma length_idck:
+  Lemma length_idsnd:
     forall xs,
-      length (idck xs) = length xs.
+      length (idsnd xs) = length xs.
   Proof.
     induction xs as [|x xs]; auto.
     destruct x; simpl. now rewrite IHxs.
   Qed.
 
-  Lemma In_idck_exists:
-    forall x (ck : clock) xs,
-      In (x, ck) (idck xs) <-> exists (ty: type), In (x, (ty, ck)) xs.
+  Lemma In_idsnd_exists:
+    forall x (ck : B) xs,
+      In (x, ck) (idsnd xs) <-> exists (ty: A), In (x, (ty, ck)) xs.
   Proof.
     induction xs as [|x' xs].
     - split; inversion_clear 1. inv H0.
@@ -696,26 +699,26 @@ Section TypesAndClocks.
         * constructor 2; apply IHxs; eauto.
   Qed.
 
-  Global Instance idck_Permutation_Proper:
-    Proper (Permutation (A:=(ident * (type * clock)))
-            ==> Permutation (A:=(ident * clock))) idck.
+  Global Instance idsnd_Permutation_Proper:
+    Proper (Permutation (A:=(ident * (A * B)))
+            ==> Permutation (A:=(ident * B))) idsnd.
   Proof.
     intros xs ys Hperm.
-    unfold idck. rewrite Hperm.
+    unfold idsnd. rewrite Hperm.
     reflexivity.
   Qed.
 
-  Lemma filter_fst_idck:
-    forall (xs: list (ident * (type * clock))) P,
-      idck (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idck xs).
+  Lemma filter_fst_idsnd:
+    forall (xs: list (ident * (A * B))) P,
+      idsnd (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idsnd xs).
   Proof.
     induction xs; simpl; intros; auto.
     cases; simpl; now rewrite IHxs.
   Qed.
 
-End TypesAndClocks.
+End Projections.
 
-Global Hint Unfold idty idck : list.
+Global Hint Unfold idfst idsnd : list.
 
 Lemma In_of_list : forall xs x,
     PS.In x (PSP.of_list xs) <-> In x xs.

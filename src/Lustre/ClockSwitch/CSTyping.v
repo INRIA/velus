@@ -30,7 +30,7 @@ Module Type CSTYPING
 
   Section switch_block.
 
-    Context {PSyn : block -> Prop} {prefs : PS.t}.
+    Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
     Import Permutation.
@@ -52,7 +52,7 @@ Module Type CSTYPING
     Lemma cond_eq_wt_clock vars : forall e ty ck x xcs eqs' st st',
         wt_clock G.(types) vars ck ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_clock G.(types) vars) (map snd (Common.idck xcs)).
+        Forall (wt_clock G.(types) vars) (map snd (idsnd xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -61,7 +61,7 @@ Module Type CSTYPING
     Lemma cond_eq_wt_type : forall e ty ck x xcs eqs' st st',
         wt_type G.(types) ty ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_type G.(types)) (map snd (Common.idty xcs)).
+        Forall (wt_type G.(types)) (map snd (idfst xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -196,9 +196,9 @@ Module Type CSTYPING
         wt_scope P_wt G Γty' s'.
     Proof.
       intros * Hsubin Hsub Hnsub Hnl1 Hincl Hnd1 Hnd2 Hwenv Hbck Hnl2 Hnd3 Hwt Hswitch Hind;
-        inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; simpl in *.
+        inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; subst Γ'; simpl in *.
       econstructor; eauto.
-      - unfold wt_clocks, Common.idty in *.
+      - unfold wt_clocks, idfst, senv_of_decls in *.
         simpl_Forall. subst.
         eapply subclock_clock_wt with (Γ:=Γty++_); eauto.
         + intros * Hfind Hin. rewrite HasType_app in *.
@@ -213,8 +213,7 @@ Module Type CSTYPING
           right. clear - Hin. inv Hin. simpl_In. econstructor; solve_In. auto.
         + eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app. auto.
       - simpl_Forall; auto.
-      - simpl_Forall. subst; auto.
-      - eapply Hind with (Γty:=Γty++senv_of_locs _) (Γck:=Γck++senv_of_locs _); eauto.
+      - eapply Hind with (Γty:=Γty++senv_of_decls _) (Γck:=Γck++senv_of_decls _); eauto.
         + intros ? Hin. apply InMembers_app; auto.
         + intros ??? Hfind Hin.
           repeat rewrite HasType_app in *. destruct Hin as [Hin|Hin]; eauto.
@@ -230,18 +229,18 @@ Module Type CSTYPING
           right. inv Hin. simpl_In. econstructor; solve_In; auto.
         + intros * Hin. rewrite HasType_app in *.
           destruct Hin as [Hin|Hin]; simpl_In; eauto.
-        + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
-          intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
+        + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_decls; auto.
+          intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_decls in Hinm2. rewrite fst_InMembers in Hinm1.
           eapply H6; eauto.
         + apply NoDupMembers_app; auto. apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-          intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2.
+          intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_decls in Hinm2.
           eapply H6; eauto.
           eapply InMembers_In in Hinm1 as (?&Hin1).
           assert (HasType Γck x0 x1.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty; solve_In.
         + rewrite map_app, Forall_app. split; auto. simpl_Forall; simpl_In; simpl_Forall; auto.
         + eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; auto.
-        + rewrite map_app, map_fst_senv_of_locs. auto.
+        + rewrite map_app, map_fst_senv_of_decls. auto.
     Qed.
 
     Lemma switch_block_wt : forall blk bck sub Γck Γty Γty' blk' st st',
@@ -296,33 +295,30 @@ Module Type CSTYPING
         { rewrite Permutation_app_comm.
           eapply switch_block_NoDupMembers_env; eauto. }
 
-        do 2 econstructor; eauto; unfold wt_clocks; repeat rewrite idty_app; repeat rewrite idck_app;
+        do 2 econstructor; eauto; unfold wt_clocks, senv_of_decls; repeat rewrite idfst_app; repeat rewrite idsnd_app;
         repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
         + eapply cond_eq_wt_clock in H0; eauto.
-          unfold Common.idty, Common.idck in *. simpl_Forall.
-          eapply wt_clock_incl; [|eauto]. intros **. rewrite HasType_app; auto.
+          unfold idfst, idsnd in *. simpl_Forall.
+          eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; auto.
         + assert (Forall (fun k => k < length tn) (map fst branches)) as Hlt.
           { rewrite H7. apply Forall_forall; intros ? Hin.
             apply in_seq in Hin as (?&?); auto. }
           clear - Hini H2 H6 Hlt Hck'.
-          eapply Forall_impl with (P:=fun '(_, (_, ck, _)) => wt_clock G.(types) (Γty'++senv_of_tyck l1) ck). intros (?&(?&?)&?) ?.
-          1:{ eapply wt_clock_incl; [|eauto].
-              intros. simpl_app. rewrite app_assoc, HasType_app. left. erewrite map_map, map_ext; eauto.
+          simpl_Forall. simpl_In.
+          eapply wt_clock_incl with (Γ:=Γty'++senv_of_tyck l1).
+          1:{ intros. simpl_app. rewrite app_assoc, HasType_app. left. erewrite map_map, map_ext; eauto.
               intros; destruct_conjs; auto. }
-          eapply mmap_values in H2.
-          induction H2 as [|(?&?) (((?&?)&?)&?)]; simpl in *; inv Hlt; auto.
-          rewrite idty_app, map_app. apply Forall_app; split; auto.
-          clear - Hini H6 H3 H Hck'. destruct H as (?&?&?); repeat inv_bind.
-          eapply new_idents_wt_clock with (Γ':=Γty'++_) in H; eauto.
+          eapply mmap_values, Forall2_ignore1 in H2. simpl_Forall. repeat inv_bind.
           eapply new_idents_wt_clock with (Γ':=Γty'++_) in H0; eauto.
+          eapply new_idents_wt_clock with (Γ':=Γty'++_) in H1; eauto.
+          3,5:eapply HasType_app; eauto.
           2,3:eapply wt_clock_incl; [|eauto]; intros *; rewrite HasType_app; auto.
-          simpl_app.
-          apply Forall_app; split; simpl_Forall; auto.
+          apply in_app_iff in Hin0 as [|]; simpl_Forall; auto.
         + eapply cond_eq_wt_type in H0; eauto.
           2:{ apply wt_exp_wt_type in H4; auto.
               take (typeof ec = _) and rewrite it in H4. now inv H4. }
           clear - H0.
-          unfold Common.idty in *. simpl_Forall; auto.
+          unfold idfst in *. simpl_Forall; auto.
         + assert (Forall (wt_type G.(types)) (map (fun '(_, ann) => ann.(typ)) Γck)) as Hwenv2.
           { simpl_Forall.
             assert (HasType Γck k a.(typ)) as Hty by eauto with senv.
@@ -336,15 +332,13 @@ Module Type CSTYPING
           apply Forall_app; split.
           * eapply new_idents_wt_type in H; simpl_Forall; simpl_In; simpl_Forall; eauto.
           * eapply new_idents_wt_type in H0; simpl_Forall; simpl_In; simpl_Forall; eauto.
-        + simpl_Forall. auto.
-        + simpl_Forall. simpl_In. auto.
         + simpl_Forall.
           eapply merge_defs_wt; eauto.
           * eapply HasType_incl; [|eauto]. apply incl_appr'.
             simpl_app. apply incl_appl. intros ??. solve_In.
           * apply HasType_app. left.
             eapply rename_var_wt; eauto.
-            assert (Is_defined_in i0 (Bswitch ec branches)) as Hdef.
+            assert (Is_defined_in (FunctionalEnvironment.Var i0) (Bswitch ec branches)) as Hdef.
             { eapply vars_defined_Is_defined_in.
               eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
               apply PSF.mem_2; auto. }
@@ -463,20 +457,18 @@ Module Type CSTYPING
       wt_node G1 n ->
       wt_node G2 (switch_node n).
   Proof.
-    intros * Hwt1 Heq (Hwc1&Hwc2&Hwc3&Hwt4).
-    repeat split; simpl; auto.
+    intros * Hwt1 Heq Wc. inv Wc; subst Γ.
+    pose proof (n_syn n) as Hsyn. inv Hsyn.
+    econstructor; simpl; auto.
     1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-    eapply iface_incl_wt_block; eauto.
-    eapply switch_block_wt in Hwt4; eauto. 10:eapply surjective_pairing.
-    - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
-    - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
-    - apply senv_of_inout_NoLast.
-    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
-    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
-    - simpl_Forall. simpl_In. simpl_Forall. auto.
-    - constructor.
-    - apply n_syn.
-    - rewrite map_fst_senv_of_inout. apply n_nodup.
+    - eapply iface_incl_wt_block; eauto.
+      eapply switch_block_wt in H2; eauto using node_NoDupMembers, node_NoDupLocals, surjective_pairing.
+      + intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
+      + intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
+      + apply NoLast_app; split; auto using senv_of_ins_NoLast.
+        intros * L; inv L; simpl_In; simpl_Forall. subst; simpl in *; congruence.
+      + simpl_Forall. simpl_In. simpl_Forall. auto.
+      + constructor.
   Qed.
 
   Lemma switch_global_wt : forall G,

@@ -60,14 +60,17 @@ module type SYNTAX =
 
     type auto_type = Weak | Strong
 
+    type decl = (ident * (((typ * clock) * ident) * ident option))
+
     type 'a scope =
-    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * 'a
+    | Scope of decl list * 'a
 
     type 'a branch =
     | Branch of (ident * ident) list * 'a
 
     type block =
     | Beq of equation
+    | Blast of ident * exp
     | Breset of block list * exp
     | Bswitch of exp * (enumtag * (block list) branch) list
     | Bauto of auto_type * clock * ((exp * enumtag) list * enumtag) *
@@ -78,7 +81,7 @@ module type SYNTAX =
           n_name     : ident;
           n_hasstate : bool;
           n_in       : (ident * ((typ * clock) * ident)) list;
-          n_out      : (ident * ((typ * clock) * ident)) list;
+          n_out      : decl list;
           n_block    : block;
         }
 
@@ -260,21 +263,16 @@ module PrintFun
             PrintOps.print_enumtag (c, ty)
             print_ident x
 
-    let print_decl p (id, ((ty, ck), _)) =
+    let print_input_decl p (id, ((ty, ck), _)) =
       fprintf p "@[<h>%a : %a%a@]"
         print_ident id
         PrintOps.print_typ ty
         print_clock_decl ck
 
-    let print_local_decl p (id, (((ty, ck), cx), o)) =
-      match o with
-      | Some (e, _) ->
-        fprintf p "@[<h>%a : %a%a@]"
-          print_ident id
-          PrintOps.print_typ ty
-          print_clock_decl ck
-      | None -> print_decl p (id, ((ty, ck), cx))
+    let print_decl p (id, (((ty, ck), cx), o)) =
+      print_input_decl p (id, ((ty, ck), cx))
 
+    let print_input_decl_list = print_semicol_list print_input_decl
     let print_decl_list = print_semicol_list print_decl
 
     let print_pattern p xs =
@@ -323,6 +321,10 @@ module PrintFun
 
     let rec print_block p = function
       | L.Beq eq -> print_equation p eq
+      | L.Blast (x, e) ->
+        fprintf p "@[<hov 2>%a = %a@]"
+          print_ident x
+          print_exp e
       | L.Breset (blks, er) ->
         fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a"
           print_blocks blks
@@ -339,7 +341,7 @@ module PrintFun
           (pp_print_list (print_state ty)) states
       | L.Blocal (Scope (locals, blks)) ->
         fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
-          (print_semicol_list_as "var" print_local_decl) locals
+          (print_semicol_list_as "var" print_decl) locals
           print_blocks blks
 
     and print_blocks p blks =
@@ -353,7 +355,7 @@ module PrintFun
     and print_state ty p ((_, e), Branch (_, (unl, Scope (locs, (blks, unt))))) =
       fprintf p "@[<v 2>state %a %ado@ %a%a%a@]"
         print_ident e
-        (print_semicol_list_as "var" print_local_decl) locs
+        (print_semicol_list_as "var" print_decl) locs
         (print_semicol_list print_block) blks
         (print_until_list ty) unt
         (print_unless_list ty) unl
@@ -371,7 +373,7 @@ module PrintFun
                  %a@]"
         (if hasstate then "node" else "fun")
         print_ident name
-        print_decl_list inputs
+        print_input_decl_list inputs
         print_decl_list outputs
         print_block blk
 

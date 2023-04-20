@@ -10,7 +10,7 @@ From Velus Require Import CoindStreams.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
-From Velus Require Import Interface.
+From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Instantiator.
 From Velus Require Import Lustre.LustreElab.
 Import NL.
@@ -30,11 +30,12 @@ Open Scope error_monad_scope.
 Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
-Parameter print_lustre  : @global (fun _ => True) elab_prefs -> unit.
-Parameter print_nolast  : @global nolast_block last_prefs -> unit.
-Parameter print_noauto  : @global noauto_block auto_prefs -> unit.
-Parameter print_noswitch : @global noswitch_block switch_prefs -> unit.
-Parameter print_nolocal : @global nolocal_top_block local_prefs -> unit.
+Parameter print_lustre  : @global (fun _ _ => True) elab_prefs -> unit.
+Parameter print_complete: @global complete elab_prefs -> unit.
+Parameter print_nolast  : @global nolast last_prefs -> unit.
+Parameter print_noauto  : @global noauto auto_prefs -> unit.
+Parameter print_noswitch : @global noswitch switch_prefs -> unit.
+Parameter print_nolocal : @global nolocal local_prefs -> unit.
 Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
@@ -48,7 +49,7 @@ Parameter do_norm_switches : unit -> bool.
 Parameter do_sync       : unit -> bool.
 Parameter do_expose     : unit -> bool.
 
-Definition is_causal (G: @global (fun _ => True) elab_prefs) : res (@global _ elab_prefs) :=
+Definition is_causal (G: @global complete elab_prefs) : res (@global _ elab_prefs) :=
   do _ <- check_causality G;
   OK G.
 
@@ -73,9 +74,11 @@ Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
-Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global :=
+Definition l_to_nl (G : @global (fun _ _ => True) elab_prefs) : res NL.Syn.global :=
   OK G
      @@ print print_lustre
+     @@ complete_global
+     @@ print print_complete
      @@@ is_causal
      @@ delast_global
      @@ print print_nolast
@@ -119,8 +122,12 @@ Definition nl_to_asm (main_node: option ident) (g: NL.Syn.global) : res Asm.prog
      @@ add_builtins
      @@@ transf_clight2_program.
 
+Definition lustre_to_asm (main_node: option ident) G : res Asm.program :=
+  OK G
+    @@@ l_to_nl
+    @@@ nl_to_asm main_node.
+
 Definition compile (D: list LustreAst.declaration) (main_node: option ident) : res Asm.program :=
   elab_declarations D
                     @@ @proj1_sig _ _
-                    @@@ l_to_nl
-                    @@@ nl_to_asm main_node.
+                    @@@ lustre_to_asm main_node.

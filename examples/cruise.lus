@@ -40,11 +40,10 @@ tel
 node cruiseControl (onn, off, resume : bool; speed : real;
                     set, quickAccel, quickDecel : bool;
                     accel, brake : real)
-returns ((* last *) cruiseSpeed : real; throttleCmd : real);
+returns (cruise_speed : real; throttleCmd : real);
 var braking, accelerator : bool;
-    last cruise_speed : real = 0.0;
 let
-    cruiseSpeed = cruise_speed;
+    last cruise_speed = 0.0;
     braking = brake > 0.0;
     accelerator = accel > 0.0;
 

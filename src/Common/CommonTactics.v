@@ -95,3 +95,7 @@ Tactic Notation "take" uconstr(ty) "and" tactic(tac) :=
      summon ty as it; tac;
      try (rename new_it into it).
 
+Tactic Notation "take" uconstr(ty1) "," uconstr(ty2) "and" tactic(tac) :=
+  let it1 := fresh "it1" in
+  let it2 := fresh "it2" in
+  summon ty1 as it1; summon ty2 as it2; tac.

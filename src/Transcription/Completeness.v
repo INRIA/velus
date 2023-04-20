@@ -164,7 +164,7 @@ Module Type COMPLETENESS
   Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
       wt_block G vars blk ->
       normalized_block G out blk ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eq', block_to_equation env envo xr blk = OK eq'.
@@ -178,18 +178,19 @@ Module Type COMPLETENESS
       eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
+  Corollary mmap_block_to_equation_complete {prefs} : forall (G: @global nolocal prefs) (n: @node nolocal prefs) env envo locs blks,
       n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (map fst (n_out n)) ->
       (forall x e, envo x = Error e -> PS.In x (ps_from_list (map fst (n_out n)))) ->
-      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo nil) blks = OK eqs'.
+      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idfst (idfst locs)) env) envo nil) blks = OK eqs'.
   Proof.
     intros * Hblk Hlocs Hwtn Hnormed Hfind Henvo.
-    pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
-    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat x0)) as Hfind'.
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? _ _ (?&Hvars&Hperm)].
+    rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
+    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idfst (idfst locs)) env) x = OK cl) (concat x0)) as Hfind'.
     { rewrite Hperm0.
       apply Forall_app; split; simpl_Forall; subst.
       - rewrite Hperm in H; simpl_In; simpl_Forall.
@@ -199,45 +200,43 @@ Module Type COMPLETENESS
       - apply In_InMembers in H.
         unfold find_clock. cases_eqn Hfind; eauto.
         eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
-        rewrite 2 InMembers_idty in Hinm. congruence.
+        rewrite 2 InMembers_idfst in Hinm. congruence.
     }
-    destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt; inv H1.
+    inversion_clear Hwtn as [?? _ _ _ Hwt]. rewrite Hblk in Hwt. inv Hwt; inv H1. subst Γ'.
     clear Hblk Hperm0.
     induction Hvars; intros; simpl in *; eauto. simpl_Forall.
     apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H2 as (?&Heqs1); eauto.
-    eapply IHHvars in H8 as (?&Heqs2); eauto.
+    eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
+    eapply IHHvars in H7 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
   Open Scope string_scope.
 
-  Lemma to_node_complete : forall (G: @global nolocal_top_block norm2_prefs) n,
+  Lemma to_node_complete : forall (G: @global nolocal norm2_prefs) n,
       wt_node G n ->
       normalized_node G n ->
       exists n', to_node n = OK n'.
   Proof.
-    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
+    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk ? Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
-              with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (n_out n))))
-                   (envo := fun x => if Env.mem x (Env.from_list (idty (n_out n)))
+              with (env:=Env.adds' (idfst (n_in n)) (Env.from_list (idfst (idfst (n_out n)))))
+                   (envo := fun x => if Env.mem x (Env.from_list (idfst (idfst (n_out n))))
                                   then Error (msg "output variable defined as a fby")
                                   else OK tt)
       as [? ?]; eauto.
     3:{ unfold mmap_block_to_equation. destruct n; simpl in *.
         dependent destruction n_block0; inv Hblk.
         cases_eqn Hmap; eauto. congruence. }
-    - rewrite Forall_forall. intros x Hin.
-      eapply in_map_iff in Hin as ((?&((?&ck)&?))&(?&Hin)); subst.
-      eapply in_app_weak, in_app_comm in Hin.
-      exists ck; simpl. eapply envs_eq_find.
-      2:erewrite In_idck_exists; eexists; erewrite In_idty_exists; eauto.
-      pose proof (n_nodup n) as (Hnd&_).
-      rewrite idty_app. eapply env_eq_env_adds', env_eq_env_from_list; auto.
-      rewrite <-idty_app. 1,2:rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
+    - simpl_Forall. simpl_In.
+      exists c; simpl. eapply envs_eq_find. eapply env_eq_env_adds', env_eq_env_from_list.
+      1,2:rewrite fst_NoDupMembers. rewrite map_app. 1,2:repeat rewrite map_fst_idfst.
+      + eapply n_nodup.
+      + eapply NoDup_app_r, n_nodup.
+      + rewrite idsnd_app. apply in_app_iff, or_intror. solve_In.
     - intros x e Hmem; simpl in Hmem.
-      rewrite <-map_fst_idty, ps_from_list_In.
+      rewrite <-2 map_fst_idfst, ps_from_list_In.
       rewrite <- fst_InMembers. rewrite <- Env.In_from_list.
       apply Env.mem_2.
       cases_eqn Hmem.

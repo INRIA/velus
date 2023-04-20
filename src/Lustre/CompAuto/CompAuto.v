@@ -65,7 +65,7 @@ Module Type COMPAUTO
 
   Fixpoint auto_block (blk : block) : FreshAnn (block * list type) :=
     match blk with
-    | Beq _ => ret (blk, [])
+    | Beq _ | Blast _ _ => ret (blk, [])
     | Breset blks er =>
         do (blks', tys) <- mmap2 auto_block blks;
         ret (Breset blks' er, concat tys)
@@ -144,8 +144,8 @@ Module Type COMPAUTO
   Proof.
     induction blk using block_ind2; intros * Haut; try destruct type0;
       destruct_conjs; repeat inv_bind.
-    - (* equation *)
-      reflexivity.
+    - (* equation *) reflexivity.
+    - (* last *) reflexivity.
     - (* reset *)
       eapply mmap2_st_follows; eauto.
     - (* switch *)
@@ -178,15 +178,15 @@ Module Type COMPAUTO
        end; repeat inv_bind);
     eauto.
 
-  Lemma auto_block_VarsDefined : forall blk xs blk' tys st st',
-      VarsDefined blk xs ->
+  Lemma auto_block_VarsDefinedComp : forall blk xs blk' tys st st',
+      VarsDefinedComp blk xs ->
       auto_block blk st = ((blk', tys), st') ->
-      VarsDefined blk' xs.
+      VarsDefinedComp blk' xs.
   Proof.
     induction blk using block_ind2; intros * Hvd Haut; try destruct type0;
       inv Hvd; destruct_conjs; repeat inv_bind.
-    - (* equation *)
-      constructor.
+    - (* equation *) constructor.
+    - (* last *) constructor.
     - (* reset *)
       constructor.
       apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H0.
@@ -196,7 +196,7 @@ Module Type COMPAUTO
       constructor.
       + apply Forall3_ignore3 in H0; inv H0; congruence.
       + apply Forall3_ignore13 in H0; simpl_Forall.
-        destruct b0; repeat inv_bind. take (VarsDefinedBranch _ _ _) and inv it; inv_VarsDefined.
+        destruct b0; repeat inv_bind. take (VarsDefinedCompBranch _ _ _) and inv it; inv_VarsDefined.
         constructor; eauto using incl_nil'. do 2 esplit; eauto.
         apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H5.
         eapply Forall2_trans_ex in Hvars; eauto. simpl_Forall; eauto.
@@ -209,7 +209,7 @@ Module Type COMPAUTO
       + apply Forall3_ignore3 in Hmmap; inv Hmmap; try congruence. auto.
       + apply Forall3_ignore13 in Hmmap; simpl_Forall.
         destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind.
-        take (VarsDefinedBranch _ _ _) and inv it; take (VarsDefinedScope _ _ _) and inv it; inv_VarsDefined.
+        take (VarsDefinedCompBranch _ _ _) and inv it; take (VarsDefinedCompScope _ _ _) and inv it; inv_VarsDefined.
         constructor; eauto using incl_nil'.
         apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H10.
         eapply Forall2_trans_ex in Hvars; eauto.
@@ -228,7 +228,7 @@ Module Type COMPAUTO
         * apply Forall3_ignore3 in Hmmap; inv Hmmap; try congruence.
         * apply Forall3_ignore13 in Hmmap; simpl_Forall.
           destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind.
-          take (VarsDefinedBranch _ _ _) and inv it; take (VarsDefinedScope _ _ _) and inv it; inv_VarsDefined.
+          take (VarsDefinedCompBranch _ _ _) and inv it; take (VarsDefinedCompScope _ _ _) and inv it; inv_VarsDefined.
           constructor; eauto using incl_nil'.
           apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H10.
           eapply Forall2_trans_ex in Hvars; eauto.
@@ -244,6 +244,62 @@ Module Type COMPAUTO
       do 2 econstructor; eauto using incl_nil'. do 2 esplit; [|eauto].
       apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H0.
       eapply Forall2_trans_ex in Hvars; eauto. simpl_Forall; eauto.
+  Qed.
+
+  Lemma auto_block_LastsDefined : forall blk xs blk' tys st st',
+      LastsDefined blk xs ->
+      auto_block blk st = ((blk', tys), st') ->
+      LastsDefined blk' xs.
+  Proof.
+    induction blk using block_ind2; intros * Hvd Haut; try destruct type0;
+      inv Hvd; destruct_conjs; repeat inv_bind.
+    - (* equation *) constructor.
+    - (* last *) constructor.
+    - (* reset *)
+      constructor.
+      apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H3; eauto. simpl_Forall; eauto.
+    - (* switch *)
+      apply mmap2_values in H0.
+      constructor.
+      + apply Forall3_ignore3 in H0; inv H0; congruence.
+      + apply Forall3_ignore13 in H0; simpl_Forall.
+        destruct b0; repeat inv_bind. repeat inv_branch.
+        constructor; eauto using incl_nil'.
+        apply mmap2_values, Forall3_ignore13 in H5. simpl_Forall. eauto.
+    - (* automaton (weak) *)
+      take (mmap2 _ _ _ = _) and rename it into Hmmap. apply mmap2_values in Hmmap.
+      repeat econstructor.
+      + apply Forall3_ignore3 in Hmmap; inv Hmmap; try congruence. auto.
+      + apply Forall3_ignore13 in Hmmap; simpl_Forall.
+        repeat inv_branch. repeat inv_scope. repeat inv_bind.
+        repeat constructor. replace [] with (@concat ident ([]::[])); repeat constructor.
+        simpl.
+        apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H10.
+        eapply Forall2_trans_ex in H6; eauto.
+        do 2 esplit.
+        * repeat constructor. instantiate (1:=x11). simpl_Forall; eauto.
+        * simpl. repeat rewrite app_nil_r; eauto using Permutation.
+    - (* automaton (strong) *)
+      take (mmap2 _ _ _ = _) and rename it into Hmmap. apply mmap2_values in Hmmap.
+      repeat econstructor.
+      + intros Map. apply map_eq_nil in Map. contradiction.
+      + simpl_Forall. repeat inv_branch. repeat econstructor.
+        replace [] with (@concat ident [[]]); auto. repeat constructor.
+      + apply Forall3_ignore3 in Hmmap; inv Hmmap; try congruence.
+      + apply Forall3_ignore13 in Hmmap; simpl_Forall.
+        repeat inv_branch. repeat inv_scope. repeat inv_bind.
+        repeat constructor.
+        replace [] with (@concat ident [[]]); auto. repeat constructor.
+        apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H10.
+        eapply Forall2_trans_ex in H6; eauto.
+        do 2 esplit; [|eauto].
+        simpl_Forall. eauto.
+    - (* local *)
+      repeat inv_scope.
+      do 2 econstructor; eauto using incl_nil'. do 2 esplit; [|eauto].
+      apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H0.
+      eapply Forall2_trans_ex in H1; eauto. simpl_Forall; eauto.
   Qed.
 
   (** NoDupLocals *)
@@ -306,8 +362,8 @@ Module Type COMPAUTO
     Opaque auto_scope.
     induction blk using block_ind2; intros * Haut Hat Hgood Hnd; try destruct type0;
       inv Hgood; inv Hnd; destruct_conjs; repeat inv_bind.
-    - (* equation *)
-      constructor.
+    - (* equation *) constructor.
+    - (* last *) constructor.
 
     - (* reset *)
       constructor.
@@ -424,14 +480,14 @@ Module Type COMPAUTO
   Proof.
     induction blk using block_ind2; intros * Hgood Haut; try destruct type0;
       inv Hgood; destruct_conjs; repeat inv_bind.
-    - (* equation *)
-      constructor.
+    - (* equation *) constructor.
+    - (* last *) constructor.
     - (* reset *)
       constructor. auto_block_simpl_Forall.
     - (* switch *)
       constructor. auto_block_simpl_Forall.
       destruct b0; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it.
-      constructor; eauto using AtomOrGensym_add. auto_block_simpl_Forall.
+      constructor; eauto using Forall_AtomOrGensym_add. auto_block_simpl_Forall.
     - (* automaton (weak) *)
       do 2 constructor; simpl.
       + repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
@@ -439,7 +495,7 @@ Module Type COMPAUTO
         all:right; do 2 esplit; eauto; now apply PSF.add_1.
       + repeat constructor. auto_block_simpl_Forall.
         destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it. take (GoodLocalsScope _ _ _) and inv it.
-        repeat constructor; eauto using AtomOrGensym_add.
+        repeat constructor; eauto using Forall_AtomOrGensym_add.
         auto_block_simpl_Forall.
     - (* automaton (strong) *)
       do 2 constructor; simpl. 2:do 2 constructor.
@@ -449,10 +505,10 @@ Module Type COMPAUTO
       + constructor. simpl_Forall. destruct b as [?(?&[?(?&?)])]; repeat inv_bind. repeat constructor.
       + repeat constructor. auto_block_simpl_Forall.
         destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it. take (GoodLocalsScope _ _ _) and inv it.
-        repeat constructor; eauto using AtomOrGensym_add.
+        repeat constructor; eauto using Forall_AtomOrGensym_add.
         auto_block_simpl_Forall.
     - (* local *)
-      inv H1. do 2 constructor; eauto using AtomOrGensym_add.
+      inv H1. do 2 constructor; eauto using Forall_AtomOrGensym_add.
       auto_block_simpl_Forall.
   Qed.
 
@@ -488,7 +544,7 @@ Module Type COMPAUTO
       inv H1. repeat constructor; auto. auto_block_simpl_Forall.
   Qed.
 
-  Program Definition auto_node (n: @node nolast_block last_prefs) : @node noauto_block auto_prefs * list type :=
+  Program Definition auto_node (n: @node nolast last_prefs) : @node noauto auto_prefs * list type :=
     let res := auto_block (n_block n) init_st in
     ({| n_name := n_name n;
         n_hasstate := n_hasstate n;
@@ -500,8 +556,21 @@ Module Type COMPAUTO
      |}, snd (fst res)).
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
-    pose proof (n_defd n) as (?&?&?).
-    esplit; split; eauto using auto_block_VarsDefined.
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? _ _ (?&Vars&Perm)].
+    pose proof (n_nodup n) as (Hnd1&Hnd2).
+    pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
+    apply Permutation_map_inv in Perm as (?&?&Perm); subst.
+    do 2 esplit; [|symmetry; eapply Permutation_map; eauto].
+    eapply VarsDefinedComp_VarsDefined, auto_block_VarsDefinedComp; eauto.
+    1:{ erewrite map_map, map_ext with (g:=fst), <-Perm; simpl. 2:intros; destruct_conjs; auto.
+        eapply NoDupLocals_incl, auto_block_NoDupLocals, Hnd2; eauto. 2:simpl_Forall; auto.
+        solve_incl_app. }
+    erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+  Qed.
+  Next Obligation.
+    pose proof (n_lastd n) as (?&Last&Perm).
+    destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
+    do 2 esplit; eauto using auto_block_LastsDefined.
   Qed.
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
@@ -514,15 +583,16 @@ Module Type COMPAUTO
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
-    repeat (split; eauto using AtomOrGensym_add, auto_block_GoodLocals).
+    repeat (split; eauto using Forall_AtomOrGensym_add, auto_block_GoodLocals).
   Qed.
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
-    pose proof (n_syn n) as Hsyn.
-    eapply auto_block_noauto; eauto.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (?&Vars&Perm)].
+    constructor; eauto using auto_block_noauto.
+    do 2 esplit; eauto using auto_block_VarsDefinedComp.
   Qed.
 
-  Definition auto_global (G : @global nolast_block last_prefs) : @global noauto_block auto_prefs :=
+  Definition auto_global (G : @global nolast last_prefs) : @global noauto auto_prefs :=
     let ndstys := map auto_node G.(nodes) in
     Global (G.(types)++flat_map snd ndstys) G.(externs) (map fst ndstys).
 

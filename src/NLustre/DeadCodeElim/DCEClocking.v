@@ -226,10 +226,10 @@ Module Type DCECLOCKING
         assert (Hf2:=H1). eapply Forall2_ignore1, Forall_forall in H1 as ((?&?&?)&Hin&Hsub&?&Hvars&Hinst); eauto.
         eapply NoDupMembers_det in Hxck; eauto; subst.
         eapply instck_inv in Hinst as [|(?&Hsub'&Hfree')]...
-        assert (wc_env (idck (n_in n ++ n_out n))) as Hwenv.
+        assert (wc_env (idsnd (n_in n ++ n_out n))) as Hwenv.
         { eapply wc_find_node in H as (?&?&_&?&?&?); eauto. }
         eapply wc_env_var in Hwenv; [|eapply in_map_iff; do 2 esplit; eauto with datatypes]. simpl in *.
-        eapply wc_clock_free, InMembers_idck, InMembers_In in Hfree' as ((?&?)&Hin'); [|eauto].
+        eapply wc_clock_free, InMembers_idsnd, InMembers_In in Hfree' as ((?&?)&Hin'); [|eauto].
         apply in_app_iff in Hin' as [Hin'|Hin'].
         + eapply Forall2_ignore2, Forall_forall in H0 as (?&?&Hv); eauto; simpl in *.
           destruct Hv as (Hv&_). rewrite Hsub' in Hv. inv Hv.
@@ -251,9 +251,9 @@ Module Type DCECLOCKING
       remember (snd (dce_eqs (PSP.of_list (map fst (n_out n))) (n_vars n) (n_eqs n))) as eqs'.
       assert
         (forall x ck,
-            In (x, ck) (idck (n_in n ++ n_vars n ++ n_out n)) ->
+            In (x, ck) (idsnd (n_in n ++ n_vars n ++ n_out n)) ->
             Exists (fun eq : equation => Is_defined_in_eq x eq \/ Is_free_in_eq x eq) eqs' ->
-            In (x, ck) (idck (n_in n ++ vars' ++ n_out n))) as Hstable.
+            In (x, ck) (idsnd (n_in n ++ vars' ++ n_out n))) as Hstable.
       { intros * Hin Hex.
         assert (InMembers x (n_in n ++ vars' ++ n_out n)) as Hinm.
         eapply dce_eqs_stable with (ins:=n_in n) (eqs:=n_eqs n); eauto. 6:subst; reflexivity.
@@ -264,7 +264,7 @@ Module Type DCECLOCKING
           symmetry. apply Is_defined_in_vars_defined.
         - eapply wc_equations_has_def; eauto.
         - intros ? Hdef. simpl_Exists; simpl_Forall.
-          eapply InMembers_idck, wc_equation_def_free; eauto.
+          eapply InMembers_idsnd, wc_equation_def_free; eauto.
         - eapply InMembers_In in Hinm as ((?&?)&?).
           eapply in_map_iff in Hin as ((?&?&?)&Heq&Hin); inv Heq.
         eapply NoDupMembers_det in Hin. 2:apply n_nodup.
@@ -273,22 +273,22 @@ Module Type DCECLOCKING
         }
         inv Hin. solve_In.
       }
-      assert (Forall (wc_equation G2 (idck (n_in n ++ vars' ++ n_out n))) eqs') as Hwc'.
+      assert (Forall (wc_equation G2 (idsnd (n_in n ++ vars' ++ n_out n))) eqs') as Hwc'.
       { subst. eapply wc_equations_restrict; eauto.
         eapply Forall_incl; [eauto|apply incl_filter', incl_refl].
       } subst.
       repeat split; auto; simpl.
-      - rewrite (Permutation_app_comm (filter _ _)), app_assoc, idck_app.
+      - rewrite (Permutation_app_comm (filter _ _)), app_assoc, idsnd_app.
         apply Forall_app; split.
         + eapply Forall_impl; [|eauto]; intros (?&?) ?.
           eapply wc_clock_incl; [|eauto]. solve_incl_app.
         + eapply Forall_forall; intros (?&?) Hin.
           eapply in_map_iff in Hin as ((?&?&?)&Heq&Hin); inv Heq.
-          rewrite (Permutation_app_comm (n_vars _)), app_assoc, idck_app in Hwc3.
+          rewrite (Permutation_app_comm (n_vars _)), app_assoc, idsnd_app in Hwc3.
           apply Forall_app in Hwc3 as (_&Hwc3). eapply Forall_forall in Hwc3.
           2:{ eapply filter_In in Hin as (Hin&_). eapply in_map_iff; eauto. }
           simpl in *.
-          rewrite <-idck_app, <-app_assoc, (Permutation_app_comm (n_out n)) in *.
+          rewrite <-idsnd_app, <-app_assoc, (Permutation_app_comm (n_out n)) in *.
           eapply wc_clock_restrict; [|eauto].
           intros.
           eapply Hstable; eauto.
@@ -301,7 +301,7 @@ Module Type DCECLOCKING
           solve_Exists.
           eapply wc_equation_free_in_clock; eauto.
           2:(subst; eapply Forall_forall in Hwc'; eauto).
-          * apply NoDupMembers_idck, dce_NoDupMembers_filter, n_nodup.
+          * apply NoDupMembers_idsnd, dce_NoDupMembers_filter, n_nodup.
           * eapply in_map_iff. do 2 esplit; eauto with datatypes. auto.
     Qed.
 

@@ -35,6 +35,9 @@ Module Type NLCOINDSEMANTICS
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Ord   : NLORDERED     Ids Op OpAux Cks CESyn Syn).
 
+  Definition history := @history ident.
+  Definition sem_var := @sem_var ident.
+
   Definition sem_clocked_var (H: history) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
     (forall xs,
         sem_var H x xs ->
@@ -218,8 +221,7 @@ Module Type NLCOINDSEMANTICS
       n < S m ->
       (n < m \/ n = m).
   Proof.
-    intros * Hlt.
-    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+    intros * Hlt. lia.
   Qed.
 
   Lemma reset1_present1 : forall n k v0 xs rs x,
@@ -254,10 +256,10 @@ Module Type NLCOINDSEMANTICS
        simpl in *; try congruence; auto).
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk. lia.
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk. lia.
     - specialize (Hk 0 (Nat.lt_0_succ _)).
       rewrite Str_nth_0 in Hk. inv Hk.
     - specialize (Hk 0 (Nat.lt_0_succ _)).
@@ -299,7 +301,7 @@ Module Type NLCOINDSEMANTICS
           find_node f G = Some n ->
           Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
           Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-          sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
+          sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
           Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
           sem_node f xss oss.
 
@@ -346,7 +348,7 @@ Module Type NLCOINDSEMANTICS
         find_node f G = Some n ->
         Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
         Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-        sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
+        sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
         Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
         Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
         P_node f xss oss.

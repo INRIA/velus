@@ -181,7 +181,7 @@ Module Type EI
   Defined.
 
   Program Definition exp_inlining_node (n : node) : node :=
-    let eqs' := inline_all_possible' (idck n.(n_vars)) n.(n_eqs) in
+    let eqs' := inline_all_possible' (idsnd n.(n_vars)) n.(n_eqs) in
     {| n_name := n.(n_name);
        n_in := n.(n_in);
        n_out := n.(n_out);
@@ -191,7 +191,7 @@ Module Type EI
   Next Obligation. exact n.(n_ingt0). Qed.
   Next Obligation. exact n.(n_outgt0). Qed.
   Next Obligation.
-    replace (vars_defined (inline_all_possible (idck (n_vars n)) (n_eqs n)))
+    replace (vars_defined (inline_all_possible (idsnd (n_vars n)) (n_eqs n)))
       with (vars_defined (n_eqs n)).
     exact n.(n_defd).
     unfold inline_all_possible.
@@ -202,7 +202,7 @@ Module Type EI
     f_equal. eapply map_ext. intros [??[]| |]; simpl; auto.
   Qed.
   Next Obligation.
-    replace (vars_defined (filter is_fby (inline_all_possible (idck (n_vars n)) (n_eqs n))))
+    replace (vars_defined (filter is_fby (inline_all_possible (idsnd (n_vars n)) (n_eqs n))))
       with (vars_defined (filter is_fby (n_eqs n))).
     now apply n.(n_vout).
     unfold inline_all_possible.

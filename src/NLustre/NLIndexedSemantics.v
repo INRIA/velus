@@ -89,8 +89,7 @@ Module Type NLINDEXEDSEMANTICS
       n < S m ->
       (n < m \/ n = m).
   Proof.
-    intros * Hlt.
-    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+    intros * Hlt. lia.
   Qed.
 
   Lemma doreset_spec : forall xs rs n,
@@ -109,7 +108,7 @@ Module Type NLINDEXEDSEMANTICS
       + exists n. repeat split; auto.
         intros ? Hle Hlt.
         apply lt_S_inv in Hlt as [?|?]; subst; auto.
-        exfalso. eapply Lt.lt_irrefl, Lt.lt_le_trans; eauto.
+        exfalso. eapply Nat.lt_irrefl, Nat.lt_le_trans; eauto.
       + exists x. repeat split; auto.
         intros ? Hle Hlt.
         apply lt_S_inv in Hlt as [?|?]; subst; auto.
@@ -120,7 +119,7 @@ Module Type NLINDEXEDSEMANTICS
         apply lt_S_inv in Hmn as [?|?]; subst; auto.
         right. exists x. repeat (split; auto).
       + exfalso. rewrite Hk in Hxs; auto. inv Hxs.
-        apply Lt.lt_n_Sm_le; auto.
+        apply Nat.lt_succ_r; auto.
   Qed.
 
   Fact doreset_shift : forall xs rs xs' rs' ,
@@ -352,7 +351,7 @@ Module Type NLINDEXEDSEMANTICS
                find_node f G = Some n ->
                sem_vars H (map fst n.(n_in)) xss ->
                sem_vars H (map fst n.(n_out)) yss ->
-               sem_clocked_vars bk H (idck n.(n_in)) ->
+               sem_clocked_vars bk H (idsnd n.(n_in)) ->
                Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
 
@@ -406,7 +405,7 @@ Module Type NLINDEXEDSEMANTICS
         NB: Every in-built 'assumption' like this is a risk since it does
             not have to be justified and may thus be forgotten or
             violated. The clause
-                [sem_clocked_vars bk H (idck n.(n_in))]
+                [sem_clocked_vars bk H (idsnd n.(n_in))]
             requires that, for a semantics to exist, the input streams
             of the top-level program must correspond with the clocks of
             the interface to the top-level program (with the base clock
@@ -492,7 +491,7 @@ enough: it does not support the internal fixpoint introduced by
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        sem_clocked_vars bk H (idck n.(n_in)) ->
+        sem_clocked_vars bk H (idsnd n.(n_in)) ->
         Forall (sem_equation G bk H) n.(n_eqs) ->
         Forall (P_equation bk H) n.(n_eqs) ->
         P_node f xss yss.

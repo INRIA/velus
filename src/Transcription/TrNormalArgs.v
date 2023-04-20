@@ -70,7 +70,7 @@ Module Type TRNORMALARGS
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
-      unfold Common.idty; erewrite map_map, map_ext; eauto. intros (?&((?&?)&?)); auto.
+      unfold Common.idfst; erewrite map_map, map_ext; eauto. intros (?&((?&?)&?)); auto.
     - (* fby *)
       monadInv Htoeq.
       constructor.

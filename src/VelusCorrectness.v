@@ -13,7 +13,7 @@ From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Interface.
+From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Instantiator.
 From Velus Require Import Lustre.LustreElab.
 From Velus Require Import Velus.
@@ -44,7 +44,7 @@ Open Scope stream_scope.
 Import Common.
 
 Section WtStream.
-  Context {PSyn : block -> Prop} {prefs : PS.t}.
+  Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
 
   Variable G: @global PSyn prefs.
   Variable main: ident.
@@ -54,12 +54,12 @@ Section WtStream.
   Definition wt_ins :=
     forall node,
       find_node main G = Some node ->
-      NLCorrectness.wt_streams ins (idty (idty node.(n_in))).
+      NLCorrectness.wt_streams ins (idfst (idfst node.(n_in))).
 
   Definition wt_outs :=
     forall node,
       find_node main G = Some node ->
-      NLCorrectness.wt_streams outs (idty (idty node.(n_out))).
+      NLCorrectness.wt_streams outs (idfst (idfst (idfst node.(n_out)))).
 
 End WtStream.
 
@@ -67,7 +67,7 @@ Definition wc_ins {PSyn prefs} (G: @global PSyn prefs) main ins := sem_clock_inp
 
 (** The trace of a Lustre node *)
 Section LTrace.
-  Context {PSyn : block -> Prop} {prefs : PS.t}.
+  Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
 
   Variable (node: @node PSyn prefs) (ins outs: list (Stream value)).
 
@@ -77,25 +77,25 @@ Section LTrace.
 
   Program Definition trace_node (n: nat): traceinf :=
     mk_trace (tr_Streams ins) (tr_Streams outs)
-             (idty (idty node.(n_in))) (idty (idty node.(n_out)))
+             (idfst (idfst node.(n_in))) (idfst (idfst (idfst node.(n_out))))
              _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
     - left; intro E; apply map_eq_nil, map_eq_nil in E; auto.
-    - right; intro E; apply map_eq_nil, map_eq_nil in E; auto.
+    - right; intro E; apply map_eq_nil, map_eq_nil, map_eq_nil in E; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 3 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 3 map_length; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 3 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 4 map_length; auto.
   Qed.
 
   (** Simply link the trace of a Lustre node with the trace of an NLustre node with the same parameters *)
   Lemma trace_inf_sim_node:
     forall n n' Spec_in_out_n' Len_ins_n' Len_outs_n',
-      idty (NL.Syn.n_in n') = idty (idty (n_in node)) ->
-      idty (NL.Syn.n_out n') = idty (idty (n_out node)) ->
+      idfst (NL.Syn.n_in n') = idfst (idfst (n_in node)) ->
+      idfst (NL.Syn.n_out n') = idfst (idfst (idfst (n_out node))) ->
       traceinf_sim (NLCorrectness.trace_node n' ins outs Spec_in_out_n' Len_ins_n' Len_outs_n' n)
                    (trace_node n).
   Proof.
@@ -103,18 +103,18 @@ Section LTrace.
     apply traceinf_sim'_sim.
     revert n; cofix COFIX; intro.
     rewrite unfold_mk_trace.
-    rewrite unfold_mk_trace with (xs := idty (idty (n_in node))).
+    rewrite unfold_mk_trace with (xs := idfst (idfst (n_in node))).
     simpl.
-    replace (load_events (tr_Streams ins n) (idty (idty (n_in node))) ** store_events (tr_Streams outs n) (idty (idty (n_out node))))
-      with (load_events (tr_Streams ins n) (idty (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idty (NL.Syn.n_out n')));
+    replace (load_events (tr_Streams ins n) (idfst (idfst (n_in node))) ** store_events (tr_Streams outs n) (idfst (idfst (idfst (n_out node)))))
+      with (load_events (tr_Streams ins n) (idfst (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idfst (NL.Syn.n_out n')));
       try congruence.
     constructor.
     - intro E; eapply Eapp_E0_inv in E.
-      assert (forall n, length (tr_Streams ins n) = length (idty (NL.Syn.n_in n'))) as Len_ins_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idty; auto. }
-      assert (forall n, length (tr_Streams outs n) = length (idty (NL.Syn.n_out n'))) as Len_outs_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idty; auto. }
-      assert (idty (NL.Syn.n_in n') <> [] \/ idty (NL.Syn.n_out n') <> []) as Spec_in_out_2.
+      assert (forall n, length (tr_Streams ins n) = length (idfst (NL.Syn.n_in n'))) as Len_ins_2.
+      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+      assert (forall n, length (tr_Streams outs n) = length (idfst (NL.Syn.n_out n'))) as Len_outs_2.
+      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+      assert (idfst (NL.Syn.n_in n') <> [] \/ idfst (NL.Syn.n_out n') <> []) as Spec_in_out_2.
       { clear - Spec_in_out_n'.
         destruct Spec_in_out_n'; [left|right].
         1,2:intro contra; eapply H, map_eq_nil; eauto. }
@@ -138,6 +138,7 @@ Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: li
 
 Local Hint Resolve
       wc_global_Ordered_nodes
+      complete_global_wt complete_global_wc
       delast_global_wt delast_global_wc
       auto_global_wt auto_global_wc
       switch_global_wt switch_global_wc
@@ -153,7 +154,7 @@ Local Ltac unfold_l_to_nl Hltonl :=
   repeat rewrite print_identity in Hltonl;
   destruct (is_causal _) eqn:Hcaus; simpl in Hltonl; [|inv Hltonl];
   repeat rewrite print_identity in Hltonl;
-  monadInv Hcaus.
+  Errors.monadInv Hcaus.
 
 (** Correctness from Lustre to NLustre *)
 Lemma behavior_l_to_nl:
@@ -167,16 +168,24 @@ Lemma behavior_l_to_nl:
 Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply TR.Correctness.sem_l_nl in Hltonl; eauto 12 with ltyping.
-  eapply normalize_global_sem, inlinelocal_global_sem, switch_global_sem, auto_global_sem, delast_global_sem; eauto.
-  eapply sem_node_sem_node_ck; eauto with ltyping.
+  eapply TR.Correctness.sem_l_nl in Hltonl; eauto 14 with ltyping.
+  eapply normalize_global_sem, inlinelocal_global_sem, switch_global_sem, auto_global_sem, delast_global_sem; eauto 7.
+  eapply sem_node_sem_node_ck; eauto using complete_global_sem with ltyping.
+  - eapply check_causality_correct; eauto using complete_global_wt with ltyping.
+  - edestruct Hwcins as (?&?&Find&?&?).
+    repeat esplit.
+    + unfold find_node in *. inv_equalities.
+      apply CommonProgram.find_unit_transform_units_forward in Hf.
+      setoid_rewrite Hf. simpl. eauto.
+    + simpl; eauto.
+    + simpl; eauto.
 Qed.
 
 Fact l_to_nl_find_node' : forall G G' f n',
     NL.Syn.find_node f G' = Some n' ->
     l_to_nl G = OK G' ->
     exists n, find_node f G = Some n /\
-         NL.Syn.n_in n' = idty (n_in n) /\ NL.Syn.n_out n' = idty (n_out n).
+         NL.Syn.n_in n' = idfst (n_in n) /\ NL.Syn.n_out n' = idfst (idfst (n_out n)).
 Proof.
   intros G * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
@@ -188,12 +197,16 @@ Proof.
       eapply global_iface_eq_trans, switch_global_iface_eq. apply global_iface_eq_refl. }
   apply auto_global_find_node' in Hfind as (?&Hfind&(_&_&Hin'&Hout')).
   eapply global_iface_eq_find in Hfind as (?&Hfind&(_&_&Hin''&Hout'')); eauto.
-  2:apply global_iface_eq_sym, delast_global_iface_eq.
+  2:{ apply global_iface_eq_sym.
+      eapply global_iface_eq_trans, delast_global_iface_eq.
+      apply complete_global_iface_eq. }
   do 2 esplit; eauto; split.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
-    congruence.
+    unfold idfst. erewrite map_ext, <-Hin'', <-Hin', <-Hin, map_ext. symmetry; apply Htonode.
+    1,2:intros; destruct_conjs; auto.
   - eapply TR.Tr.to_node_out in Htonode; eauto.
-    congruence.
+    unfold idfst. erewrite map_map, map_ext, <-Hout'', <-Hout', <-Hout, map_ext, <-map_map. symmetry; apply Htonode.
+    1,2:intros; destruct_conjs; auto.
 Qed.
 
 (** The ultimate lemma states that, if
@@ -211,31 +224,28 @@ Qed.
 Theorem behavior_asm:
   forall D G Gp P main ins outs,
     elab_declarations D = OK (exist _ G Gp) ->
+    lustre_to_asm (Some main) G = OK P ->
     wt_ins G main ins ->
     wc_ins G main (pStr ins) ->
     Sem.sem_node G main (pStr ins) (pStr outs) ->
-    compile D (Some main) = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
-  intros * Elab Hwti Hwci Hsem Comp.
-  unfold compile, print in Comp.
-  rewrite Elab in Comp. simpl in Comp.
+  intros * Elab Comp Hwti Hwci Hsem.
+  unfold lustre_to_asm, print in Comp. simpl in Comp.
   destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
-  destruct (nl_to_asm (Some main) G') as [p|] eqn: Comp''; inv Comp.
   destruct Gp as (Hwc&Hwt).
-  eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp'' as (T&Hbeh&Hbisim).
+  eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp as (T&Hbeh&Hbisim).
   - exists T. split; auto.
     inv Hbisim.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&Hout); eauto.
     assert (n_in x <> []) as Hnnul.
     { specialize (n_ingt0 x) as Hlt.
-      intro contra. rewrite contra in Hlt; simpl in Hlt.
-      eapply Lt.lt_irrefl; eauto. }
+      intro contra. rewrite contra in Hlt; simpl in Hlt. lia. }
     assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin
-        by (rewrite <-length_idty; congruence).
+        by (rewrite <-length_idfst; congruence).
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
-        by (rewrite <-length_idty; congruence).
+        by (now rewrite Len_outs, Hout, 2 length_idfst).
     eapply IOStep with (Spec_in_out:=or_introl Hnnul)
                        (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.
@@ -250,6 +260,6 @@ Proof.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&_); eauto.
     eapply Hwti in Hfind'. rewrite Hin. eauto.
   - clear - Hwt Comp'. unfold_l_to_nl Comp'.
-    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto 12 with lclocking.
+    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto 14 with lclocking.
   - eapply behavior_l_to_nl in Comp'; eauto.
 Qed.
