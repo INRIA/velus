@@ -979,7 +979,8 @@ Module Type LSEMDETERMINISM
     - inv H3. apply fst_InMembers in H; simpl_In.
       repeat (take (sem_var (var_history _) _ _) and apply sem_var_history in it).
       eapply Hck in it; eauto using Is_free_in_clock with senv.
-      eapply enums_of_detn; eauto.
+      eapply whenb_detn. 3,4:eauto. 1,2:eauto.
+      eapply IHck; eauto using Is_free_in_clock with senv.
   Qed.
 
   Lemma det_var_inv_mask : forall Γ n rs1 rs2 Hi1 Hi2 x,
@@ -1356,8 +1357,8 @@ Module Type LSEMDETERMINISM
 
       Variable sem_block : history -> history -> A -> Prop.
 
-      Inductive sem_scope_det (n : nat) (envS : list ident) : history -> history -> Stream bool -> Stream bool -> scope A -> Prop :=
-      | Sscope : forall Hi1 Hi2 Hi1' Hi2' bs1 bs2 locs blks,
+      Inductive sem_scope_det (n : nat) (envS : list ident) : history -> history -> scope A -> Prop :=
+      | Sscope : forall Hi1 Hi2 Hi1' Hi2' locs blks,
           dom Hi1' (senv_of_decls locs) ->
           dom Hi2' (senv_of_decls locs) ->
 
@@ -1365,7 +1366,7 @@ Module Type LSEMDETERMINISM
 
           (forall cx, det_var_inv (senv_of_decls locs) n Hi1' Hi2' cx) ->
           (forall cx, In cx envS -> det_var_inv (senv_of_decls locs) (S n) Hi1' Hi2' cx) ->
-          sem_scope_det n envS Hi1 Hi2 bs1 bs2 (Scope locs blks).
+          sem_scope_det n envS Hi1 Hi2 (Scope locs blks).
     End sem_scope.
 
     Section sem_branch.
@@ -1453,7 +1454,7 @@ Module Type LSEMDETERMINISM
                                             Forall (sem_block_det n envS Hi1 Hi2 bik1 bik2) (fst blks)
                                             /\ sem_transitions G Hi1 bik1 (snd blks) (tag, false) (fselect absent tag k stres1 stres11)
                                             /\ sem_transitions G Hi2 bik2 (snd blks) (tag, false) (fselect absent tag k stres2 stres12))
-                             n envS Hik1 Hik2 bik1 bik2 (snd blks))
+                             n envS Hik1 Hik2 (snd blks))
                         (fun x => Syn.Is_defined_in (Var x) (Bauto Weak ck (ini, oth) states))
                         (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in (Var x)) blks) (Var x) s)
                         n envS Hik1 Hik2 (snd state)) states ->
@@ -1490,14 +1491,14 @@ Module Type LSEMDETERMINISM
                       sem_branch_det
                         (fun blks =>
                            sem_scope_det (fun Hi1 Hi2 blks => Forall (sem_block_det n envS Hi1 Hi2 bik1 bik2) (fst blks))
-                             n envS Hik1 Hik2 bik1 bik2 (snd blks))
+                             n envS Hik1 Hik2 (snd blks))
                         (fun x => Syn.Is_defined_in (Var x) (Bauto Strong ck ([], ini) states))
                         (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in (Var x)) blks) (Var x) s)
                         n envS Hik1 Hik2 (snd state)) states ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bauto Strong ck ([], ini) states)
 
     | Sdetlocal : forall Hi1 Hi2 bs1 bs2 s,
-        sem_scope_det (fun Hi1 Hi2 => Forall (sem_block_det n envS Hi1 Hi2 bs1 bs2)) n envS Hi1 Hi2 bs1 bs2 s ->
+        sem_scope_det (fun Hi1 Hi2 => Forall (sem_block_det n envS Hi1 Hi2 bs1 bs2)) n envS Hi1 Hi2 s ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Blocal s).
 
     Ltac inv_branch :=
@@ -1509,7 +1510,7 @@ Module Type LSEMDETERMINISM
 
     Ltac inv_scope :=
       match goal with
-      | H:sem_scope_det _ _ _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
+      | H:sem_scope_det _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
       | _ => (Syn.inv_scope || Typ.inv_scope || Sem.inv_scope)
       end.
 
@@ -1520,11 +1521,11 @@ Module Type LSEMDETERMINISM
       end.
 
     Lemma sem_scope_det_0 {A} P_blk1 P_blk2 (P_blk3: _ -> _ -> _ -> Prop) :
-      forall locs (blks: A) Hi1 Hi2 bs1 bs2,
-        sem_scope P_blk1 Hi1 bs1 (Scope locs blks) ->
-        sem_scope P_blk2 Hi2 bs2 (Scope locs blks) ->
+      forall locs (blks: A) Hi1 Hi2,
+        sem_scope P_blk1 Hi1 (Scope locs blks) ->
+        sem_scope P_blk2 Hi2 (Scope locs blks) ->
         (forall Hi1 Hi2, P_blk1 Hi1 blks -> P_blk2 Hi2 blks -> P_blk3 Hi1 Hi2 blks) ->
-        sem_scope_det P_blk3 0 [] Hi1 Hi2 bs1 bs2 (Scope locs blks).
+        sem_scope_det P_blk3 0 [] Hi1 Hi2 (Scope locs blks).
     Proof.
       intros * Hsem1 Hsem2 Hblk.
       inv Hsem1. inv Hsem2.
@@ -1593,14 +1594,13 @@ Module Type LSEMDETERMINISM
 
     (* Go from n to n + 1 :) *)
     Lemma det_scope_S {A} P_nd P_wt f_idcaus P_blk1 (P_blk2: _ -> _ -> _ -> Prop) :
-      forall Γ n envS locs (blks: A) Hi1 Hi2 bs1 bs2,
+      forall Γ n envS locs (blks: A) Hi1 Hi2,
         det_nodes G ->
         NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
         wt_scope P_wt G Γ (Scope locs blks) ->
-        EqStN (S n) bs1 bs2 ->
         (forall cx, det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         incl (map snd (idcaus_of_scope f_idcaus (Scope locs blks))) envS ->
-        sem_scope_det P_blk1 n envS Hi1 Hi2 bs1 bs2 (Scope locs blks) ->
+        sem_scope_det P_blk1 n envS Hi1 Hi2 (Scope locs blks) ->
         (forall Γ Hi1 Hi2,
             P_nd (map fst Γ) blks ->
             P_wt Γ blks ->
@@ -1608,19 +1608,19 @@ Module Type LSEMDETERMINISM
             incl (map snd (f_idcaus blks)) envS ->
             P_blk1 Hi1 Hi2 blks ->
             P_blk2 Hi1 Hi2 blks) ->
-        sem_scope_det P_blk2 (S n) [] Hi1 Hi2 bs1 bs2 (Scope locs blks).
+        sem_scope_det P_blk2 (S n) [] Hi1 Hi2 (Scope locs blks).
     Proof.
-      intros * Hdet Hndl Hwt Hbs (* Hdoml1 Hdoml2  *)Hsc Hincl Hsem Hind; repeat inv_scope; subst Γ'; simpl in *.
+      intros * Hdet Hndl Hwt (* Hdoml1 Hdoml2  *)Hsc Hincl Hsem Hind; repeat inv_scope; subst Γ'; simpl in *.
       eapply Sscope with (Hi1':=Hi1') (Hi2':=Hi2'); eauto.
       - eapply Hind; eauto.
         + rewrite map_app, map_fst_senv_of_decls; auto.
         + intros. eapply det_var_inv_local with (Hi1':=Hi1'); eauto.
-          split; intros. 1,2:eapply H9; eauto; eapply Hincl.
+          split; intros. 1,2:eapply H7; eauto; eapply Hincl.
             1,2:repeat rewrite map_app, in_app_iff; left.
             1,2:clear - H; solve_In; try eapply idcaus_of_senv_In; eauto; auto.
         + etransitivity. 2:eapply Hincl.
           intros ??. rewrite map_app, in_app_iff; auto.
-      - simpl_Forall. split; intros. 1,2:eapply H9; eauto; eapply Hincl.
+      - simpl_Forall. split; intros. 1,2:eapply H7; eauto; eapply Hincl.
         1,2:repeat rewrite map_app, in_app_iff; left.
         1,2:clear - H; solve_In; try eapply idcaus_of_senv_In; eauto; auto.
       - simpl_Forall. intros * [].
@@ -1744,8 +1744,6 @@ Module Type LSEMDETERMINISM
         + intros. eapply det_var_inv_select. 2-4:eauto. eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
-        + apply EqStN_mask. 1,2:apply EqStN_fwhen; auto.
-          1-3:apply map_EqStN; auto.
         + instantiate (1:=fun '(blks, _) => flat_map idcaus_of_locals blks).
           etransitivity. 2:eapply Hincl. eapply incl_map.
           intros ??. eapply in_flat_map'. solve_Exists; auto with datatypes.
@@ -1797,8 +1795,6 @@ Module Type LSEMDETERMINISM
           * intros. eapply det_var_inv_select. 2-4:eauto. eauto.
           * etransitivity. 2:eapply Hincl.
             intros ??. simpl_In. solve_In.
-          * apply EqStN_mask. 1,2:apply EqStN_fwhen; auto.
-            1-3:apply map_EqStN; auto.
           * instantiate (1:=fun '(blks, _) => flat_map idcaus_of_locals blks).
             etransitivity. 2:eapply Hincl. eapply incl_map.
             intros ??. eapply in_flat_map'. solve_Exists; auto with datatypes.
@@ -1949,7 +1945,7 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Lemma det_scope_cons {A} f_idcaus P_nd P_wt (P_blk1 P_blk2 : _ -> _ -> _ -> Prop) P_vd P_ld P_def P_dep :
-      forall n envS locs (blks: A) Γ xs ls Hi1 Hi2 bs1 bs2 cy,
+      forall n envS locs (blks: A) Γ xs ls Hi1 Hi2 (bs1 bs2 : Stream bool) cy,
         det_nodes G ->
         NoDupMembers Γ ->
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_scope f_idcaus (Scope locs blks))) ->
@@ -1960,7 +1956,7 @@ Module Type LSEMDETERMINISM
         incl ls (map fst Γ) ->
         (forall cx, det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_scope P_wt G Γ (Scope locs blks) ->
-        sem_scope_det P_blk1 n envS Hi1 Hi2 bs1 bs2 (Scope locs blks) ->
+        sem_scope_det P_blk1 n envS Hi1 Hi2 (Scope locs blks) ->
         EqStN n bs1 bs2 ->
         (Is_defined_in_scope P_def Γ cy (Scope locs blks) -> EqStN (S n) bs1 bs2) ->
         (forall cx, depends_on_scope P_dep Γ cy cx (Scope locs blks) -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
@@ -1986,7 +1982,7 @@ Module Type LSEMDETERMINISM
             /\ P_blk2 Hi1 Hi2 blks) ->
         (forall y, In y xs -> HasCaus Γ y cy -> det_var (S n) Hi1 Hi2 (Var y))
         /\ (forall y, In y ls -> HasLastCaus Γ y cy -> det_var (S n) Hi1 Hi2 (Last y))
-        /\ sem_scope_det P_blk2 n (cy::envS) Hi1 Hi2 bs1 bs2 (Scope locs blks).
+        /\ sem_scope_det P_blk2 n (cy::envS) Hi1 Hi2 (Scope locs blks).
     Proof.
       intros * HdetG Hnd1 Hnd Hnd2 Hvd Hivd Hld Hild Hn Hwt Hsem Hbs HSbs HSn HenvS Hind;
         inv Hnd2; inv Hvd; inv Hld; inv Hwt; inv Hsem; subst Γ'; simpl in *.
@@ -2007,7 +2003,7 @@ Module Type LSEMDETERMINISM
       1:{ intros * Hdep. eapply det_var_inv_local; eauto.
           + intros. eapply HSn; eauto.
             econstructor; eauto.
-          + split; intros * In; eapply H17; eauto.
+          + split; intros * In; eapply H15; eauto.
             1,2:eapply HenvS; [|econstructor; eauto].
             1,2:eapply in_map_iff; do 2 esplit; [|apply in_app_iff; left; eapply idcaus_of_senv_In; eauto].
             1,2:auto.
@@ -2322,7 +2318,7 @@ Module Type LSEMDETERMINISM
                                      (fun Hi1 Hi2 blks => Forall (sem_block_det n (cy::envS) Hi1 Hi2 (fselectb e k stres1 bs1) (fselectb e k stres2 bs2)) (fst blks)
                                                        /\ sem_transitions G Hi1 (fselectb e k stres1 bs1) (snd blks) (e, false) (fselect absent e k stres1 stres11)
                                                        /\ sem_transitions G Hi2 (fselectb e k stres2 bs2) (snd blks) (e, false) (fselect absent e k stres2 stres12))
-                                     n (cy :: envS) Hi1' Hi2' (fselectb e k stres1 bs1) (fselectb e k stres2 bs2) (snd s))
+                                     n (cy :: envS) Hi1' Hi2' (snd s))
                                 (fun x => Syn.Is_defined_in (Var x) (Bauto Weak ck (ini0, oth) states))
                                 (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in (Var x)) blks) (Var x) s)
                                 n (cy :: envS) Hi1' Hi2' br)
@@ -2337,8 +2333,9 @@ Module Type LSEMDETERMINISM
             + eapply HSn; eauto. constructor. solve_Exists.
           - intros * Hin' Hdep. eapply HenvS; eauto.
             2:constructor; solve_Exists. solve_In.
-          - intros; simpl in *; destruct_conjs.
-            subst Γ0. eapply det_scope_cons in H31 as (?&?&?); eauto.
+          - intros; simpl in *; destruct_conjs. subst Γ0.
+            eapply det_scope_cons with (bs1:=fselectb _ _ _ bs1) (bs2:=fselectb _ _ _ bs2)
+              in H31 as (?&?&?); eauto.
             + instantiate (1:=fun '(blks, _) => flat_map idcaus_of_locals blks). eauto.
             + rewrite map_fst_replace_idcaus; eauto.
             + apply incl_nil'.
@@ -2454,7 +2451,7 @@ Module Type LSEMDETERMINISM
                                 (fun s =>
                                    sem_scope_det
                                      (fun Hi1 Hi2 blks => Forall (sem_block_det n (cy::envS) Hi1 Hi2 (fselectb e k stres11 bs1) (fselectb e k stres12 bs2)) (fst blks))
-                                     n (cy :: envS) Hi1' Hi2' (fselectb e k stres11 bs1) (fselectb e k stres12 bs2) (snd s))
+                                     n (cy :: envS) Hi1' Hi2' (snd s))
                                 (fun x => Syn.Is_defined_in (Var x) (Bauto Strong ck ([], oth) states))
                                 (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in (Var x)) blks) (Var x) s)
                                 n (cy :: envS) Hi1' Hi2' br)
@@ -2469,8 +2466,9 @@ Module Type LSEMDETERMINISM
             + eapply HSn; eauto. constructor. solve_Exists.
           - intros * Hin' Hdep. eapply HenvS; eauto.
             2:constructor; solve_Exists. solve_In.
-          - intros; simpl in *. destruct_conjs.
-            subst Γ0. eapply det_scope_cons in H29 as (DetV&DetL&Sem); eauto.
+          - intros; simpl in *. destruct_conjs. subst Γ0.
+            eapply det_scope_cons with (bs1:=fselectb _ _ stres11 bs1) (bs2:=fselectb _ _ _ bs2)
+              in H29 as (DetV&DetL&Sem); eauto.
             + instantiate (1:=fun '(blks, _) => flat_map idcaus_of_locals blks). eauto.
             + rewrite map_fst_replace_idcaus; eauto.
             + apply incl_nil'.

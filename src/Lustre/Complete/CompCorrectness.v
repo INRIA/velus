@@ -136,7 +136,7 @@ Module Type COMPCORRECTNESS
             eapply Is_defined_in_wx_In in In; eauto. }
           do 2 econstructor. 1,2:simpl; repeat (constructor; eauto).
           1,2:eapply sem_var_union2; [eauto|].
-          1,2:contradict nInM; apply H21 in nInM; clear - nInM; inv nInM; solve_In.
+          1,2:contradict nInM; apply H20 in nInM; clear - nInM; inv nInM; solve_In.
         + eapply H with (Γ:=Γ++senv_of_decls locs); eauto.
           * now rewrite map_app, map_fst_senv_of_decls.
         + eauto using sem_ref_sem_transitions.
@@ -171,7 +171,7 @@ Module Type COMPCORRECTNESS
             eapply Is_defined_in_wx_In in In; eauto. }
           do 2 econstructor. 1,2:simpl; repeat (constructor; eauto).
           1,2:eapply sem_var_union2; [eauto|].
-          1,2:contradict nInM; apply H20 in nInM; clear - nInM; inv nInM; solve_In.
+          1,2:contradict nInM; apply H19 in nInM; clear - nInM; inv nInM; solve_In.
         + eapply H with (Γ:=Γ++senv_of_decls locs); eauto.
           * now rewrite map_app, map_fst_senv_of_decls.
         + intros * Def NDef.

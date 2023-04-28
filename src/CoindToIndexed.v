@@ -190,15 +190,13 @@ Module Type COINDTOINDEXED
       intros * Hsemck n. revert dependent bs.
       induction ck; intros * Hsemck.
       - inv Hsemck. rewrite H1. constructor.
-      - inv Hsemck. apply IHck in H4.
-        apply sem_var_impl in H7. specialize (H7 n).
-        apply eqst_ntheq with (n:=n) in H9. rewrite ac_nth in H9.
-        repeat rewrite tr_Stream_nth in *. rewrite <-H9 in *.
-        apply enums_of_nth with (n:=n) in H10 as [(Hx&Hb)|[(Hx&Hb)|(?&Hx&?&Hb)]];
-          rewrite Hx in *; rewrite Hb.
-        + setoid_rewrite Hx in H4. constructor; auto.
-        + setoid_rewrite Hx in H4. constructor; auto.
-        + setoid_rewrite Hx in H4. eapply Son_abs2; eauto.
+      - inv Hsemck. apply IHck in H6.
+        apply sem_var_impl in H8. specialize (H8 n).
+        repeat rewrite tr_Stream_nth in *.
+        apply whenb_nth with (n:=n) in H9 as [(Hb&Hx&Hy)|[(?&Hb&Hx&?&Hy)|(Hb&Hx&Hy)]];
+          rewrite Hb in *; rewrite Hx in *; rewrite Hy in *.
+        1,3:constructor; auto.
+        eapply Son_abs2; eauto.
     Qed.
     Global Hint Resolve sem_clock_impl : indexedstreams coindstreams nlsem.
 

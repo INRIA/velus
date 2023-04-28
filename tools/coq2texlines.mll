@@ -99,6 +99,7 @@ let def_start =
   | ("Program" space+)? ("Definition" | "Fixpoint")
   | "Theorem" | "Lemma" | "Fact" | "Remark" | "Goal" | "Corollary"
   | "Module" (space+ "Type")?
+  | "Axiom" | "Conjecture" | "Parameter"
 let inductive_start =
   "Inductive" | "CoInductive"
 let admin_start =
@@ -108,7 +109,7 @@ let proof_start_anon =
   "Obligation" space+ (['0' - '9'])+ | "Next" space+ "Obligation"
   ("Save" | "Qed" | "Defined" | "Abort" | "Admitted") [^'.']* '.'
 let assumption_start =
-  "Axiom" | "Conjecture" | "Parameter" | "Hypothesis" | "Variable" | "Context"
+  "Hypothesis" | "Variable" | "Context"
   | "Let" (* not sure *)
 let tac_start =
   ("Local" space+)?
