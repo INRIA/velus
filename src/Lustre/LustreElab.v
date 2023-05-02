@@ -412,8 +412,8 @@ Section ElabSclock.
       | None => OK (tt, (nid, Env.add id sck sub1'))
       end.
 
-  (** Apply the current substitution in a clock *)
-  Fixpoint update_sclock (sck : sclock) : Elab sclock :=
+  (** Apply the current substitution to a clock *)
+  Fixpoint subst_sclock (sck : sclock) : Elab sclock :=
     match sck with
     | Sbase => ret Sbase
     | Svar x =>
@@ -423,13 +423,13 @@ Section ElabSclock.
       | None => ret (Svar x)
       end
     | Son sck' x b =>
-      do sck' <- update_sclock sck';
+      do sck' <- subst_sclock sck';
       ret (Son sck' x b)
     end.
 
-  Definition update_ann (a : (type * sclock)) : Elab (type * sclock) :=
+  Definition subst_ann (a : (type * sclock)) : Elab (type * sclock) :=
     let '(ty, ck) := a in
-    do ck' <- update_sclock ck;
+    do ck' <- subst_sclock ck;
     ret (ty, ck').
 
   Definition unify_ident loc (id1 id2 : ident) : Elab unit :=
@@ -438,14 +438,14 @@ Section ElabSclock.
 
   (** Unify two clocks *)
   Definition unify_sclock (loc : astloc) (ck1 ck2 : sclock) : Elab unit :=
-    do ck1 <- update_sclock ck1;
-    do ck2 <- update_sclock ck2;
+    do ck1 <- subst_sclock ck1;
+    do ck2 <- subst_sclock ck2;
     (fix aux ck1 ck2 :=
        match ck1, ck2 with
        | Sbase, Sbase => ret tt
        | Svar x, ck
        | ck, Svar x =>
-         do ck <- update_sclock ck;
+         do ck <- subst_sclock ck;
          add_to_clock_subst x ck
        | Son ck1 id1 (ty1, k1), Son ck2 id2 (ty2, k2) =>
          if (k1 =? k2) && (ty1 ==b ty2) then
@@ -804,43 +804,22 @@ Section ElabExpressions.
     do sck <- inst_clock loc base sub ck;
     ret (ty, sck).
 
-  Definition inst_nannot (loc: astloc) (base: sclock) (sub : Env.t ident)
-             (xtc: ident * (type * clock)) : Elab (type * nsclock) :=
-    let '(x, (ty, ck)) := xtc in
-    do sck <- inst_clock loc base sub ck;
-    match (Env.find x sub) with
-    | None => ret (ty, (sck, None))
-    | Some x => ret (ty, (sck, Some x))
-    end.
-
-  Definition unify_nclock' (loc : astloc) (nck1 : nsclock) (nck2 : nsclock) : Elab unit :=
-    let '(ck1, id1) := nck1 in let '(ck2, id2) := nck2 in
-    do _ <- unify_sclock tenv loc ck1 ck2;
-    match id1, id2 with
-    | Some id1, Some id2 =>
-      unify_ident loc id1 id2
-    | _, _ => ret tt
-    end.
-
-  Fixpoint unify_inputs (gloc: astloc)
-                        (iface: list (type * nsclock))
+  Fixpoint unify_params (gloc: astloc)
+                        (iface: list (type * sclock))
                         (args: list ((type * nsclock) * astloc)) : Elab unit :=
     match iface, args with
     | nil, nil => ret tt
     | nil, _ => err_loc gloc (msg "too many arguments")
     | _, nil => err_loc gloc (msg "not enough arguments")
 
-    | (ty, nck)::iface', ((ty', nck'), loc)::args' =>
+    | (ty, ck)::iface', ((ty', (ck', _)), loc)::args' =>
       do _ <- assert_type' loc ty' ty;
-      do _ <- unify_nclock' loc nck' nck;
-      unify_inputs gloc iface' args'
+      do _ <- unify_sclock tenv loc ck' ck;
+      unify_params gloc iface' args'
     end.
 
   Definition discardloc (ann : (type * sclock * astloc)) : (type * sclock) :=
     let '(ty, ck, _) := ann in (ty, ck).
-
-  Definition discardname (ann : (type * nsclock)) : (type * sclock) :=
-    let '(ty, (ck, _)) := ann in (ty, ck).
 
   Definition assert_reset_type '(er, loc) :=
     do (erty, _) <- single_annot loc er;
@@ -939,7 +918,7 @@ Section ElabExpressions.
       do es <- mmap elab_exp aes;
       let ans0 := lannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lannots es);
-      do ans0 <- mmap update_ann (map discardloc ans0);
+      do ans0 <- mmap subst_ann (map discardloc ans0);
       ret (Efby (map fst e0s) (map fst es) ans0, loc)
 
     | ARROW ae0s aes loc =>
@@ -947,7 +926,7 @@ Section ElabExpressions.
       do es <- mmap elab_exp aes;
       let ans0 := lannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lannots es);
-      do ans0 <- mmap update_ann (map discardloc ans0);
+      do ans0 <- mmap subst_ann (map discardloc ans0);
       ret (Earrow (map fst e0s) (map fst es) ans0, loc)
 
     | WHEN aes' x c loc =>
@@ -998,9 +977,9 @@ Section ElabExpressions.
           let nanns := lnannots eas in
           let sub := instantiating_subst (map fst tyck_in) (map (fun '(_, (_, x), _) => x) nanns) in
           do xbase <- fresh_ident;
-          do ianns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_in;
+          do ianns <- mmap (inst_annot loc (Svar xbase) sub) tyck_in;
           do oanns <- mmap (inst_annot loc (Svar xbase) sub) tyck_out;
-          do _ <- unify_inputs loc ianns nanns;
+          do _ <- unify_params loc ianns nanns;
           ret (Eapp f (map fst eas) (map fst er) oanns, loc)
       | External tyins tyout =>
           do _ <- check_noreset loc aer;
@@ -1013,7 +992,7 @@ Section ElabExpressions.
     end.
 
   Definition freeze_clock (sck : sclock) : Elab clock :=
-    do sck <- update_sclock sck;
+    do sck <- subst_sclock sck;
     ret (sclk' sck).
 
   Definition freeze_ann (tc : ann) : Elab Syn.ann :=
@@ -1120,13 +1099,13 @@ Section ElabExpressions.
 
   Fixpoint unify_npat (gloc: astloc)
                      (xs: list ident)
-                     (anns: list ((type * nsclock))) : Elab unit :=
+                     (anns: list ((type * sclock))) : Elab unit :=
     match xs, anns with
     | nil, nil => ret tt
-    | x::xs', ((ty, ck))::anns' =>
+    | x::xs', (ty, ck)::anns' =>
       do (xty, xck) <- find_var gloc x;
       do _ <- assert_id_type gloc x xty ty;
-      do _ <- unify_nclock tenv gloc x xck ck;
+      do _ <- unify_sclock tenv gloc xck ck;
       unify_npat gloc xs' anns'
     | nil, _ => err_loc gloc (msg "too few variables on lhs of equation.")
     | _, nil => err_loc gloc (msg "too many variables on lhs of equation.")
@@ -1151,13 +1130,13 @@ Section ElabExpressions.
                        (map fst (tyck_in++tyck_out))
                        (map (fun '(_, (_, x), _) => x) anns++map Some xs) in
           do xbase <- fresh_ident;
-          do ianns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_in;
-          do oanns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_out;
-          do _ <- unify_inputs loc ianns anns;
+          do ianns <- mmap (inst_annot loc (Svar xbase) sub) tyck_in;
+          do oanns <- mmap (inst_annot loc (Svar xbase) sub) tyck_out;
+          do _ <- unify_params loc ianns anns;
           do _ <- unify_npat loc xs oanns;
           (* freeze everything *)
 
-          do e' <- freeze_exp (Eapp f (map fst eas) (map fst er) (map discardname oanns));
+          do e' <- freeze_exp (Eapp f (map fst eas) (map fst er) oanns);
           ret (xs, [e'])
       | _ =>
           do es' <- mmap elab_exp es;
