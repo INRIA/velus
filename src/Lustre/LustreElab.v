@@ -127,48 +127,10 @@ Definition msg_of_enum_type (ty: type) : errmsg :=
 Definition msg_of_primitive_type (ty: type) : errmsg :=
   MSG "primitive type expected but got '" :: MSG (string_of_type ty) :: msg "'".
 
-(* Used for unification *)
-Inductive sident :=
-| Vnm : ident -> sident
-| Vidx : ident -> sident.
-
 Inductive sclock :=
 | Sbase : sclock
 | Svar : ident -> sclock
-| Son : sclock -> sident -> (type * enumtag) -> sclock.
-
-Definition sident_eq (id1 id2 : sident) : bool :=
-  match id1, id2 with
-  | Vnm id1, Vnm id2
-  | Vidx id1, Vidx id2 => ident_eqb id1 id2
-  | _, _ => false
-  end.
-
-Lemma sident_eq_spec:
-  forall id1 id2,
-    sident_eq id1 id2 = true <-> id1 = id2.
-Proof.
-  intros *; split; intro HH; auto;
-    destruct id1, id2; simpl in *;
-      try now inversion HH.
-  1,2,3,4:rewrite ident_eqb_eq in *; congruence.
-Qed.
-
-Local Instance sident_EqDec : EqDec sident eq.
-Proof.
-  intros id1 id2. compute.
-  pose proof (sident_eq_spec id1 id2) as Heq.
-  destruct (sident_eq id1 id2); [left|right].
-  now apply Heq.
-  intro HH. apply Heq in HH.
-  discriminate.
-Qed.
-
-Lemma sident_eqb_eq :
-  forall (x y: sident), x ==b y = true <-> x = y.
-Proof.
-  setoid_rewrite equiv_decb_equiv; reflexivity.
-Qed.
+| Son : sclock -> ident -> (type * enumtag) -> sclock.
 
 Fixpoint sclock_eq (ck1 ck2: sclock) : bool :=
   match ck1, ck2 with
@@ -194,16 +156,16 @@ Proof.
     destruct Heq as (Heq & Hc).
     apply andb_prop in Heq.
     destruct Heq as (Hi & Hb).
-    apply sident_eqb_eq in Hi.
-    rewrite equiv_decb_equiv in Hb.
+    rewrite equiv_decb_equiv in Hi. inv Hi.
+    rewrite equiv_decb_equiv in Hb. inv Hb.
     apply IHck1 in Hc.
-    subst. rewrite Hb. reflexivity.
+    subst. reflexivity.
   - inversion HH as [Heq].
     subst. simpl.
     rewrite Bool.andb_true_iff.
     split. 2:now apply IHck1.
     rewrite Bool.andb_true_iff.
-    split. now apply sident_eqb_eq.
+    split. now apply equiv_decb_equiv.
     now apply equiv_decb_equiv.
 Qed.
 
@@ -226,17 +188,16 @@ Qed.
 Fixpoint sclk (ck : clock) : sclock :=
   match ck with
   | Cbase => Sbase
-  | Con ck' x b => Son (sclk ck') (Vnm x) b
+  | Con ck' x b => Son (sclk ck') x b
   end.
 
 Fixpoint sclk' (ck : sclock) : clock :=
   match ck with
   | Sbase | Svar _ => Cbase
-  | Son ck' (Vnm x) b
-  | Son ck' (Vidx x) b => Con (sclk' ck') x b
+  | Son ck' x b => Con (sclk' ck') x b
   end.
 
-Definition nsclock := (sclock * option sident)%type.
+Definition nsclock := (sclock * option ident)%type.
 Definition stripname (nck : nsclock) := (fst nck).
 
 Definition ann : Type := (type * sclock)%type.
@@ -266,12 +227,6 @@ Inductive const_annot :=
 | ConstA: cconst -> const_annot
 | EnumA: enumtag -> (ident * list ident) -> const_annot.
 
-Definition msg_of_sident (id : sident) : errmsg :=
-  match id with
-  | Vnm x => CTX x :: nil
-  | Vidx x => MSG "?c" :: POS x :: nil
-  end.
-
 Fixpoint msg_ident_list (xs: list ident) :=
   match xs with
   | [] => []
@@ -283,10 +238,10 @@ Fixpoint msg_ident_list (xs: list ident) :=
 Section ElabMonad.
   Context {A : Type}.
 
-  Definition elab_state : Type := (ident * Env.t sclock * Env.t sident).
+  Definition elab_state : Type := (ident * Env.t sclock).
   Definition Elab A := elab_state -> res (A * elab_state).
 
-  Definition init_state : elab_state := (xH, Env.empty _, Env.empty _).
+  Definition init_state : elab_state := (xH, Env.empty _).
 
   Definition ret (x : A) : Elab A := fun st => OK (x, st).
 
@@ -312,9 +267,9 @@ Section ElabMonad.
     error (err_loc' loc m).
 
   Definition fresh_ident : Elab ident :=
-    fun '(n, sub1, sub2) =>
+    fun '(n, sub1) =>
       let id := Ids.gensym Ids.elab None n in
-      OK (id, (Pos.succ n, sub1, sub2)).
+      OK (id, (Pos.succ n, sub1)).
 
   (** Substitution functions *)
 
@@ -326,12 +281,6 @@ Section ElabMonad.
     | Son sck _ _ => occurs id sck
     end.
 
-  Definition subst_in_sident (id : ident) (sid1 sid2 : sident) :=
-    match sid2 with
-    | Vnm _ => sid2
-    | Vidx x => if x ==b id then sid1 else sid2
-    end.
-
   (** Substitute `ck` to `id` in `sck` *)
   Fixpoint subst_in_sclock (id : ident) (ck sck : sclock) :=
     match sck with
@@ -340,19 +289,8 @@ Section ElabMonad.
     | Son sck ckid b => Son (subst_in_sclock id ck sck) ckid b
     end.
 
-  (** Substitute `sid` to `id` in `sck` *)
-  Fixpoint subst_ident_in_sclock id sid sck :=
-    match sck with
-    | Sbase | Svar _ => sck
-    | Son sck x b =>
-      Son (subst_ident_in_sclock id sid sck) (subst_in_sident id sid x) b
-    end.
-
   Definition subst_clock (id : ident) : Elab (option sclock) :=
-    fun st => let '(_, sub1, _) := st in OK (Env.find id sub1, st).
-
-  Definition subst_ident (id : ident) : Elab (option sident) :=
-    fun st => let '(_, _, sub2) := st in OK (Env.find id sub2, st).
+    fun st => let '(_, sub1) := st in OK (Env.find id sub1, st).
 
   Lemma bind_inv {B} : forall (x : Elab A) (f : A -> Elab B) res st,
       (bind x f) st = OK res ->
@@ -459,43 +397,20 @@ Section ElabSclock.
     | Svar x         => CTX x :: nil
     | Son ck id (Tenum t _, c) =>
       msg_of_sclock ck ++ MSG " on " :: msg_of_enumtag t c
-                    :: MSG "(" :: msg_of_sident id ++ MSG ")" :: nil
+                    :: MSG "(" :: CTX id :: MSG ")" :: nil
     | _ => msg ""
     end.
 
   (** Add a new association to the substitution *)
   Definition add_to_clock_subst (id : ident) (sck : sclock) : Elab unit :=
-    fun '(nid, sub1, sub2) =>
+    fun '(nid, sub1) =>
       let sub1' := Env.map (subst_in_sclock id sck) sub1 in
       match Env.find id sub1' with
-      | Some sck' => if sck' ==b sck then OK (tt, (nid, sub1', sub2))
+      | Some sck' => if sck' ==b sck then OK (tt, (nid, sub1'))
                     else Error (MSG "Imcompatibility in subst : " :: msg_of_sclock sck ++ MSG " and "
                                     :: msg_of_sclock sck' ++ nil)
-      | None => OK (tt, (nid, Env.add id sck sub1', sub2))
+      | None => OK (tt, (nid, Env.add id sck sub1'))
       end.
-
-  Definition add_to_ident_subst (id : ident) (id' : sident) : Elab unit :=
-    fun '(nid, sub1, sub2) =>
-      let sub1 := Env.map (subst_ident_in_sclock id id') sub1 in
-      let sub2' := Env.map (subst_in_sident id id') sub2 in
-      match Env.find id sub2' with
-      | Some id'' => if id'' ==b id' then OK (tt, (nid, sub1, sub2'))
-                    else Error (MSG "Imcompatibility in subst : " :: msg_of_sident id'
-                                    ++ MSG " and " :: msg_of_sident id'')
-      | None => OK (tt, (nid, sub1, Env.add id id' sub2'))
-      end.
-
-  (** Apply the current substitution to an ident *)
-  Definition update_sident (sid : sident) : Elab sident :=
-    match sid with
-    | Vnm _ => ret sid
-    | Vidx x =>
-      do x' <- subst_ident x;
-      match x' with
-      | None => ret sid
-      | Some x' => ret x'
-      end
-    end.
 
   (** Apply the current substitution in a clock *)
   Fixpoint update_sclock (sck : sclock) : Elab sclock :=
@@ -509,7 +424,6 @@ Section ElabSclock.
       end
     | Son sck' x b =>
       do sck' <- update_sclock sck';
-      do x <- update_sident x;
       ret (Son sck' x b)
     end.
 
@@ -518,17 +432,9 @@ Section ElabSclock.
     do ck' <- update_sclock ck;
     ret (ty, ck').
 
-  (** Unify two sident *)
-  Definition unify_sident loc (sid1 sid2 : sident) : Elab unit :=
-    do sid1 <- update_sident sid1;
-    do sid2 <- update_sident sid2;
-    match sid1, sid2 with
-    | Vnm id1, Vnm id2 =>
-      if id1 ==b id2 then ret tt
-      else err_loc loc (MSG "Ident unification error : " :: CTX id1 :: MSG ", " :: CTX id2 :: nil)
-    | Vidx id, sid
-    | sid, Vidx id => add_to_ident_subst id sid
-    end.
+  Definition unify_ident loc (id1 id2 : ident) : Elab unit :=
+    if id1 ==b id2 then ret tt
+    else err_loc loc (MSG "Mismatched idents in clock unification: " :: CTX id1 :: MSG ", " :: CTX id2 :: nil).
 
   (** Unify two clocks *)
   Definition unify_sclock (loc : astloc) (ck1 ck2 : sclock) : Elab unit :=
@@ -543,8 +449,8 @@ Section ElabSclock.
          add_to_clock_subst x ck
        | Son ck1 id1 (ty1, k1), Son ck2 id2 (ty2, k2) =>
          if (k1 =? k2) && (ty1 ==b ty2) then
-           do _ <- aux ck1 ck2;
-           unify_sident loc id1 id2
+           do _ <- unify_ident loc id1 id2;
+           aux ck1 ck2
          else err_loc loc (MSG "Clock unification error : " :: msg_of_sclock ck1 ++ MSG ", " ::
                                msg_of_sclock ck2)
        | _, _ => err_loc loc (MSG "Clock unification error : " :: msg_of_sclock ck1 ++ MSG ", " ::
@@ -557,7 +463,7 @@ Section ElabSclock.
     match id2 with
     | None => ret tt
     | Some id2 =>
-      unify_sident loc (Vnm id1) id2
+      unify_ident loc id1 id2
     end.
 
 End ElabSclock.
@@ -801,7 +707,7 @@ Section ElabExpressions.
     match e with
     | Econst c ck => [((Tprimitive (ctype_cconst c), (ck, None)), loc)]
     | Eenum _ ty ck => [((ty, (ck, None)), loc)]
-    | Evar x (ty, ck) => [((ty, (ck, Some (Vnm x))), loc)]
+    | Evar x (ty, ck) => [((ty, (ck, Some x)), loc)]
     | Elast _ (ty, ck) => [((ty, (ck, None)), loc)]
     | Eunop _ _ (ty, ck)
     | Ebinop _ _ _ (ty, ck) => [((ty, (ck, None)), loc)]
@@ -878,9 +784,8 @@ Section ElabExpressions.
     | _, _ => err_loc gloc (msg "arguments are of different lengths")
     end.
 
-  Definition instantiating_subst (xtc : list (ident * (type * clock))) : Elab (Env.t ident) :=
-    do xs <- mmap (fun '(x, _) => do x' <- fresh_ident; ret (x, x')) xtc;
-    ret (Env.from_list xs).
+  Definition instantiating_subst (xtc : list ident) (nanns : list (option ident)) :=
+    Env.adds_opt xtc nanns (Env.empty _).
 
   Fixpoint inst_clock (loc: astloc) (base: sclock) (sub : Env.t ident) (ck: clock) : Elab sclock :=
     match ck with
@@ -888,10 +793,8 @@ Section ElabExpressions.
     | Con ck' x b =>
       do sck' <- inst_clock loc base sub ck';
       match Env.find x sub with
-      | None => err_loc loc
-                       (MSG "Clock depends on output " :: CTX x ::
-                            msg ". Dependencies between clock outputs are only permitted when node instantiation is the root of the expression.")
-      | Some ni => ret (Son sck' (Vidx ni) b)
+      | None => err_loc loc (msg "Clocks of node calls may only depend on named variables of the caller")
+      | Some ni => ret (Son sck' ni b)
       end
     end.
 
@@ -907,7 +810,7 @@ Section ElabExpressions.
     do sck <- inst_clock loc base sub ck;
     match (Env.find x sub) with
     | None => ret (ty, (sck, None))
-    | Some x => ret (ty, (sck, Some (Vidx x)))
+    | Some x => ret (ty, (sck, Some x))
     end.
 
   Definition unify_nclock' (loc : astloc) (nck1 : nsclock) (nck2 : nsclock) : Elab unit :=
@@ -915,7 +818,7 @@ Section ElabExpressions.
     do _ <- unify_sclock tenv loc ck1 ck2;
     match id1, id2 with
     | Some id1, Some id2 =>
-      unify_sident loc id1 id2
+      unify_ident loc id1 id2
     | _, _ => ret tt
     end.
 
@@ -1054,12 +957,12 @@ Section ElabExpressions.
       let ans' := lannots eas' in
       do _ <- unify_same_clock xck ans';
       ret (Ewhen (map fst eas') (x, xty) c
-                 (lannots_ty ans', Son xck (Vnm x) (Tenum (fst tn') (snd tn'), c)), loc)
+                 (lannots_ty ans', Son xck x (Tenum (fst tn') (snd tn'), c)), loc)
 
     | MERGE x aes loc =>
       do (xty, sck) <- find_var loc x;
       do tn <- assert_enum_type loc x xty;
-      do (eas, tys) <- elab_branches loc tn true elab_exp (fun c => Son sck (Vnm x) (xty, c))
+      do (eas, tys) <- elab_branches loc tn true elab_exp (fun c => Son sck x (xty, c))
                                     aes;
       ret (Emerge (x, Tenum (fst tn) (snd tn)) eas (lannots_ty tys, sck), loc)
 
@@ -1092,11 +995,11 @@ Section ElabExpressions.
           do er <- mmap elab_exp aer;
           do _ <- mmap assert_reset_type er;
           (* instantiate annotations *)
-          do sub <- instantiating_subst (tyck_in(* ++tyck_out *));
+          let nanns := lnannots eas in
+          let sub := instantiating_subst (map fst tyck_in) (map (fun '(_, (_, x), _) => x) nanns) in
           do xbase <- fresh_ident;
           do ianns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_in;
           do oanns <- mmap (inst_annot loc (Svar xbase) sub) tyck_out;
-          let nanns := lnannots eas in
           do _ <- unify_inputs loc ianns nanns;
           ret (Eapp f (map fst eas) (map fst er) oanns, loc)
       | External tyins tyout =>
@@ -1107,13 +1010,6 @@ Section ElabExpressions.
           do _ <- unify_same_clock xck anns;
           ret (Eextcall f (map fst eas) (tyout, xck), loc)
       end
-    end.
-
-  Definition freeze_ident (sid : sident) : Elab ident :=
-    do sid <- update_sident sid;
-    match sid with
-    | Vnm x => ret x
-    | Vidx x => error (MSG "Variable " :: CTX x :: MSG " escapes its scope" :: nil)
     end.
 
   Definition freeze_clock (sck : sclock) : Elab clock :=
@@ -1251,7 +1147,9 @@ Section ElabExpressions.
           do _ <- mmap assert_reset_type er;
           (* instantiate annotations *)
           let anns := lnannots eas in
-          do sub <- instantiating_subst (tyck_in++tyck_out);
+          let sub := instantiating_subst
+                       (map fst (tyck_in++tyck_out))
+                       (map (fun '(_, (_, x), _) => x) anns++map Some xs) in
           do xbase <- fresh_ident;
           do ianns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_in;
           do oanns <- mmap (inst_nannot loc (Svar xbase) sub) tyck_out;
@@ -2398,7 +2296,7 @@ Section ElabDeclaration.
            then err_loc loc (msg "not enough inputs or outputs")
            else ret (xin, xout, blk)) init_state with
     | Error e => Error e
-    | OK ((xin, xout, blk), ((nfui, _), _)) =>
+    | OK ((xin, xout, blk), (nfui, _)) =>
       OK {| n_name     := name;
             n_hasstate := has_state;
             n_in       := idfst xin;
