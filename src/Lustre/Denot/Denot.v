@@ -675,66 +675,66 @@ Proof.
   now apply mem_ident_spec in Hmem.
 Qed.
 
-Definition denot_equation (ins : list ident) (e : equation) :
-  Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
-  destruct e as (xs,es).
-  pose proof (ss := denot_exps_ (denot_exp_ ins) es).
-  apply curry, curry, curry, Dprodi_DISTR.
-  intro x.
-  destruct (mem_ident x ins).
-  (* si x est une entrée *)
-  exact (PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _).
-  (* sinon on le prend dans les ss *)
-  exact (PROJ (DS_fam SI) x @_ env_of_np xs @_ ss).
-Defined.
+(* Definition denot_equation (ins : list ident) (e : equation) : *)
+(*   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI. *)
+(*   destruct e as (xs,es). *)
+(*   pose proof (ss := denot_exps_ (denot_exp_ ins) es). *)
+(*   apply curry, curry, curry, Dprodi_DISTR. *)
+(*   intro x. *)
+(*   destruct (mem_ident x ins). *)
+(*   (* si x est une entrée *) *)
+(*   exact (PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _). *)
+(*   (* sinon on le prend dans les ss *) *)
+(*   exact (PROJ (DS_fam SI) x @_ env_of_np xs @_ ss). *)
+(* Defined. *)
 
-Section Equation_spec.
+(* Section Equation_spec. *)
 
-Lemma denot_equation_Oeq :
-  forall ins xs es envG envI bs env,
-    denot_equation ins (xs,es) envG envI bs env
-    == denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)).
-Proof.
-  intros.
-  apply Oprodi_eq_intro; intro x.
-  unfold denot_equation, denot_var.
-  Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
-  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  cases.
-Qed.
+(* Lemma denot_equation_Oeq : *)
+(*   forall ins xs es envG envI bs env, *)
+(*     denot_equation ins (xs,es) envG envI bs env *)
+(*     == denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)). *)
+(* Proof. *)
+(*   intros. *)
+(*   apply Oprodi_eq_intro; intro x. *)
+(*   unfold denot_equation, denot_var. *)
+(*   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb. *)
+(*   autorewrite with cpodb using (simpl (snd _); simpl (fst _)). *)
+(*   cases. *)
+(* Qed. *)
 
-(* parfois plut utile car c'est une égalité *)
-Lemma denot_equation_eq :
-  forall ins xs es envG envI bs env x,
-    denot_equation ins (xs,es) envG envI bs env x
-    = denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)) x.
-Proof.
-  intros.
-  unfold denot_equation, denot_var.
-  Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
-  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  cases.
-Qed.
+(* (* parfois plut utile car c'est une égalité *) *)
+(* Lemma denot_equation_eq : *)
+(*   forall ins xs es envG envI bs env x, *)
+(*     denot_equation ins (xs,es) envG envI bs env x *)
+(*     = denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)) x. *)
+(* Proof. *)
+(*   intros. *)
+(*   unfold denot_equation, denot_var. *)
+(*   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb. *)
+(*   autorewrite with cpodb using (simpl (snd _); simpl (fst _)). *)
+(*   cases. *)
+(* Qed. *)
 
-Global Opaque denot_equation.
+(* Global Opaque denot_equation. *)
 
-Lemma denot_equation_input :
-  forall e ins envG envI bs env x,
-    wl_equation G e ->
-    In x ins ->
-    denot_equation ins e envG envI bs env x = envI x.
-Proof.
-  intros * Hwt Hx.
-  apply mem_ident_spec in Hx.
-  destruct e as (xs,es).
-  destruct Hwt as [? Hwt].
-  rewrite annots_numstreams in Hwt.
-  rewrite denot_equation_eq.
-  unfold denot_var.
-  cases; congruence.
-Qed.
+(* Lemma denot_equation_input : *)
+(*   forall e ins envG envI bs env x, *)
+(*     wl_equation G e -> *)
+(*     In x ins -> *)
+(*     denot_equation ins e envG envI bs env x = envI x. *)
+(* Proof. *)
+(*   intros * Hwt Hx. *)
+(*   apply mem_ident_spec in Hx. *)
+(*   destruct e as (xs,es). *)
+(*   destruct Hwt as [? Hwt]. *)
+(*   rewrite annots_numstreams in Hwt. *)
+(*   rewrite denot_equation_eq. *)
+(*   unfold denot_var. *)
+(*   cases; congruence. *)
+(* Qed. *)
 
-End Equation_spec.
+(* End Equation_spec. *)
 
 (* (* 1ère version : construction directe de l'environnement en parcourant *)
 (*  l'équation *) *)
@@ -788,10 +788,65 @@ End Equation_spec.
 (*           * exact (SND _ _). *)
 (*     Defined. *)
 
+(** [env_of_np_ext xs ss env] binds xs to ss in env *)
+Definition env_of_np_ext (l : list ident) {n} : nprod n -C-> DS_prod SI -C-> DS_prod SI :=
+  curry (Dprodi_DISTR _ _ _
+           (fun x => match mem_nth l x with
+                  | Some n => get_nth n errTy @_ FST _ _
+                  | None => PROJ _ x @_ SND _ _
+                  end)).
+
+(* signature : envG -> envI -> bs -> env -> env_acc -> env
+    on utilise les 4 premiers arguments pour évaluer les expressions,
+    et on ajoute les nouvelles associations à l'accumulateur *)
 Definition denot_block (ins : list ident) (b : block) :
+  Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
+  curry (curry (curry (curry
+    match b with
+    | Beq (xs,es) => ((env_of_np_ext xs @2_
+                        uncurry (uncurry (uncurry (denot_exps ins es))) @_ FST _ _)
+                       (SND _ _))
+    | _ =>  SND _ _ (* garder l'accumulateur *)
+    end))).
+
+Lemma denot_block_eq :
+  forall ins b envG envI bs env env_acc,
+    denot_block ins b envG envI bs env env_acc
+    = match b with
+      | Beq (xs,es) => env_of_np_ext xs (denot_exps ins es envG envI bs env) env_acc
+      | _ => env_acc
+      end.
+Proof.
+  unfold denot_block; intros; cases.
+Qed.
+
+(* un genre de (fold denot_block) sur blks *)
+Definition denot_blocks (ins : list ident) (blks : list block) :
+  (*  envG -> envI -> bs -> env -> env *)
+  Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
+  apply curry, curry, curry.
+  revert blks; fix denot_blocks 1.
+  intros [| blk blks].
+  - apply SND. (* accumulateur initial : env *)
+  - refine ((ID _ @2_ uncurry (uncurry (uncurry (denot_block ins blk)))) (denot_blocks blks)).
+Defined.
+
+Lemma denot_blocks_eq :
+  forall ins envG envI bs env blks,
+    denot_blocks ins blks envG envI bs env
+    = fold_right (fun blk => denot_block ins blk envG envI bs env) env blks.
+Proof.
+  induction blks; simpl; auto.
+  unfold denot_blocks at 1.
+  setoid_rewrite <- IHblks.
+  reflexivity.
+Qed.
+
+Definition denot_top_block (ins : list ident) (b : block) :
+  (* envG -> envI -> bs -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
   match b with
-  | Beq e => denot_equation ins e
+  | Blocal (Scope _ blks) => denot_blocks ins blks
   | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
   end.
 
@@ -799,7 +854,7 @@ Definition denot_node (n : node) :
   (* envG -> envI -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry.
-  refine ((denot_block (List.map fst n.(n_in)) n.(n_block) @3_ _) _ _).
+  refine ((denot_top_block (List.map fst n.(n_in)) n.(n_block) @3_ _) _ _).
   - exact (FST _ _). (* envG *)
   - exact (SND _ _). (* envI *)
   - exact (bss (List.map fst n.(n_in)) @_ SND _ _).
@@ -807,24 +862,26 @@ Defined.
 
 Lemma denot_node_eq : forall n envG envI,
     let ins := List.map fst n.(n_in) in
-    denot_node n envG envI = denot_block ins n.(n_block) envG envI (bss ins envI).
+    denot_node n envG envI = denot_top_block ins n.(n_block) envG envI (bss ins envI).
 Proof.
   trivial.
 Qed.
 
-Lemma denot_node_input :
-  forall nd envG envI env x,
-    wl_node G nd ->
-    In x (List.map fst nd.(n_in)) ->
-    denot_node nd envG envI env x = envI x.
-Proof.
-  intros * Hwl Hin.
-  unfold denot_node, denot_block.
-  inversion_clear Hwl as (?& Hwl').
-  inv Hwl'; auto.
-  autorewrite with cpodb.
-  eapply denot_equation_input; eauto.
-Qed.
+(* (* inutile en fait ??? *) *)
+(* Lemma denot_node_input : *)
+(*   forall nd envG envI env x, *)
+(*     wl_node G nd -> *)
+(*     In x (List.map fst nd.(n_in)) -> *)
+(*     denot_node nd envG envI env x = envI x. *)
+(* Proof. *)
+(*   intros * Hwl Hin. *)
+(*   unfold denot_node, denot_block. *)
+(*   inversion_clear Hwl as (?& Hwl'). *)
+(*   inv Hwl'; auto. *)
+(*   autorewrite with cpodb. *)
+(*   simpl. cases. *)
+(*   eapply denot_equation_input; eauto. *)
+(* Qed. *)
 
 End Denot_node.
 
@@ -934,8 +991,14 @@ Inductive restr_block : block -> Prop :=
     Forall restr_exp es ->
     restr_block (Beq (xs,es)).
 
+Inductive restr_top_block : block -> Prop :=
+| restr_Blocal :
+  forall vars blks,
+    Forall restr_block blks ->
+    restr_top_block (Blocal (Scope vars blks)).
+
 Definition restr_node (nd : node) : Prop :=
-  restr_block nd.(n_block).
+  restr_top_block nd.(n_block).
 
 Definition restr_global (g : global) : Prop :=
   Forall restr_node g.(nodes).
@@ -1091,6 +1154,36 @@ Proof.
     apply nprod_app_Oeq_compat; auto using denot_exp_cons.
 Qed.
 
+Lemma denot_block_cons :
+  forall nd nds tys exts
+    ins envG envI bs env env_acc blk,
+    ~ Is_node_in_block (n_name nd) blk ->
+    denot_block (Global tys exts nds) ins blk envG envI bs env env_acc
+    == denot_block (Global tys exts (nd :: nds)) ins blk envG envI bs env env_acc.
+Proof.
+  intros * Hnin.
+  rewrite 2 denot_block_eq.
+  cases.
+  rewrite denot_exps_cons; auto.
+  contradict Hnin.
+  constructor; auto.
+Qed.
+
+Corollary denot_blocks_cons :
+  forall nd nds tys exts
+    ins envG envI bs env blks,
+    ~ (List.Exists (Is_node_in_block (n_name nd)) blks) ->
+    denot_blocks (Global tys exts nds) ins blks envG envI bs env
+    == denot_blocks (Global tys exts (nd :: nds)) ins blks envG envI bs env.
+Proof.
+  intros * Hnin.
+  rewrite 2 denot_blocks_eq.
+  induction blks; simpl. reflexivity.
+  rewrite IHblks.
+  apply denot_block_cons.
+  all: contradict Hnin; auto.
+Qed.
+
 Lemma denot_node_cons :
   forall n nd nds tys exts,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
@@ -1100,18 +1193,15 @@ Proof.
   intros * Hnin.
   unfold denot_node, denot_block.
   destruct n.(n_block).
-  2-6: trivial.
-  destruct e as (xs,es).
+  1-5: trivial.
+  destruct s as [vars blks]; simpl.
   apply fcont_eq_intro; intro envG.
   apply fcont_eq_intro; intro envI.
   apply fcont_eq_intro; intro env.
-  apply Oprodi_eq_intro; intro x.
   autorewrite with cpodb; simpl.
-  rewrite 2 denot_equation_eq.
-  unfold denot_var; cases.
-  apply ford_eq_elim.
-  rewrite <- denot_exps_cons; auto.
-  intro; apply Hnin; constructor; auto.
+  apply denot_blocks_cons.
+  contradict Hnin.
+  now constructor; constructor.
 Qed.
 
 (* Lemma denot_global_cons_ : *)
