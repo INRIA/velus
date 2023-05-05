@@ -789,12 +789,27 @@ Qed.
 (*     Defined. *)
 
 (** [env_of_np_ext xs ss env] binds xs to ss in env *)
+(* TODO: move ?? *)
 Definition env_of_np_ext (l : list ident) {n} : nprod n -C-> DS_prod SI -C-> DS_prod SI :=
   curry (Dprodi_DISTR _ _ _
            (fun x => match mem_nth l x with
                   | Some n => get_nth n errTy @_ FST _ _
                   | None => PROJ _ x @_ SND _ _
                   end)).
+
+Lemma env_of_np_ext_eq :
+  forall l n (np : nprod n) env x,
+    env_of_np_ext l np env x
+    = match mem_nth l x with
+      | Some n => get_nth n errTy np
+      | None => env x
+      end.
+Proof.
+  unfold env_of_np_ext.
+  intros.
+  autorewrite with cpodb.
+  cases.
+Qed.
 
 (* signature : envG -> envI -> bs -> env -> env_acc -> env
     on utilise les 4 premiers arguments pour évaluer les expressions,
@@ -820,6 +835,8 @@ Proof.
   unfold denot_block; intros; cases.
 Qed.
 
+Definition err_env : DS_prod SI := fun _ => errTy.
+
 (* un genre de (fold denot_block) sur blks *)
 Definition denot_blocks (ins : list ident) (blks : list block) :
   (*  envG -> envI -> bs -> env -> env *)
@@ -827,19 +844,30 @@ Definition denot_blocks (ins : list ident) (blks : list block) :
   apply curry, curry, curry.
   revert blks; fix denot_blocks 1.
   intros [| blk blks].
-  - apply SND. (* accumulateur initial : env *)
+  - (* TEST: partir d'un environnement d'erreur
+       pour faciliter la preuve d'infinité *)
+    apply (CTE _ _ err_env).
   - refine ((ID _ @2_ uncurry (uncurry (uncurry (denot_block ins blk)))) (denot_blocks blks)).
 Defined.
 
 Lemma denot_blocks_eq :
   forall ins envG envI bs env blks,
     denot_blocks ins blks envG envI bs env
-    = fold_right (fun blk => denot_block ins blk envG envI bs env) env blks.
+    = fold_right (fun blk => denot_block ins blk envG envI bs env) err_env blks.
 Proof.
   induction blks; simpl; auto.
   unfold denot_blocks at 1.
   setoid_rewrite <- IHblks.
   reflexivity.
+Qed.
+
+Corollary denot_blocks_eq_cons :
+  forall ins envG envI bs env blk blks,
+    denot_blocks ins (blk :: blks) envG envI bs env
+    = denot_block ins blk envG envI bs env
+        (denot_blocks ins blks envG envI bs env).
+Proof.
+  trivial.
 Qed.
 
 Definition denot_top_block (ins : list ident) (b : block) :
@@ -849,6 +877,19 @@ Definition denot_top_block (ins : list ident) (b : block) :
   | Blocal (Scope _ blks) => denot_blocks ins blks
   | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
   end.
+
+Lemma denot_top_block_eq :
+  forall ins blk envG envI bs env,
+    denot_top_block ins blk envG envI bs env
+    = match blk with
+      | Blocal (Scope _ blks) => denot_blocks ins blks envG envI bs env
+      | _ => envI
+      end.
+Proof.
+  intros.
+  unfold denot_top_block.
+  cases.
+Qed.
 
 Definition denot_node (n : node) :
   (* envG -> envI -> env -> env *)
