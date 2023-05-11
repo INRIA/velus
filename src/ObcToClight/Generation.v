@@ -133,9 +133,10 @@ Section Translate.
         | [y], [(y', t)] =>
           let args := ptr_obj cls obj :: args in
           let c_t := cltype t in
+          let temp := prefix_temp c.(c_name) (prefix f y') in
           Clight.Ssequence
-            (funcall (Some (prefix_temp f y')) (prefix_fun f cls) (Some c_t) args)
-            (assign y c_t (Clight.Etempvar (prefix_temp f y') c_t))
+            (funcall (Some temp) (prefix_fun f cls) (Some c_t) args)
+            (assign y c_t (Clight.Etempvar temp c_t))
         | _, outs =>
           let tyout := type_of_inst (prefix_fun f cls) in
           let out := Clight.Eaddrof (Clight.Evar (prefix_out f obj) tyout) (pointer_of tyout) in
@@ -212,7 +213,7 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: Env.t type): En
       match find_method f c.(c_methods) with
       | Some m' =>
         match ys, m'.(m_out) with
-        | [_], [(y', t)] => Env.add (prefix_temp f y') t m
+        | [_], [(y', t)] => Env.add (prefix_temp c.(c_name) (prefix f y')) t m
         | _, _ => m
         end
       | None => m

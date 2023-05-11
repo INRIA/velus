@@ -309,18 +309,19 @@ Lemma In_rec_instance_methods_temp_find_method :
     (Env.In fid m -> exists cls c p' fm cid' o,
         find_class cls p = Some (c, p') /\
         find_method cid' c.(c_methods) = Some fm /\
-        fid = prefix_temp cid' o) ->
+        fid = prefix_temp cls (prefix cid' o)) ->
     exists cls c p' fm cid' o,
       find_class cls p = Some (c, p') /\
       find_method cid' c.(c_methods) = Some fm /\
-      fid = prefix_temp cid' o.
+      fid = prefix_temp cls (prefix cid' o).
 Proof.
   induction s; intros * Hin H; simpl in *; eauto.
   destruct (find_class _ _) eqn:Hclass; eauto. destruct p0.
   destruct (find_method _ _) eqn:Hmethod; eauto.
   destruct_list l; eauto.
   destruct_list (m_out m0); eauto. 1,2:destruct x0; eauto.
-  apply Env.Props.P.F.add_in_iff in Hin as [?|?]; subst; eauto 10.
+  erewrite find_class_name in Hin; eauto.
+  apply Env.Props.P.F.add_in_iff in Hin as [?|?]; eauto 10.
 Qed.
 
 Corollary In_instance_methods_temp_find_method :
@@ -329,7 +330,7 @@ Corollary In_instance_methods_temp_find_method :
     exists cls c p' fm cid' o,
       find_class cls p = Some (c, p') /\
       find_method cid' c.(c_methods) = Some fm /\
-      fid = prefix_temp cid' o.
+      fid = prefix_temp cls (prefix cid' o).
 Proof.
   unfold instance_methods_temp.
   intros.

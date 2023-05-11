@@ -873,13 +873,13 @@ Section PRESERVATION.
         (* get the only assignment after the call *)
         rewrite sep_swap34, sep_swap23, sep_swap,
         sep_swap67, sep_swap56, sep_swap45, sep_swap34, sep_swap23 in Hmem'.
+        set (temp := prefix_temp (c_name c) (prefix fid a)).
         edestruct exec_assign with (x := x) (ty := ta)
-                                   (ae := Etempvar (prefix_temp fid a) (cltype ta))
-                                   (le1 := PTree.set (prefix_temp fid a) rv le)
+                                   (ae := Etempvar temp (cltype ta))
+                                   (le1 := PTree.set temp rv le)
           as (m'' & le' & ? & Hmem'' & Hself);
           eauto using eval_expr, PTree.gss.
         { eapply find_method_name in Findcallee; subst.
-          specialize (m_good callee) as (_&Hat).
           eapply sep_imp; eauto.
           - apply outputrep_add_prefix; auto.
           - repeat apply sep_imp'; auto.
@@ -894,10 +894,10 @@ Section PRESERVATION.
         clear Hmem'.
 
         exists m'', le'; split.
-        + change E0 with (Eapp E0 (Eapp E0 E0)).
+        + change E0 with (Eapp E0 E0).
           unfold funcall.
           eapply exec_Sseq_1; eauto.
-          change (PTree.set (prefix_temp fid a) rv le) with (set_opttemp (Some (prefix_temp fid a)) rv le).
+          change (PTree.set temp rv le) with (set_opttemp (Some temp) rv le) in *.
           econstructor; simpl; eauto using eval_exprlist.
         + simpl map; rewrite Env.adds_opt_cons_cons, Env.adds_opt_nil_l.
           apply match_states_conj; intuition; eauto using m_nodupvars.

@@ -1182,10 +1182,9 @@ Section MatchStates.
 
   Lemma outputrep_add_prefix:
     forall c f ve le outb_co f' x v,
-      atom f' ->
       outputrep c f ve le outb_co <-*-> outputrep c f ve (PTree.set (prefix_temp f' x) v le) outb_co.
   Proof.
-    intros * Hat.
+    intros.
     unfold outputrep, case_out.
     destruct_list (m_out f) as (?,?) (?,?) ? : Hout; auto.
     - unfold match_var; rewrite PTree.gso; auto.
