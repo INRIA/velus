@@ -85,19 +85,27 @@ rule scan = parse
     let extracted = if !extracted = "" then extr_dir else !extracted in
     let rm_mls = "rm -f " ^ Filename.concat extracted "*.ml*" in
     let rules = [
-      [".PHONY"], ["all"; "clean"; "depend"], [];
-      ["all"], ["$(VOFILES)"], [];
-      ["clean"], [], "rm -f $(VOFILES) $(DOCDIR)/*.glob .depend" :: if !extraction <> "" then
-                       [rm_mls; "rm -f " ^ stamp] else [];
-      ["depend"], ["$(VFILES)"], ["@echo \"Analyzing Coq dependencies\"";
-                                  "$(COQDEP) $(COQLIBS) $^ > .depend"];
-      ["src/%.vo"; "$(DOCDIR)/%.glob"], ["src/%.v"],
-      ["@echo \"COQC src/$*.v\"";
-       "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
+      [".PHONY"], ["all"; "clean"; "depend"],
+        [];
+      ["all"], ["$(VOFILES)"],
+        [];
+      ["clean"], [],
+        "rm -f $(VOFILES) $(GLOBFILES) .depend" ::
+        if !extraction <> ""
+        then [rm_mls; "rm -f " ^ stamp]
+        else [];
+      ["depend"], ["$(VFILES)"],
+        ["@echo \"Analyzing Coq dependencies\"";
+         "$(COQDEP) $(COQLIBS) $^ > .depend"];
+      ["src/%.vo"], ["src/%.v"],
+        ["@echo \"COQC src/$*.v\"";
+         "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
+      ["$(GLOBFILES)"], ["$(VOFILES)"],
+        [];
       ["documentation"], ["$(GLOBFILES)"],
-      ["cd src && " ^
-       "coq2html -d ../$(DOCDIR)/html/ -base Velus -external ../../CompCert/doc/html compcert "^
-       "-short-names ../$(DOCDIR)/*.glob $(VFILES:src/%=%)"]
+        ["cd src && " ^
+         "coq2html -d ../$(DOCDIR)/html/ -base Velus -external ../../CompCert/doc/html compcert "^
+         "-short-names ../$(DOCDIR)/*.glob $(VFILES:src/%=%)"]
     ]
     in
     print_section oc "RULES";
