@@ -638,6 +638,7 @@ Section ElabExpressions.
     | Ebinop _ _ _ (ty, nck)
     | Ewhen _ _ _ ([ty], nck)
     | Efby _ _ [(ty, nck)]
+    | Earrow _ _ [(ty, nck)]
     | Emerge _ _ _ ([ty], nck)
     | Eite _ _ _ ([ty], nck) => ret (ty, stripname nck)
     | _ => err_not_singleton loc
