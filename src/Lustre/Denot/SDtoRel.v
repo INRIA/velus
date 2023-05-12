@@ -663,6 +663,38 @@ Proof.
         [now setoid_rewrite mask_false_0 | now setoid_rewrite mask_false_S].
 Qed.
 
+(* construire une histroire qui absente sur [vars], None sinon *)
+Definition abs_hist_of_vars (vars : list decl) : history :=
+  fun x => match x with
+        | Var x => if mem_ident x (List.map fst vars)
+                  then Some (Streams.const absent)
+                  else None
+        | Last x => None
+        end.
+
+Lemma abs_hist_of_vars_dom :
+  forall vars,
+    Forall (fun '(_, (_, _, _, o)) => o = None) vars ->
+    dom (abs_hist_of_vars vars) (senv_of_decls vars).
+Proof.
+  intro.
+  unfold abs_hist_of_vars, senv_of_decls, dom, FEnv.In.
+  split; intro x; (split; [intros (s & Hs)|intros Hf]); cases_eqn HH; eauto.
+  - inv Hs.
+    apply mem_ident_spec in HH.
+    constructor.
+    apply fst_InMembers; solve_In.
+  - apply mem_ident_false in HH; contradict HH.
+    inv Hf.
+    apply fst_InMembers; solve_In.
+  - congruence.
+  - inv Hf.
+    eapply in_map_iff in H0 as ((?&((?&?)&?)&?)&?&?).
+    contradict H1.
+    inv H0; simpl; auto.
+    now simpl_Forall.
+Qed.
+
 (***************************************
  avec Ordered_nodes ça semble impossible car on ne peut pas avoir
  wt_node à chaque fois
@@ -700,20 +732,42 @@ Proof.
     split; intros; subst; auto.
     econstructor; eauto.
     rewrite nth_repeat_in; now auto.
-  + (* équation *)
+  + (* bloc *)
     apply sem_block_cons'; eauto using find_node_not_Is_node_in, find_node_now.
     inv Hr. take (restr_node _) and inv it.
     apply wt_global_cons in Hwt as Hwt'.
     apply wt_global_uncons in Hwt. inversion_clear Hwt as [????? Hwt''].
-    rewrite <- H in Hwt''. inv Hwt''.
+    pose proof (n_syn n) as Noloc.
+    rewrite <- H in *.
+    inv Hwt''.
+    take (wt_scope _ _ _ _) and inv it.
+    inv Noloc.
+    take (nolocal_top_block _) and inv it.
+    constructor.
+    (* scope *)
+    apply Sscope with (Hi' := abs_hist_of_vars vars);
+      auto using abs_hist_of_vars_dom.
+    simpl_Forall.
+    apply sem_block_refines with (H := fun _ => Some (Streams.const absent)).
+    { intros ?? Eq. inv Eq.
+      do 2 esplit. reflexivity.
+      destruct (abs_hist_of_vars vars x1) eqn:Find2.
+      - apply FEnv.union1; auto.
+        unfold abs_hist_of_vars in *. cases.
+      - apply FEnv.union2; auto. }
+    take (restr_block _) and  inv it.
+    take (wt_block _ _ _) and inv it.
     take (wt_equation _ _ _) and inv it.
     constructor.
+    (* equation *)
     apply Seq with
       (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es); simpl.
     (* expressions *)
     rewrite clocks_of_false2.
     match goal with H:Forall (wt_exp _ ?Γ) _ |- _=> revert H; generalize Γ end.
     intros; clear dependent n.
+    clear dependent blks.
+    take (nolocal_block _) and clear it.
     induction es; simpl_Forall; constructor; eauto.
     eapply sem_exp_absent; now eauto.
     (* variables *)
