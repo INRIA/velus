@@ -3447,7 +3447,7 @@ Section Node_safe.
       Forall (fun blk =>
                 match blk with
                 | Beq (xs,es) =>
-                    Forall2 (fun x (s : DS _) => s == env' x)
+                    Forall2 (fun x (s : DS _) => s == PROJ _ x env')
                       xs (list_of_nprod (denot_exps G ins es envG envI bs env))
                 | _ => True
                 end
@@ -3467,7 +3467,7 @@ Section Node_safe.
       apply Forall2_forall2; split.
       + now rewrite list_of_nprod_length, <- annots_numstreams.
       + intros * Hn ? ?; subst.
-        rewrite list_of_nprod_nth, denot_blocks_eq_cons, denot_block_eq, env_of_np_ext_eq.
+        rewrite PROJ_simpl, list_of_nprod_nth, denot_blocks_eq_cons, denot_block_eq, env_of_np_ext_eq.
         setoid_rewrite mem_nth_nth; auto.
         erewrite <- 2 list_of_nprod_nth, nth_indep; auto.
         change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME *)
@@ -3481,7 +3481,7 @@ Section Node_safe.
       rewrite denot_blocks_eq_cons, denot_block_eq.
       destruct blk; auto; simpl in *.
       destruct e as (xs',es').
-      rewrite env_of_np_ext_eq.
+      rewrite 2 PROJ_simpl, env_of_np_ext_eq.
       cases_eqn Hmem.
       apply mem_nth_In in Hmem.
       apply Forall_forall with (1 := ND3) in Hmem; destruct Hmem.
@@ -3909,15 +3909,12 @@ Theorem noerrors_prog :
     forall f n envI,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
-      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
       forall bs, bss ins envI <= bs ->
       env_correct Γ ins envI bs 0 ->
       env_correct Γ ins envI bs (denot_global G f envI).
 Proof.
   intros * Rg Wtg Wcg Ocg * Hfind ??? Hle Hins.
-  apply env_correct_0_ext in Hins as Hins'.
-  (* on prouve un résultat plus fort impliquant les variables locales *)
-  apply env_correct_loc.
   unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   now apply wl_global_Ordered_nodes, wt_global_wl_global.
@@ -3936,7 +3933,8 @@ Proof.
   - (* cas qui nous intéresse *)
     rewrite find_node_now in Hfind; inv Hfind; auto.
     inversion_clear Ocg as [|?? Hoc Hocs].
-    specialize (Hoc envI bs Hins). revert Hoc. fold ins.
+    specialize (Hoc envI bs (env_correct_loc _ _ _ _ Hins)).
+    revert Hoc. fold ins.
     rewrite HenvG; auto using find_node_now.
     rewrite <- denot_node_cons;
       eauto using find_node_not_Is_node_in, find_node_now.
@@ -3946,7 +3944,7 @@ Proof.
     apply fixp_inv2_le with
       (Q := fun env =>
               op_correct {| types := tys; externs := exts; nodes := nds |} ins envG envI bs env n
-    ); auto using env_correct_admissible, oc_admissible_rev.
+      ); eauto using env_correct_admissible, oc_admissible_rev, env_correct_0_ext.
     intros env Hsafe Hl Hoc2.
     apply Ordered_nodes_cons in Hord as Hord'.
     apply wt_global_cons in Wtg as Wtg'.
