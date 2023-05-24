@@ -1,0 +1,264 @@
+(* 2014 bourke. the "priority inheritance" protocol, version 2. *)
+
+node counter_modulo (tick : bool; max : int)
+returns (c : int);
+var pc : int; vinit : bool;
+let
+  vinit = true fby false;
+  pc = 0 fby c;
+  c = if vinit then 0 else if tick then (pc + 1) * max else pc;
+tel;
+
+-- high-priority process
+node proc0 (cpu : bool)
+returns (pc : int; sleep : bool; asks_cs0, asks_cs1 : bool);
+var asks_cs0_vstate, asks_cs1_vstate : bool;
+let
+    pc = counter_modulo (cpu, 8);
+    sleep = cpu and (pc = 8 - 1);
+    asks_cs0_vstate = false fby (1 <= pc and pc < 6);
+    asks_cs0 = asks_cs0_vstate;
+    asks_cs1_vstate = false fby (3 <= pc and pc < 5);
+    asks_cs1 = asks_cs1_vstate;
+tel;
+
+-- mid-priority process
+node proc1 (cpu : bool)
+returns (pc : int; sleep : bool; asks_cs1 : bool);
+var asks_cs1_vstate : bool;
+let
+    pc = counter_modulo (cpu, 7);
+    sleep = cpu and (pc = 7 - 1);
+    asks_cs1_vstate = false fby (1 <= pc and pc < 5);
+    asks_cs1 = asks_cs1_vstate;
+tel;
+
+-- low-priority process
+node proc2 (cpu : bool)
+returns (pc : int; sleep : bool; asks_cs0 : bool);
+var asks_cs0_vstate : bool;
+let
+    pc = counter_modulo (cpu, 11);
+    sleep = false;  --the idle process never sleeps
+    asks_cs0_vstate = false fby (2 <= pc and pc < 8);
+    asks_cs0 = asks_cs0_vstate;
+tel;
+
+-- scheduler
+
+node hold_until (start, vreset : bool)
+returns (hold : bool);
+var pre_hold : bool;
+let
+    hold = start or (pre_hold and not vreset);
+    pre_hold = false fby hold;
+tel;
+
+node dispatcher (trigger_p0 : bool; sleep0, sleep1, sleep2 : bool)
+returns (dispatch0, dispatch1, dispatch2 : bool);
+var c : int;
+let
+    c = counter_modulo (true, 20);
+    dispatch0 = hold_until (trigger_p0, sleep0);
+    dispatch1 = hold_until (c = 4,      sleep1);
+    dispatch2 = hold_until (c = 0,      sleep2);
+tel;
+
+node min (v1, v2 : int)
+returns (m : int);
+let
+    m = if v1 <= v2 then v1 else v2;
+tel;
+
+node sched (dispatch0, dispatch1, dispatch2 : bool;
+            p0_asks_cs0, p2_asks_cs0 : bool;
+            p0_asks_cs1, p1_asks_cs1 : bool)
+returns (cpu0, cpu1, cpu2 : bool;
+         p0_has_cs0, p0_has_cs1 : bool;
+         p1_has_cs0, p1_has_cs1 : bool;
+         p2_has_cs0, p2_has_cs1 : bool);
+var p0_had_cs0, p2_had_cs0 : bool;
+    p0_had_cs1, p1_had_cs1 : bool;
+    mutual_exclusion : bool;
+    p0_blocks_p2, p2_blocks_p0 : bool;
+    p0_blocks_p1, p1_blocks_p0 : bool;
+    p1_blocks_p2, p2_blocks_p1 : bool;
+    p0_is_blocked, p1_is_blocked, p2_is_blocked : bool;
+    ii0, ii1, ii2 : int;
+    -- priority ceiling
+    ceiling_cs0, ceiling_cs1, no_ceiling : int;
+    ceiling_p0, ceiling_p1, ceiling_p2 : int;
+    p0_asks, p1_asks, p2_asks : bool;
+    ceiling_p0_arg1,
+    ceiling_p0_arg2,
+    ceiling_p1_arg1,
+    ceiling_p1_arg2,
+    ceiling_p1_arg2_arg1,
+    ceiling_p1_arg2_arg2,
+    ceiling_p2_arg1,
+    ceiling_p2_arg2,
+    ceiling_p2_arg2_arg1,
+    ceiling_p2_arg2_arg2 : int;
+let
+    -- policy: the highest priority process always runs
+    cpu0 = if not dispatch0 then false
+           else if p1_blocks_p0 then false
+           else if p2_blocks_p0 then false
+           else not p0_is_blocked;
+    ii0 = if not dispatch0 then 0
+          else if p1_blocks_p0 then 1
+          else if p2_blocks_p0 then 2
+          else 0;
+    cpu1 = if not dispatch1 then false
+           else if cpu0 then false
+           else if ii0 = 1 then true
+           else if ii0 > 0 then false
+           else not p1_is_blocked;
+    ii1 = if not dispatch1 then ii0
+          else if cpu0 then -1
+          else if ii0 = 1 then -1
+          else if ii0 > 0 then ii0
+          else 0;
+    cpu2 = if not dispatch2 then false
+           else if cpu0 or cpu1 then false
+           else if ii1 = 2 then true
+           else if ii1 > 0 then false
+           else not p2_is_blocked;
+    ii2 = if not dispatch2 then ii1
+          else if cpu0 or cpu1 then -1
+          else if ii1 = 2 then -1
+          else if ii1 > 0 then ii1
+          else 0;
+
+    p1_has_cs0 = false;
+    p2_has_cs1 = false;
+
+    p0_had_cs0 = false fby p0_has_cs0;
+    p0_has_cs0 = p0_asks_cs0 and (cpu0 or p0_had_cs0);
+    p2_had_cs0 = false fby p2_has_cs0;
+    p2_has_cs0 = p2_asks_cs0 and (cpu2 or p2_had_cs0);
+
+    p0_had_cs1 = false fby p0_has_cs1;
+    p0_has_cs1 = p0_asks_cs1 and (cpu0 or p0_had_cs1);
+    p1_had_cs1 = false fby p1_has_cs1;
+    p1_has_cs1 = p1_asks_cs1 and (cpu1 or p1_had_cs1);
+
+    p0_blocks_p2 = p2_asks_cs0 and (p0_asks_cs0 and p0_had_cs0);
+    p2_blocks_p0 = p0_asks_cs0 and (p2_asks_cs0 and p2_had_cs0);
+
+    p0_blocks_p1 = p1_asks_cs1 and (p0_asks_cs1 and p0_had_cs1);
+    p1_blocks_p0 = p0_asks_cs1 and (p1_asks_cs1 and p1_had_cs1);
+
+    p1_blocks_p2 = p2_asks_cs0 and (p1_asks_cs1 and p1_had_cs1);
+    p2_blocks_p1 = p1_asks_cs1 and (p2_asks_cs0 and p2_had_cs0);
+    
+    p0_is_blocked = p1_blocks_p0 or p2_blocks_p0;
+    p1_is_blocked = p0_blocks_p1 or p2_blocks_p1;
+    p2_is_blocked = p0_blocks_p2 or p1_blocks_p2;
+
+    -- priority ceiling
+    ceiling_cs0 = 0;
+    ceiling_cs1 = 0;
+    no_ceiling = 3 + 1;
+
+    ceiling_p0_arg1 =
+      if p1_asks_cs1 and p1_had_cs1 then ceiling_cs1 else no_ceiling;
+    ceiling_p0_arg2 =
+      if p2_asks_cs0 and p2_had_cs0 then ceiling_cs0 else no_ceiling;
+    ceiling_p0 = min (ceiling_p0_arg1, ceiling_p0_arg2);
+
+    ceiling_p1_arg1 =
+      if p0_asks_cs0 and p0_had_cs0 then ceiling_cs0 else no_ceiling;
+    ceiling_p1_arg2_arg1 =
+      if p0_asks_cs1 and p0_had_cs1 then ceiling_cs1 else no_ceiling;
+    ceiling_p1_arg2_arg2 =
+      if p2_asks_cs0 and p2_had_cs0 then ceiling_cs0 else no_ceiling;
+    ceiling_p1_arg2 = min (ceiling_p1_arg2_arg1, ceiling_p1_arg2_arg2);
+    ceiling_p1 = min (ceiling_p1_arg1, ceiling_p1_arg2);
+
+    ceiling_p2_arg1 =
+      if p0_asks_cs0 and p0_had_cs0 then ceiling_cs0 else no_ceiling;
+    ceiling_p2_arg2 =
+        min (ceiling_p2_arg2_arg1, ceiling_p2_arg2_arg2);
+    ceiling_p2_arg2_arg1 =
+      if p0_asks_cs1 and p0_had_cs1 then ceiling_cs1 else no_ceiling;
+    ceiling_p2_arg2_arg2 =
+      if p1_asks_cs1 and p1_had_cs1 then ceiling_cs1 else no_ceiling;
+    ceiling_p2 = min (ceiling_p2_arg1, ceiling_p2_arg2);
+    
+    p0_asks = (p0_asks_cs0 and not p0_had_cs0)
+              or (p0_asks_cs1 and not p0_had_cs1);
+    p1_asks = p1_asks_cs1 and not (p1_had_cs1);
+    p2_asks = p2_asks_cs0 and not (p2_had_cs0);
+
+    mutual_exclusion = not (p0_has_cs0 and p2_has_cs0)
+                       and not (p0_has_cs1 and p1_has_cs1);
+    --%property mutual_exclusion;
+tel;
+
+node max (v1, v2 : int)
+returns (m : int);
+let
+    m = if v1 >= v2 then v1 else v2;
+tel;
+
+node max_time_to_complete (dispatched, finished : bool)
+returns (maxtime : int);
+var time, pre_time, pre_maxtime, arg : int;
+    vinit : bool;
+let
+    vinit = true fby false;
+    time = if finished then 0
+           else if dispatched then pre_time + 1
+           else pre_time;
+    pre_time = 0 fby time;
+    arg = if vinit then time else pre_maxtime;
+    maxtime = max(time, arg);
+    pre_maxtime = 0 fby maxtime;
+tel;
+
+node system (trigger_p0 : bool)
+returns (dispatch0, dispatch1, dispatch2: bool;
+         cpu0, cpu1, cpu2 : bool;
+         pc0, pc1, pc2 : int;
+         p0_has_cs0, p0_has_cs1,
+         p1_has_cs0, p1_has_cs1,
+         p2_has_cs0, p2_has_cs1 : bool;
+         max_time0 : int);
+var sleep0, sleep1, sleep2 : bool;
+    psleep0, psleep1, psleep2 : bool;
+    pre_cpu0, pre_cpu1, pre_cpu2 : bool;
+    p0_asks_cs0, p2_asks_cs0 : bool;
+    p0_asks_cs1, p1_asks_cs1 : bool;
+    -- properties:
+    cpu_good : bool;
+    high_priority_wcet : bool;
+let
+    (pc0, sleep0, p0_asks_cs0, p0_asks_cs1) = proc0(pre_cpu0);
+    (pc1, sleep1, p1_asks_cs1)              = proc1(pre_cpu1);
+    (pc2, sleep2, p2_asks_cs0)              = proc2(pre_cpu2);
+    psleep0 = false fby sleep0;
+    psleep1 = false fby sleep1;
+    psleep2 = false fby sleep2;
+    (dispatch0, dispatch1, dispatch2) =
+      dispatcher(trigger_p0, psleep0, psleep1, psleep2);
+    (cpu0, cpu1, cpu2,
+     p0_has_cs0, p0_has_cs1,
+     p1_has_cs0, p1_has_cs1,
+     p2_has_cs0, p2_has_cs1) = sched(dispatch0, dispatch1, dispatch2,
+                                     p0_asks_cs0, p2_asks_cs0,
+                                     p0_asks_cs1, p1_asks_cs1);
+    pre_cpu0 = false fby cpu0;
+    pre_cpu1 = false fby cpu1;
+    pre_cpu2 = false fby cpu2;
+
+    cpu_good = (cpu0 and not (cpu1 or cpu2))
+               or (cpu1 and not (cpu0 or cpu2))
+               or (cpu2 and not (cpu0 or cpu1));
+    --%property cpu_good;
+
+    max_time0 = max_time_to_complete (dispatch0, psleep0);
+    high_priority_wcet = max_time0 <= 8 + 5;
+    --%property high_priority_wcet;
+tel;
+

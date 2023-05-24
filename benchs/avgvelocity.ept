@@ -1,0 +1,13 @@
+node counter (ini:int; inc:int; rest:bool) returns (n:int)
+let
+  n = if rest then ini else ((0 fby n) + inc);
+tel
+
+node avgvelocity (delta : int; sec : bool)
+returns (v : int)
+let
+  v = merge sec
+            (true -> ((counter (0, delta, false) when sec) *
+                      (counter (0 when sec, 1 when sec, false when sec))))
+            (false -> ((0 fby v) whenot sec));
+tel

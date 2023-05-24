@@ -1,0 +1,36 @@
+node euler(x0, u: float64) returns (x: float64);
+var i: bool; px: float64;
+let
+  i = true fby false;
+  x = if i then x0 else (px + 0.1 * u);
+  px = 0.0 fby x;
+tel
+
+node ins(gps, xv: float64) returns (x: float64; alarm: bool);
+var k: int; px: float64; xe: float64 when not alarm;
+let
+  k = 0 fby (k + 1);
+  alarm = (k >= 50);
+  xe = euler(gps when not alarm, xv when not alarm);
+  x = merge alarm (px when alarm) xe;
+  px = 0. fby x;
+tel
+
+node driver(gps, xv, yv : float64; r : bool)
+returns (x, y : float64);
+var alarmx, alarmy : bool;
+let
+  x, alarmx = (restart ins every r)(gps, xv);
+  y, alarmy = (restart ins every r)(gps, yv);
+tel
+
+node nav(gps, xv: float64; s: bool) returns (x: float64; alarm: bool);
+  var r, c, cm: bool; insr: float64 when not c; alr: bool when not c;
+let
+  insr, alr = (restart ins every r) (gps when not c, xv when not c);
+  x = merge c (gps when c) insr;
+  alarm = merge c false alr;
+  cm = merge c (not s when c) (s when not c);
+  c = true fby cm;
+  r = false fby (s and c);
+tel
