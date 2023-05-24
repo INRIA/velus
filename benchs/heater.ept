@@ -1,0 +1,143 @@
+(* my heater at home *)
+(* $Id: heater.ls,v 1.10 2009-02-04 21:54:09 pouzet Exp $ *)
+
+-- let static low = 4
+-- let static high = 4
+
+-- let static delay_on = 30
+-- let static delay_off = 10
+
+(* [edge x] returns the rising edge *)
+node edge(x : bool) returns (y : bool)
+let y = (false fby not x) and x
+tel
+
+(* [count d t] returns [true] when [d] occurrences of [t] has been received*)
+node count(d : int; t : bool) returns (ok : bool)
+var cpt : int;
+let
+  ok = edge(cpt = d);
+  cpt = ((0 fby cpt) + (if t then 1 else 0)) * d
+tel
+
+(* controling the heat *)
+(* returns [true] when [expected_temp] does not agree with [actual_temp] *)
+(* we introduce an hysteresis to avoir oscilation *)
+node heat_1(expected_temp, actual_temp : real) returns (ok : bool)
+let
+  ok = if actual_temp <=. expected_temp -. 4.0 then true
+       else if actual_temp >=. expected_temp +. 4.0 then false
+       else false fby ok
+tel
+
+(* controling the heat according to a tracking error *)
+(* [error = expected_temp - actual_temp] *)
+(* returns [true] when [expected_temp] does not agree with [actual_temp] *)
+(* we introduce an hysteresis to avoir oscilation *)
+node heat_2(error : real) returns (ok : bool)
+let
+  ok = if 4.0 <=. error then true
+       else if -.4.0 >=. error then false
+       else false fby ok
+tel
+
+(* the same function using two modes *)
+node heat_3(expected_temp, actual_temp : real) returns (ok : bool)
+let
+  automaton
+  state False
+    do ok = false
+    unless (actual_temp <=. expected_temp -. 4.0) then True
+  state True
+    do ok = true
+    unless (actual_temp >=. expected_temp +. 4.0) then False
+   end
+tel
+
+node heat_4(error : real) returns (ok : bool)
+let
+  automaton
+  state False
+    do ok = false
+    unless (4.0 <=. error) then True
+  state True
+    do ok = true
+    unless (-.4.0 >=. error) then False
+  end
+tel
+
+(* a cyclic two mode automaton with an internal timer *)
+(* [open_light = true] and [open_gas = true] for [delay_on time] *)
+(* then [open_light = false] and [open_gas = false] for *)
+(* [delay_off time] *)
+node command(time : bool) returns (open_light, open_gas : bool)
+let
+  automaton
+  state Open do
+    open_light = true;
+    open_gas = true
+    until count(30, time) then Silent
+  state Silent do
+    open_light = false;
+    open_gas = false
+    until count(10, time) then Open
+  end
+tel
+
+
+(* the main command which control the opening of the light and gas *)
+(* [on_heat] indicates that the water must be heated *)
+(* at most three test must be made. At the end, if [on_light] is false *)
+(* the system must be blocked into a security stop *)
+node light(time : bool; on_heat, on_light : bool)
+returns (open_light, open_gas, nok : bool)
+let
+  automaton
+  state Off_light do
+    nok = false;
+    open_light = false;
+    open_gas = false;
+    until on_heat then Try
+  state On_light do
+    nok = false;
+    open_light = false;
+    open_gas = true;
+    until (not on_heat) then Off_light
+  state Try do
+    nok = false;
+    (open_light, open_gas) = command(time)
+    until on_light then On_light
+        | count(4, edge(not open_light)) then Failure
+  state Failure do
+    nok = true;
+    open_light = false;
+    open_gas = false;
+   end
+tel
+
+(* the main function *)
+node controller_1(time : bool; rst : bool; expected_temp, actual_temp : real; on_light : bool)
+returns (open_light, open_gas, ok, nok : bool)
+var error : real; on_heat : bool;
+let
+  reset
+    error = expected_temp -. actual_temp;
+    on_heat = heat_4(error);
+    (open_light, open_gas,nok) = light(time, on_heat, on_light);
+    ok = not nok;
+  every rst
+tel
+
+node controller_2(time : bool; rst : bool; expected_temp, actual_temp : real; on_light : bool)
+returns (open_light, open_gas, ok, nok : bool)
+var error : real; on_heat : bool;
+let
+  automaton
+  state S do
+    error = expected_temp -. actual_temp;
+    on_heat = heat_4(error);
+    (open_light, open_gas,nok) = light(time, on_heat, on_light);
+    ok = not nok;
+    unless rst then S
+  end
+tel

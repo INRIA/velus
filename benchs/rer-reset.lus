@@ -1,0 +1,23 @@
+(*
+   This example is adapted from §1.2.2, Pouzet 2006. “The Lucid Synchrone
+   reference manual”, version 3. See also Bourke, Jeanmaire, Pesin, and Pouzet,
+   JFLA 2021.
+ *)
+node count_down(n : int)
+returns (cpt : int)
+let
+  cpt = n fby (cpt - 1);
+tel
+
+node rising_edge_retrigger(i : bool; n : int)
+returns (o : bool)
+var edge, ck : bool; v : int;
+let
+  edge = i and (false fby (not i));
+  ck = edge or (false fby o);
+  v = merge ck
+            ((restart count_down every edge)(n when ck))
+            0;
+  o = v > 0;
+tel
+

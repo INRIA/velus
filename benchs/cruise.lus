@@ -1,0 +1,139 @@
+(* Taken from the examples of Lucid Synchrone v3 *)
+(* A cruise control *)
+(* $Id: cruise.ls,v 1.9 2009/02/07 04:35:35 gerard Exp $ *)
+
+(*
+  const speedInc = 5.0
+  const speedMax = 150.0
+  const speedMin = 30.0
+  const kp = 10.0
+  const ki = 0.2
+*)
+
+node cruiseSpeedMgt (onn, set, quickAccel, quickDecel : bool; speed : real)
+returns (cruise_speed : real);
+var l1, l2, l3 : real;
+let
+  l1 = l3 + 5.0;
+  l2 = l3 - 5.0;
+  cruise_speed = 
+    if quickDecel and (l2 >= 30.0)
+    then l2
+    else if quickAccel and (l1 <= 150.0)
+    then l1
+    else if (onn or set) and (speed <= 150.0) and (speed >= 30.0)
+    then speed else l3;
+  l3 = 0.0 fby cruise_speed;
+tel
+
+(* a PI regulation *)
+node regulator (cruise_speed, speed : real)
+returns (throttle : real);
+var delta, pre_aux, aux : real;
+let
+  delta = cruise_speed - speed;
+  throttle = delta * 10.0 + aux * 0.2;
+  aux = delta + pre_aux;
+  pre_aux = 0.0 fby aux;
+tel
+ 
+node cruiseControl (onn, off, resume : bool; speed : real;
+                    set, quickAccel, quickDecel : bool;
+                    accel, brake : real)
+returns (cruiseSpeed : real; throttleCmd : real);
+var braking, accelerator : bool;
+let
+    last cruiseSpeed = 0.0;
+    braking = brake > 0.0;
+    accelerator = accel > 0.0;
+
+    automaton
+      initially Off
+      state Off do
+        throttleCmd = accel;
+        cruiseSpeed = last cruiseSpeed
+      until onn then On
+
+      state On do
+        automaton
+        initially Regulation
+        state Regulation
+          var between : bool; do
+
+          cruiseSpeed = cruiseSpeedMgt(onn, set, quickAccel, quickDecel, speed);
+          between = (speed >= 30.0) and (speed <= 150.0);
+          automaton
+            initially RegulOn
+            state RegulOn do
+              throttleCmd = regulator(cruiseSpeed, speed);
+            until (accelerator or not between) then StandBy
+
+            state StandBy do
+              throttleCmd = accel;
+            until (not accelerator and between) then RegulOn
+          end
+        until braking then Interrupt
+
+        state Interrupt do
+          throttleCmd = accel;
+          cruiseSpeed = last cruiseSpeed
+        until resume then Regulation
+        end;
+
+      until off then Off
+      end;
+tel
+
+(*
+(* make an interface for continuous inputs *)
+node button(vinit, step : real; key_present, key_up : bool)
+returns (o : real);
+var last_o : real;
+let
+  last_o = vinit fby o;
+  o = if key_present then
+        (if key_up then last_o + step
+                   else last_o - step)
+      else last_o;
+tel
+
+(* make the interface for manual testing *)
+(* all the inputs are given through the keyboard *)
+node interface(key : int8)
+returns (onn, off, set, resume, quickAccel, quickDecel : bool;
+         speed, accel, brake : real);
+var vinit, speed_present, speed : bool;
+    pre_speed : real;
+let
+  onn = (key = 'o');
+  off = (key = 'f');
+  set = (key = 's');
+  resume = (key = 'r');
+  quickAccel = (key = 'a');
+  quickDecl = (key = 'd');
+
+  speed_present = (key = '+' or key = '-');
+  speed = (key = '+');
+
+  brake = if key = 'b' then 1.0 else 0.0;
+
+  vinit = true fby false;
+  speed = button(0.0, 2.0, speed_present, speed);
+  pre_speed = 0.0 fby speed;
+  accel = if vinit then 0.0 else speed - pre_speed;
+tel
+
+node main (key : int8)
+returns (cruiseSpeed, throttleCmd : real);
+var onn, off, set, resume, quickAccel, quickDecl : bool;
+    speed, accel, brake : real;
+let
+  (onn, off, set, resume, quickAccel, quickDecel, speed, accel, brake) =
+      interface(key);
+
+  (cruiseSpeed, throttleCmd) =
+    cruiseControl (onn, off, resume,
+                   speed, set, quickAccel,
+                   quickDecel, accel, brake)
+tel
+*)

@@ -1,0 +1,111 @@
+(* ums_verif example from the lustre v4 distribution. *)
+
+node two_vstates(set,vreset,vinit:bool) returns (vstate:bool);
+let
+  vstate = vinit -> (if set and not (false fby vstate) then true
+                     else if vreset and (false fby vstate) then false
+                     else false fby vstate);
+tel
+
+node edge(x: bool) returns (edge : bool);
+let
+  edge = x -> x and not (false fby x);
+tel
+
+node implies(a,b:bool) returns (implies: bool);
+let implies = if a then b else true; tel
+
+node after (a: bool) returns (x: bool);
+let
+  x = false -> false fby (a or x);
+tel
+
+node always_since (c,a: bool) returns (x: bool);
+let
+  x = if a then c
+      else if after(a) then c and (false fby x)
+      else true;
+tel
+
+node once_since (c,a: bool) returns (x: bool);
+let
+  x = if a then c
+      else if after(a) then c or (false fby x)
+      else true;
+tel
+
+node always_from_to (c,a,b: bool) returns (x: bool);
+let
+  x = implies (after(a), always_since(c, a) or once_since(b, a));
+tel
+
+node once_from_to (c,a,b: bool) returns (x: bool);
+let
+  x = implies (after(a) and b, once_since(c, a));
+tel
+
+node alternating(a,b: bool) returns (x:bool);
+var a_forbiden, b_forbiden: bool;
+let
+  a_forbiden = false -> (if (false fby a) and not a then true
+                         else if (false fby x) and not b then false 
+                         else (false fby a_forbiden));
+  b_forbiden = true -> (if (false fby b) and not b then true
+                        else if (false fby a) and not a then false  
+                        else (false fby b_forbiden));
+  x = not(a and a_forbiden) and not(b and b_forbiden);
+tel
+
+node not_between_and (a,b,c: bool) returns (x: bool);
+let
+  x = implies(c, not once_since(a,b)); 
+tel
+
+node ums(on_a,on_b,on_c,ack_ab,ack_bc: bool)
+     returns (grant_access,grant_exit,
+        do_ab,do_bc: bool);
+var empty_section, only_on_b: bool;
+let
+   grant_access = empty_section and ack_ab;
+   grant_exit = only_on_b and ack_bc;
+   do_ab = not ack_ab and empty_section;
+   do_bc = not ack_bc and only_on_b;
+   empty_section = not(on_a or on_b or on_c);
+   only_on_b = on_b and not(on_a or on_c);
+tel
+
+node ums_verif(on_a,on_b,on_c,
+         ack_ab,ack_bc: bool)
+     returns(property: bool);
+var
+   grant_access,grant_exit: bool;
+   do_ab,do_bc: bool;
+   no_collision,exclusive_req: bool;
+   no_derail_ab,no_derail_bc: bool;
+   empty_section, only_on_b: bool;
+let
+   empty_section = not(on_a or on_b or on_c);
+   only_on_b = on_b and not(on_a or on_c);
+   
+   -- ums call
+   (grant_access,grant_exit,do_ab,do_bc) =
+      ums(on_a,on_b,on_c,ack_ab,ack_bc);
+
+   -- properties
+   no_collision =
+  implies(grant_access,empty_section);
+   exclusive_req =
+  not(do_ab and do_bc);
+   no_derail_ab =
+  always_from_to(ack_ab,
+           grant_access,
+           only_on_b);
+   no_derail_bc =
+  always_from_to(ack_bc,
+           grant_exit,
+           empty_section);
+   property =
+  no_collision and exclusive_req and
+  no_derail_ab and no_derail_bc;
+tel
+

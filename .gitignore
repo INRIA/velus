@@ -45,3 +45,4 @@ _CoqProject
 
 *.exe
 *.out
+*.ff

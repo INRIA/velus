@@ -1,0 +1,62 @@
+(* examples from the paper
+   "clocks as first class abstract types", colaço and pouzet, emsoft 2003 *)
+
+node sum (x: int) returns (s: int);
+var ps : int;
+let
+  ps = 0 fby s;
+  s = ps + x;
+tel
+
+node bounds (x: int) returns (min, max: int);
+var vinit : bool;
+    pre_min, pre_max : int;
+let
+  vinit = true fby false;
+  pre_min = 0 fby min;
+  pre_max = 0 fby max;
+  min = if vinit then x
+        else if x < pre_min then x
+        else pre_min;
+  max = if vinit then x
+        else if x > pre_max then x
+        else pre_max;
+tel
+
+node sample (n: int) returns (ok: bool);
+var vinit : bool;
+    cpt, pre_cpt : int;
+let
+  vinit = true fby false;
+  cpt = if vinit then 0
+        else if pre_cpt = n - 1 then 0
+        else pre_cpt + 1;
+  pre_cpt = 0 fby cpt;
+  ok = (cpt = 0);
+tel
+
+node count_down (vreset : bool; n : int) returns (cpt : int);
+var vinit : bool;
+    pre_cpt : int;
+let
+  vinit = true fby false;
+  pre_cpt = 0 fby (cpt - 1);
+  cpt = if vreset or vinit then n else pre_cpt;
+tel
+
+node risingedgeretrigger (rer_input : bool; numberofcycle : int)
+returns (rer_output : bool);
+var clk, c, pre_rer_input, count : bool;
+    v, pv : int;
+    r : int when clk;
+let
+  rer_output = (0 < v) and (c or count);
+  v = merge clk r (pv when not clk);
+  r = count_down (count when clk, numberofcycle when clk);
+  pv = 0 fby v;
+  c = false fby rer_output;
+  clk = c or count;
+  count = rer_input and not pre_rer_input;
+  pre_rer_input = true fby rer_input;
+tel
+
