@@ -3438,6 +3438,9 @@ Section Node_safe.
      alors [env'] associe les bons flots aux bonnes variables.
      TODO: lorsque la structure du bloc sera plus complexe, il faudra
      peut-être remplacer ce résultat par un inductif...
+
+     TODO: déplacer ailleurs ? Dans Denot.v ? Alors il faudrait bouger aussi
+     get_defined
    *)
   Lemma denot_blocks_equs :
     forall G ins envG envI bs env blks,
