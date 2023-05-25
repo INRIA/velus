@@ -3,7 +3,7 @@
 # Velus
 
 VELUS=../velus
-VELUS_OPT=-lib
+VELUS_OPT=-lib -dsch -dobc
 
 # CompCert
 
@@ -40,6 +40,10 @@ EXAMPLES = \
 	count.lus \
 	tracker.lus \
 	pip_ex.lus \
+	cocospec_mono_system.lus \
+	emsoft03.lus \
+	emsoft05.lus \
+	halbwachs.lus \
 	rer.lus \
 	kind_functionalChain.lus \
 	landing_gear.lus \
@@ -56,9 +60,7 @@ EXAMPLES = \
 
 ## Main targets
 
-all: velus
-
-velus: $(EXAMPLES:.lus=.exe)
+all: wcet
 
 realclean: clean
 	@rm -f *.wcet

@@ -1,6 +1,6 @@
-node counter (ini:int; inc:int; rest:bool) returns (n:int)
+node counter(ini, inc: int; rest: bool) returns (n: int)
 let
-  n = if rest then ini else ((0 fby n) + inc);
+  n = if (true fby false) or rest then ini else (1 fby n) + inc;
 tel
 
 node d_integrator(gamma: int)
@@ -16,12 +16,11 @@ let
 tel
 
 node tracker(acc, limit: int) returns (p, t: int)
-var s : int; x : bool;
+  var s : int; x : bool;
 let
   x = rising(s > limit);
   (s, p) = d_integrator(acc);
-  t = merge x 
-            (true => counter(1 when x, 1 when x, false when x))
-            (false => (0 fby t) when not x);
+  t = merge x (true => counter(1 when x, 1 when x, false when x))
+              (false => (0 fby t) when not x);
 tel
 

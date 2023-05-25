@@ -53,8 +53,8 @@ let
                     else (false fby frozen));
   displayed_time =
     merge frozen
-          (true => (0 fby displayed_time) when frozen)
-          (false => internal_time when not frozen);
+          (true -> (0 fby displayed_time) when frozen)
+          (false -> internal_time when not frozen);
   (internal_time, running) =
       simple_stopwatch(start_stop, actual_vreset, hs);
   actual_vreset =

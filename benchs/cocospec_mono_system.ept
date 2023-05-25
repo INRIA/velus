@@ -3,12 +3,12 @@
 
 node max(fst, snd: real) returns (vout: real) ;
 let
-  vout = if fst >= snd then fst else snd ;
+  vout = if fst >=. snd then fst else snd ;
 tel
 
 node min(fst, snd: real) returns (vout: real) ;
 let
-  vout = if fst <= snd then fst else snd ;
+  vout = if fst <=. snd then fst else snd ;
 tel
 
 node duration(vin: bool) returns (vout: int) ;
@@ -132,34 +132,34 @@ tel
 
 node abs(vin: real) returns (vout: real) ;
 let
-  vout = if vin < 0.0 then -vin else vin ;
+  vout = if vin <. 0.0 then -.vin else vin ;
 tel
 
 node clamp(l_bound, vin, u_bound: real) returns (vout: real) ;
 let
   vout =
-    if vin < l_bound then l_bound else if vin > u_bound then u_bound else vin ;
+    if vin <. l_bound then l_bound else if vin >. u_bound then u_bound else vin ;
 tel
 
 node right (heading, cmd: real) returns (vout: bool) ;
 let
   vout = (
-    ((cmd - heading) > 0.0) and
-    ((cmd - heading) < 180.0)
+    ((cmd -. heading) >. 0.0) and
+    ((cmd -. heading) <. 180.0)
   ) ;
 tel
 
 node left (heading, cmd: real) returns (vout: bool) ;
 let
   vout = (
-    ((cmd - heading) < 0.0) and
-    ((cmd - heading) > - 180.0)
+    ((cmd -. heading) <. 0.0) and
+    ((cmd -. heading) >. -.180.0)
   ) ;
 tel
 
 node sign(vin: real) returns (vout: bool) ;
 let
-  vout = vin >= 0.0 ;
+  vout = vin >=. 0.0 ;
 tel
 
 node pseudocontinuous (vin, inc: real) returns (vout: bool) ;
@@ -167,20 +167,20 @@ var pre_vin, absv: real; vinit: bool;
 let
   pre_vin = 0.0 fby vin;
   vinit = true fby false;
-  absv = abs(vin - pre_vin);
-  vout = if vinit then 0.0 <= inc else absv <= inc ;
+  absv = abs(vin -. pre_vin);
+  vout = if vinit then 0.0 <=. inc else absv <=. inc ;
 tel
 
 -- |===| abstractions of non-linear streams.
 
 node times(x, y: real) returns (z: real) ;
 let
-  z = x * y ;
+  z = x *. y ;
 tel
 
 node divid(num, den: real) returns (res: real) ;
 let
-  res = num / den ;
+  res = num /. den ;
 tel
 
 (* division with some bounds on the denominator.
@@ -188,12 +188,12 @@ tel
 node divid_bounded_num(num, den: real ; l_bound, u_bound: real)
 returns (res: real) ;
 let
-  res = num / den ;
+  res = num /. den ;
 tel
 
 node temporal_divid(num, den: real) returns (res: real) ;
 let
-  res = num / den ;
+  res = num /. den ;
 tel
 
 -- |===| latitudinal_control.lus
@@ -447,12 +447,12 @@ var
   srflipfloprepl_dot_gunitdelay_1_1 : bool;
   srflipfloprepl_dot_gunitdelay1_1_1 : bool;
 let 
-  abs_1_1 = if add_1_1 >= 0.0 then add_1_1 else -add_1_1;
-  add_1_1 = altitude_1_1 - altcmd_1_1;
+  abs_1_1 = if add_1_1 >=. 0.0 then add_1_1 else -.add_1_1;
+  add_1_1 = altitude_1_1 -. altcmd_1_1;
   arg = if deactivate_1_1 then 1.0 else 0.0;
   comparetoconstant_1_1 = not(arg = 0.0);
   comparetoconstant1_1_1 = not(activatefpa_1_1 = 0.0);
-  comparetoconstant2_1_1 = abs_1_1 <= 200.0;
+  comparetoconstant2_1_1 = abs_1_1 <=. 200.0;
   comparetoconstant3_1_1 = not(activatealt_1_1 = 0.0);
   logicaloperator1_1_1 = logicaloperator2_1_1 or comparetoconstant2_1_1;
   logicaloperator2_1_1 = not srflipfloprepl_dot_glogicaloperator1_1_1;
@@ -536,10 +536,10 @@ var
   add4_1_1 : real;
   divide_1_1 : real;
 let 
-  add1_1_1 =  - x1_1_1 + x2_1_1;
-  add2_1_1 = divide_1_1 + y1_1_1;
-  add3_1_1 =  - y1_1_1 + y2_1_1;
-  add4_1_1 = in1_1_1 - x1_1_1;
+  add1_1_1 =  -. x1_1_1 +. x2_1_1;
+  add2_1_1 = divide_1_1 +. y1_1_1;
+  add3_1_1 =  -. y1_1_1 +. y2_1_1;
+  add4_1_1 = in1_1_1 -. x1_1_1;
   arg = divid(add4_1_1, add1_1_1) ;
   divide_1_1 = times(arg, add3_1_1 ) ;
   out1_1_1 = add2_1_1;
@@ -556,10 +556,10 @@ var
   add4_1_1 : real;
   divide_1_1 : real;
 let 
-  add1_1_1 =  - x1_1_1 + x2_1_1;
-  add2_1_1 = divide_1_1 + y1_1_1;
-  add3_1_1 =  - y1_1_1 + y2_1_1;
-  add4_1_1 = in1_1_1 - x1_1_1;
+  add1_1_1 =  -. x1_1_1 +. x2_1_1;
+  add2_1_1 = divide_1_1 +. y1_1_1;
+  add3_1_1 =  -. y1_1_1 +. y2_1_1;
+  add4_1_1 = in1_1_1 -. x1_1_1;
   arg = divid(add4_1_1, add1_1_1);
   divide_1_1 = times(arg, add3_1_1 ) ;
   out1_1_1 = add2_1_1;
@@ -576,10 +576,10 @@ var
   add4_1_1 : real;
   divide_1_1 : real;
 let 
-  add1_1_1 =  - x1_1_1 + x2_1_1;
-  add2_1_1 = divide_1_1 + y1_1_1;
-  add3_1_1 =  - y1_1_1 + y2_1_1;
-  add4_1_1 = in1_1_1 - x1_1_1;
+  add1_1_1 =  -. x1_1_1 +. x2_1_1;
+  add2_1_1 = divide_1_1 +. y1_1_1;
+  add3_1_1 =  -. y1_1_1 +. y2_1_1;
+  add4_1_1 = in1_1_1 -. x1_1_1;
   arg = divid(add4_1_1, add1_1_1);
   divide_1_1 = times(arg, add3_1_1 ) ;
   out1_1_1 = add2_1_1;
@@ -610,16 +610,16 @@ var
   r7_1_1 : real;
   r8_1_1 : real;
 let 
-  add_1_1 = branch_sharp_1_1_1 + branch_sharp_2_1_1 + branch_sharp_3_1_1;
+  add_1_1 = branch_sharp_1_1_1 +. branch_sharp_2_1_1 +. branch_sharp_3_1_1;
   branch_sharp_1_1_1 =
     if lte1_1_1 and gte1_1_1 then interpolate1d_sharp_0_1_1 else 0.0 ;
   branch_sharp_2_1_1 =
     if lte2_1_1 and gte2_1_1 then interpolate1d_sharp_1_1_1 else 0.0 ;
   branch_sharp_3_1_1 =
     if lte3_1_1 and gte3_1_1 then interpolate1d_sharp_2_1_1 else 0.0 ;
-  gte1_1_1 = in1_1_1 <= r2_1_1;
-  gte2_1_1 = in1_1_1 <= r3_1_1;
-  gte3_1_1 = in1_1_1 <= r4_1_1;
+  gte1_1_1 = in1_1_1 <=. r2_1_1;
+  gte2_1_1 = in1_1_1 <=. r3_1_1;
+  gte3_1_1 = in1_1_1 <=. r4_1_1;
   interpolate1d_sharp_0_1_1 =
     longitudinal_controller_pitchinnerloop_lookup1d_interpolate1d_sharp_0(
       in1_1_1, r1_1_1, r2_1_1, r5_1_1, r6_1_1);
@@ -629,9 +629,9 @@ let
   interpolate1d_sharp_2_1_1 =
     longitudinal_controller_pitchinnerloop_lookup1d_interpolate1d_sharp_2(
       in1_1_1, r3_1_1, r4_1_1, r7_1_1, r8_1_1);
-  lte1_1_1 = in1_1_1 >= r1_1_1;
-  lte2_1_1 = in1_1_1 > r2_1_1;
-  lte3_1_1 = in1_1_1 > r3_1_1;
+  lte1_1_1 = in1_1_1 >=. r1_1_1;
+  lte2_1_1 = in1_1_1 >. r2_1_1;
+  lte3_1_1 = in1_1_1 >. r3_1_1;
   r1_1_1 = 0.0;
   r2_1_1 = 120.0;
   r3_1_1 = 350.0;
@@ -655,14 +655,14 @@ var
   sum11_1_1 : real;
   sum21_1_1 : real;
 let 
-  a_sharp_1_1_1 = 0.0625 * delay_sharp_1_1_1;
-  b0_sharp_0_1_1 = 1.0 * u_1_1;
-  b0_sharp_1_1_1 = -1.0 * a_sharp_1_1_1;
+  a_sharp_1_1_1 = 0.0625 *. delay_sharp_1_1_1;
+  b0_sharp_0_1_1 = 1.0 *. u_1_1;
+  b0_sharp_1_1_1 = -.1.0 *. a_sharp_1_1_1;
   delay_sharp_1_1_1 = 0.0 fby sum21_1_1;
-  output_sum_1_1 = b0_sharp_0_1_1 + b0_sharp_1_1_1;
-  sample_sharp_1_1_1 = 0.02 * sum11_1_1;
-  sum11_1_1 = u_1_1 - a_sharp_1_1_1;
-  sum21_1_1 = sample_sharp_1_1_1 + delay_sharp_1_1_1;
+  output_sum_1_1 = b0_sharp_0_1_1 +. b0_sharp_1_1_1;
+  sample_sharp_1_1_1 = 0.02 *. sum11_1_1;
+  sum11_1_1 = u_1_1 -. a_sharp_1_1_1;
+  sum21_1_1 = sample_sharp_1_1_1 +. delay_sharp_1_1_1;
   y_1_1 = output_sum_1_1;
 tel
 
@@ -679,13 +679,13 @@ var
   transferfunc_1_1 : real;
   lookup1d_1_1 : real;
 let 
-  kpitch_1_1 = 2.0 * sum_1_1;
-  kwo_1_1 = 0.5 * transferfunc_1_1;
+  kpitch_1_1 = 2.0 *. sum_1_1;
+  kwo_1_1 = 0.5 *. transferfunc_1_1;
   mux_1_1 = pitchcmd_1_1 ;
   mux_1_2 = pitch_1_1 ;
   product_1_1 = times(sum1_1_1, lookup1d_1_1);
-  sum_1_1 = pitchcmd_1_1 - pitch_1_1;
-  sum1_1_1 =  - kpitch_1_1 + kwo_1_1;
+  sum_1_1 = pitchcmd_1_1 -. pitch_1_1;
+  sum1_1_1 =  -. kpitch_1_1 +. kwo_1_1;
   transferfunc_1_1 =
     longitudinal_controller_pitchinnerloop_transferfunc(qdeg_1_1);
   lookup1d_1_1 = longitudinal_controller_pitchinnerloop_lookup1d(cas_1_1);
@@ -726,16 +726,16 @@ var
   eq0_1_1_a, ne0_1_1_a, ne1_1_1_a : real;
 let 
   vinit = true fby false;
-  add_1_1 = product1_1_1 + product2_1_1;
+  add_1_1 = product1_1_1 +. product2_1_1;
   constant_1_1 = 0.0;
-  gain1_1_1 = 1.0 * f_lpar_x_rpar_g1_1;
+  gain1_1_1 = 1.0 *. f_lpar_x_rpar_g1_1;
   product_1_1 = if vinit then x0_1_1 else 0.0 ;
   product1_1_1 = if ne0_1_1 then sum3_1_1 else 0.0 ;
   product2_1_1 = if eq0_1_1 and ne1_1_1 then sum3_1_1 else 0.0 ;
-  sum1_1_1 = gain1_1_1 + sum2_1_1;
-  sum2_1_1 = sum4_1_1 + product_1_1;
-  sum3_1_1 =  - delay_sharp_2_1_1 + x0_1_1;
-  sum4_1_1 = delay_sharp_2_1_1 + add_1_1;
+  sum1_1_1 = gain1_1_1 +. sum2_1_1;
+  sum2_1_1 = sum4_1_1 +. product_1_1;
+  sum3_1_1 =  -. delay_sharp_2_1_1 +. x0_1_1;
+  sum4_1_1 = delay_sharp_2_1_1 +. add_1_1;
   delay_sharp_1_1_1 = 1.0;
   delay_sharp_2_1_1 = 0.0 fby sum1_1_1;
   delay_sharp_3_1_1 = false fby vreset_level_1_1;
@@ -758,10 +758,10 @@ var
   switch2_1_1 : real;
   upperrelop_1_1 : bool;
 let 
-  lowerrelop1_1_1 = u_1_1 > up_1_1;
+  lowerrelop1_1_1 = u_1_1 >. up_1_1;
   switch_1_1 = if upperrelop_1_1 then lo_1_1 else u_1_1;
   switch2_1_1 = if lowerrelop1_1_1 then up_1_1 else switch_1_1;
-  upperrelop_1_1 = u_1_1 < lo_1_1;
+  upperrelop_1_1 = u_1_1 <. lo_1_1;
   y1_1_1 = switch2_1_1;
 tel
 
@@ -787,22 +787,22 @@ let
   dynamicsaturation_1_1 =
     longitudinal_controller_fpacontrol_dynamicsaturation(
       product1_1_1, kigamerr_1_1, m1_1_1);
-  kigamerr_1_1 = 1.0 * sum2_1_1 ;
-  kgamerr_1_1 = 1.4 * gamma_1_1;
+  kigamerr_1_1 = 1.0 *. sum2_1_1 ;
+  kgamerr_1_1 = 1.4 *. gamma_1_1;
   logicaloperator_1_1 = not engage_1_1;
   mux_1_1 = gamcmd_1_1 ;
   mux_1_2 = gamma_1_1 ;
   mux1_1_1 = sum2_1_1 ;
   mux1_1_2 = dynamicsaturation_1_1 ;
-  product1_1_1 = (4.83 * 57.2958) * kt2fps_1_1 ;
-  sum_1_1 = thetadeg_1_1 + kgamerr_1_1;
-  sum1_1_1 = integrator_vreset_1_1 - kgamerr_1_1;
-  sum2_1_1 = gamcmd_1_1 - gamma_1_1;
+  product1_1_1 = (4.83 *. 57.2958) *. kt2fps_1_1 ;
+  sum_1_1 = thetadeg_1_1 +. kgamerr_1_1;
+  sum1_1_1 = integrator_vreset_1_1 -. kgamerr_1_1;
+  sum2_1_1 = gamcmd_1_1 -. gamma_1_1;
   integrator_vreset_1_1 =
     longitudinal_controller_fpacontrol_integrator_vreset(
       dynamicsaturation_1_1, logicaloperator_1_1, sum_1_1);
-  kt2fps_1_1 = 1.6878 * vt_1_1;
-  m1_1_1 = -1.0 * product1_1_1;
+  kt2fps_1_1 = 1.6878 *. vt_1_1;
+  m1_1_1 = -.1.0 *. product1_1_1;
   pitchcmd_1_1 = sum1_1_1;
 tel
 
@@ -819,7 +819,7 @@ let
   arg1 = if zero10_1_1 = 0.0 then false else true;
   logicaloperator5_1_1 = engage_1_1 and arg1;
   arg2 = if logicaloperator5_1_1 then 1.0 else 0.0;
-  switch1_1_1 = if arg2 >= 0.5 then in_1_1 else zero9_1_1;
+  switch1_1_1 = if arg2 >=. 0.5 then in_1_1 else zero9_1_1;
   zero10_1_1 = 1.0;
   zero9_1_1 = 0.0;
   out_1_1 = switch1_1_1;
@@ -833,9 +833,9 @@ var
   enforceuplim_1_1 : real;
 let 
   enforcelowlim_1_1 =
-    if lo_lim_1_1 >= sigin_1_1 then lo_lim_1_1 else sigin_1_1;
+    if lo_lim_1_1 >=. sigin_1_1 then lo_lim_1_1 else sigin_1_1;
   enforceuplim_1_1 =
-    if enforcelowlim_1_1 <= up_lim_1_1 then enforcelowlim_1_1 else up_lim_1_1;
+    if enforcelowlim_1_1 <=. up_lim_1_1 then enforcelowlim_1_1 else up_lim_1_1;
   out1_1_1 = enforceuplim_1_1;
 tel
 
@@ -848,9 +848,9 @@ var
   enforceuplim_1_1 : real;
 let 
   enforcelowlim_1_1 =
-    if lo_lim_1_1 >= sigin_1_1 then lo_lim_1_1 else sigin_1_1;
+    if lo_lim_1_1 >=. sigin_1_1 then lo_lim_1_1 else sigin_1_1;
   enforceuplim_1_1 =
-    if enforcelowlim_1_1 <= up_lim_1_1 then enforcelowlim_1_1 else up_lim_1_1;
+    if enforcelowlim_1_1 <=. up_lim_1_1 then enforcelowlim_1_1 else up_lim_1_1;
   out1_1_1 = enforceuplim_1_1;
 tel
 
@@ -883,15 +883,15 @@ var
   arg1, arg2, arg3 : real;
 let 
   vinit = true fby false;
-  gain_1_1 = 20.0 * sum2_1_1;
-  gain1_1_1 = -1.0 * ratelim_1_1;
-  sum2_1_1 = input_1_1 - integrator_vreset_delay_sharp_2_1_1;
+  gain_1_1 = 20.0 *. sum2_1_1;
+  gain1_1_1 = -.1.0 *. ratelim_1_1;
+  sum2_1_1 = input_1_1 -. integrator_vreset_delay_sharp_2_1_1;
   variablelimitsaturation_1_1 =
     longitudinal_controller_altitudecontrol_variableratelimit_variablelimitsaturation(
       ratelim_1_1, gain_1_1, gain1_1_1);
-  integrator_vreset_add_1_1 = integrator_vreset_product1_1_1 + integrator_vreset_product2_1_1;
+  integrator_vreset_add_1_1 = integrator_vreset_product1_1_1 +. integrator_vreset_product2_1_1;
   integrator_vreset_constant_1_1 = 0.0;
-  integrator_vreset_gain1vreset_1_1 = 1.0 * variablelimitsaturation_1_1;
+  integrator_vreset_gain1vreset_1_1 = 1.0 *. variablelimitsaturation_1_1;
   integrator_vreset_product_1_1 = if vinit then ic_1_1 else 0.0 ;
   integrator_vreset_product1_1_1 =
     if integrator_vreset_ne0_1_1 then integrator_vreset_sum3_1_1 else 0.0 ;
@@ -899,12 +899,12 @@ let
     if integrator_vreset_eq0_1_1 and integrator_vreset_ne1_1_1
     then integrator_vreset_sum3_1_1 else 0.0 ;
   integrator_vreset_sum1_1_1 =
-    integrator_vreset_gain1vreset_1_1 + integrator_vreset_sum2vreset_1_1;
+    integrator_vreset_gain1vreset_1_1 +. integrator_vreset_sum2vreset_1_1;
   integrator_vreset_sum2vreset_1_1 =
-    integrator_vreset_sum4_1_1 + integrator_vreset_product_1_1;
-  integrator_vreset_sum3_1_1 = - integrator_vreset_delay_sharp_2_1_1 + ic_1_1;
+    integrator_vreset_sum4_1_1 +. integrator_vreset_product_1_1;
+  integrator_vreset_sum3_1_1 = -. integrator_vreset_delay_sharp_2_1_1 +. ic_1_1;
   integrator_vreset_sum4_1_1 =
-    integrator_vreset_delay_sharp_2_1_1 + integrator_vreset_add_1_1;
+    integrator_vreset_delay_sharp_2_1_1 +. integrator_vreset_add_1_1;
   integrator_vreset_delay_sharp_1_1_1 = 1.0 fby integrator_vreset_constant_1_1;
   integrator_vreset_delay_sharp_2_1_1 = 0.0 fby integrator_vreset_sum1_1_1;
   integrator_vreset_delay_sharp_3_1_1 = false fby ictrig_1_1;
@@ -929,9 +929,9 @@ let
   constant1_1_1 = 0.0001;
   constant2_1_1 = 1000.0;
   enforcelowlim_1_1 =
-    if constant1_1_1 >= sigin_1_1 then constant1_1_1 else sigin_1_1;
+    if constant1_1_1 >=. sigin_1_1 then constant1_1_1 else sigin_1_1;
   enforceuplim_1_1 =
-    if enforcelowlim_1_1 <= constant2_1_1
+    if enforcelowlim_1_1 <=. constant2_1_1
     then enforcelowlim_1_1 else constant2_1_1;
   out1_1_1 = enforceuplim_1_1;
 tel
@@ -960,16 +960,16 @@ var
   r2d_1_1 : real;
   arg, divide_1_1_a, divide_1_1_b : real;
 let 
-  abs_1_1 = if hdot_1_1 >= 0.0 then hdot_1_1 else -hdot_1_1;
+  abs_1_1 = if hdot_1_1 >=. 0.0 then hdot_1_1 else -.hdot_1_1;
   constant1_1_1 = 0.0;
   constant3_1_1 = 10.0;
   constant4_1_1 = 3.2;
-  arg = if gskts_1_1 < 100.0 then 200.0 else saturation1_1_1;
+  arg = if gskts_1_1 <. 100.0 then 200.0 else saturation1_1_1;
   divide_1_1_a = divid_bounded_num(variableratelimit_1_1, arg, 168.78, 1000.0);
   divide_1_1_b = divid_bounded_num(variableratelimit_1_1,
                                    saturation1_1_1, 0.0001, 1000.0);
-  divide_1_1 = if gskts_1_1 >= 100.0 then divide_1_1_a else divide_1_1_b;
-  kh_1_1 = 0.08 * sum_1_1;
+  divide_1_1 = if gskts_1_1 >=. 100.0 then divide_1_1_a else divide_1_1_b;
+  kh_1_1 = 0.08 *. sum_1_1;
   logicaloperator_1_1 = not engage_1_1;
   mux_1_1 = altcmd_1_1 ;
   mux_1_2 = altitude_1_1 ;
@@ -977,8 +977,8 @@ let
   mux1_1_2 = variableratelimit_1_1 ;
   saturation1_1_1 =
     longitudinal_controller_altitudecontrol_saturation1(kts2fps_1_1);
-  sum_1_1 = altcmd_1_1 - altitude_1_1;
-  sum3_1_1 = abs_1_1 + constant3_1_1;
+  sum_1_1 = altcmd_1_1 -. altitude_1_1;
+  sum3_1_1 = abs_1_1 +. constant3_1_1;
   switch_1_1 = if engage_1_1 then kh_1_1 else constant1_1_1 ;
   variableratelimit_1_1 =
     longitudinal_controller_altitudecontrol_variableratelimit(
@@ -986,9 +986,9 @@ let
   variablelimitsaturation_1_1 =
     longitudinal_controller_altitudecontrol_variablelimitsaturation(
       sum3_1_1, switch_1_1, k_1_1);
-  k_1_1 = -1.0 * sum3_1_1;
-  kts2fps_1_1 = 1.6878 * gskts_1_1;
-  r2d_1_1 = 57.2958 * divide_1_1;
+  k_1_1 = -.1.0 *. sum3_1_1;
+  kts2fps_1_1 = 1.6878 *. gskts_1_1;
+  r2d_1_1 = 57.2958 *. divide_1_1;
   altgamcmd_1_1 = r2d_1_1;
 tel
 
@@ -1022,11 +1022,11 @@ let
   pitchinnerloop_1_1 =
     longitudinal_controller_pitchinnerloop(k5_1_1, thetadeg_1_1,
                                            qdeg_1_1, cas_1_1);
-  sum7_1_1 = fpacmd_1_1 + k2_1_1;
-  act_cmd_ge_cmd = sum7_1_1 >= fpacmd_1_1 ;
-  alt_out_loc_pos = k2_1_1 >= 0.0 ;
-  k2_1_1 = 1.0 * altitudecontrol_1_1;
-  k5_1_1 = 1.0 * fpacontrol_1_1;
+  sum7_1_1 = fpacmd_1_1 +. k2_1_1;
+  act_cmd_ge_cmd = sum7_1_1 >=. fpacmd_1_1 ;
+  alt_out_loc_pos = k2_1_1 >=. 0.0 ;
+  k2_1_1 = 1.0 *. altitudecontrol_1_1;
+  k5_1_1 = 1.0 *. fpacontrol_1_1;
   elevcmd_1_1 = manualoverride_1_1;
   pitch_cmd_out =
     if act_cmd_ge_cmd or not act_cmd_ge_cmd
