@@ -1793,3 +1793,117 @@ End SStream_functions.
 (*   Qed. *)
 
 (* End Simple_sreset. *)
+
+
+(* reset sur les fonctions d'environnement *)
+Section Sreset.
+
+  Context {I A : Type}.
+  Definition SI := fun _ : I => sampl A.
+
+  (* appliquer REM à tous les flots de l'environment *)
+  Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
+
+  (* prendre la tête dans env1, la queue dans env2 *)
+  Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
+    apply curry, Dprodi_DISTR; intro i.
+    exact ((APP _ @2_ (PROJ _ i @_ FST _ _)) (PROJ _ i @_ SND _ _)).
+  Defined.
+
+  Lemma APP_env_eq :
+    forall (env1 env2 : DS_prod SI) i,
+      APP_env env1 env2 i = APP _ (env1 i) (env2 i).
+  Proof.
+    trivial.
+  Qed.
+
+  Definition sresetf_aux :
+    (* la fonctionnelle : *)
+    ((DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI) -C->
+    (* les arguments *)
+    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
+
+    do 4 apply curry.
+    match goal with
+    | |- _ (_ (Dprod ?pl ?pr) _) =>
+        (* fonctionnelle *)
+        pose (reset := FST _ _ @_ (FST _ _ @_ (FST _ _ @_ (FST pl pr))));
+        (* fonction à réinitialiser *)
+        pose (f := SND _ _ @_ (FST _ _ @_ (FST _ _ @_ (FST pl pr))));
+        (* flot du reset, booléens *)
+        pose (R := SND _ _ @_ (FST _ _ @_ (FST pl pr)));
+        (* environnement des entrées (arguments de f) à faire progresser *)
+        pose (X := SND _ _ @_ (FST pl pr));
+        (* sorties déjà calculées, à faire progresser aussi *)
+        pose (Y := SND pl pr);
+        idtac
+    end.
+
+    (* on décrit l'environnement pour chaque variable *)
+    apply Dprodi_DISTR; intro x.
+    refine ((DSCASE (sampl bool) _ @2_ _) R).
+    apply ford_fcont_shift; intro vr.
+
+    (* on dégage (tl R) du contexte pour pouvoir utiliser nos alias : *)
+    refine (curry (_ @_ FST _ _)).
+
+    (* on teste la condition booléenne *)
+    destruct vr as [|[]|] eqn:?.
+    (* pas de reset *)
+    1,3: exact ((APP _ @2_ PROJ _ x @_ Y)
+                  (PROJ _ x @_
+                     ((AP _ _ @5_ reset)
+                        f (REM _ @_ R) (REM_env @_ X) (REM_env @_ Y)))).
+    (* erreur *)
+    2: exact (CTE _ _ (DS_const (err e))).
+    (* signal reçu *)
+    exact (PROJ _ x @_ ((AP _ _ @5_ reset) f
+             (CONS (pres false) @_ (REM _ @_ R))
+             X ((AP _ _ @2_ f) X))).
+  Defined.
+
+  Lemma sresetf_aux_eq : forall F f vr R X Y,
+      sresetf_aux F f (cons vr R) X Y ==
+        match vr with
+        | pres true => F f (cons (pres false) R) X (f X)
+        | err e => fun _ => DS_const (err e)
+        | _ => APP_env Y (F f R (REM_env X) (REM_env Y))
+        end.
+  Proof.
+    intros.
+    apply Oprodi_eq_intro; intro i.
+    unfold sresetf_aux.
+    autorewrite with localdb.
+    setoid_rewrite Dprodi_DISTR_simpl.
+    setoid_rewrite DSCASE_simpl.
+    setoid_rewrite DScase_cons.
+    destruct vr as [|[]|]; cbn; now autorewrite with localdb.
+  Qed.
+
+
+  Definition sreset_aux :
+    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
+    FIXP _ sresetf_aux.
+
+  Definition sreset :
+    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI.
+    apply curry, curry.
+    match goal with
+    | |- _ (_ (Dprod ?pl ?pr) _) =>
+        pose (f := FST _ _ @_ (FST pl pr));
+        pose (R := SND _ _ @_ (FST pl pr));
+        pose (X := SND pl pr);
+        idtac
+    end.
+    exact ((sreset_aux @4_ f) R X ((AP _ _ @2_ f) X)).
+  Defined.
+
+  Lemma sreset_eq : forall f R X,
+      sreset f R X == sreset_aux f R X (f X).
+  Proof.
+    intros.
+    unfold sreset.
+    now autorewrite with localdb.
+  Qed.
+
+End Sreset.
