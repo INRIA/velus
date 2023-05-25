@@ -165,6 +165,18 @@ Section Denot_node.
 
 Variable (G : global).
 
+Fixpoint sbools_ofs {n} : @nprod (DS (sampl value)) n -C-> DS (sampl bool) :=
+  match n with
+  | O => CTE _ _ (DS_const abs)
+  | S _ => (ZIP (fun b acc =>
+                  match b, acc with
+                  | pres (Venum true_tag), _ => pres true
+                  | err e, _ => err e
+                  | _, _ => acc
+                  end
+             ) @2_ nprod_hd) (sbools_ofs @_ nprod_tl)
+  end.
+
 (* l'opérateur swhen spécialisé aux Velus.Op.value *)
 Definition swhenv :=
   let get_tag := fun v => match v with Venum t => Some t | _ => None end in
@@ -334,9 +346,11 @@ Definition denot_exp_ (ins : list ident)
     (* dénotation du nœud *)
     pose (f := PROJ _ i @_ FST _ _ @_ FST _ _ @_ FST _ _ : ctx -C-> FI i).
     pose (ss := denot_exps_ denot_exp_ es).
+    pose (rs := denot_exps_ denot_exp_ er).
     (* chaînage *)
-    exact ((np_of_env (List.map fst (n_out n))
-              @_ (f @2_ ID ctx) (env_of_np (idents (n_in n)) @_ ss))).
+    refine
+      (np_of_env (List.map fst (n_out n)) @_
+         (sreset @3_ f) (sbools_ofs @_ rs) (env_of_np (idents (n_in n)) @_ ss)).
 Defined.
 
 Definition denot_exp (ins : list ident) (e : exp) :
@@ -515,14 +529,15 @@ Lemma denot_exp_eq :
                        (nprod_cons (eq_rect _ nprod ds _ eqm) ss)
           | _,_ => fun _ => nprod_const errTy _
           end cs
-      | Eapp f es _ an =>
+      | Eapp f es er an =>
           let ss := denot_exps ins es envG envI bs env in
+          let rs := denot_exps ins er envG envI bs env in
           match find_node f G with
           | Some n =>
               match Nat.eq_dec (length (List.map fst n.(n_out))) (length an) with
               | left eqan =>
                   eq_rect _ nprod
-                    (np_of_env (List.map fst n.(n_out)) (envG f (env_of_np (idents n.(n_in)) ss)))
+                    (np_of_env (List.map fst n.(n_out)) (sreset (envG f) (sbools_ofs rs) (env_of_np (idents n.(n_in)) ss)))
                     _ eqan
               | _ => nprod_const errTy _
               end
@@ -631,9 +646,11 @@ Proof.
     fold_denot_exps_ ins.
     gen_denot_sub_exps.
     cases.
-    generalize (np_of_env (List.map fst (n_out n))).
+    generalize (np_of_env (List.map fst (n_out n))); intro.
     unfold eq_rect.
-    simpl; cases.
+    autorewrite with cpodb.
+    simpl; destruct e.
+    now autorewrite with cpodb.
 Qed.
 
 Global Opaque denot_exp.
@@ -1020,10 +1037,10 @@ Inductive restr_exp : exp -> Prop :=
     Forall restr_exp des ->
     restr_exp (Ecase e ess (Some des) a)
 | restr_Eapp :
-  forall f es anns,
-    (* TODO: reset *)
+  forall f es er anns,
     Forall restr_exp es ->
-    restr_exp (Eapp f es [] anns)
+    Forall restr_exp er ->
+    restr_exp (Eapp f es er anns)
 .
 
 Inductive restr_block : block -> Prop :=
@@ -1177,9 +1194,15 @@ Proof.
       simpl_Forall.
       apply H; contradict Hnin.
       constructor; left; solve_Exists. }
-    revert Hes; simpl; unfold eq_rect.
+    assert (denot_exps (Global tys exts nds) ins er envG envI bs env
+            == denot_exps (Global tys exts (nd::nds)) ins er envG envI bs env) as Her.
+    { apply denot_exps_hyp.
+      simpl_Forall.
+      apply H0; contradict Hnin.
+      constructor; right; solve_Exists. }
+    revert Hes Her; simpl; unfold eq_rect.
     gen_sub_exps; cases.
-    now intros ?? ->.
+    now intros ???? -> ->.
 Qed.
 
 Corollary denot_exps_cons :
