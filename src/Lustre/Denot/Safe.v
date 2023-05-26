@@ -401,10 +401,10 @@ Inductive op_correct_exp : exp -> Prop :=
     Forall op_correct_exp eds ->
     op_correct_exp (Ecase e ess (Some eds) anns)
 | opc_Eapp :
-  forall f es anns,
+  forall f es er anns,
     Forall op_correct_exp es ->
-    (* TODO : quelles hypothèses ? *)
-    op_correct_exp (Eapp f es [] anns)
+    Forall op_correct_exp er ->
+    op_correct_exp (Eapp f es er anns)
 .
 
 Definition op_correct_block (b : block) : Prop :=
@@ -473,9 +473,12 @@ Proof.
       contradict Hnin; constructor; right; right; esplit; split; solve_Exists.
   - (* Eapp *)
     constructor.
-    simpl_Forall.
-    eapply H; eauto.
-    contradict Hnin; constructor; left; solve_Exists.
+    + simpl_Forall.
+      eapply H; eauto.
+      contradict Hnin; constructor; left; solve_Exists.
+    + simpl_Forall.
+      eapply H0; eauto.
+      contradict Hnin; constructor; right; solve_Exists.
 Qed.
 
 Lemma op_correct_block_cons :
@@ -2462,13 +2465,14 @@ Section Node_safe.
      dans le nœud appelant.
    *)
   Hypothesis Hnode :
-    forall f n envI,
+    forall f n,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
       let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-      forall bs, bss ins envI <= bs ->
-      env_correct Γ ins envI bs 0 ->
-      env_correct Γ ins envI bs (envG f envI).
+      forall bs envI,
+        bss ins envI <= bs ->
+        env_correct Γ ins envI bs 0 ->
+        env_correct Γ ins envI bs (envG f envI).
 
   Lemma basilus_nclockus :
     forall ins envI bs env e,
@@ -3172,24 +3176,71 @@ Section Node_safe.
      - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
-      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
-      apply Forall_and_inv in H as [Wt H'].
-      apply Forall_and_inv in H' as [Wc Sf].
-      apply Forall_ty_exp in Wt.
-      apply Forall_cl_exp in Wc.
-      apply Forall_denot_exps (* forall_nprod_Forall *) in Sf.
+      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H, H0; auto.
+      apply Forall_and_inv in H as [Wt H'], H0 as [Wt2 H'2].
+      apply Forall_and_inv in H' as [Wc Sf], H'2 as [Wc2 Sf2].
+      apply Forall_ty_exp in Wt, Wt2.
+      apply Forall_cl_exp in Wc, Wc2.
+      apply Forall_denot_exps (* forall_nprod_Forall *) in Sf, Sf2.
       pose proof (nclocksof_sem ins envI bs env es) as Ncs.
+      pose proof (nclocksof_sem ins envI bs env er) as Ncs2. (* vraiment utile? *)
       rewrite annots_numstreams in *.
       rewrite denot_exp_eq.
-      revert Wt Wc Sf Ncs.
-      generalize (denot_exps G ins es envG envI bs env).
+      revert Wt Wc Sf Ncs Wt2 Wc2 Sf2 Ncs2.
+      gen_sub_exps.
       take (list_sum _ = _) and rewrite it.
-      intro ss.
-      take (find_node f G = _) and
-        specialize (Hnode f _ (env_of_np (idents (n_in n)) ss) it).
+      intros sr ss.
+
+      Set Nested Proofs Allowed.
+      Lemma rem_denot_var :
+        forall ins envI env x,
+          rem (denot_var ins envI env x)
+          == denot_var ins (REM_env envI) (REM_env env) x.
+      Proof.
+        unfold denot_var; intros; cases.
+      Qed.
+
+      Lemma rem_denot_clock :
+        forall ins envI bs env ck,
+          rem (denot_clock ins envI bs env ck)
+          == denot_clock ins (REM_env envI) (rem bs) (REM_env env) ck.
+      Proof.
+        induction ck as [| ??? []]; simpl; auto.
+        now rewrite rem_zip, IHck, rem_denot_var.
+      Qed.
+
+      Lemma env_correct_rem :
+        forall Γ ins envI bs env,
+          env_correct Γ ins envI bs env ->
+          env_correct Γ ins (REM_env envI) (rem bs) (REM_env env).
+      Proof.
+        clear.
+        unfold env_correct.
+        intros * Hco ??? Hty Hcl.
+        destruct (Hco _ _ _ Hty Hcl) as (Ty & Cl & Sf); clear Hco.
+        unfold ty_DS, cl_DS, safe_DS, DSForall_pres in *.
+        rewrite <- rem_denot_var, <- rem_denot_clock, <- rem_AC.
+        auto using DSForall_rem.
+      Qed.
+
+      Lemma safe_sreset :
+        forall f n bs envI rs,
+          find_node f G = Some n ->
+          let ins := List.map fst (n_in n) in
+          let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+          (* + condition sur rs ? *)
+          env_correct Γ ins envI bs 0 ->
+          env_correct Γ ins envI bs (sreset (envG f) rs envI).
+      Proof.
+        intros * Hfind ?? Hco.
+        rewrite sreset_eq.
+      Admitted.
+
+      (* take (find_node f G = _) and *)
+      (*   specialize (Hnode f _ (env_of_np (idents (n_in n)) ss) it). *)
       take (find_node f G = _) and rewrite it in *.
       repeat take (Some _ = Some _) and inv it.
       eapply wc_find_node in WCG as (? & WCG); eauto.
@@ -3198,18 +3249,19 @@ Section Node_safe.
       rewrite clocksof_nclocksof in Wc.
       2:{ unfold decl in *;
           take (length a = _ ) and rewrite it, map_length in *; congruence. }
-      unfold eq_rect. cases; simpl.
+      unfold eq_rect; cases; simpl.
       (* on choisit bien [[bck]] comme majorant de bss *)
-      specialize (Hnode (denot_clock ins envI bs env bck)).
-      apply env_correct_decompose in Hnode as (fTy & fCl & fEf).
-      + (* on utilise la conclusion de Hnode *)
-        repeat split.
-        * eapply inst_ty_env; eauto.
-          now rewrite Forall2_map_1.
-        * eapply inst_cl_env; eauto.
-        * eapply inst_ef_env; eauto.
-      + eapply bss_le_bs, cl_env_inst; eauto.
-      + eapply safe_inst_in; eauto.
+
+      pose proof (safe_sreset f n (denot_clock ins envI bs env bck)
+                    (env_of_np (idents (n_in n)) ss)
+                    (sbools_ofs sr)
+        ) as Hres.
+      apply env_correct_decompose in Hres as (fTy & fCl & fEf); eauto using safe_inst_in.
+      repeat split.
+      * eapply inst_ty_env; eauto.
+        now rewrite Forall2_map_1.
+      * eapply inst_cl_env; eauto.
+      * eapply inst_ef_env; eauto.
   Qed.
 
   Corollary safe_exp :
