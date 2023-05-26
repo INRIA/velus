@@ -1885,6 +1885,19 @@ Section Sreset.
     (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
     FIXP _ sresetf_aux.
 
+  Lemma sreset_aux_eq : forall f vr R X Y,
+      sreset_aux f (cons vr R) X Y ==
+        match vr with
+        | pres true => sreset_aux f (cons (pres false) R) X (f X)
+        | err e => fun _ => DS_const (err e)
+        | _ => APP_env Y (sreset_aux f R (REM_env X) (REM_env Y))
+        end.
+  Proof.
+    intros.
+    assert (Heq:=FIXP_eq sresetf_aux).
+    rewrite <- sresetf_aux_eq, <- Heq; auto.
+  Qed.
+
   Definition sreset :
     (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI.
     apply curry, curry.
