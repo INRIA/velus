@@ -371,13 +371,19 @@ Proof.
 Qed.
 
 Lemma forall_denot_exps :
-  forall ins es envG envI bs env (P : DS (sampl value) -> Prop),
-    Forall (fun e => forall_nprod P (denot_exp ins e envG envI bs env)) es ->
-    forall_nprod P (denot_exps ins es envG envI bs env).
+  forall (P : DS (sampl value) -> Prop) ins es envG envI bs env,
+    forall_nprod P (denot_exps ins es envG envI bs env)
+    <-> Forall (fun e => forall_nprod P (denot_exp ins e envG envI bs env)) es.
 Proof.
-  induction es; intros * Hf; simpl_Forall; auto.
-  setoid_rewrite denot_exps_eq.
-  auto using forall_nprod_app.
+  induction es; intros; simpl; split; auto.
+  - intro Hs. setoid_rewrite denot_exps_eq in Hs.
+    apply app_forall_nprod in Hs as [].
+    constructor; auto.
+    now apply IHes.
+  - intro Hs. inv Hs.
+    setoid_rewrite denot_exps_eq.
+    apply forall_nprod_app; auto.
+    now apply IHes.
 Qed.
 
 Definition denot_expss {A} (ins : list ident) (ess : list (A * list exp)) (n : nat) :
@@ -432,6 +438,27 @@ Proof.
   - rewrite denot_expss_eq.
     unfold eq_rect in *.
     cases; eauto using forall_nprod_const, forall_nprod_cons.
+Qed.
+
+Lemma Forall_denot_expss :
+  forall A P ins (es : list (A * list exp)) n envG envI bs env,
+    Forall (fun es => length (annots (snd es)) = n) es ->
+    forall_nprod (forall_nprod P) (denot_expss ins es n envG envI bs env)
+    <-> Forall (fun l => Forall (fun e => forall_nprod P (denot_exp ins e envG envI bs env)) l) (List.map snd es).
+Proof.
+  clear.
+  induction es as [|[i es] ess]; intros * Hl.
+  - repeat constructor.
+  - inv Hl.
+    rewrite denot_expss_eq.
+    unfold eq_rect; cases.
+    + (* sans erreurs *)
+      simpl (Forall _ _).
+      rewrite Forall_cons2.
+      rewrite <- (IHess (list_sum (List.map numstreams es))); auto.
+      setoid_rewrite forall_nprod_cons_iff.
+      now rewrite <- forall_denot_exps.
+    + now rewrite annots_numstreams in n.
 Qed.
 
 Lemma denot_exps_nil :
