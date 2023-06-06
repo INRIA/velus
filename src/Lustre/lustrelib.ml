@@ -192,9 +192,9 @@ module PrintFun
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Ewhen (e, (x, tx), c, _) ->
         fprintf p "%a when %a(%a)"
-          print_ident x
           (exp_list prec') e
           PrintOps.print_enumtag (c, tx)
+          print_ident x
       | L.Emerge ((id, ty), es, _) ->
         fprintf p "@[<v 2>merge %a@ %a@]"
           print_ident id
