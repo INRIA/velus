@@ -2,7 +2,7 @@
    Colaco, Pagano, Pouzet,
    "Scade 6: A Formal Language for Embedded Critical Software Development" *)
 
-node watch(stst, rst, set, md : bool)
+node stopwatch(stst, rst, set, md : bool)
 returns (hh, mm, ss : int; isLap : bool)
 var
     isStart : bool; -- is chrono started ?

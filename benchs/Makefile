@@ -28,6 +28,7 @@ GCC_NOINLINING?=-fno-inline-functions \
 	      -fno-inline-functions-called-once \
 	      -fno-inline-small-functions
 GCC_FLAGS=-O1 $(GCC_NOINLINING) $(ARCH_FLAGS)
+GCC_IFLAGS=-O1 $(ARCH_FLAGS)
 
 # WCET
 
@@ -112,9 +113,19 @@ clean:
 		 $(GCC_FLAGS) $(<:.ept=_types.c) $(<:.ept=.c) _main.c; \
 	 cp $(<:.ept=.c) ../$(<:.ept=.hept-gcc.c))
 
+%.hept-gcci.exe %.hept-gcc.c %.hept-gcc.s: %.ept
+	heptc $(HEPT_FLAGS) -s $(<:.ept=) -target c $<
+	(cd $(<:.ept=_c); \
+	 $(GCC) $(V) -S -I $(HEPT_LIB)/c -o ../$(<:.ept=.hept-gcc.s) \
+		 $(GCC_IFLAGS) $(<:.ept=).c; \
+	 $(GCC) $(V) --specs=nosys.specs \
+		-I $(HEPT_LIB)/c -o ../$@ \
+		 $(GCC_IFLAGS) $(<:.ept=_types.c) $(<:.ept=.c) _main.c; \
+	 cp $(<:.ept=.c) ../$(<:.ept=.hept-gcc.c))
+
 ## WCET
 
-wcet: velus.wcet hept.wcet hept-gcc.wcet
+wcet: velus.wcet hept.wcet hept-gcc.wcet hept-gcci.wcet
 
 velus: $(EXAMPLES:.lus=.exe)
 velus.wcet: $(EXAMPLES:.lus=.velus.wcet)
@@ -124,6 +135,9 @@ hept.wcet: $(EXAMPLES:.lus=.hept.wcet)
 
 hept-gcc: $(EXAMPLES:.lus=.hept-gcc.exe)
 hept-gcc.wcet: $(EXAMPLES:.lus=.hept-gcc.wcet)
+
+hept-gcci: $(EXAMPLES:.lus=.hept-gcci.exe)
+hept-gcci.wcet: $(EXAMPLES:.lus=.hept-gcci.wcet)
 
 %.ff: %.exe
 	$(OTAWA_PATH)/bin/mkff -DBG $< >$@
@@ -148,6 +162,12 @@ hept-gcc.wcet: $(EXAMPLES:.lus=.hept-gcc.wcet)
 		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept-gcc.exe=)./"; \
 	done >$@
 
+%.hept-gcci.wcet: %.hept-gcci.exe %.hept-gcci.ff
+	for f in $$(nm $< | grep -i "$(<:.hept-gcci.exe=).*\(step\|reset\)" | cut -d ' ' -f 3); do \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
+		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept-gcci.exe=)./"; \
+	done >$@
+
 MAIN_NODES := $(shell cut -d ' ' -f 2 main.txt)
 
 empty :=
@@ -159,3 +179,15 @@ groupwcet:
 	    grep -E "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
 	    sed -e 's/_step/.step/' | \
 		column -t
+
+groupwcet.latex:
+	@$(MAKE) --silent groupwcet \
+	    | sed -e 's/^\(.*\)\.\(.*\)\.step/\2/' \
+	    	  -e 's/  */ \& /g' \
+			  -e 's/\(controller_2\)/heater~\\citep{lucy:manual:2006}/g' \
+		      -e 's/\(cruisecontrol\)/\1~\\citep{lucy:manual:2006}/g' \
+	    	  -e 's/\(chrono\)/\1~\\citep{ColacoPagPou:StateMachines:2005}/g' \
+			  -e 's/\(stopwatch\)/stopwatch~\\citep{ColacoPagPou:SCADE:2017}/g' \
+			  -e 's/\(buttons\)/\1~\\citep{ColacoPagPou:SCADE:2017}/g' \
+	    	  -e 's/_/\\_/g' \
+		  -e 's/$$/ \\\\/'

@@ -75,7 +75,7 @@ let print_function fname =
           printf " %s"
             (match mv with
              | None -> " ?"
-             | Some mv -> (string_of_int (((mv - v) * 100) / v)));
+             | Some mv -> (string_of_int (((v - mv) * 100) / mv)));
       with Not_found ->
         (printf " ?"; if calc_percentages then printf " ?")
   in

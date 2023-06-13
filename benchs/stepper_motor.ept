@@ -68,7 +68,7 @@ let
     end
 tel
 
-node motor(pause : bool) returns (enable, motorA, motorB, step : bool)
+node stepper_motor(pause : bool) returns (enable, motorA, motorB, step : bool)
 let
     (enable, step) = feed_pause(pause);
     (motorA, motorB) = drive_sequence(step);
