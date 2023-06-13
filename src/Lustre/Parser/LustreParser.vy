@@ -168,24 +168,23 @@ primary_expression:
 | cst=constant
     { [LustreAst.CONSTANT (fst cst) (snd cst)] }
 | loc=LPAREN expr=expression_list RPAREN
-    { rev expr }
+    { expr }
 
 (* 6.5.2 *)
 postfix_expression:
 | expr=primary_expression
     { expr }
 | fn=VAR_NAME LPAREN args=expression_list RPAREN
-    { [LustreAst.APP (fst fn) (rev args) [] (snd fn)] }
+    { [LustreAst.APP (fst fn) args [] (snd fn)] }
 | LPAREN RESTART fn=VAR_NAME EVERY e=expression RPAREN
   LPAREN args=expression_list RPAREN
-    { [LustreAst.APP (fst fn) (rev args) e (snd fn)] }
+    { [LustreAst.APP (fst fn) args e (snd fn)] }
 
-(* Semantic value is in reverse order. *)
 expression_list:
 | expr=expression
     { expr }
 | exprs=expression_list COMMA expr=expression
-    { expr ++ exprs }
+    { exprs ++ expr }
 
 (* 6.5.3 *)
 unary_expression:
