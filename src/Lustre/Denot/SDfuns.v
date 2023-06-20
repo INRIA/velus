@@ -41,7 +41,7 @@ Local Hint Rewrite
 (** *** abstract_clock as defined in Vélus, considering errors as absences *)
 Section Abstract_clock.
 
-  Context {A : Type}.
+  Context {A I : Type}.
 
   Definition AC : DS (sampl A) -C-> DS bool :=
     MAP (fun v => match v with pres _ => true | _ => false end).
@@ -78,7 +78,7 @@ Section Abstract_clock.
   Qed.
 
   (** equivalent of [clocks_of] *)
-  Fixpoint bss {I} (ins : list I) : DS_prod (fun _ => sampl A) -C-> DS bool :=
+  Fixpoint bss (ins : list I) : DS_prod (fun _ => sampl A) -C-> DS bool :=
     match ins with
     | [] => CTE _ _ (DS_const false)
     | x :: nil => AC @_ PROJ _ x
@@ -86,10 +86,9 @@ Section Abstract_clock.
     end.
 
   Lemma bss_cons :
-    forall {I} x (l : list I) env,
+    forall x l env,
       bss (x :: l) env == ZIP orb (AC (env x)) (bss l env).
   Proof.
-    clear.
     destruct l; simpl; auto.
     intro env.
     autorewrite with cpodb.
@@ -99,14 +98,14 @@ Section Abstract_clock.
   Qed.
 
   Lemma bss_cons2 :
-    forall {I} x y (l : list I) env,
+    forall x y l env,
       bss (x :: y :: l) env = ZIP orb (AC (env x)) (bss (y :: l) env).
   Proof.
     trivial.
   Qed.
 
   Lemma bss_inf :
-    forall {I} (l : list I) env,
+    forall l env,
       all_infinite env ->
       infinite (bss l env).
   Proof.
@@ -120,16 +119,26 @@ Section Abstract_clock.
   Qed.
 
   Lemma bss_switch_env :
-    forall {I} (l : list I) env env',
+    forall l env env',
       (forall x, In x l -> env x == env' x) ->
       bss l env == bss l env'.
   Proof.
-    clear.
     induction l as [|x []]; intros * Heq; auto.
     - simpl; autorewrite with cpodb.
       rewrite (Heq x); simpl; auto.
     - simpl; autorewrite with cpodb.
       rewrite (Heq x), IHl; simpl in *; eauto.
+  Qed.
+
+  Lemma rem_bss :
+    forall l env,
+      rem (bss l env) == bss l (REM_env env).
+  Proof.
+    induction l; intros.
+    - simpl.
+      autorewrite with cpodb.
+      now rewrite DS_const_eq, rem_cons at 1.
+    - now rewrite 2 bss_cons, rem_zip, rem_AC, IHl.
   Qed.
 
 End Abstract_clock.
@@ -1801,22 +1810,6 @@ Section Sreset.
   Context {I A : Type}.
   Definition SI := fun _ : I => sampl A.
 
-  (* appliquer REM à tous les flots de l'environment *)
-  Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
-
-  (* prendre la tête dans env1, la queue dans env2 *)
-  Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
-    apply curry, Dprodi_DISTR; intro i.
-    exact ((APP _ @2_ (PROJ _ i @_ FST _ _)) (PROJ _ i @_ SND _ _)).
-  Defined.
-
-  Lemma APP_env_eq :
-    forall (env1 env2 : DS_prod SI) i,
-      APP_env env1 env2 i = APP _ (env1 i) (env2 i).
-  Proof.
-    trivial.
-  Qed.
-
   Definition sresetf_aux :
     (* la fonctionnelle : *)
     ((DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI) -C->
@@ -1880,6 +1873,15 @@ Section Sreset.
     destruct vr as [|[]|]; cbn; now autorewrite with localdb.
   Qed.
 
+  Lemma is_cons_sresetf_aux :
+    forall F f R X Y x,
+      is_cons (sresetf_aux F f R X Y x) ->
+      is_cons R.
+  Proof.
+    unfold sresetf_aux.
+    intros * Hc.
+    now apply DScase_is_cons in Hc.
+  Qed.
 
   Definition sreset_aux :
     (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
@@ -1896,6 +1898,17 @@ Section Sreset.
     intros.
     assert (Heq:=FIXP_eq sresetf_aux).
     rewrite <- sresetf_aux_eq, <- Heq; auto.
+  Qed.
+
+  Lemma is_cons_sreset_aux :
+    forall f R X Y x,
+      is_cons (sreset_aux f R X Y x) ->
+      is_cons R.
+  Proof.
+    unfold sreset_aux.
+    intros * Hc.
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl in Hc.
+    now apply DScase_is_cons in Hc.
   Qed.
 
   Definition sreset :
