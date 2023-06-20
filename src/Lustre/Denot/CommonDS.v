@@ -396,6 +396,25 @@ Section DS_Forall.
     apply DSForall_bot.
   Qed.
 
+  Lemma DSForall_app :
+    forall u v,
+      DSForall u ->
+      DSForall v ->
+      DSForall (app u v).
+  Proof.
+    intros.
+    remember_ds (app u v) as t.
+    revert_all.
+    cofix Cof; intros * Fu Fv t Ht.
+    destruct t; constructor.
+    - rewrite <- eqEps in *.
+      now eapply Cof with (u := u) (v := v).
+    - apply symmetry, app_cons_elim in Ht as (?& Hu &?).
+      rewrite Hu in Fu; now inv Fu.
+    - apply symmetry, app_cons_elim in Ht as (?& ? & Ht).
+      now rewrite Ht.
+  Qed.
+
 End DS_Forall.
 
 Lemma DSForall_map :
@@ -424,6 +443,16 @@ Proof.
   intros ???.
   cofix Cof.
   destruct s; intros Pq Hf; inv Hf; constructor; cases.
+Qed.
+
+Lemma DSForall_and :
+  forall A (P Q : A -> Prop) (u : DS A),
+    DSForall P u ->
+    DSForall Q u ->
+    DSForall (fun x => P x /\ Q x) u.
+Proof.
+  cofix Cof; intros * Hp Hq.
+  destruct u; inv Hp; inv Hq; constructor; auto.
 Qed.
 
 Lemma DSForall_forall :
