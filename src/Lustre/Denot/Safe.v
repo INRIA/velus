@@ -4172,6 +4172,7 @@ Module LdenotsafeFun
        (Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED     Ids Op OpAux Cks Senv Syn)
        (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
-<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den.
-  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den.
+       (OpErr : OP_ERR     Ids Op OpAux Cks Senv Syn Lord Den)
+<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr.
+  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr.
 End LdenotsafeFun.
