@@ -48,6 +48,18 @@ Module Type LDENOTSAFE
         right; intro HH; inv HH.
   Qed.
 
+  (* TODO: move to Vélus ? *)
+  Lemma typeof_same :
+    forall es ty,
+      Forall (fun e => typeof e = [ty]) es ->
+      Forall (eq ty) (typesof es).
+  Proof.
+    induction es; simpl; intros * Hf; auto.
+    inv Hf.
+    apply Forall_app; split; auto.
+    take (typeof _ = _) and rewrite it; auto.
+  Qed.
+
 Section Static_env_node.
 
   Lemma NoDup_senv :
@@ -2618,11 +2630,13 @@ Section Node_safe.
       apply sub_clock_bs.
   Qed.
 
-  (* XXXXXXXXXXXXXXXXXXXXXXXXXXX
-     faire le tri pour le reset
-   *)
 
-  Set Nested Proofs Allowed.
+  (** ** Traitement du reset *)
+
+  (** Pour raisonner sur la définition de [sreset_aux], on a besoin
+      de quelques résultats sur la combinaison d'environments via
+      [REM_env] et [APP_env]. *)
+
   Lemma rem_denot_var :
     forall ins envI env x,
       rem (denot_var ins envI env x)
@@ -2654,427 +2668,6 @@ Section Node_safe.
     auto using DSForall_rem.
   Qed.
 
-  (* XXXXXXXXXXXXXx *)
-
-
-  (* XXXXXXXX *)
-  Definition FIRST_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => FIRST _).
-  CoInductive ec Γ ins : DS_prod SI -> DS bool -> DS_prod SI -> Prop :=
-  | EnCo :
-    forall envI bs env,
-      ec Γ ins (REM_env envI) (rem bs) (REM_env env) ->
-      env_correct Γ ins (FIRST_env envI) (first bs) (FIRST_env env) ->
-      ec Γ ins envI bs env.
-
-
-  Lemma ec_env_correct :
-    forall Γ ins envI bs env,
-      ec Γ ins envI bs env ->
-      env_correct Γ ins envI bs env.
-  Proof.
-  Abort.
-  (*   clear. *)
-  (*   intros * Hec. *)
-  (*   apply env_correct_decompose; repeat split. *)
-  (*   - unfold ty_env, ty_DS, DSForall_pres. *)
-  (*     intro x. *)
-  (*     remember_ds (denot_var ins envI env x) as xs; revert Hxs. *)
-  (*     revert dependent env. *)
-  (*     revert envI bs xs. *)
-  (*     cofix Cof. *)
-  (*     destruct xs; intros. *)
-  (*     + constructor. *)
-  (*       rewrite <- eqEps in Hxs; eauto. *)
-  (*     + constructor; inv Hec. *)
-  (*       * apply env_correct_decompose in H1 as (Ty & _ & _). *)
-  (*         specialize (Ty _ _ H). *)
-
-  (* (*         rewrite <- Hxs in Ty. *) *)
-  (* (*       * inv Hec. *) *)
-  (* (*         apply rem_eq_compat in Hxs. *) *)
-  (* (*         rewrite rem_cons, rem_denot_var in Hxs. *) *)
-  (* (*         eauto. *) *)
-  (*         (* Qed. *) *)
-
-  (*         (* il y a quand même de grandes chances que ça marche *) *)
-  (* Admitted. *)
-  Lemma REM_env_bot :
-    forall I SI, @REM_env I SI 0 == 0.
-  Proof.
-    intros.
-    apply Oprodi_eq_intro; intro.
-    apply rem_eq_bot.
-  Qed.
-
-
-  Lemma denot_clock_ins :
-    (* FIXME: ces hypothèses sur le nœud sont aberrantes,
-           ça vaut le coup d'abstraire ou non ?
-     *)
-    forall f (n : node) x ck envI bs env1 env2,
-      find_node f G = Some n ->
-      let ins := List.map fst (n_in n) in
-      In (x, ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
-      denot_clock ins envI bs env1 ck == denot_clock ins envI bs env2 ck.
-  Proof.
-    intros * Hfind ? Hin.
-    eapply wc_find_node in Hfind as (?& Wcn); auto.
-    inv Wcn.
-    revert dependent x.
-    induction ck as [|??? []]; simpl; intros; auto.
-    apply wc_env_var in Hin; auto.
-    inv Hin.
-    rewrite IHck with i; auto.
-    eapply in_map_iff in H6 as ((?&(?&?)&?) & HH & Hin%(in_map fst)); inv HH.
-    unfold denot_var, ins; simpl in *.
-    now apply mem_ident_spec in Hin as ->.
-  Qed.
-
-  Lemma is_cons_sreset_aux :
-    forall I SI,
-    forall f R X Y x,
-      is_cons (@sreset_aux I SI f R X Y x) ->
-      is_cons R.
-  Proof.
-    clear.
-    unfold sreset_aux.
-    intros * Hc.
-    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl in Hc.
-    now apply DScase_is_cons in Hc.
-  Qed.
-
-
-  (* TEST : faire un prédicat co-inductif pour la validité d'un flot *)
-  CoInductive var_correct ty ck ins : DS_prod SI -> DS bool -> DS_prod SI -> DS (sampl value) -> Prop :=
-  | vcEps :
-    forall envI bs env s,
-      var_correct ty ck ins envI bs env s ->
-      var_correct ty ck ins envI bs env (Eps s)
-  | vcCon :
-    forall envI bs env x s,
-      var_correct ty ck ins (REM_env envI) (rem bs) (REM_env env) s ->
-      first (AC (cons x s)) <= first (denot_clock ins envI bs env ck) ->
-      (match x with
-       | pres v => wt_value v ty
-       | abs => True
-       | err _ => False
-       end) ->
-      var_correct ty ck ins envI bs env (cons x s).
-
-  Add Parametric Morphism ty ck ins : (var_correct ty ck ins)
-      with signature
-      @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==> @Oeq (DS_prod SI) ==> @Oeq (DS (sampl value)) ==> Basics.impl
-        as vc_morph.
-  Proof.
-    clear.
-    cofix Cof; intros * Eq1 ?? Eq2 ?? Eq3 ?? Eq4 Hvc.
-    destruct y2.
-    { constructor.
-      rewrite <- eqEps in Eq4.
-      eapply Cof; eauto. }
-    constructor.
-    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-      eapply Cof.
-      rewrite <- Eq1; reflexivity.
-      rewrite <- Eq2; reflexivity.
-      rewrite <- Eq3; reflexivity.
-      rewrite Hy; reflexivity.
-      revert dependent x2.
-      induction k; simpl; intros; subst.
-      + inv Hvc; auto.
-      + eapply IHk in Hk; eauto.
-        destruct x2; simpl; auto.
-        now inv Hvc.
-    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-      rewrite <- Eq1, <- Eq2, <- Eq3.
-      revert dependent x2.
-      induction k; intros; simpl in Hk; subst.
-      + inv Hvc.
-        rewrite AC_cons, first_cons in *; auto.
-      + eapply IHk in Hk; eauto.
-        destruct x2; simpl; auto.
-        now inv Hvc.
-    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-      revert dependent x2.
-      induction k; intros; simpl in Hk; subst.
-      + now inv Hvc.
-      + eapply IHk in Hk; eauto.
-        destruct x2; simpl; auto.
-        now inv Hvc.
-  Qed.
-
-  Lemma vc_spec1 :
-    forall ins envI bs env,
-    forall ty ck xs,
-      var_correct ty ck ins envI bs env xs ->
-      ty_DS ty xs /\ safe_DS xs.
-  Proof.
-    clear.
-    intros * Hvc.
-    unfold safe_DS, ty_DS, DSForall_pres.
-    repeat split.
-    - (* ty *)
-      revert dependent xs.
-      revert envI bs env.
-      cofix Cof; intros.
-      destruct xs; inv Hvc.
-      + constructor; eauto.
-      + constructor; [cases|]; eauto.
-    - (* sf *)
-      revert dependent xs.
-      revert envI bs env.
-      cofix Cof; intros.
-      destruct xs; inv Hvc.
-      + constructor; eauto.
-      + constructor.
-        * destruct s; tauto.
-        * eapply Cof; eauto.
-  Qed.
-
-  Lemma vc_spec2 :
-    forall ins envI bs env,
-    forall ty ck xs,
-      var_correct ty ck ins envI bs env xs ->
-      cl_DS ins envI bs env ck xs.
-  Proof.
-    intros * Hvc.
-    unfold cl_DS.
-    eapply DSle_rec_eq2 with
-      (R := fun U V => exists xs envI bs env,
-                var_correct ty ck ins envI bs env xs
-                /\ U == AC xs
-                /\ V == denot_clock ins envI bs env ck
-      ).
-    3: eauto 8.
-    { intros ???? (?&?&?&?&?&?&?) ??.
-      do 5 esplit; eauto. }
-    clear.
-    intros U V Hc (xs & envI & bs & env & Hvc & Hu & Hv).
-    destruct (@is_cons_elim _ xs) as (vx & xs' & Hx).
-    { apply AC_is_cons; now rewrite <- Hu. }
-    rewrite Hx in Hu, Hvc.
-    inversion_clear Hvc as [|????? Vc Le Hm].
-    rewrite AC_cons, first_cons in *.
-    apply DSle_cons_elim in Le as HH.
-    destruct HH as (t & Hf & _).
-    apply first_cons_elim in Hf as HH.
-    destruct HH as (w & Hw & Ht).
-    rewrite Ht in Hf.
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    split.
-    - now rewrite first_cons, Hf.
-    - setoid_rewrite rem_denot_clock.
-      rewrite rem_cons.
-      do 5 esplit; eauto.
-  Qed.
-
-  Lemma vc_ec :
-    forall Γ ins envI bs env,
-      (forall x ty ck,
-          HasType Γ x ty ->
-          HasClock Γ x ck ->
-          let s := denot_var ins envI env x in
-          var_correct ty ck ins envI bs env s) ->
-      env_correct Γ ins envI bs env.
-  Proof.
-    intros * Hvc x ty ck Hty Hck.
-    eapply vc_spec1 in Hvc as ?; eauto.
-    eapply vc_spec2 in Hvc as ?; eauto.
-    simpl; tauto.
-  Qed.
-
-  Lemma ec_vc_ :
-    forall (* Γ *) ins envI bs env,
-    forall (* x *) ty ck s,
-      (* HasType Γ x ty -> *)
-      (* HasClock Γ x ck -> *)
-      ty_DS ty s /\ cl_DS ins envI bs env ck s /\ safe_DS s ->
-      var_correct ty ck ins envI bs env s.
-  Proof.
-    intros *  (Ty & Cl & Sf).
-    revert Ty Cl Sf.
-    revert envI bs env s.
-    clear.
-    unfold cl_DS, ty_DS, DSForall_pres.
-    cofix Cof; intros.
-    destruct s; constructor.
-    - rewrite <- eqEps in *; eauto.
-    - apply rem_le_compat in Cl.
-      rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
-      inv Sf. inv Ty.
-      eauto.
-    - apply first_le_compat in Cl.
-      rewrite AC_cons in *; auto.
-    - inv Sf. inv Ty.
-      cases.
-  Qed.
-
-  Lemma ec_vc :
-    forall Γ ins envI bs env,
-      env_correct Γ ins envI bs env ->
-      (forall x ty ck,
-          HasType Γ x ty ->
-          HasClock Γ x ck ->
-          let s := denot_var ins envI env x in
-          var_correct ty ck ins envI bs env s).
-  Proof.
-    intros * Hec ??? Hty Hcl; simpl.
-    destruct (Hec _ _ _ Hty Hcl) as (Ty & Cl & Sf).
-    revert Ty Cl Sf.
-    clear.
-    generalize (denot_var ins envI env x) as xs.
-    revert envI bs env.
-    unfold cl_DS, ty_DS, DSForall_pres.
-    cofix Cof; intros.
-    destruct xs; constructor.
-    - rewrite <- eqEps in *; eauto.
-    - apply rem_le_compat in Cl.
-      rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
-      inv Sf. inv Ty.
-      eauto.
-    - apply first_le_compat in Cl.
-      rewrite AC_cons in *; auto.
-    - inv Sf. inv Ty.
-      cases.
-  Qed.
-
-
-  Fixpoint nrem_env (n : nat) : DS_prod SI -C-> DS_prod SI :=
-    match n with
-    | O => ID _
-    | S n => REM_env @_ nrem_env n
-    end.
-
-  Lemma rem_bss :
-    forall l (env : DS_prod SI),
-      rem (bss l env) == bss l (REM_env env).
-  Proof.
-    induction l; intros.
-    - simpl.
-      autorewrite with cpodb.
-      now rewrite DS_const_eq, rem_cons at 1.
-    - now rewrite 2 bss_cons, rem_zip, rem_AC, IHl.
-  Qed.
-  Lemma cons_le_app :
-    forall D x (s t u : DS D),
-      cons x s <= app t u ->
-      exists t',
-        t == cons x t'
-        /\ s <= u.
-  Proof.
-    intros * Hle.
-    apply DSle_cons_elim in Hle as (u' & Heq & Hle).
-    apply app_cons_elim in Heq as (?&?&?).
-    eauto.
-  Qed.
-  Lemma REM_env_eq :
-    forall (env : DS_prod SI) i,
-      REM_env env i = rem (env i).
-  Proof.
-    trivial.
-  Qed.
-  Lemma REM_APP_env_le :
-    forall (x y:DS_prod SI), REM_env (APP_env x y) <= y.
-  Proof.
-    intros.
-    intro i.
-    rewrite REM_env_eq, APP_env_eq, APP_simpl.
-    apply rem_app_le.
-  Qed.
-  Lemma HasClock_idck :
-    forall Γ x ck,
-      HasClock Γ x ck <-> In (x, ck) (idck Γ).
-  Proof.
-    unfold idck.
-    intros; split; intro Hf.
-    - inv Hf.
-      apply in_map_iff.
-      exists (x,e); auto.
-    - apply in_map_iff in Hf as ([] & Eq & Hin); inv Eq.
-      econstructor; eauto.
-  Qed.
-
-
-  (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-             une panoplie de trucs dans l'espoir de gérer APP_env...
-   *)
-  Lemma app_map :
-    forall A B,
-    forall (f : A -> B) (U V : DS A),
-      map f (app U V) == app (map f U) (map f V).
-  Proof.
-    clear.
-    intros.
-    apply DS_bisimulation_allin1 with
-      (R := fun U V =>
-              U == V
-              \/
-                exists X Y,
-                  (U == map f (app X Y) /\ V == app (map f X) (map f Y))).
-    3: eauto.
-    { intros * ? Eq1 Eq2.
-      setoid_rewrite <- Eq1.
-      now setoid_rewrite <- Eq2.
-    }
-    clear.
-    intros U V Hc [HH | (X & Y & Hu & Hv)].
-    { setoid_rewrite HH. eauto. }
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    destruct (@is_cons_elim _ X) as (vx & X' & Hx).
-    { destruct Hc.
-      - eapply app_is_cons, map_is_cons.
-        now rewrite <- Hu.
-      - eapply map_is_cons, app_is_cons.
-        now rewrite <- Hv. }
-    setoid_rewrite Hx.
-    rewrite app_cons, 2 map_eq_cons, first_cons, app_cons, first_cons, rem_cons.
-    auto.
-  Qed.
-  Lemma zip_app:
-    forall {A B D : Type} (bop : A -> B -> D)
-      (xs1 xs2 : DS A) (ys1 ys2 : DS B),
-      app (ZIP bop xs1 ys1) (ZIP bop xs2 ys2)
-      == ZIP bop (app xs1 xs2) (app ys1 ys2).
-  Proof.
-    clear.
-    intros.
-    apply DS_bisimulation_allin1 with
-      (R := fun U V =>
-              U == V
-              \/
-                exists X1 X2 Y1 Y2,
-                  (U == app (ZIP bop X1 Y1) (ZIP bop X2 Y2)
-                   /\ V == ZIP bop (app X1 X2) (app Y1 Y2))).
-    3: eauto 12.
-    { intros * ? Eq1 Eq2.
-      setoid_rewrite <- Eq1.
-      now setoid_rewrite <- Eq2.
-    }
-    clear.
-    intros U V Hc [HH | (X1 & X2 & Y1 & Y2 & Hu & Hv)].
-    { setoid_rewrite HH. eauto. }
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    destruct (@is_cons_elim _ X1) as (vx1 & X1' & Hx1).
-    { destruct Hc.
-      - eapply proj1, zip_is_cons, app_is_cons.
-        now rewrite <- Hu.
-      - eapply app_is_cons, proj1, zip_is_cons.
-        now rewrite <- Hv. }
-    destruct (@is_cons_elim _ Y1) as (vy1 & Y1' & Hy1).
-    { destruct Hc.
-      - eapply proj2, zip_is_cons, app_is_cons.
-        now rewrite <- Hu.
-      - eapply app_is_cons, proj2, zip_is_cons.
-        now rewrite <- Hv. }
-    setoid_rewrite Hx1.
-    setoid_rewrite Hy1.
-    rewrite zip_cons, 3 app_cons, zip_cons, first_cons.
-    auto.
-  Qed.
-
   Lemma denot_var_app :
     forall ins envI1 envI2 env1 env2 x,
       app (denot_var ins envI1 env1 x) (denot_var ins envI2 env2 x)
@@ -3095,28 +2688,7 @@ Section Node_safe.
     now rewrite zip_app, IHck, denot_var_app.
   Qed.
 
-  Lemma DSForall_app :
-    forall D (P:D->Prop),
-    forall u v,
-      DSForall P u ->
-      DSForall P v ->
-      DSForall P (app u v).
-  Proof.
-    clear.
-    intros.
-    remember_ds (app u v) as t.
-    revert_all.
-    cofix Cof; intros * Fu Fv t Ht.
-    destruct t; constructor.
-    - rewrite <- eqEps in *.
-      now eapply Cof with (u := u) (v := v).
-    - apply symmetry, app_cons_elim in Ht as (?& Hu &?).
-      rewrite Hu in Fu; now inv Fu.
-    - apply symmetry, app_cons_elim in Ht as (?& ? & Ht).
-      now rewrite Ht.
-  Qed.
-
-  Lemma correct_APP_env :
+  Lemma env_correct_APP_ :
     forall Γ ins envI1 envI2 bs1 bs2 env1 env2,
       env_correct Γ ins envI1 bs1 env1 ->
       env_correct Γ ins envI2 bs2 env2 ->
@@ -3142,16 +2714,7 @@ Section Node_safe.
       cases; apply DSForall_app; auto.
   Qed.
 
-  Lemma app_rem_env :
-    forall (s : DS_prod SI),
-      APP_env s (REM_env s) == s.
-  Proof.
-    intros.
-    apply Oprodi_eq_intro; intro x.
-    now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
-  Qed.
-
-  Lemma correct_APP_env_TEST :
+  Corollary env_correct_APP :
     forall Γ ins envI bs env1 env2,
       env_correct Γ ins envI bs env1 ->
       env_correct Γ ins (REM_env envI) (rem bs) env2 ->
@@ -3161,21 +2724,270 @@ Section Node_safe.
     intros * Co1 Co2.
     rewrite <- app_rem.
     rewrite <- (app_rem_env envI).
-    apply correct_APP_env; auto.
-  Qed.
-  Lemma is_cons_sresetf_aux :
-    forall I SI,
-    forall F f R X Y x,
-      is_cons (@sresetf_aux I SI F f R X Y x) ->
-      is_cons R.
-  Proof.
-    clear.
-    unfold sresetf_aux.
-    intros * Hc.
-    now apply DScase_is_cons in Hc.
+    apply env_correct_APP_; auto.
   Qed.
 
-  (* TODO: généraliser un bs tq bss <= bs *)
+  Lemma denot_clock_ins :
+    (* FIXME: toutes ces hypothèses sur le nœud sont aberrantes,
+       on voudrait trouver une façon plus simple de caractériser
+       les propriétés de Γ et ins... *)
+    forall f (n : node) x ck envI bs env1 env2,
+      find_node f G = Some n ->
+      let ins := List.map fst (n_in n) in
+      In (x, ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
+      denot_clock ins envI bs env1 ck == denot_clock ins envI bs env2 ck.
+  Proof.
+    intros * Hfind ? Hin.
+    eapply wc_find_node in Hfind as (?& Wcn); auto.
+    inv Wcn.
+    revert dependent x.
+    induction ck as [|??? []]; simpl; intros; auto.
+    apply wc_env_var in Hin; auto.
+    inv Hin.
+    rewrite IHck with i; auto.
+    eapply in_map_iff in H6 as ((?&(?&?)&?) & HH & Hin%(in_map fst)); inv HH.
+    unfold denot_var, ins; simpl in *.
+    now apply mem_ident_spec in Hin as ->.
+  Qed.
+
+  (* TODO: déplacer la section à côté de env_correct ? *)
+  Section Var_correct.
+
+    (** [env_correct] n'étant pas un prédicat co-inductif, il est impossible
+        de raisonner directement dessus avec la tactique cofix. (Typiquement,
+        pour "attendre" un [Con] sur le flot de la condition de reset).
+
+        On introduit donc le prédicat co-inductif [var_correct] et on montre
+        qu'il est équivalent à [env_correct] s'il tient pour chaque variable
+        de l'environment (cf. [vc_ec] et [ec_vc]).
+     *)
+    (* FIXME: c'est quand même un peu lourd comme procédé, et pas très pratique.
+       Comment faire plus simplement ?*)
+
+    CoInductive var_correct ty ck ins : DS_prod SI -> DS bool -> DS_prod SI -> DS (sampl value) -> Prop :=
+    | vcEps :
+      forall envI bs env s,
+        var_correct ty ck ins envI bs env s ->
+        var_correct ty ck ins envI bs env (Eps s)
+    | vcCon :
+      forall envI bs env x s,
+        var_correct ty ck ins (REM_env envI) (rem bs) (REM_env env) s ->
+        first (AC (cons x s)) <= first (denot_clock ins envI bs env ck) ->
+        (match x with
+         | pres v => wt_value v ty
+         | abs => True
+         | err _ => False
+         end) ->
+        var_correct ty ck ins envI bs env (cons x s).
+
+    Global Add Parametric Morphism ty ck ins : (var_correct ty ck ins)
+        with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==>
+                         @Oeq (DS_prod SI) ==> @Oeq (DS (sampl value)) ==> Basics.impl
+          as vc_morph.
+    Proof.
+      clear.
+      cofix Cof; intros * Eq1 ?? Eq2 ?? Eq3 ?? Eq4 Hvc.
+      destruct y2.
+      { constructor.
+        rewrite <- eqEps in Eq4.
+        eapply Cof; eauto. }
+      constructor.
+      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+        eapply Cof.
+        rewrite <- Eq1; reflexivity.
+        rewrite <- Eq2; reflexivity.
+        rewrite <- Eq3; reflexivity.
+        rewrite Hy; reflexivity.
+        revert dependent x2.
+        induction k; simpl; intros; subst.
+        + inv Hvc; auto.
+        + eapply IHk in Hk; eauto.
+          destruct x2; simpl; auto.
+          now inv Hvc.
+      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+        rewrite <- Eq1, <- Eq2, <- Eq3.
+        revert dependent x2.
+        induction k; intros; simpl in Hk; subst.
+        + inv Hvc.
+          rewrite AC_cons, first_cons in *; auto.
+        + eapply IHk in Hk; eauto.
+          destruct x2; simpl; auto.
+          now inv Hvc.
+      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+        revert dependent x2.
+        induction k; intros; simpl in Hk; subst.
+        + now inv Hvc.
+        + eapply IHk in Hk; eauto.
+          destruct x2; simpl; auto.
+          now inv Hvc.
+    Qed.
+
+    Lemma vc_spec1 :
+      forall ins envI bs env,
+      forall ty ck xs,
+        var_correct ty ck ins envI bs env xs ->
+        ty_DS ty xs /\ safe_DS xs.
+    Proof.
+      clear.
+      intros * Hvc.
+      unfold safe_DS, ty_DS, DSForall_pres.
+      repeat split.
+      - (* ty *)
+        revert dependent xs.
+        revert envI bs env.
+        cofix Cof; intros.
+        destruct xs; inv Hvc.
+        + constructor; eauto.
+        + constructor; [cases|]; eauto.
+      - (* sf *)
+        revert dependent xs.
+        revert envI bs env.
+        cofix Cof; intros.
+        destruct xs; inv Hvc.
+        + constructor; eauto.
+        + constructor.
+          * destruct s; tauto.
+          * eapply Cof; eauto.
+    Qed.
+
+    Lemma vc_spec2 :
+      forall ins envI bs env,
+      forall ty ck xs,
+        var_correct ty ck ins envI bs env xs ->
+        cl_DS ins envI bs env ck xs.
+    Proof.
+      intros * Hvc.
+      unfold cl_DS.
+      eapply DSle_rec_eq2 with
+        (R := fun U V => exists xs envI bs env,
+                  var_correct ty ck ins envI bs env xs
+                  /\ U == AC xs
+                  /\ V == denot_clock ins envI bs env ck
+        ).
+      3: eauto 8.
+      { intros ???? (?&?&?&?&?&?&?) ??.
+        do 5 esplit; eauto. }
+      clear.
+      intros U V Hc (xs & envI & bs & env & Hvc & Hu & Hv).
+      destruct (@is_cons_elim _ xs) as (vx & xs' & Hx).
+      { apply AC_is_cons; now rewrite <- Hu. }
+      rewrite Hx in Hu, Hvc.
+      inversion_clear Hvc as [|????? Vc Le Hm].
+      rewrite AC_cons, first_cons in *.
+      apply DSle_cons_elim in Le as HH.
+      destruct HH as (t & Hf & _).
+      apply first_cons_elim in Hf as HH.
+      destruct HH as (w & Hw & Ht).
+      rewrite Ht in Hf.
+      setoid_rewrite Hu.
+      setoid_rewrite Hv.
+      split.
+      - now rewrite first_cons, Hf.
+      - setoid_rewrite rem_denot_clock.
+        rewrite rem_cons.
+        do 5 esplit; eauto.
+    Qed.
+
+    Lemma vc_ec :
+      forall Γ ins envI bs env,
+        (forall x ty ck,
+            HasType Γ x ty ->
+            HasClock Γ x ck ->
+            let s := denot_var ins envI env x in
+            var_correct ty ck ins envI bs env s) ->
+        env_correct Γ ins envI bs env.
+    Proof.
+      intros * Hvc x ty ck Hty Hck.
+      eapply vc_spec1 in Hvc as ?; eauto.
+      eapply vc_spec2 in Hvc as ?; eauto.
+      simpl; tauto.
+    Qed.
+
+    Lemma ec_vc_ :
+      forall ins envI bs env,
+      forall ty ck s,
+        ty_DS ty s /\ cl_DS ins envI bs env ck s /\ safe_DS s ->
+        var_correct ty ck ins envI bs env s.
+    Proof.
+      intros *  (Ty & Cl & Sf).
+      revert Ty Cl Sf.
+      revert envI bs env s.
+      clear.
+      unfold cl_DS, ty_DS, DSForall_pres.
+      cofix Cof; intros.
+      destruct s; constructor.
+      - rewrite <- eqEps in *; eauto.
+      - apply rem_le_compat in Cl.
+        rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
+        inv Sf. inv Ty.
+        eauto.
+      - apply first_le_compat in Cl.
+        rewrite AC_cons in *; auto.
+      - inv Sf. inv Ty.
+        cases.
+    Qed.
+
+    Lemma ec_vc :
+      forall Γ ins envI bs env,
+        env_correct Γ ins envI bs env ->
+        (forall x ty ck,
+            HasType Γ x ty ->
+            HasClock Γ x ck ->
+            let s := denot_var ins envI env x in
+            var_correct ty ck ins envI bs env s).
+    Proof.
+      intros * Hec ??? Hty Hcl; simpl.
+      destruct (Hec _ _ _ Hty Hcl) as (Ty & Cl & Sf).
+      revert Ty Cl Sf.
+      clear.
+      generalize (denot_var ins envI env x) as xs.
+      revert envI bs env.
+      unfold cl_DS, ty_DS, DSForall_pres.
+      cofix Cof; intros.
+      destruct xs; constructor.
+      - rewrite <- eqEps in *; eauto.
+      - apply rem_le_compat in Cl.
+        rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
+        inv Sf. inv Ty.
+        eauto.
+      - apply first_le_compat in Cl.
+        rewrite AC_cons in *; auto.
+      - inv Sf. inv Ty.
+        cases.
+    Qed.
+
+  End Var_correct.
+
+  (** [REM_env] itéré *)
+  Fixpoint nrem_env (n : nat) : DS_prod SI -C-> DS_prod SI :=
+    match n with
+    | O => ID _
+    | S n => REM_env @_ nrem_env n
+    end.
+
+
+  (** FIXME: on voudrait généraliser (envG f) pour sortir de la section
+      Node_safe, se concentrer sur la fonction de reset (sans Hnode, Γ, etc.)
+      et obtenir un résultat du genre :
+
+      Lemma safe_sreset :
+        forall (f : DS_prod SI -C-> DS_prod SI) Γ ins envI bs rs,
+        (forall bs envI,
+          bss ins envI <= bs ->
+          env_correct Γ ins envI bs 0 ->
+          env_correct Γ ins envI bs (f envI)) ->
+        bss ins envI <= bs ->
+        safe_DS rs ->
+        env_correct Γ ins envI bs 0 ->
+        env_correct Γ ins envI bs (sreset f rs envI).
+
+      Malheureusement ça semble impossible car il faut des propriétés
+      du type (wc_env Γ) et on ne peut les obtenir que dans un nœud
+      bien cadencé.
+   *)
+
+  (** Ici on utilise l'hypothèse de section [Hnode] à chaque fois que
+      la condition de reset [rs] est activée. *)
   Lemma safe_sreset :
     forall f n envI bs rs,
       find_node f G = Some n ->
@@ -3188,35 +3000,28 @@ Section Node_safe.
   Proof.
     intros * Hfind ?? Hbs Hr Hco.
     rewrite sreset_eq.
-
     remember_ds envI as envIk.
     remember (_ (envG f) envIk) as Y eqn:HH.
-    assert (Hy : exists envI k, envIk == nrem_env k envI
-                           (* /\ Y == nrem_env k (envG f envI) *)
-                           /\ env_correct Γ ins envIk bs Y)
-      by (exists envI, O; subst; rewrite HenvIk in *; split; eauto).
+    (* tout ce qu'on a besoin de savoir sur envIk et Y : *)
+    assert (exists envI k, envIk == nrem_env k envI
+                      /\ env_correct Γ ins envIk bs Y) as Hy
+        by (exists envI, O; subst; rewrite HenvIk in *; split; eauto).
     clear HH HenvIk envI.
-
     unfold sreset_aux.
     rewrite FIXP_fixp.
-
-    eapply fixp_inv.
-    instantiate (1 := fun freset =>
-                        forall Y rs envIk bs,
-                          safe_DS rs ->
-                          bss (List.map fst (n_in n)) envIk <= bs ->
-                          env_correct Γ ins envIk bs 0 ->
-                          (exists envI k, envIk == nrem_env k envI /\ env_correct Γ ins envIk bs Y) ->
-                          env_correct Γ ins envIk bs (freset (envG f) rs envIk Y)); eauto.
-    { (* admissible *)
-      intros ??.
-      eapply env_correct_admissible; eauto. }
-    { (* bottom *)
-      simpl; eauto. }
-    clear - WCG Hnode Hfind.
-    cbv beta.
+    (* on utilise le principe d'induction sur [fixp] de la bibliothèque *)
+    revert Hr Hbs Hco Hy.
+    revert Y rs envIk bs.
+    apply fixp_ind; auto.
+    (* admissible *)
+    { red; intros; apply env_correct_admissible; simpl; now eauto. }
     intros freset Hco' Y rs envIk bs Hr Hbs Hco Hy.
-    (* TODO: expliquer pourquoi on passe par ec_vc, peut-être le reformuler *)
+
+    (* Ici on a besoin d'un raisonnement co-inductif pour extraire la
+       tête de [rs]. (Tant que [rs] vaut [Eps], sresetf_aux ajoute [Eps]
+       en tête de tous ses flots et c'est bon.) Comme [env_correct] n'est pas
+       un prédicat co-inductif, on ne peut pas utiliser cofix directement.
+       On choisit de passer par [var_correct], qu'on a montré équivalent. *)
     apply vc_ec.
     cbv zeta.
     intros x ty ck Hty Hck.
@@ -3232,92 +3037,62 @@ Section Node_safe.
         try now apply mem_ident_spec.
       unfold cl_DS, ins.
       erewrite denot_clock_ins; eauto. }
+
+    (* sinon on va "attendre" les [Eps] sur x jusqu'à lui trouver
+       une tête *)
     remember_ds (denot_var ins envIk _ x) as xs.
     revert dependent x.
     revert xs.
-    cofix Cof.
+    cofix Cof; intros.
     destruct xs.
-    { constructor.
-      rewrite <- eqEps in Hxs.
-      eauto. }
+    { constructor; rewrite <- eqEps in Hxs; eauto. }
     clear Cof.
-    intros.
+    (* on a maintenant [is_cons xs], d'où [is_cons rs] *)
     rewrite Hxs.
     eapply ec_vc; eauto.
 
     assert (exists vr rs', rs == cons vr rs') as (vr & rs' & Hrs).
-    {
-      unfold denot_var in Hxs.
+    { unfold denot_var in Hxs.
       rewrite Hmem in Hxs.
-      now apply symmetry, cons_is_cons, is_cons_sresetf_aux, is_cons_elim in Hxs.
-    }
+      now apply symmetry, cons_is_cons, is_cons_sresetf_aux, is_cons_elim in Hxs. }
+
     rewrite Hrs in Hr |- *.
     inv Hr.
+    destruct Hy as (envI & k & Hk & Hco3).
+    apply rem_le_compat in Hbs as Hbsr.
+    apply env_correct_rem in Hco as Hcor, Hco3 as Hco4.
+    rewrite REM_env_bot, rem_bss in *.
     setoid_rewrite sresetf_aux_eq.
-    cases_eqn HH.
+    cases.
     - (* signal abs *)
-      destruct Hy as (envI & k & Hk (* & -> *) & Hco3).
-      apply correct_APP_env_TEST; auto.
-      apply rem_le_compat in Hbs.
-      apply env_correct_rem in Hco, Hco3.
-      rewrite REM_env_bot, rem_bss in *.
+      apply env_correct_APP; auto.
       apply Hco'; auto.
-      exists envI, (S k); rewrite Hk in Hco3 |- * ; auto.
+      exists envI, (S k); rewrite Hk in Hco4 |- * ; auto.
     - (* signal pres true *)
-      apply Hco'; auto.
-      + constructor; auto.
-      + destruct Hy as (envI & k & Hk (* & -> *) & Hco3).
-        eauto.
+      apply Hco'; eauto; now constructor.
     - (* signal pres false *)
-      destruct Hy as (envI & k & Hk (* & -> *) & Hco3).
-      apply correct_APP_env_TEST; auto.
-      apply rem_le_compat in Hbs.
-      apply env_correct_rem in Hco, Hco3.
-      rewrite REM_env_bot, rem_bss in *.
+      apply env_correct_APP; auto.
       apply Hco'; auto.
-      exists envI, (S k); rewrite Hk in Hco3 |- * ; auto.
+      exists envI, (S k); rewrite Hk in Hco4 |- * ; auto.
   Qed.
 
-        Lemma DSForall_and :
-          forall D (P Q:D->Prop),
-          forall u,
-            DSForall P u ->
-            DSForall Q u ->
-            DSForall (fun x => P x /\ Q x) u.
-        Proof.
-          clear.
-          cofix Cof; intros * Hp Hq.
-          destruct u; inv Hp; inv Hq; constructor; auto.
-        Qed.
 
-        Lemma safe_sbools_ofs :
-          forall n (np : nprod n),
-            forall_nprod safe_DS np ->
-            forall_nprod (ty_DS bool_velus_type) np ->
-            safe_DS (sbools_ofs np).
-        Proof.
-          clear.
-          intros * Sf Ty.
-          revert dependent np; induction n; intros.
-          - now apply DSForall_const.
-          - apply forall_nprod_inv in Ty as [Ty1 Ty2], Sf as [Sf1 Sf2].
-            simpl; autorewrite with cpodb.
-            apply DSForall_and with (1 := Sf1) in Ty1.
-            eapply DSForall_zip in IHn; eauto.
-            simpl; intros; cases_eqn HH; subst.
-        Qed.
-        Lemma typeof_same :
-          forall es ty,
-            Forall (fun e => typeof e = [ty]) es ->
-            Forall (eq ty) (typesof es).
-        Proof.
-          induction es; simpl; intros * Hf; auto.
-          inv Hf.
-          apply Forall_app; split; auto.
-          take (typeof _ = _) and rewrite it; auto.
-        Qed.
-
-  (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX /fin tri *)
+  Lemma safe_sbools_ofs :
+    forall n (np : nprod n),
+      forall_nprod safe_DS np ->
+      forall_nprod (ty_DS bool_velus_type) np ->
+      safe_DS (sbools_ofs np).
+  Proof.
+    clear.
+    intros * Sf Ty.
+    revert dependent np; induction n; intros.
+    - now apply DSForall_const.
+    - apply forall_nprod_inv in Ty as [Ty1 Ty2], Sf as [Sf1 Sf2].
+      simpl; autorewrite with cpodb.
+      apply DSForall_and with (1 := Sf1) in Ty1.
+      eapply DSForall_zip in IHn; eauto.
+      simpl; intros; cases_eqn HH; subst.
+  Qed.
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
