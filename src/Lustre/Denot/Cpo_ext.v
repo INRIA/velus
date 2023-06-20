@@ -720,6 +720,38 @@ Proof.
   split; [| exists 0]; now autorewrite with cpodb.
 Qed.
 
+Lemma app_map :
+  forall A B (f : A -> B) (U V : DS A),
+    map f (app U V) == app (map f U) (map f V).
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            U == V
+            \/
+              exists X Y,
+                (U == map f (app X Y) /\ V == app (map f X) (map f Y))).
+  3: eauto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    now setoid_rewrite <- Eq2.
+  }
+  clear.
+  intros U V Hc [HH | (X & Y & Hu & Hv)].
+  { setoid_rewrite HH. eauto. }
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  destruct (@is_cons_elim _ X) as (vx & X' & Hx).
+  { destruct Hc.
+    - eapply app_is_cons, map_is_cons.
+      now rewrite <- Hu.
+    - eapply map_is_cons, app_is_cons.
+      now rewrite <- Hv. }
+  setoid_rewrite Hx.
+  rewrite app_cons, 2 map_eq_cons, first_cons, app_cons, first_cons, rem_cons.
+  auto.
+Qed.
+
 Lemma map_inf :
   forall A B (f : A -> B) xs,
     infinite xs ->
@@ -899,6 +931,51 @@ Proof.
   destruct 1.
   now rewrite rem_cons in *.
 Qed.
+
+
+(** ** Lifting stream functions to environment of streams *)
+
+Section ENV_funs.
+
+  Context {I : Type}.
+  Context {SI : I -> Type}.
+
+  Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
+
+  Lemma REM_env_eq :
+    forall env i, REM_env env i = rem (env i).
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma REM_env_bot : REM_env 0 == 0.
+  Proof.
+    apply Oprodi_eq_intro; intro.
+    apply rem_eq_bot.
+  Qed.
+
+  (* prendre la tête dans env1, la queue dans env2 *)
+  Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
+    apply curry, Dprodi_DISTR; intro i.
+    exact ((APP _ @2_ (PROJ _ i @_ FST _ _)) (PROJ _ i @_ SND _ _)).
+  Defined.
+
+  Lemma APP_env_eq :
+    forall env1 env2 i,
+      APP_env env1 env2 i = APP _ (env1 i) (env2 i).
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma app_rem_env :
+    forall s, APP_env s (REM_env s) == s.
+  Proof.
+    intros.
+    apply Oprodi_eq_intro; intro x.
+    now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
+  Qed.
+
+End ENV_funs.
 
 
 (** ** First definition of zip using three functions *)
@@ -1162,6 +1239,47 @@ Section Zip.
       split; autorewrite with cpodb; eauto.
       exists 0,0.
       rewrite Hu, Hv, 2 first_eq_bot, rem_cons, zip_bot1; auto.
+  Qed.
+
+  Lemma zip_app:
+    forall (xs1 xs2 : DS A) (ys1 ys2 : DS B),
+      app (ZIP xs1 ys1) (ZIP xs2 ys2)
+      == ZIP (app xs1 xs2) (app ys1 ys2).
+  Proof.
+    intros.
+    apply DS_bisimulation_allin1 with
+      (R := fun U V =>
+              U == V
+              \/
+                exists X1 X2 Y1 Y2,
+                  (U == app (ZIP X1 Y1) (ZIP X2 Y2)
+                   /\ V == ZIP (app X1 X2) (app Y1 Y2))).
+    3: eauto 12.
+    { intros * ? Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      now setoid_rewrite <- Eq2.
+    }
+    clear.
+    intros U V Hc [HH | (X1 & X2 & Y1 & Y2 & Hu & Hv)].
+    { setoid_rewrite HH. eauto. }
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    destruct (@is_cons_elim _ X1) as (vx1 & X1' & Hx1).
+    { destruct Hc.
+      - eapply proj1, zip_is_cons, app_is_cons.
+        now rewrite <- Hu.
+      - eapply app_is_cons, proj1, zip_is_cons.
+        now rewrite <- Hv. }
+    destruct (@is_cons_elim _ Y1) as (vy1 & Y1' & Hy1).
+    { destruct Hc.
+      - eapply proj2, zip_is_cons, app_is_cons.
+        now rewrite <- Hu.
+      - eapply app_is_cons, proj2, zip_is_cons.
+        now rewrite <- Hv. }
+    setoid_rewrite Hx1.
+    setoid_rewrite Hy1.
+    rewrite zip_cons, 3 app_cons, zip_cons, first_cons.
+    auto.
   Qed.
 
   Lemma zip_uncons :
