@@ -954,6 +954,17 @@ Section ENV_funs.
     apply rem_eq_bot.
   Qed.
 
+  Lemma REM_env_inf :
+    forall env,
+      all_infinite env ->
+      all_infinite (REM_env env).
+  Proof.
+    intros * Hinf x.
+    rewrite REM_env_eq.
+    specialize (Hinf x).
+    now inversion Hinf.
+  Qed.
+
   (* prendre la tête dans env1, la queue dans env2 *)
   Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
     apply curry, Dprodi_DISTR; intro i.
