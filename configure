@@ -40,8 +40,8 @@ done
  ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
  $standard_headers $clightgen $target)
 if [ -f "$compcertdir"/Makefile.config ]; then
-    export "$(grep ARCH < "$compcertdir"/Makefile.config)"
-    export "$(grep BITSIZE < "$compcertdir"/Makefile.config)"
+    export "$(grep ^ARCH= < "$compcertdir"/Makefile.config)"
+    export "$(grep ^BITSIZE= < "$compcertdir"/Makefile.config)"
 fi
 
 printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
@@ -56,6 +56,6 @@ printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 	      printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/${ARCH}_${BITSIZE}"\
 	             "${ARCH}_${BITSIZE}";
     fi;
-    printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
+    printf -- "-R \"%s/%s\" compcert.%s\\n" "$compcertdir" "$ARCH" "$ARCH";
     cat vfiles
 } >"$coqproject"
