@@ -285,6 +285,18 @@ Module Type LDENOTINF
     now rewrite <- annots_numstreams.
   Qed.
 
+  Lemma is_ncons_sbools_ofs :
+    forall n m (np : nprod m),
+      forall_nprod (is_ncons n) np ->
+      is_ncons n (sbools_ofs np).
+  Proof.
+    clear.
+    induction m; intros * Hf; simpl.
+    - apply is_ncons_DS_const.
+    - apply forall_nprod_inv in Hf as [].
+      autorewrite with cpodb.
+      apply is_ncons_zip; auto.
+  Qed.
 
   Ltac solve_err :=
     try (
@@ -421,15 +433,19 @@ Module Type LDENOTINF
     - (* Eapp *)
       rewrite denot_exp_eq; simpl.
       unfold eq_rect.
-      inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H; auto.
-      inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H; auto.
+      inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H, H0; auto.
+      inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H, H0; auto.
       destruct (find_node f G) eqn:Hfind; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_np_of_env, (Hnode n); intros; eauto using find_node_name.
-      unfold P_var. rewrite PROJ_simpl.
-      apply forall_env_of_np; solve_err.
-      apply k_forall_nprod_def with (d := errTy); intros; solve_err.
-      now apply P_exps_k, Forall_P_exps.
+      apply forall_np_of_env; intro.
+      apply is_ncons_sreset; intros.
+      + apply Hnode; eauto using find_node_name.
+      + apply is_ncons_sbools_ofs.
+        apply k_forall_nprod_def with (d := errTy); intros; solve_err.
+        now apply P_exps_k, Forall_P_exps.
+      + apply forall_env_of_np; solve_err.
+        apply k_forall_nprod_def with (d := errTy); intros; solve_err.
+        now apply P_exps_k, Forall_P_exps.
   Qed.
 
   Lemma exps_n :
@@ -574,12 +590,17 @@ Module Type LDENOTINF
       inv Hwl; inv Hwx.
       destruct (find_node f G) eqn:?; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_np_of_env, (Hnode (S n)); intros; eauto using find_node_name.
-      unfold P_var. rewrite PROJ_simpl.
-      apply forall_env_of_np; solve_err.
-      apply k_forall_nprod_def with (d := errTy); intros; solve_err.
-      rewrite annots_numstreams in *.
-      apply P_exps_k; eauto using P_exps_impl.
+      apply forall_np_of_env; intro.
+      apply is_ncons_sreset with (n := S n); intros.
+      + apply Hnode; eauto using find_node_name.
+      + apply is_ncons_sbools_ofs.
+        apply k_forall_nprod_def with (d := errTy); intros; solve_err.
+        rewrite annots_numstreams in *.
+        apply P_exps_k; eauto using P_exps_impl.
+      + apply forall_env_of_np; solve_err.
+        apply k_forall_nprod_def with (d := errTy); intros; solve_err.
+        rewrite annots_numstreams in *.
+        apply P_exps_k; eauto using P_exps_impl.
   Qed.
 
   Corollary exps_S :
@@ -891,8 +912,20 @@ Proof.
   eapply denot_global_n; eauto.
 Qed.
 
+Lemma sbools_ofs_inf :
+  forall n (np : nprod n),
+    forall_nprod (@infinite _) np ->
+    infinite (sbools_ofs np).
+Proof.
+  induction n; intros * Hf; simpl.
+  - apply DS_const_inf.
+  - apply forall_nprod_inv in Hf as [].
+    autorewrite with cpodb.
+    apply zip_inf; auto.
+Qed.
+
 (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour
-    prouver l'infinité des expression. *)
+    prouver l'infinité des expressions. *)
 Lemma infinite_exp :
   forall G ins envI (envG : Dprodi FI) bs env,
     (forall envI f, all_infinite envI -> all_infinite (envG f envI)) ->
@@ -935,11 +968,12 @@ Proof.
     apply forall_denot_expss.
     unfold eq_rect.
     simpl_Forall.
-    cases; eauto using forall_nprod_const, DS_const_inf, forall_denot_exps.
+    cases; eauto using forall_nprod_const, DS_const_inf.
+    now apply forall_denot_exps.
   - (* Ecase *)
     destruct a as [tys].
     eapply Forall_impl in H.
-    2:{ intros ? HH. apply forall_denot_exps, HH. }
+    2:{ intros ? HH. eapply (proj2 (forall_denot_exps _ _ _ _ _ _ _ _ )), HH. }
     eapply forall_forall_denot_expss with (n := length tys) in H as Hess;
       eauto using DS_const_inf.
     destruct d.
@@ -957,11 +991,13 @@ Proof.
       eapply forall_lift_nprod; eauto using scase_inf.
       unfold eq_rect, eq_sym; cases.
   - (* Eapp *)
-    apply forall_denot_exps in H.
+    apply forall_denot_exps in H, H0.
     unfold eq_rect.
     cases; eauto using forall_nprod_const, DS_const_inf.
-    apply forall_np_of_env, HG; intro.
-    apply forall_env_of_np; eauto using DS_const_inf.
+    apply forall_np_of_env; intro.
+    apply sreset_inf; auto.
+    + apply sbools_ofs_inf; auto.
+    + intro; apply forall_env_of_np; eauto using DS_const_inf.
 Qed.
 
 Corollary infinite_exps :

@@ -1,6 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import Cpo_ext SDfuns.
+Require Import Cpo_ext SDfuns CommonDS.
 
 (** * Infinity of streams defined in SDfuns  *)
 
@@ -159,7 +159,8 @@ Ltac solve_err :=
   try match goal with
     | |- context [ DS_const _ ] =>
         repeat rewrite DS_const_eq, rem_cons;
-        now auto using is_cons_DS_const, is_consn_DS_const, is_ncons_DS_const
+        now (apply is_ncons_DS_const || apply is_consn_DS_const)
+        || now auto using is_cons_DS_const, is_consn_DS_const, is_ncons_DS_const
     end.
 
 (** ** Productivity of primitive stream functions  *)
@@ -520,6 +521,111 @@ Proof.
   setoid_rewrite <- nrem_inf_iff.
   intros * Infc Infd n.
   apply is_ncons_scase_def; eauto using inf_nrem, forall_nprod_impl.
+Qed.
+
+Lemma is_cons_sreset :
+  forall I,
+  forall (f : DS_prod (fun _ : I => sampl A) -C-> DS_prod (fun _ : I => sampl A)) R X x,
+    (forall envI, (forall x, is_cons (envI x)) -> (forall x, is_cons (f envI x))) ->
+    is_cons R ->
+    (forall x, is_cons (X x)) ->
+    is_cons (@sreset I A f R X x).
+Proof.
+  intros * Cf Cr Cx.
+  apply is_cons_elim in Cr as (vr & R' & Hr).
+  rewrite <- PROJ_simpl, sreset_eq, Hr, sreset_aux_eq.
+  cases; try apply is_cons_DS_const.
+  2: rewrite sreset_aux_eq.
+  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+Qed.
+
+Lemma is_cons_sreset_aux :
+  forall I,
+  forall (f : DS_prod (fun _ : I => sampl A) -C-> DS_prod (fun _ : I => sampl A)) R X Y x,
+    (forall envI, (forall x, is_cons (envI x)) -> (forall x, is_cons (f envI x))) ->
+    is_cons R ->
+    (forall x, is_cons (X x)) ->
+    (forall x, is_cons (Y x)) ->
+    is_cons (@sreset_aux I A f R X Y x).
+Proof.
+  intros * Cf Cr Cx Cy.
+  apply is_cons_elim in Cr as (vr & R' & Hr).
+  rewrite <- PROJ_simpl, Hr, sreset_aux_eq.
+  cases; try apply is_cons_DS_const.
+  2: rewrite sreset_aux_eq.
+  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+Qed.
+
+Lemma is_ncons_sreset :
+  forall I,
+  forall (f : DS_prod (fun _ : I => sampl A) -C-> DS_prod (fun _ : I => sampl A)) R X x,
+    (forall n envI, (forall x, is_ncons n (envI x)) -> (forall x, is_ncons n (f envI x))) ->
+    forall n,
+      is_ncons n R ->
+      (forall x, is_ncons n (X x)) ->
+      is_ncons n (@sreset I A f R X x).
+Proof.
+  intros * Cf n Cr Cx.
+  rewrite <- PROJ_simpl, sreset_eq.
+  assert (Hy : forall x, is_ncons n (f X x)) by (subst; intros; eauto).
+  remember (_ f X) as Y eqn:HH; clear HH.
+  rewrite PROJ_simpl.
+  revert dependent R.
+  revert dependent X.
+  revert dependent Y.
+  induction n as [|[]]; intros; auto.
+  { apply is_cons_sreset_aux; auto; now apply (Cf 1). }
+  apply is_ncons_is_cons in Cr as Hr.
+  apply is_cons_elim in Hr as (vr & R' & Hr).
+  rewrite <- PROJ_simpl, Hr, sreset_aux_eq in *.
+  simpl in Cr; rewrite rem_cons in Cr.
+  cases; solve_err.
+  2: rewrite sreset_aux_eq.
+  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, is_ncons_SS, rem_app;
+    eauto using is_ncons_is_cons.
+  all: apply IHn; auto.
+  intros; rewrite REM_env_eq.
+  apply (Cf (S (S n))); auto.
+Qed.
+
+Lemma sreset_inf :
+  forall I,
+  forall (f : DS_prod (fun _ : I => sampl A) -C-> DS_prod (fun _ : I => sampl A)) R X,
+    (forall envI, all_infinite envI -> all_infinite (f envI)) ->
+    infinite R ->
+    all_infinite X ->
+    all_infinite (@sreset I A f R X).
+Proof.
+  intros * If Ir Ix.
+  rewrite sreset_eq.
+  assert (all_infinite (f X)) as Iy by (subst; auto).
+  remember (_ f X) as Y eqn:HH; clear HH.
+  intro x.
+  remember_ds (sreset_aux _ _ _ _ _) as tx.
+  revert dependent tx.
+  revert dependent X.
+  revert dependent Y.
+  revert dependent R.
+  cofix Cof; intros.
+  inversion_clear Ir as [Hc IIr].
+  apply is_cons_elim in Hc as (vr & R' & Hr).
+  rewrite Hr, rem_cons in IIr.
+  apply REM_env_inf in Iy as Iry, Ix as Irx.
+  rewrite <- PROJ_simpl, Hr, sreset_aux_eq in Htx.
+  destruct (Iy x), (If X Ix x). (* utile *)
+  constructor.
+  - rewrite Htx.
+    cases.
+    4: rewrite DS_const_eq, PROJ_simpl; auto.
+    2: rewrite sreset_aux_eq.
+    all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+  - apply rem_eq_compat in Htx.
+    destruct (Iy x), (If X Ix x). (* pour plus tard *)
+    cases.
+    4: rewrite Htx, DS_const_eq, PROJ_simpl, rem_cons; apply DS_const_inf.
+    2: rewrite sreset_aux_eq in Htx.
+    all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, rem_app in Htx; auto.
+    all: eapply Cof in Htx; eauto using REM_env_inf.
 Qed.
 
 End Ncons_ops.
