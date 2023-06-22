@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof Safe CommonList2.
+Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof OpErr Safe CommonList2.
 
 Import List ListNotations.
 
@@ -27,7 +27,8 @@ Module Type SDTOREL
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
-       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den).
+       (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
+       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr).
 
 
 (* TODO: ajouter à Vélus *)
@@ -2691,7 +2692,8 @@ Module SdtorelFun
        (Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
        (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
        (Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
-       (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den)
-<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf Safe.
-  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf Safe.
+       (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
+       (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
+<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe.
+  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe.
 End SdtorelFun.
