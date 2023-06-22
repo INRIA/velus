@@ -31,6 +31,14 @@ Module Type SDTOREL
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr).
 
 
+ (* TODO: move to CommonList2 *)
+ Lemma repeat_map :
+   forall A (a : A) n,
+     repeat a n = map (fun _ => a) (repeat a n).
+ Proof.
+   induction n; simpl; auto.
+ Qed.
+
 (* TODO: ajouter à Vélus *)
 Global Instance : Symmetric history_equiv.
 Proof.
@@ -700,12 +708,22 @@ Proof.
         take (typesof _ = _) and rewrite it.
         now rewrite length_typesof_annots, annots_numstreams.
   - (* Eapp *)
-    eapply Sapp with
-      (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es);
-      simpl; eauto using bools_ofs_empty.
+    apply Sapp with
+      (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es)
+      (rs := repeat (Streams.const absent) (list_sum (List.map numstreams er)))
+      (bs := Streams.const false)
+    ; simpl.
     + rewrite Forall2_map_2. apply Forall2_same.
       apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+    + induction er; simpl_Forall.
+      take (typeof _ = _) and
+        apply (f_equal (@length _)) in it;
+        rewrite length_typeof_numstreams  in it;
+        rewrite it in *.
+      constructor; auto.
+    + rewrite repeat_map.
+      apply bools_ofs_absent.
     + intro k.
       rewrite <- flat_map_concat_map, flat_map_repeat, 2 map_repeat.
       rewrite <- annots_numstreams, <- length_typesof_annots.
