@@ -3,12 +3,15 @@
 
 let lustre_destination = ref (None : string option)
 let complete_destination = ref (None : string option)
-let nolast_destination = ref (None : string option)
 let noauto_destination = ref (None : string option)
 let noswitch_destination = ref (None : string option)
 let nolocal_destination = ref (None : string option)
+let unnested_destination = ref (None : string option)
+let normlast_destination = ref (None : string option)
+let normfby_destination = ref (None : string option)
 let nlustre_destination = ref (None : string option)
 let stc_destination = ref (None : string option)
+let cut_destination = ref (None : string option)
 let sch_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 let sync_destination = ref (None : string option)
@@ -30,6 +33,9 @@ let do_fusion () = !fuse_obc
 
 let normalize_switches = ref true
 let do_normalize_switches () = !normalize_switches
+
+let obc_dce = ref true
+let do_obc_dce () = !obc_dce
 
 let do_sync () = !sync_destination <> None
 
@@ -70,9 +76,6 @@ let print_lustre_if =
 let print_complete_if =
   print_if complete_destination Interfacelib.PrintLustre.print_global
 
-let print_nolast_if =
-  print_if nolast_destination Interfacelib.PrintLustre.print_global
-
 let print_noauto_if =
   print_if noauto_destination Interfacelib.PrintLustre.print_global
 
@@ -82,11 +85,23 @@ let print_noswitch_if =
 let print_nolocal_if =
   print_if nolocal_destination Interfacelib.PrintLustre.print_global
 
+let print_unnested_if =
+  print_if unnested_destination Interfacelib.PrintLustre.print_global
+
+let print_normlast_if =
+  print_if normlast_destination Interfacelib.PrintLustre.print_global
+
+let print_normfby_if =
+  print_if normfby_destination Interfacelib.PrintLustre.print_global
+
 let print_nlustre_if =
   print_if nlustre_destination Interfacelib.PrintNLustre.print_global
 
 let print_stc_if =
   print_if stc_destination Interfacelib.PrintStc.print_program
+
+let print_cut_if =
+  print_if cut_destination Interfacelib.PrintStc.print_program
 
 let print_sch_if =
   print_if sch_destination Interfacelib.PrintStc.print_program

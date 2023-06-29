@@ -34,22 +34,26 @@ Module Type DRRCLOCKING
   Section rename.
     Variable sub : Env.t ident.
 
-    Variable inouts : list (ident * clock).
-    Variable vars vars' : list (ident * clock).
+    Variable inouts : list (ident * (clock * bool)).
+    Variable vars vars' : list (ident * (clock * bool)).
 
-    Hypothesis Hsub : forall x y ck,
+    Hypothesis Hsub : forall x y ck islast,
         Env.find x sub = Some y ->
-        In (x, ck) (inouts ++ vars) ->
-        In (y, rename_in_clock sub ck) (inouts ++ vars').
+        In (x, (ck, islast)) (inouts ++ vars) ->
+        In (y, (rename_in_clock sub ck, islast)) (inouts ++ vars').
 
-    Hypothesis Hnsub : forall x ck,
+    Hypothesis Hnsub : forall x ck islast,
         Env.find x sub = None ->
-        In (x, ck) (inouts ++ vars) ->
-        In (x, rename_in_clock sub ck) (inouts ++ vars').
+        In (x, (ck, islast)) (inouts ++ vars) ->
+        In (x, (rename_in_clock sub ck, islast)) (inouts ++ vars').
 
-    Lemma rename_in_var_wc : forall x ck,
-        In (x, ck) (inouts ++ vars) ->
-        In (rename_in_var sub x, rename_in_clock sub ck) (inouts ++ vars').
+    Hypothesis Hlast : forall x ck,
+        In (x, (ck, true)) (inouts ++ vars) ->
+        In (x, (rename_in_clock sub ck, true)) (inouts ++ vars').
+
+    Lemma rename_in_var_wc : forall x ck islast,
+        In (x, (ck, islast)) (inouts ++ vars) ->
+        In (rename_in_var sub x, (rename_in_clock sub ck, islast)) (inouts ++ vars').
     Proof.
       intros * Hin.
       unfold rename_in_var.
@@ -59,11 +63,12 @@ Module Type DRRCLOCKING
     Variable (G : global).
 
     Lemma rename_in_clock_wc : forall ck,
-        wc_clock (inouts ++ vars) ck ->
-        wc_clock (inouts ++ vars') (rename_in_clock sub ck).
+        wc_clock (idfst (inouts ++ vars)) ck ->
+        wc_clock (idfst (inouts ++ vars')) (rename_in_clock sub ck).
     Proof.
       induction ck; intros * Hwc; inv Hwc; auto with clocks.
-      simpl. constructor; eauto using rename_in_var_wc with clocks.
+      simpl. constructor; eauto.
+      solve_In; [|eapply rename_in_var_wc; eauto]. reflexivity.
     Qed.
 
     Lemma rename_in_exp_wc : forall e ck,
@@ -121,52 +126,71 @@ Module Type DRRCLOCKING
         wc_equation G (inouts ++ vars') (rename_in_equation sub equ).
     Proof with eauto with nlclocking.
       intros * Hdef Hwc; inv Hwc; simpl in *...
-      - constructor...
+      - econstructor...
+      - econstructor...
+        unfold rename_in_reset. simpl_Forall...
       - eapply CEqApp with (sub:=fun x => option_map (fun x => rename_in_var sub x) (sub0 x)) (* ? *)...
-        + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ _ (?&?&?&?).
+        + simpl_Forall.
           repeat esplit...
-          * inv H3; simpl; constructor.
+          * inv H5; simpl; constructor.
           * apply instck_rename_in_clock; auto.
-        + eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ Hin2 (?&?&?&?).
+        + simpl_Forall.
           repeat (esplit; eauto).
-          * rewrite H3; simpl.
+          * rewrite H5; simpl.
             unfold rename_in_var. rewrite Hdef; eauto.
           * eapply instck_rename_in_clock; eauto.
-        + unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?...
+        + unfold rename_in_reset. simpl_Forall...
       - constructor...
-        unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?...
+        unfold rename_in_reset. simpl_Forall...
     Qed.
 
   End rename.
 
+  Definition idck (vars : list (ident * (type * clock * bool))) :=
+    map (fun x => (fst x, (snd (fst (snd x)), snd (snd x)))) vars.
+
   Lemma remove_dup_regs_once_wc : forall G inouts vars eqs,
-      NoDupMembers (inouts ++ idsnd vars) ->
+      NoDup (map fst inouts ++ map fst vars) ->
       NoDup (vars_defined eqs) ->
-      (forall x eq, In eq eqs -> In x (var_defined eq) -> is_fby eq = true -> ~InMembers x inouts) ->
-      wc_env inouts ->
-      Forall (wc_equation G (inouts ++ idsnd vars)) eqs ->
+      Forall (fun x => ~InMembers x inouts) (vars_defined (filter is_fby eqs)) ->
+      Forall (fun '(x, (_, _, islast)) => islast = true -> ~In x (vars_defined (filter is_fby eqs))) vars ->
+      wc_env (idfst inouts) ->
+      Forall (wc_equation G (inouts ++ idck vars)) eqs ->
       let (vars', eqs') := remove_dup_regs_eqs_once vars eqs in
-      Forall (wc_equation G (inouts ++ idsnd vars')) eqs'.
+      Forall (wc_equation G (inouts ++ idck vars')) eqs'.
   Proof.
-    intros * Hndv Hnd Hinouts Hwinouts Hwc.
+    intros * Hndv Hnd Hinouts Hlasts Hwinouts Hwc.
     destruct (remove_dup_regs_eqs_once _ _) eqn:Honce. inv Honce.
     unfold subst_and_filter_equations.
     rewrite Forall_map, Forall_filter. eapply Forall_impl_In; eauto.
     intros ? Hineq Hwc' Hfilter.
-    eapply rename_in_equation_wc; [| | |eauto].
+    assert (Forall (fun '(x, (ck, islast)) => rename_in_clock (find_duplicates eqs) ck = ck) inouts) as Idem.
+    { simpl_Forall.
+      assert (forall x, Env.In x (find_duplicates eqs) -> ~InMembers x inouts) as Hninouts.
+      { intros ? Hindup.
+        eapply find_duplicates_In in Hindup. now simpl_Forall.
+      }
+      eapply wc_env_var in Hwinouts; [|solve_In]; simpl in *.
+      clear - Hwinouts Hninouts.
+      induction Hwinouts; simpl; auto.
+      f_equal; auto.
+      unfold rename_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
+      apply Env.find_In, Hninouts in Hfind.
+      exfalso. eapply Hfind. solve_In.
+    }
+    eapply rename_in_equation_wc; [| | | |eauto].
     - intros * Hfind Hin.
       assert (~InMembers x inouts) as Hnx.
       { apply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_&_).
-        eapply Hinouts in Hin1; eauto. simpl; auto. }
+        apply Forall_flat_map, Forall_filter in Hinouts. simpl_Forall.
+        specialize (Hinouts eq_refl). simpl_Forall. auto. }
       assert (~InMembers y inouts) as Hny.
       { apply find_duplicates_spec in Hfind as (?&?&?&?&?&_&Hin2&_).
-        eapply Hinouts in Hin2; eauto. simpl; auto. }
+        apply Forall_flat_map, Forall_filter in Hinouts. simpl_Forall.
+        specialize (Hinouts eq_refl). simpl_Forall. auto. }
       rewrite in_app_iff in *. destruct Hin as [Hin|Hin].
       1:(exfalso; eauto using In_InMembers).
       right.
-      rewrite In_idsnd_exists in *. destruct Hin as (?&Hin).
       assert (Hfind':=Hfind).
       eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hwt1&Hwt2&_).
       eapply Forall_forall in Hwt1; eauto. eapply Forall_forall in Hwt2; eauto.
@@ -174,36 +198,24 @@ Module Type DRRCLOCKING
       rewrite in_app_iff in H2, H3.
       destruct H2 as [Hin1|Hin1], H3 as [Hin2|Hin2].
       1-3:(exfalso; eauto using In_InMembers).
-      eapply In_idsnd_exists in Hin1 as (?&Hin1).
-      eapply In_idsnd_exists in Hin2 as (ty&Hin2).
-      eapply NoDupMembers_det in Hin; eauto. 2:eapply NoDupMembers_app_r, NoDupMembers_idsnd in Hndv; eauto.
-      inv Hin. exists ty; simpl.
-      eapply in_map_iff. exists (y, (ty, ck)); split; auto.
-      eapply filter_In; split; auto.
-       eapply find_duplicates_irrefl in Hfind'; eauto.
-       apply Env.Props.P.F.not_mem_in_iff in Hfind'. rewrite Hfind'; auto.
+      simpl_In.
+      eapply NoDupMembers_det in Hin1; eauto. 2:apply fst_NoDupMembers; eauto using NoDup_app_r.
+      inv Hin1.
+      unfold idck, subst_and_filter_vars. solve_In.
+      eapply find_duplicates_irrefl in Hfind'; eauto.
+      apply Env.Props.P.F.not_mem_in_iff in Hfind'. rewrite Hfind'; auto.
     - intros * Hfind Hin.
       rewrite in_app_iff in *. destruct Hin as [Hin|Hin]; auto.
-      + assert (forall x, Env.In x (find_duplicates eqs) -> ~InMembers x inouts) as Hninouts.
-        { clear Hfind. intros ? Hindup.
-          rewrite Env.In_find in Hindup. destruct Hindup as (?&Hfind).
-          eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_).
-          eapply Hinouts; eauto. simpl; auto.
-        }
-        assert (rename_in_clock (find_duplicates eqs) ck = ck); repeat rewrite H; auto.
-        eapply wc_env_var in Hin; eauto.
-        clear - Hin Hwinouts Hninouts.
-        induction Hin; simpl; auto.
-        f_equal; auto.
-        unfold rename_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
-        apply Env.find_In, Hninouts in Hfind.
-        exfalso; eauto using In_InMembers.
-      + right.
-        rewrite In_idsnd_exists in *. destruct Hin as (ty&Hin).
-        exists ty.
-        apply in_map_iff. exists (x, (ty, ck)); split; auto.
-        apply filter_In; split; auto.
+      + left. simpl_Forall. now rewrite Idem.
+      + right. unfold idck, subst_and_filter_vars. solve_In.
         rewrite Env.mem_find, Hfind; auto.
+    - intros * In.
+      rewrite in_app_iff in *. destruct In as [In|In]; auto.
+      + left. simpl_Forall. now rewrite Idem.
+      + right. unfold idck, subst_and_filter_vars. solve_In.
+        simpl_Forall.
+        apply Bool.negb_true_iff, Env.Props.P.F.not_mem_in_iff.
+        intros ?; eapply Hlasts; eauto using find_duplicates_In.
     - intros * Hindef.
       destruct (Env.find _ _) eqn:Hfind; auto. exfalso.
       apply Env.find_In in Hfind.
@@ -215,35 +227,33 @@ Module Type DRRCLOCKING
   Qed.
 
   Lemma remove_dup_regs_once_wc_env : forall G inouts vars eqs vars' eqs',
-      NoDupMembers (inouts ++ idsnd vars) ->
+      NoDup (map fst inouts ++ map fst vars) ->
       NoDup (vars_defined eqs) ->
-      (forall x eq, In eq eqs -> In x (var_defined eq) -> is_fby eq = true -> ~InMembers x inouts) ->
-      wc_env inouts ->
-      wc_env (inouts ++ idsnd vars) ->
-      Forall (wc_equation G (inouts ++ idsnd vars)) eqs ->
+      Forall (fun x => ~InMembers x inouts) (vars_defined (filter is_fby eqs)) ->
+      wc_env (idfst inouts) ->
+      wc_env (idfst (inouts ++ idck vars)) ->
+      Forall (wc_equation G (inouts ++ idck vars)) eqs ->
       remove_dup_regs_eqs_once vars eqs = (vars', eqs') ->
-      wc_env (inouts ++ idsnd vars').
+      wc_env (idfst (inouts ++ idck vars')).
   Proof.
     intros * Hndv Hnd Hinouts Hwc1 Hwc2 Hwceq Hrem.
-    inv Hrem.
+    inv Hrem. unfold idfst. rewrite map_app.
     eapply Forall_app; split.
     - eapply Forall_impl; [|eauto]; intros (?&?) ?.
-      eapply wc_clock_incl; eauto. apply incl_appl, incl_refl.
-    - eapply Forall_app in Hwc2 as (?&Hwc2).
-      unfold idsnd in *.
-      rewrite Forall_map in *. eapply Forall_map, Forall_filter.
-      eapply Forall_impl_In; [|eauto]. intros (?&?&?) ? Hwc Hmem; simpl in *.
-      eapply rename_in_clock_wc; eauto; intros * Hfind Hin.
+      eapply Cks.wc_clock_incl; eauto. apply incl_appl, incl_refl.
+    - unfold idfst, idck in Hwc2. rewrite map_app in Hwc2. eapply Forall_app in Hwc2 as (?&Hwc2).
+      simpl_Forall. simpl_In. simpl_Forall.
+      rewrite <-map_app in *.
+      eapply rename_in_clock_wc; eauto; intros * Hfind Hin'.
       + assert (~InMembers x inouts) as Hnx.
-        { apply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_&_).
-          eapply Hinouts in Hin1; eauto. simpl; auto. }
+        { apply Env.find_In, find_duplicates_In in Hfind.
+          now simpl_Forall. }
         assert (~InMembers y inouts) as Hny.
         { apply find_duplicates_spec in Hfind as (?&?&?&?&?&_&Hin2&_).
-          eapply Hinouts in Hin2; eauto. simpl; auto. }
-        rewrite in_app_iff in *. destruct Hin as [Hin|Hin].
+          eapply Forall_forall in Hinouts; eauto. unfold vars_defined; solve_In; simpl; auto. }
+        rewrite in_app_iff in *. destruct Hin' as [|].
         1:(exfalso; eauto using In_InMembers).
         right.
-        rewrite in_map_iff in *. destruct Hin as ((?&ty0&?)&Heq&Hin); inv Heq; simpl in *.
         assert (Hfind':=Hfind).
         eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hwt1&Hwt2&_).
         eapply Forall_forall in Hwt1; eauto. eapply Forall_forall in Hwt2; eauto.
@@ -251,106 +261,102 @@ Module Type DRRCLOCKING
         rewrite in_app_iff in H4, H5.
         destruct H4 as [Hin1|Hin1], H5 as [Hin2|Hin2].
         1-3:(exfalso; eauto using In_InMembers).
-        eapply In_idsnd_exists in Hin1 as (?&Hin1).
-        eapply In_idsnd_exists in Hin2 as (ty&Hin2).
-        eapply NoDupMembers_det in Hin; eauto. inv Hin. 2:eapply NoDupMembers_app_r, NoDupMembers_idsnd in Hndv; eauto.
-        exists (y, (ty, rename_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
-        apply in_map_iff. exists (y, (ty, ck)); split; auto.
-        eapply filter_In; split; auto.
+        simpl_In.
+        eapply NoDupMembers_det in Hin0; eauto. 2:apply fst_NoDupMembers; eauto using NoDup_app_r.
+        inv Hin0.
+        unfold idck, subst_and_filter_vars. solve_In.
         eapply find_duplicates_irrefl in Hfind'; eauto.
         apply Env.Props.P.F.not_mem_in_iff in Hfind'. rewrite Hfind'; auto.
-      + rewrite in_app_iff in *. destruct Hin as [Hin|Hin]; auto.
-        * assert (forall x, Env.In x (find_duplicates eqs) -> ~InMembers x inouts) as Hninouts.
-          { clear Hfind. intros ? Hindup.
-            rewrite Env.In_find in Hindup. destruct Hindup as (?&Hfind).
-            eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_).
-            eapply Hinouts; eauto. simpl; auto.
+      + rewrite in_app_iff in *. destruct Hin' as [|]; auto.
+        * replace (rename_in_clock _ ck) with ck; auto.
+          simpl_Forall.
+          assert (forall x, Env.In x (find_duplicates eqs) -> ~InMembers x inouts) as Hninouts.
+          { intros ? Hindup.
+            eapply find_duplicates_In in Hindup. now simpl_Forall.
           }
-          assert (rename_in_clock (find_duplicates eqs) ck = ck) as Hck; repeat rewrite Hck; auto.
-          eapply wc_env_var in Hin; eauto.
-          clear - Hin Hwc1 Hninouts.
-          induction Hin; simpl; auto.
+          eapply wc_env_var in Hwc1; [|solve_In]; simpl in *.
+          clear - Hwc1 Hninouts.
+          induction Hwc1; simpl; auto.
           f_equal; auto.
           unfold rename_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
           apply Env.find_In, Hninouts in Hfind.
-          exfalso; eauto using In_InMembers.
+          exfalso. eapply Hfind. solve_In.
         * right.
-          rewrite in_map_iff in *. destruct Hin as ((x0&ty0&ck0)&Heq&Hin); inv Heq; simpl in *.
-          exists (x, (ty0, rename_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
-          apply in_map_iff. exists (x, (ty0, ck)); split; auto.
-          apply filter_In; split; auto.
+          unfold idck, subst_and_filter_vars. solve_In.
           rewrite Env.mem_find, Hfind; auto.
   Qed.
 
   Lemma remove_dup_regs_eqs_wc : forall G inouts vars eqs vars' eqs',
-      NoDupMembers (inouts ++ idsnd vars) ->
+      NoDup (map fst inouts ++ map fst vars) ->
       NoDup (vars_defined eqs) ->
-      (forall x eq, In eq eqs -> In x (var_defined eq) -> is_fby eq = true -> ~InMembers x inouts) ->
-      wc_env inouts ->
-      wc_env (inouts ++ idsnd vars) ->
-      Forall (wc_equation G (inouts ++ idsnd vars)) eqs ->
+      Forall (fun x => ~InMembers x inouts) (vars_defined (filter is_fby eqs)) ->
+      Forall (fun '(x, (_, _, islast)) => islast = true -> ~In x (vars_defined (filter is_fby eqs))) vars ->
+      wc_env (idfst inouts) ->
+      wc_env (idfst (inouts ++ idck vars)) ->
+      Forall (wc_equation G (inouts ++ idck vars)) eqs ->
       remove_dup_regs_eqs vars eqs = (vars', eqs') ->
-      Forall (wc_equation G (inouts ++ idsnd vars')) eqs' /\ wc_env (inouts ++ idsnd vars').
+      Forall (wc_equation G (inouts ++ idck vars')) eqs' /\ wc_env (idfst (inouts ++ idck vars')).
   Proof.
     intros until eqs.
-    functional induction (remove_dup_regs_eqs vars eqs); intros * Hndv Hnd Hinouts Hwinouts Hwenv Hwc Hrem.
+    functional induction (remove_dup_regs_eqs vars eqs); intros * Hndv Hnd Hinouts Hlasts Hwinouts Hwenv Hwc Hrem.
     - eapply remove_dup_regs_once_wc_env in Hwenv; eauto.
       eapply remove_dup_regs_once_wc in Hwc; eauto.
       rewrite e in Hwc. inv e.
       eapply IHp; eauto using subst_and_filter_equations_NoDup.
       + clear - Hndv.
-        apply NoDupMembers_app; eauto using NoDupMembers_app_l.
-        * apply NoDupMembers_app_r, NoDupMembers_idsnd in Hndv.
-          apply NoDupMembers_idsnd, subst_and_filter_vars_NoDupMembers; auto.
-        * intros ? Hin.
-          eapply NoDupMembers_app_InMembers in Hndv; eauto.
-          contradict Hndv.
-          rewrite InMembers_idsnd in *; eauto using subst_and_filter_vars_InMembers.
-      + intros ?? Hin1 Hin2 Hisfby.
-        eapply in_map_iff in Hin1 as (?&?&Hin1); subst. apply in_filter in Hin1.
-        destruct x0; simpl in *; try congruence. destruct Hin2 as [Hin2|Hin2]; inv Hin2.
-        eapply Hinouts; eauto. simpl; auto.
+        apply NoDup_app'; eauto using NoDup_app_l.
+        * apply NoDup_app_r in Hndv. rewrite <-fst_NoDupMembers in *.
+          apply subst_and_filter_vars_NoDupMembers; auto.
+        * simpl_Forall.
+          eapply NoDup_app_In in Hndv; [|solve_In].
+          contradict Hndv. rewrite <-fst_InMembers in *.
+          eauto using subst_and_filter_vars_InMembers.
+      + eapply Forall_incl; [|eapply remove_dup_regs_eqs_once_fby_incl with (vars:=vars)]; eauto.
+      + unfold subst_and_filter_vars. simpl_Forall. simpl_In. simpl_Forall.
+        intros L In. eapply Hlasts; eauto.
+        eapply remove_dup_regs_eqs_once_fby_incl with (vars:=vars); eauto.
     - inv Hrem; auto.
   Qed.
+
+  Definition idck' (vars : list (ident * (type * clock))) :=
+    map (fun x => (fst x, (snd (snd x), false))) vars.
 
   Lemma remove_dup_regs_node_wc : forall G n,
       wc_node G n ->
       wc_node (remove_dup_regs G) (remove_dup_regs_node n).
   Proof.
     intros * (Hwci&Hwco&Hwcv&Hwceq).
+    assert (NoDup (map fst (idck' (n_in n ++ n_out n)) ++ map fst (n_vars n))) as Nd.
+    { unfold idck'.
+      rewrite map_map, map_app, <-app_assoc, Permutation.Permutation_app_comm with (l':=map _ (n_vars _)).
+      apply n_nodup. }
     destruct (remove_dup_regs_eqs (n_vars n) (n_eqs n)) as (vars'&eqs') eqn:Hrem.
-    destruct (remove_dup_regs_eqs_wc G (idsnd (n_in n ++ n_out n)) (n_vars n) (n_eqs n) vars' eqs')
+    destruct (remove_dup_regs_eqs_wc G (idck' (n_in n ++ n_out n)) (n_vars n) (n_eqs n) vars' eqs')
       as (Hwc'&Hwenv'); eauto.
-    - rewrite <-idsnd_app, <-app_assoc, (Permutation.Permutation_app_comm (n_out _)).
-      apply NoDupMembers_idsnd, n_nodup.
     - apply NoDup_var_defined_n_eqs.
-    - intros. intros contra. rewrite idsnd_app, InMembers_app in contra. destruct contra as [contra|contra].
-      + rewrite InMembers_idsnd in contra.
-        assert (In x (vars_defined (n_eqs n))) as Hdef.
-        { unfold vars_defined. apply in_flat_map.
-          eexists; split; eauto. }
-        rewrite n_defd in Hdef. apply fst_InMembers in Hdef.
-        eapply NoDupMembers_app_InMembers in contra. eapply contra; eauto.
-        eapply n_nodup.
-      + rewrite fst_InMembers, map_fst_idsnd in contra.
-        apply n_vout in contra. apply contra.
-        unfold vars_defined. apply in_flat_map.
-        eexists; split; eauto.
-        apply filter_In; auto.
-    - rewrite <-idsnd_app, <-app_assoc, (Permutation.Permutation_app_comm (n_out _)); auto.
-    - eapply Forall_impl; [|eauto]. intros ? Hwt.
-      eapply wc_equation_incl; eauto. clear -n. intros (?&?) Hin.
-      rewrite <-idsnd_app, <-app_assoc, (Permutation.Permutation_app_comm (n_out _)).
-      assumption.
-    - split; [|split; [|split]]; simpl; auto.
-      1,2:rewrite Hrem.
-      + simpl. rewrite <-idsnd_app, <-app_assoc, (Permutation.Permutation_app_comm (n_out _)) in Hwenv'; auto.
-      + eapply Forall_impl; [|eauto]. intros ? Hwt.
+    - simpl_Forall. rewrite fst_InMembers. intros In'.
+      eapply NoDup_app_In; eauto using vars_defined_fby_vars.
+    - simpl_Forall. intros Eq; subst.
+      eapply n_lastfby.
+      rewrite n_lastd1. solve_In.
+    - unfold idfst, idck'. now rewrite map_map.
+    - clear - Hwcv. unfold idck', idck. simpl_app.
+      repeat rewrite map_map in *. simpl in *.
+      now rewrite Permutation.Permutation_app_comm with (l':=map _ (n_vars _)).
+    - simpl_Forall.
+      unfold idck', idck.
+      erewrite map_ext with (l:=_++_), map_ext with (l:=n_vars _); eauto.
+      all:intros; destruct_conjs; auto.
+    - repeat (split; auto).
+      1,2:simpl; rewrite Hrem.
+      + clear - Hwenv'. unfold idck', idck in *. simpl_app.
+      repeat rewrite map_map in *. simpl in *.
+      now rewrite Permutation.Permutation_app_comm with (l':=map _ (n_out _)).
+      + simpl_Forall.
         eapply global_iface_eq_wc_eq; eauto using remove_dup_regs_iface_eq.
-        eapply wc_equation_incl; eauto. clear -n. intros ? Hin.
-        repeat rewrite idsnd_app in *. repeat rewrite <-filter_app in Hin.
-        repeat rewrite in_app_iff in *.
-        destruct Hin as [[Hin|Hin]|Hin]; auto.
+        clear - Hwc'. unfold idck', idck in *.
+        erewrite map_ext with (l:=_++_), map_ext with (l:=vars'); eauto.
+        all:intros; destruct_conjs; auto.
   Qed.
 
   Theorem remove_dup_regs_wc : forall G,

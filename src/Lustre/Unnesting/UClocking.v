@@ -8,12 +8,11 @@ From Velus Require Import Clocks.
 From Velus Require Import Fresh.
 From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LClocking.
-From Velus Require Import Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.SubClock.SCClocking.
+From Velus Require Import Lustre.Unnesting.Unnesting.
 
-(** * Preservation of Typing through Normalization *)
+(** * Preservation of Typing through Unnesting *)
 
-Module Type NCLOCKING
+Module Type UCLOCKING
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -21,13 +20,11 @@ Module Type NCLOCKING
        (Import Senv : STATICENV Ids Op OpAux Cks)
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
        (Import Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Cks Senv Syn).
-
-  Module Import SCC := SCClockingFun Ids Op OpAux Cks Senv Syn Clo SC. Import SC.
+       (Import Un  : UNNESTING Ids Op OpAux Cks Senv Syn).
 
   Import Fresh Fresh.Facts Fresh.Tactics.
 
-  (** ** Rest of clockof preservation (started in Normalization.v) *)
+  (** ** Rest of clockof preservation (started in Unnesting.v) *)
 
   Fact unnest_reset_clockof : forall G vars e e' eqs' st st',
       wc_exp G vars e ->
@@ -135,14 +132,6 @@ Module Type NCLOCKING
     eapply unnest_exps_annots in H0; eauto with lclocking.
     repeat rewrite clocksof_annots.
     congruence.
-  Qed.
-
-  Fact fby_iteexp_clockof : forall e0 e ann es' eqs' st st',
-      fby_iteexp e0 e ann st = (es', eqs', st') ->
-      clockof es' = [(snd ann)].
-  Proof.
-    intros ?? [ty cl] es' eqs' st st' Hfby; simpl in *.
-    destruct (is_constant e0); repeat inv_bind; reflexivity.
   Qed.
 
   Fact unnest_fby_clocksof : forall anns e0s es,
@@ -319,7 +308,7 @@ Module Type NCLOCKING
     - apply Forall2_same, Forall_forall. intros (?&?) _.
       split; auto. destruct o; simpl in *; auto.
     - inv Hnormed; simpl in *; inv Heq.
-      1-6:repeat constructor.
+      all:repeat constructor.
       destruct ck; simpl in *; try congruence.
   Qed.
 
@@ -338,16 +327,15 @@ Module Type NCLOCKING
   Qed.
 
   Fact unnest_noops_exps_nclocksof2 : forall G vars cks es es2 es' eqs2 eqs' st st2 st3 st',
-      (forall x, ~IsLast vars x) ->
       Forall (wc_exp G vars) es ->
       length cks = length (annots es) ->
       mmap2 (unnest_exp G false) es st = (es2, eqs2, st2) ->
       unnest_noops_exps cks (concat es2) st3 = (es', eqs', st') ->
       Forall2 (fun '(ck1, o1) '(ck2, o2) => ck1 = ck2 /\ LiftO True (fun x1 => o2 = Some x1) o1) (nclocksof es) (nclocksof es').
   Proof.
-    intros * Hnl Hwc Hlen Hmmap Hun.
+    intros * Hwc Hlen Hmmap Hun.
     eapply unnest_noops_exps_nclocksof in Hun; eauto.
-    2:{ eapply mmap2_normalized_lexp; [eauto| |eauto]; eauto with lclocking. }
+    2:{ eapply mmap2_normalized_lexp; eauto with lclocking. }
     2:{ apply mmap2_unnest_exp_length in Hmmap; eauto with lclocking. congruence. }
     eapply mmap2_unnest_exp_nclocksof in Hmmap; eauto.
     eapply Forall2_trans_ex in Hun; eauto. simpl_Forall; subst.
@@ -440,7 +428,7 @@ Module Type NCLOCKING
 
   Section unnest_node_wc.
     Variable G1 : @global nolocal local_prefs.
-    Variable G2 : @global nolocal norm1_prefs.
+    Variable G2 : @global unnested norm1_prefs.
 
     Fact idents_for_anns_wc : forall vars anns ids st st',
         idents_for_anns anns st = (ids, st') ->
@@ -636,7 +624,6 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_reset_wc : forall vars e e' eqs' st st' ck,
-        (forall x, ~IsLast vars x) ->
         (forall es' eqs' st0',
             st_follows st0' st' ->
             unnest_exp G1 true e st = (es', eqs', st0') ->
@@ -649,7 +636,7 @@ Module Type NCLOCKING
         wc_exp G2 (vars++st_senv st') e' /\
         Forall (wc_equation G2 (vars++st_senv st')) eqs'.
     Proof.
-      intros * Hnl Hkwc Hwc Hck Hunn.
+      intros * Hkwc Hwc Hck Hunn.
       repeat split.
       - eapply unnest_reset_clockof in Hunn; eauto; try congruence.
         rewrite <-length_clockof_numstreams, Hck; eauto.
@@ -665,24 +652,22 @@ Module Type NCLOCKING
         { eapply unnest_exp_length in H; eauto with lclocking.
           rewrite <- length_clockof_numstreams, Hck in H; auto. }
         singleton_length.
-        assert (Hk:=H). eapply unnest_exp_normalized_cexp, Forall_singl in H. 3:eauto with lclocking.
-        2:{ apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+        assert (Hk:=H). eapply unnest_exp_normalized_cexp, Forall_singl in H.
         assert (st_follows x1 st') as Hfollows.
         { inv H; [| | inv H1]; try destruct cl; simpl in *;
             repeat inv_bind; repeat solve_st_follows. }
         eapply Hkwc in Hk as [Hwc1 Hwc2]; auto.
         inv H; [| | inv H1]; simpl in *.
-        1-8:repeat inv_bind.
-        1-8:try constructor.
-        2,4,6,8,9,11,13,15:solve_forall; repeat solve_incl.
-        1-7:simpl_Forall.
-        1-7:repeat (constructor; eauto; repeat solve_incl); simpl in *.
-        1-7:(take (fresh_ident _ _ _ = (_, _)) and eapply fresh_ident_In in it;
+        all:repeat inv_bind.
+        all:try constructor.
+        2,4,6,8,9,11,13,15,17:solve_forall; repeat solve_incl.
+        all:simpl_Forall.
+        all:repeat (constructor; eauto; repeat solve_incl); simpl in *.
+        all:(take (fresh_ident _ _ _ = (_, _)) and eapply fresh_ident_In in it;
              apply HasClock_app, or_intror; econstructor; solve_In; auto).
     Qed.
 
     Fact unnest_resets_wc : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (fun e => forall es' eqs' st0 st0',
                     unnest_exp G1 true e st0 = (es', eqs', st0') ->
                     st_follows st st0 ->
@@ -696,7 +681,7 @@ Module Type NCLOCKING
         Forall (wc_exp G2 (vars++st_senv st')) es' /\
         Forall (wc_equation G2 (vars++st_senv st')) (concat eqs').
     Proof.
-      induction es; intros * Hnl F Wt Cks Map; inv F; inv Wt; inv Cks;
+      induction es; intros * F Wt Cks Map; inv F; inv Wt; inv Cks;
         repeat inv_bind; simpl in *; auto.
       assert (Map:=H0). eapply IHes in H0 as (Cks1&Wt1&Wt2); eauto.
       3:solve_forall; repeat solve_incl.
@@ -750,7 +735,6 @@ Module Type NCLOCKING
     Hypothesis Hiface : global_iface_incl G1 G2.
 
     Fact unnest_exp_wc : forall vars e is_control es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_exp G1 (vars++st_senv st) e ->
         unnest_exp G1 is_control e st = (es', eqs', st') ->
         Forall (wc_exp G2 (vars++st_senv st')) es' /\
@@ -763,7 +747,6 @@ Module Type NCLOCKING
           eapply H in Hnorm as [? ?]; eauto;
           try split; try solve_forall; repeat solve_incl
         end.
-      intros * Hnl. revert is_control es' eqs' st st'.
       induction e using exp_ind2; intros is_control es' eqs' st st' Hwc Hnorm;
         repeat inv_bind; inv Hwc.
       - (* const *) repeat constructor.
@@ -1002,8 +985,7 @@ Module Type NCLOCKING
         assert (length (n_in n) = length (nclocksof x2)) as Hlen2.
         { apply Forall2_length in H12. repeat setoid_rewrite map_length in H12. rewrite H12.
           eapply unnest_noops_exps_nclocksof2 with (es:=es), Forall2_length in H2. 3:eauto with lclocking. 1-4:eauto.
-          2:rewrite Hlen1...
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+          rewrite Hlen1...
         }
 
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
@@ -1040,15 +1022,13 @@ Module Type NCLOCKING
         + eapply idents_for_anns_wc...
         + eapply unnest_noops_exps_wc with (vars:=vars) in H2 as (?&?); auto.
           solve_forall; repeat solve_incl.
-          eapply mmap2_normalized_lexp in Hnorm. 1,3:eauto with lclocking.
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+          eapply mmap2_normalized_lexp in Hnorm; eauto with lclocking.
         + solve_forall; repeat solve_incl.
         + instantiate (1:=fun x => match (sub x) with
                                 | Some y => Some y
                                 | _ => Env.find x sub2
                       end).
-          eapply unnest_noops_exps_nclocksof2 with (es:=es) in H2. 3,5:eauto.
-          2:{ apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+          eapply unnest_noops_exps_nclocksof2 with (es:=es) in H2. 2,4:eauto.
           2:{ rewrite Hlen1; eauto... }
           eapply Forall2_trans_ex in H2; eauto.
           erewrite map_ext, <-map_map, <-Hin. simpl_Forall. unfold nclock in *; destruct_conjs; subst.
@@ -1073,44 +1053,40 @@ Module Type NCLOCKING
           apply HasClock_app; auto.
         + repeat rewrite Forall_app; repeat split.
           2:eapply unnest_noops_exps_wc in H2 as (?&?); eauto.
-          3:{ eapply mmap2_normalized_lexp in Hnorm. 1,3:eauto with lclocking.
-              apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+          3:{ eapply mmap2_normalized_lexp in Hnorm; eauto with lclocking. }
           1-3:solve_forall; repeat solve_incl.
     Qed.
 
     Corollary mmap2_unnest_exp_wc : forall vars is_control es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         mmap2 (unnest_exp G1 is_control) es st = (es', eqs', st') ->
         Forall (wc_exp G2 (vars++st_senv st')) (concat es') /\
         Forall (wc_equation G2 (vars++st_senv st')) (concat eqs').
     Proof.
-      intros * Hnl Hwt Hmap.
+      intros * Hwt Hmap.
       eapply mmap2_wc in Hmap; eauto with norm.
       solve_forall. eapply unnest_exp_wc with (vars:=vars) in H1 as [? ?]; eauto.
       split. 1,2:solve_forall. 1,2,3:repeat solve_incl.
     Qed.
 
     Corollary unnest_exps_wc : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         unnest_exps G1 es st = (es', eqs', st') ->
         Forall (wc_exp G2 (vars++st_senv st')) es' /\
         Forall (wc_equation G2 (vars++st_senv st')) eqs'.
     Proof.
-      intros * Hnl Hwt Hmap.
+      intros * Hwt Hmap.
       unfold unnest_exps in Hmap; repeat inv_bind.
       eapply mmap2_unnest_exp_wc in H; eauto.
     Qed.
 
     Corollary mmap2_mmap2_unnest_exp_wc : forall vars is_control (es: list (enumtag * _)) es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (fun es => Forall (wc_exp G1 (vars++st_senv st)) (snd es)) es ->
         mmap2 (fun '(i, es) => bind2 (mmap2 (unnest_exp G1 is_control) es) (fun es' eqs' => ret (i, concat es', concat eqs'))) es st = (es', eqs', st') ->
         Forall (fun es => Forall (wc_exp G2 (vars++st_senv st')) (snd es)) es' /\
         Forall (wc_equation G2 (vars++st_senv st')) (concat eqs').
     Proof.
-      intros * Hnl Hwt Hmap.
+      intros * Hwt Hmap.
       eapply mmap2_wc' with (vars:=vars++st_senv st') in Hmap as (Hwc1&Hwc2); eauto.
       - split; auto.
         rewrite <-Forall_concat, Forall_map in Hwc1. eauto.
@@ -1123,13 +1099,12 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_rhs_wc : forall vars e es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_exp G1 (vars++st_senv st) e ->
         unnest_rhs G1 e st = (es', eqs', st') ->
         Forall (wc_exp G2 (vars++st_senv st')) es' /\
         Forall (wc_equation G2 (vars++st_senv st')) eqs'.
     Proof with eauto with norm lclocking.
-      intros * Hnl Hwc Hnorm.
+      intros * Hwc Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [eapply unnest_exp_wc in Hnorm; eauto]); repeat inv_bind; inv Hwc.
       - (* extcall *)
@@ -1184,9 +1159,8 @@ Module Type NCLOCKING
         assert (length (n_in n) = length (nclocksof x2)) as Hlen2.
         { apply Forall2_length in H9. repeat setoid_rewrite map_length in H9. rewrite H9.
           unfold unnest_exps in Hnorm; repeat inv_bind.
-          eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,5:eauto. 2:eauto with lclocking.
-          2:rewrite Hlen1; eauto...
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+          eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,4:eauto. eauto with lclocking.
+          rewrite Hlen1; eauto...
         }
 
         unfold unnest_exps in *. repeat inv_bind.
@@ -1223,14 +1197,12 @@ Module Type NCLOCKING
         repeat constructor; simpl in *... econstructor...
         + eapply unnest_noops_exps_wc with (vars:=vars) in H0 as (?&?); eauto.
           solve_forall; repeat solve_incl.
-          eapply mmap2_normalized_lexp in H3. 1,3:eauto with lclocking.
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+          eapply mmap2_normalized_lexp in H3; eauto with lclocking.
         + instantiate (1:=fun x => match (sub x) with
                                 | Some y => Some y
                                 | _ => Env.find x sub2
                       end).
-          eapply unnest_noops_exps_nclocksof2 with (es:=l) in H0. 5,3:eauto with senv.
-          2:{ apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+          eapply unnest_noops_exps_nclocksof2 with (es:=l) in H0. 4,2:eauto with senv.
           2:{ rewrite Hlen1; eauto... }
           eapply Forall2_trans_ex in H0; eauto.
           erewrite map_ext, <-map_map, <-Hin. simpl_Forall.
@@ -1252,19 +1224,17 @@ Module Type NCLOCKING
             1,2:solve_In.
         + repeat rewrite Forall_app; repeat split.
           2:eapply unnest_noops_exps_wc in H0 as (?&?); eauto.
-          3:{ eapply mmap2_normalized_lexp in H3. 1,3:eauto with lclocking.
-              apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+          3:{ eapply mmap2_normalized_lexp in H3; eauto with lclocking. }
           1-3:solve_forall; repeat solve_incl.
     Qed.
 
     Corollary unnest_rhss_wc : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         unnest_rhss G1 es st = (es', eqs', st') ->
         Forall (wc_exp G2 (vars++st_senv st')) es' /\
         Forall (wc_equation G2 (vars++st_senv st')) eqs'.
     Proof.
-      intros * Hnl Hwc Hnorm.
+      intros * Hwc Hnorm.
       unfold unnest_rhss in Hnorm; repeat inv_bind.
       eapply mmap2_wc in H; eauto with norm lclocking.
       solve_forall.
@@ -1273,12 +1243,11 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_equation_wc_eq : forall vars e eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_equation G1 (vars++st_senv st) e ->
         unnest_equation G1 e st = (eqs', st') ->
         Forall (wc_equation G2 (vars++st_senv st')) eqs'.
     Proof with eauto with norm lclocking.
-      intros vars [xs es] eqs' st st' Hnl Hwc Hnorm.
+      intros vars [xs es] eqs' st st' Hwc Hnorm.
       unfold unnest_equation in Hnorm. repeat inv_bind.
       inv Hwc.
       - (* app *)
@@ -1307,9 +1276,8 @@ Module Type NCLOCKING
         assert (length (n_in n) = length (nclocksof x4)) as Hlen2.
         { apply Forall2_length in H5. repeat setoid_rewrite map_length in H5. rewrite H5.
           unfold unnest_exps in Hnorm; repeat inv_bind.
-          eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,5:eauto. 2:eauto with lclocking.
-          2:rewrite Hlen1...
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+          eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,4:eauto. eauto with lclocking.
+          rewrite Hlen1...
         }
 
         unfold unnest_exps in *. repeat inv_bind.
@@ -1343,17 +1311,15 @@ Module Type NCLOCKING
             eapply NoDupMembers_det in Hin2; eauto. inv Hin2.
         }
 
-        repeat econstructor; simpl in *...
-        + eapply unnest_noops_exps_wc with (vars:=vars) in H0 as (?&?); eauto.
-          solve_forall; repeat solve_incl.
-          eapply mmap2_normalized_lexp in H9. 1,3:eauto with lclocking.
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
+        repeat rewrite Forall_app. repeat split; try congruence.
+        destruct xs; repeat econstructor; simpl in *...
+        + eapply unnest_noops_exps_wc with (vars:=vars) in H0 as (?&?); eauto with norm.
+          simpl_Forall; repeat solve_incl.
         + instantiate (1:=fun x => match (sub x) with
                                 | Some y => Some y
                                 | _ => Env.find x sub2
                                 end).
-          eapply unnest_noops_exps_nclocksof2 with (es:=es0) in H0. 5:eauto. 3:eauto with lclocking.
-          2:{ apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
+          eapply unnest_noops_exps_nclocksof2 with (es:=es0) in H0. 4:eauto. 2:eauto with lclocking.
           2:{ rewrite Hlen1; eauto... }
           eapply Forall2_trans_ex in H0; eauto.
           erewrite map_ext, <-map_map, <-Hin. simpl_Forall.
@@ -1371,11 +1337,10 @@ Module Type NCLOCKING
           eapply WellInstantiated_refines2; eauto.
           intros ?? Hsub. rewrite Hsub; auto.
         + simpl_Forall. repeat solve_incl.
-        + rewrite app_nil_r. repeat rewrite Forall_app; repeat split.
-          2:eapply unnest_noops_exps_wc in H0 as (?&?); eauto.
-          3:{ eapply mmap2_normalized_lexp in H9. 1,3:eauto with lclocking.
-              apply NoLast_app; split; auto. apply senv_of_tyck_NoLast. }
-          1-3:solve_forall; repeat solve_incl.
+        + simpl_Forall. repeat solve_incl.
+        + eapply unnest_noops_exps_wc in H0 as (?&?); eauto with norm.
+          simpl_Forall. repeat solve_incl.
+        + constructor.
       - (* general case *)
         assert (st_follows st st') as Hfollows by eauto with norm.
         assert (H':=H). eapply unnest_rhss_wc in H' as [Hwc1' Hwc1'']...
@@ -1393,31 +1358,33 @@ Module Type NCLOCKING
             rewrite firstn_length, Hwc2, length_clockof_numstreams.
             apply Nat.min_l. lia. }
           rewrite <- (firstn_skipn (numstreams a) xs) in Hwc2.
-          apply Forall2_app_split in Hwc2 as [Hwc2 _]...
-          repeat constructor...
+          apply Forall2_app_split in Hwc2 as [Hwc2 Hwc3]...
+          destruct xs; repeat constructor...
           simpl. rewrite app_nil_r. simpl_Forall. repeat solve_incl.
-        + inv Hwc1'. eapply IHx...
-          assert (length (firstn (numstreams a) xs) = length (clockof a)) as Hlen1.
-          { apply Forall2_length in Hwc2. rewrite app_length in Hwc2.
-            rewrite firstn_length, Hwc2, length_clockof_numstreams.
-            apply Nat.min_l. lia. }
-          rewrite <- (firstn_skipn (numstreams a) xs) in Hwc2.
-          apply Forall2_app_split in Hwc2 as [_ Hwc2]...
     Qed.
 
     Lemma unnest_block_wc : forall vars d blocks' st st',
-        (forall x, ~IsLast vars x) ->
         wc_block G1 (vars++st_senv st) d ->
         unnest_block G1 d st = (blocks', st') ->
         Forall (wc_block G2 (vars++st_senv st')) blocks'.
     Proof.
-      induction d using block_ind2; intros * Hnl Hwc Hun;
+      induction d using block_ind2; intros * Hwc Hun;
         repeat inv_bind; eauto using iface_incl_wc_block.
       - (* equation *)
         inv Hwc.
         eapply unnest_equation_wc_eq in H; eauto.
-        rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
-        constructor; auto.
+        simpl_Forall. constructor; auto.
+      - (* last *)
+        inv Hwc.
+        eapply unnest_exp_wc in H as Wc; eauto. destruct Wc as (Wc1&Wc2).
+        apply unnest_exp_length in H as Len; eauto with lclocking.
+        rewrite <-length_clockof_numstreams, H6 in Len. simpl in *. singleton_length.
+        repeat constructor.
+        + eapply wc_Blast with (ck:=ck); repeat solve_incl.
+          * simpl_Forall. auto.
+          * apply unnest_exp_clockof in H; eauto with lclocking.
+          simpl in *. rewrite app_nil_r in *. congruence.
+        + simpl_Forall; constructor; auto.
       - (* reset *)
         inv Hwc.
         assert (st_follows x0 st') as Hfollows by (repeat solve_st_follows).
@@ -1425,7 +1392,7 @@ Module Type NCLOCKING
         2:{ intros. eapply unnest_exp_wc in H3; eauto; repeat solve_incl. }
         2:repeat solve_incl.
         apply Forall_app; split.
-        + clear - Hnl H H0 H4 Hck1 Hwc1 Hfollows.
+        + clear - H H0 H4 Hck1 Hwc1 Hfollows.
           revert st x x0 Hfollows H H0 H4.
           induction blocks; intros * Hfollows Hf Hmap Hwc; repeat inv_bind; simpl; auto;
             inv Hf; inv Hwc.
@@ -1440,12 +1407,11 @@ Module Type NCLOCKING
     Qed.
 
     Corollary unnest_blocks_wc : forall vars blocks blocks' st st',
-        (forall x, ~IsLast vars x) ->
         Forall (wc_block G1 (vars++st_senv st)) blocks ->
         unnest_blocks G1 blocks st = (blocks', st') ->
         Forall (wc_block G2 (vars++st_senv st')) blocks'.
     Proof with eauto.
-      induction blocks; intros * Hnl Hwc Hnorm;
+      induction blocks; intros * Hwc Hnorm;
         unfold unnest_blocks in *; simpl in *; repeat inv_bind; simpl...
       assert (st_follows st x1) as Hfollows1 by repeat solve_st_follows.
       assert (st_follows x1 st') as Hfollows2 by repeat solve_st_follows.
@@ -1463,7 +1429,6 @@ Module Type NCLOCKING
     Hypothesis HwcG2 : wc_global G2.
 
     Fact unnest_reset_wc_env : forall vars e e' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         (forall es' eqs' st0',
             unnest_exp G1 true e st = (es', eqs', st0') ->
@@ -1473,7 +1438,7 @@ Module Type NCLOCKING
         unnest_reset (unnest_exp G1 true) e st = (e', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto.
-      intros * Hnl Hwenv Hun Hwc Hnorm.
+      intros * Hwenv Hun Hwc Hnorm.
       unnest_reset_spec; simpl in *; eauto.
       - eapply Hun; eauto; repeat solve_st_follows.
       - eapply fresh_ident_wc_env in Hfresh; eauto with fresh.
@@ -1487,7 +1452,7 @@ Module Type NCLOCKING
     Qed.
 
     Fact mmap2_wc_env {A A1 A2 : Type} :
-      forall vars (k : A -> Unnesting.FreshAnn (A1 * A2)) a a1s a2s st st',
+      forall vars (k : A -> FreshAnn (A1 * A2)) a a1s a2s st st',
         wc_env (idck (vars++st_senv st)) ->
         mmap2 k a st = (a1s, a2s, st') ->
         (forall st st' a es a2s, k a st = (es, a2s, st') -> st_follows st st') ->
@@ -1513,7 +1478,6 @@ Module Type NCLOCKING
     Qed.
 
     Corollary unnest_resets_wc_env : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         Forall (fun e => forall es' eqs' st0 st0',
                     wc_env (idck (vars++st_senv st0)) ->
@@ -1525,7 +1489,7 @@ Module Type NCLOCKING
         mmap2 (unnest_reset (unnest_exp G1 true)) es st = (es', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto.
-      induction es; intros * Hnl HwcE F Wc Map; simpl in *;
+      induction es; intros * HwcE F Wc Map; simpl in *;
         inv F; inv Wc; repeat inv_bind; eauto.
       assert (Map:=H0). eapply IHes in H0; eauto. 3:solve_forall; repeat solve_incl.
       2:solve_forall; eapply H9; eauto; repeat solve_st_follows.
@@ -1563,7 +1527,6 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_exp_wc_env : forall vars e is_control es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         wc_exp G1 (vars++st_senv st) e ->
         unnest_exp G1 is_control e st = (es', eqs', st') ->
@@ -1575,7 +1538,6 @@ Module Type NCLOCKING
         | Hnorm : unnest_exp _ _ _ _ = _, H : context [unnest_exp _ _ _ _ = _ -> _] |- _ =>
           eapply H in Hnorm; eauto; repeat solve_incl
         end.
-      intros * Hnl. revert is_control es' eqs' st st'.
       induction e using exp_ind2; intros * Hwenv Hwc Hnorm;
           simpl in *; repeat inv_bind...
       - (* unop *)
@@ -1657,9 +1619,6 @@ Module Type NCLOCKING
             eapply mmap2_unnest_exp_length in H1; eauto with lclocking.
             rewrite length_nclocksof_annots, map_length in H12.
             congruence. }
-        2:{ eapply mmap2_normalized_lexp in H1. 1,3:eauto with lclocking.
-            apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
-        }
         2:{ eapply mmap2_unnest_exp_numstreams; eauto. }
         2:{ eapply mmap2_unnest_exp_wc in H1 as (?&?); eauto. }
         assert (Hnr:=H3). eapply unnest_resets_wc_env in H3... 2:solve_mmap2'.
@@ -1670,13 +1629,12 @@ Module Type NCLOCKING
     Qed.
 
     Corollary mmap2_unnest_exp_wc_env : forall vars es is_control es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         mmap2 (unnest_exp G1 is_control) es st = (es', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof.
-      intros * Hnl Hwenv Hwc Hmmap.
+      intros * Hwenv Hwc Hmmap.
       eapply mmap2_wc_env in Hmmap; eauto with norm.
       simpl_Forall.
       eapply unnest_exp_wc_env in H1; eauto.
@@ -1684,13 +1642,12 @@ Module Type NCLOCKING
     Qed.
 
     Corollary unnest_exps_wc_env : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         unnest_exps G1 es st = (es', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto with norm.
-      intros * Hnl Hwenv Hwc Hnorm.
+      intros * Hwenv Hwc Hnorm.
       unfold unnest_exps in Hnorm; repeat inv_bind.
       eapply mmap2_wc_env in H...
       simpl_Forall.
@@ -1699,13 +1656,12 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_rhs_wc_env : forall vars e es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         wc_exp G1 (vars++st_senv st) e ->
         unnest_rhs G1 e st = (es', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto with norm.
-      intros * Hnl Hwenv Hwc Hnorm.
+      intros * Hwenv Hwc Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [eapply unnest_exp_wc_env in Hnorm; eauto]);
         repeat inv_bind; inv Hwc.
@@ -1731,20 +1687,17 @@ Module Type NCLOCKING
           eapply unnest_exps_length in Hnorm; eauto with lclocking.
           rewrite length_nclocksof_annots, map_length in H9.
           congruence.
-        + eapply unnest_exps_normalized_lexp in Hnorm. 1,3:eauto with lclocking.
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
         + eapply unnest_exps_numstreams; eauto.
         + eapply unnest_exps_wc in Hnorm as (?&?); eauto.
     Qed.
 
     Corollary unnest_rhss_wc_env : forall vars es es' eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         Forall (wc_exp G1 (vars++st_senv st)) es ->
         unnest_rhss G1 es st = (es', eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto with norm.
-      intros * Hnl Hwenv Hwc Hnorm.
+      intros * Hwenv Hwc Hnorm.
       unfold unnest_rhss in Hnorm; repeat inv_bind.
       eapply mmap2_wc_env in H...
       solve_forall.
@@ -1753,13 +1706,12 @@ Module Type NCLOCKING
     Qed.
 
     Fact unnest_equation_wc_env : forall vars e eqs' st st',
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         wc_equation G1 (vars++st_senv st) e ->
         unnest_equation G1 e st = (eqs', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto with norm.
-      intros vars [xs es] * Hnl Hwenv Hwc Hnorm.
+      intros vars [xs es] * Hwenv Hwc Hnorm.
       unfold unnest_equation in Hnorm.
       inv Hwc; repeat inv_bind.
       - (* app *)
@@ -1775,8 +1727,6 @@ Module Type NCLOCKING
           eapply unnest_exps_length in Hnorm; eauto with lclocking.
           rewrite length_nclocksof_annots, map_length in H4.
           congruence.
-        + eapply unnest_exps_normalized_lexp in Hnorm. 1,3:eauto with lclocking.
-          apply NoLast_app; split; auto. apply senv_of_tyck_NoLast.
         + eapply unnest_exps_numstreams; eauto.
         + eapply unnest_exps_wc in Hnorm as (?&?); eauto.
       - (* general case *)
@@ -1784,19 +1734,20 @@ Module Type NCLOCKING
     Qed.
 
     Lemma unnest_block_wc_env : forall vars d blocks' st st' ,
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         wc_block G1 (vars++st_senv st) d ->
         unnest_block G1 d st = (blocks', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof.
-      induction d using block_ind2; intros * Hnl Hwenv Hwc Hnorm;
+      induction d using block_ind2; intros * Hwenv Hwc Hnorm;
         inv Hwc; repeat inv_bind; auto.
       - (* equation *)
         eapply unnest_equation_wc_env in H; eauto.
+      - (* exp *)
+        eapply unnest_exp_wc_env in H; eauto.
       - (* reset *)
         assert (wc_env (idck (vars ++ st_senv x0))) as Hwenv'.
-        { clear - Hnl H H0 H2 Hwenv.
+        { clear - H H0 H2 Hwenv.
           revert st x0 x H2 Hwenv H0.
           induction H; intros * Hwc Hwenv Hmap; inv Hwc; repeat inv_bind; auto.
           eapply IHForall in H2; eauto.
@@ -1807,13 +1758,12 @@ Module Type NCLOCKING
     Qed.
 
     Corollary unnest_blocks_wc_env : forall vars blocks blocks' st st' ,
-        (forall x, ~IsLast vars x) ->
         wc_env (idck (vars++st_senv st)) ->
         Forall (wc_block G1 (vars++st_senv st)) blocks ->
         unnest_blocks G1 blocks st = (blocks', st') ->
         wc_env (idck (vars++st_senv st')).
     Proof with eauto.
-      induction blocks; intros * Hnl Hwenv Hwc Hnorm;
+      induction blocks; intros * Hwenv Hwc Hnorm;
         unfold unnest_blocks in *; simpl in *; repeat inv_bind...
       assert (st_follows st x1) as Hfollows1 by repeat solve_st_follows.
       inv Hwc. eapply unnest_block_wc_env in H...
@@ -1828,12 +1778,8 @@ Module Type NCLOCKING
     Proof with eauto.
       intros * Wc. inversion_clear Wc as [? Hin Hout Hblk].
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H in *. inv Hblk.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn2 _]. inv Hsyn2. rewrite <-H in *. inv Hblk.
       repeat constructor; simpl; auto.
-      assert (forall x, ~ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) x) as Hnl.
-      { repeat rewrite NoLast_app; repeat split; auto using senv_of_ins_NoLast.
-        - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
-        - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. }
       inv_scope; subst Γ'. rewrite <- H. do 2 econstructor; eauto.
       - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply unnest_blocks_wc_env in Heqres as Henv'...
@@ -1851,10 +1797,9 @@ Module Type NCLOCKING
           1,2:repeat rewrite map_map. erewrite map_ext. eapply incl_appl, incl_refl.
           2:erewrite map_ext, map_ext with (l:=n_out n). 2:eapply incl_appr', incl_appl, incl_refl.
           all:unfold decl; intros; destruct_conjs; auto.
-        + now rewrite app_assoc.
       - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply unnest_blocks_wc in Heqres as Hwc'...
-        2:unfold st_senv; rewrite init_st_anns, app_nil_r; now rewrite app_assoc.
+        2:unfold st_senv; rewrite init_st_anns, app_nil_r; eauto.
         simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
@@ -1875,332 +1820,9 @@ Module Type NCLOCKING
     - eapply IHnodes0; eauto.
   Qed.
 
-  (** ** Preservation of clocking through second pass *)
+End UCLOCKING.
 
-  Section normfby_node_wc.
-    Variable G1 : @global nolocal norm1_prefs.
-    Variable G2 : @global nolocal norm2_prefs.
-
-    Hypothesis Hiface : global_iface_incl G1 G2.
-    Local Hint Resolve iface_incl_wc_exp : norm.
-
-    Fact fby_iteexp_wc_exp : forall vars e0 e ty ck e' eqs' st st' ,
-        wc_exp G1 (vars++st_senv st) e0 ->
-        wc_exp G1 (vars++st_senv st) e ->
-        clockof e0 = [ck] ->
-        clockof e = [ck] ->
-        fby_iteexp e0 e (ty, ck) st = (e', eqs', st') ->
-        wc_exp G2 (vars++st_senv st') e'.
-    Proof with eauto with fresh.
-      intros * Hwc1 Hwc2 Hck1 Hck2 Hfby.
-      unfold fby_iteexp in Hfby; simpl in *.
-      assert (st_follows st st') as Hfollows.
-      { eapply (fby_iteexp_st_follows _ _ (ty, ck)) in Hfby; eauto. }
-      repeat inv_bind.
-      econstructor; repeat constructor; simpl; try congruence...
-      1-5:try rewrite app_nil_r.
-      - apply HasClock_app, or_intror.
-        apply init_var_for_clock_In in H; simpl in *.
-        eapply st_follows_incl in H... econstructor; solve_In. auto.
-      - eapply iface_incl_wc_exp; eauto. repeat solve_incl.
-      - apply HasClock_app, or_intror.
-        eapply fresh_ident_In in H0... econstructor; solve_In; auto.
-      - rewrite Hck1; auto.
-      - now rewrite Hck1.
-    Qed.
-
-    Fact arrow_iteexp_wc_exp : forall vars e0 e ty ck e' eqs' st st' ,
-        wc_exp G1 (vars++st_senv st) e0 ->
-        wc_exp G1 (vars++st_senv st) e ->
-        clockof e0 = [ck] ->
-        clockof e = [ck] ->
-        arrow_iteexp e0 e (ty, ck) st = (e', eqs', st') ->
-        wc_exp G2 (vars++st_senv st') e'.
-    Proof with eauto.
-      intros * Hwc1 Hwc2 Hck1 Hck2 Hfby.
-      unfold arrow_iteexp in Hfby; simpl in *; repeat inv_bind.
-      assert (st_follows st st') as Hfollows by (eapply init_var_for_clock_st_follows; eauto).
-      econstructor; repeat constructor; simpl; try congruence...
-      1-7:try rewrite app_nil_r.
-      4-7:try rewrite Hck1; try rewrite Hck2; auto.
-      - apply HasClock_app, or_intror.
-        apply init_var_for_clock_In in H; simpl in *.
-        econstructor; solve_In. auto.
-      - eapply iface_incl_wc_exp; eauto. repeat solve_incl.
-      - eapply iface_incl_wc_exp; eauto. repeat solve_incl.
-    Qed.
-
-    Fact init_var_for_clock_wc_env : forall vars ck id eqs' st st' ,
-        wc_env (idck (vars++st_senv st)) ->
-        wc_clock (idck (vars++st_senv st)) ck ->
-        init_var_for_clock ck st = (id, eqs', st') ->
-        wc_env (idck (vars++st_senv st')).
-    Proof with eauto.
-      intros * Hwenv Hwc Hinit.
-      unfold init_var_for_clock in Hinit.
-      destruct fresh_ident eqn:Hfresh. inv Hinit.
-      eapply fresh_ident_wc_env in Hfresh...
-    Qed.
-
-    Fact fby_iteexp_wc_env : forall vars e0 e ty ck es' eqs' st st' ,
-        wc_env (idck (vars++st_senv st)) ->
-        wc_clock (idck (vars++st_senv st)) ck ->
-        fby_iteexp e0 e (ty, ck) st = (es', eqs', st') ->
-        wc_env (idck (vars++st_senv st')).
-    Proof with eauto.
-      intros ???? ck es' eqs' st st' Hwenv Hwc Hfby.
-      unfold fby_iteexp in Hfby; repeat inv_bind...
-      eapply fresh_ident_wc_env in H0... 2:repeat solve_incl.
-      eapply init_var_for_clock_wc_env in H... eapply init_var_for_clock_st_follows in H...
-    Qed.
-
-    Fact init_var_for_clock_wc_eq : forall vars ck id eqs' st st' ,
-        wc_clock (idck (vars++st_senv st)) ck ->
-        init_var_for_clock ck st = (id, eqs', st') ->
-        Forall (wc_equation G2 (vars++st_senv st')) eqs'.
-    Proof with eauto with norm lclocking.
-      intros * Hwc Hinit.
-      unfold init_var_for_clock in Hinit.
-      destruct fresh_ident eqn:Hfresh; repeat inv_bind.
-      simpl in *; repeat econstructor; simpl...
-      1,2:apply add_whens_wc... 1-2:repeat solve_incl.
-      1,2:rewrite app_nil_r, add_whens_clockof...
-      apply fresh_ident_In in Hfresh.
-      apply in_or_app; right.
-      unfold st_senv, idck, idty;
-        simpl_In; eexists; split; eauto; eauto. auto.
-    Qed.
-
-    Fact normalized_lexp_wc_exp_clockof : forall vars e,
-        normalized_lexp e ->
-        wc_env (idck vars) ->
-        wc_exp G2 vars e ->
-        Forall (wc_clock (idck vars)) (clockof e).
-    Proof with eauto.
-      intros vars e Hnormed Hwenv Hwc.
-      induction Hnormed; inv Hwc; simpl; repeat constructor...
-      - inv H0. eapply Forall_forall in Hwenv; eauto. 2:solve_In. auto.
-      - eapply IHHnormed in H1. rewrite H4 in H1. inv H1...
-      - eapply IHHnormed1 in H3. rewrite H6 in H3. inv H3...
-      - apply Forall_singl in H5.
-        eapply IHHnormed in H5.
-        simpl in H7. rewrite app_nil_r in H7. symmetry in H7.
-        singleton_length.
-        inv H6. inv H5...
-      - inv H3. solve_In.
-    Qed.
-
-    Fact fby_iteexp_wc_eq : forall vars e0 e ty ck e' eqs' st st' ,
-        normalized_lexp e0 ->
-        wc_env (idck (vars++st_senv st)) ->
-        wc_exp G1 (vars++st_senv st) e0 ->
-        wc_exp G1 (vars++st_senv st) e ->
-        clockof e0 = [ck] ->
-        clockof e = [ck] ->
-        fby_iteexp e0 e (ty, ck) st = (e', eqs', st') ->
-        Forall (wc_equation G2 (vars++st_senv st')) eqs'.
-    Proof with eauto with norm lclocking.
-      intros * Hnormed Henv Hwc1 Hwc2 Hcl1 Hcl2 Hfby.
-      assert (wc_clock (idck (vars++st_senv st)) ck) as Hwck.
-      { eapply iface_incl_wc_exp, normalized_lexp_wc_exp_clockof in Hwc1...
-        rewrite Hcl1 in Hwc1; inv Hwc1; auto. }
-      unfold fby_iteexp in Hfby; simpl in *.
-      repeat inv_bind; repeat constructor; simpl...
-      - eapply add_whens_wc...
-        2,3:destruct ty; simpl...
-        eapply init_var_for_clock_st_follows in H. repeat solve_incl.
-      - eapply init_var_for_clock_st_follows in H.
-        eapply iface_incl_wc_exp; eauto. repeat solve_incl.
-      - rewrite app_nil_r, add_whens_clockof...
-        destruct ty; simpl...
-      - rewrite app_nil_r. rewrite Hcl2...
-      - eapply fresh_ident_In in H0.
-        apply HasClock_app; right. econstructor; solve_In. auto.
-      - eapply init_var_for_clock_wc_eq in H...
-        solve_forall; repeat solve_incl.
-    Qed.
-
-    Fact normfby_equation_wc : forall vars to_cut eq eqs' st st' ,
-        unnested_equation G1 eq ->
-        wc_env (idck (vars++st_senv st)) ->
-        wc_equation G1 (vars++st_senv st) eq ->
-        normfby_equation to_cut eq st = (eqs', st') ->
-        (Forall (wc_equation G2 (vars++st_senv st')) eqs' /\ wc_env (idck (vars++st_senv st'))).
-    Proof with eauto.
-      intros * Hunt Hwenv Hwc Hfby.
-      inv_normfby_equation Hfby to_cut eq; try destruct x2 as [ty ck].
-      - (* fby (constant) *)
-        destruct PS.mem; repeat inv_bind; auto.
-        2:{ split; auto. inv Hwc.
-            do 2 constructor; auto.
-            solve_forall. }
-        inv Hwc. rename H2 into Hwc. rename H3 into Hins.
-        apply Forall_singl in Hwc. apply Forall2_singl in Hins.
-        assert (Hwc':=Hwc). inv Hwc'.
-        apply Forall_singl in H3; apply Forall_singl in H4.
-        assert (wc_clock (idck (vars ++ st_senv st)) ck).
-        { inv Hins. eapply wc_env_var; eauto. solve_In. }
-        repeat (constructor; eauto).
-        + eapply fresh_ident_In in H.
-          eapply HasClock_app, or_intror. econstructor; solve_In. auto.
-        + repeat solve_incl.
-        + eapply iface_incl_wc_exp... repeat solve_incl.
-        + eapply iface_incl_wc_exp... repeat solve_incl.
-        + eapply fresh_ident_In in H.
-          eapply HasClock_app, or_intror. econstructor; solve_In. auto.
-        + eapply fresh_ident_wc_env in H; eauto.
-      - (* fby *)
-        assert (st_follows st st') as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, ck)) in H; eauto).
-        inv Hwc. rename H2 into Hwc. rename H3 into Hins.
-        apply Forall_singl in Hwc. apply Forall2_singl in Hins.
-        inv Hwc.
-        simpl in *; rewrite app_nil_r in *.
-        apply Forall_singl in H3; apply Forall_singl in H4.
-        rewrite Forall2_eq in H5, H6.
-        assert (Hwce:=H). eapply fby_iteexp_wc_exp in Hwce; eauto.
-        assert (Hck:=H). eapply (fby_iteexp_clockof _ _ (ty, ck)) in Hck; eauto.
-        assert (Hwceq:=H). eapply fby_iteexp_wc_eq in Hwceq; eauto.
-        2:(clear - Hunt; inv Hunt; eauto; inv H0; inv H).
-        assert (wc_clock (idck (vars ++ st_senv st)) ck).
-        { inv Hins. eapply wc_env_var; eauto. solve_In. }
-        eapply (fby_iteexp_wc_env _ _ _ ty ck) in H...
-        repeat constructor; auto; simpl; rewrite app_nil_r.
-        rewrite Hck. repeat constructor.
-        repeat solve_incl.
-      - (* arrow *)
-        inv Hwc. rename H2 into Hwc. rename H3 into Hins.
-        apply Forall_singl in Hwc. apply Forall2_singl in Hins.
-        inv Hwc.
-        simpl in *; rewrite app_nil_r in *.
-        apply Forall_singl in H3; apply Forall_singl in H4.
-        rewrite Forall2_eq in H5, H6.
-        assert (Hwce:=H). eapply arrow_iteexp_wc_exp in Hwce; eauto.
-        assert (wc_clock (idck (vars ++ st_senv st)) ck).
-        { inv Hins. eapply wc_env_var; eauto. solve_In. }
-        repeat inv_bind.
-        assert (Hwce':=H). eapply init_var_for_clock_wc_env in Hwce'; eauto.
-        split; eauto.
-        assert (st_follows st st') as Hfollows.
-        { eapply init_var_for_clock_st_follows; eauto. }
-        repeat (constructor; auto); try congruence.
-        + repeat solve_incl.
-        + eapply init_var_for_clock_wc_eq in H...
-      - (* others *)
-        split; auto. constructor; auto.
-        eapply iface_incl_wc_equation; eauto.
-    Qed.
-
-    Fact normfby_block_wc : forall vars to_cut d blocks' st st' ,
-        unnested_block G1 d ->
-        wc_env (idck (vars++st_senv st)) ->
-        wc_block G1 (vars++st_senv st) d ->
-        normfby_block to_cut d st = (blocks', st') ->
-        Forall (wc_block G2 (vars++st_senv st')) blocks' /\ wc_env (idck (vars++st_senv st')).
-    Proof.
-      induction d using block_ind2; intros * Hunt Henv Hwc Hfby;
-        unfold normfby_blocks in *; repeat inv_bind; simpl; eauto using iface_incl_wc_block.
-      - (* equation *)
-        inv Hunt. inv Hwc.
-        eapply normfby_equation_wc in H as (?&?); eauto.
-        split; auto. simpl_Forall.
-        constructor; auto.
-      - (* reset *)
-        simpl in Hfby.
-        inv Hunt. inv Hwc.
-        cases; repeat inv_bind.
-        apply Forall_singl in H3. inv H6. apply Forall_singl in H.
-        assert (Hnorm1:=H0). eapply H in H0 as (?&?); eauto.
-        split; auto.
-        rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
-        econstructor; simpl; eauto.
-        eapply iface_incl_wc_exp; eauto.
-        repeat solve_incl.
-        1,2:eapply normfby_block_st_follows; eauto.
-    Qed.
-
-    Corollary normfby_blocks_wc : forall vars to_cut blocks blocks' st st' ,
-        Forall (unnested_block G1) blocks ->
-        wc_env (idck (vars++st_senv st)) ->
-        Forall (wc_block G1 (vars++st_senv st)) blocks ->
-        normfby_blocks to_cut blocks st = (blocks', st') ->
-        Forall (wc_block G2 (vars++st_senv st')) blocks' /\ wc_env (idck (vars++st_senv st')).
-    Proof.
-      induction blocks; intros * Hunt Henv Hwc Hfby;
-        unfold normfby_blocks in *; repeat inv_bind; simpl; auto.
-      inv Hunt. inv Hwc.
-      assert (normfby_blocks to_cut blocks x1 = (concat x2, st')) as Hnorm.
-      { unfold normfby_blocks. repeat inv_bind; eauto. }
-      assert (H':=H). eapply normfby_block_wc in H as [Hwc' Henv']; auto. 2,3:eauto.
-      apply IHblocks in Hnorm as [Hwc'' Henv'']; auto.
-      2:solve_forall; repeat solve_incl; eapply normfby_block_st_follows in H'; eauto.
-      rewrite Forall_app; repeat split; eauto.
-      solve_forall; repeat solve_incl.
-    Qed.
-
-    Lemma normfby_node_wc : forall n,
-        unnested_node G1 n ->
-        wc_node G1 n ->
-        wc_node G2 (normfby_node n).
-    Proof.
-      intros * Hun Wc. inversion_clear Wc as [? Hin Hout Hblk].
-      unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H in *. inv Hblk.
-      repeat constructor; simpl; auto.
-      inv_scope; subst Γ'. rewrite <- H.
-      destruct (normfby_blocks _ _ _) as (eqs'&st') eqn:Heqres.
-      eapply normfby_blocks_wc in Heqres as (Hres1&Henv')...
-      3,4:unfold st_senv; rewrite init_st_anns, app_nil_r. 4:eauto.
-      3:{ unfold wc_env in *. simpl_app.
-          repeat rewrite Forall_app in *.
-          repeat split; simpl_Forall.
-          1-3:eapply wc_clock_incl; [|eauto]. 3:reflexivity.
-          1,2:repeat rewrite map_map. erewrite map_ext. eapply incl_appl, incl_refl.
-          2:erewrite map_ext, map_ext with (l:=n_out n). 2:eapply incl_appr', incl_appl, incl_refl.
-          all:unfold decl; intros; destruct_conjs; auto. }
-      2:{ inv Hun. rewrite H2 in H. now inv H. }
-      do 2 econstructor; eauto.
-      - simpl_app.
-        unfold wc_env in Henv'.
-        repeat rewrite Forall_app in Henv'. destruct Henv' as (_&_&_&Henv').
-        eapply Forall_app. split; simpl_Forall; simpl_app; solve_incl.
-        1,2:repeat rewrite map_map. 2:erewrite map_ext with (l:=st_anns _). 1,2:eapply incl_appr', incl_appr'. apply incl_appl, incl_refl. apply incl_refl.
-        intros; destruct_conjs; auto.
-      - simpl_Forall.
-        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
-    Qed.
-
-  End normfby_node_wc.
-
-  Lemma normfby_global_wc : forall G,
-      unnested_global G ->
-      wc_global G ->
-      wc_global (normfby_global G).
-  Proof.
-    intros []. unfold wc_global, unnested_global, CommonTyping.wt_program; simpl.
-    induction nodes0; intros * Hun Hwc; simpl;
-      inversion_clear Hun as [|?? (?&?)];
-      inversion_clear Hwc as [|?? (?&?)]; auto with datatypes.
-    constructor; [constructor|].
-    - eapply normfby_node_wc; eauto.
-      eapply iface_eq_iface_incl, normfby_global_eq.
-    - simpl. eapply normfby_nodes_names; eauto.
-    - eapply IHnodes0; eauto.
-  Qed.
-
-  (** ** Conclusion *)
-
-  Lemma normalize_global_wc : forall G,
-      wc_global G ->
-      wc_global (normalize_global G).
-  Proof.
-    intros * Hwc.
-    eapply normfby_global_wc, unnest_global_wc, Hwc.
-    eapply unnest_global_unnested_global; eauto with lclocking.
-  Qed.
-
-End NCLOCKING.
-
-Module NClockingFun
+Module UClockingFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -2208,7 +1830,7 @@ Module NClockingFun
        (Senv : STATICENV Ids Op OpAux Cks)
        (Syn : LSYNTAX Ids Op OpAux Cks Senv)
        (Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Cks Senv Syn)
-       <: NCLOCKING Ids Op OpAux Cks Senv Syn Clo Norm.
-  Include NCLOCKING Ids Op OpAux Cks Senv Syn Clo Norm.
-End NClockingFun.
+       (Un  : UNNESTING Ids Op OpAux Cks Senv Syn)
+       <: UCLOCKING Ids Op OpAux Cks Senv Syn Clo Un.
+  Include UCLOCKING Ids Op OpAux Cks Senv Syn Clo Un.
+End UClockingFun.

@@ -59,7 +59,7 @@ Module Type SCCORRECTNESS
     Hypothesis HGref : global_sem_refines G1 G2.
 
     Variable bck : clock.
-    Variable sub : Env.t ident.
+    Variable sub subl : Env.t ident.
     Variable bs bs' : Stream bool.
     Variable H H' : history.
 
@@ -91,7 +91,13 @@ Module Type SCCORRECTNESS
         + repeat constructor; try eapply IHc; eauto using sem_clock_when_enum.
     Qed.
 
+    Hypothesis Hvar : forall x vs,
+        Env.find x sub = None ->
+        sem_var H (Var x) vs ->
+        sem_var H' (Var x) vs.
+
     Hypothesis Hlast : forall x vs,
+        Env.find x subl = None ->
         sem_var H (Last x) vs ->
         sem_var H' (Last x) vs.
 
@@ -100,14 +106,14 @@ Module Type SCCORRECTNESS
         sem_var H (Var x) vs ->
         sem_var H' (Var y) vs.
 
-    Hypothesis Hnsub : forall x vs,
-        Env.find x sub = None ->
-        sem_var H (Var x) vs ->
-        sem_var H' (Var x) vs.
+    Hypothesis Hsubl : forall x y vs,
+        Env.find x subl = Some y ->
+        sem_var H (Last x) vs ->
+        sem_var H' (Var y) vs.
 
     Lemma subclock_exp_sem : forall e vs,
         sem_exp_ck G1 H bs e vs ->
-        sem_exp_ck G2 H' bs' (subclock_exp bck sub e) vs.
+        sem_exp_ck G2 H' bs' (subclock_exp bck sub subl e) vs.
     Proof.
       induction e using exp_ind2; intros * Hsem; inv Hsem; simpl.
       - (* const *)
@@ -117,7 +123,9 @@ Module Type SCCORRECTNESS
       - (* var *)
         constructor.
         eapply rename_var_sem; eauto.
-      - constructor. auto.
+      - (* last *)
+        unfold rename_last. cases_eqn Eq.
+        1,2:constructor; eauto.
       - (* unop *)
         econstructor; eauto.
         now rewrite subclock_exp_typeof.
@@ -162,7 +170,7 @@ Module Type SCCORRECTNESS
 
     Lemma subclock_equation_sem : forall equ,
         sem_equation_ck G1 H bs equ ->
-        sem_equation_ck G2 H' bs' (subclock_equation bck sub equ).
+        sem_equation_ck G2 H' bs' (subclock_equation bck sub subl equ).
     Proof.
       intros (?&?) Hsem. inv Hsem.
       eapply Seq with (ss:=ss); simpl_Forall;

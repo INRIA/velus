@@ -6,12 +6,13 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics LClockedSemantics.
-From Velus Require Import Lustre.DeLast.DeLast.
-From Velus Require Import Lustre.DeLast.DLTyping.
-From Velus Require Import Lustre.DeLast.DLClocking.
-From Velus Require Import Lustre.DeLast.DLCorrectness.
+From Velus Require Import Lustre.Unnesting.Unnesting.
+From Velus Require Import Lustre.Unnesting.UTyping.
+From Velus Require Import Lustre.Unnesting.UClocking.
+From Velus Require Import Lustre.Unnesting.UCorrectness.
+(* From Velus Require Import Lustre.Unnesting.Idempotence. *)
 
-Module Type LDELAST
+Module Type LUNNESTING
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -24,13 +25,14 @@ Module Type LDELAST
        (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
        (ClSem : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem).
-  Declare Module Export DL : DELAST Ids Op OpAux Cks Senv Syn.
-  Declare Module Export Typing : DLTYPING Ids Op OpAux Cks Senv Syn Typ DL.
-  Declare Module Export Clocking : DLCLOCKING Ids Op OpAux Cks Senv Syn Clo DL.
-  Declare Module Export Correct : DLCORRECTNESS Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem DL.
-End LDELAST.
+  Declare Module Export Un : UNNESTING Ids Op OpAux Cks Senv Syn.
+  Declare Module Export Typing : UTYPING Ids Op OpAux Cks Senv Syn Typ Un.
+  Declare Module Export Clocking : UCLOCKING Ids Op OpAux Cks Senv Syn Clo Un.
+  Declare Module Export Correct : UCORRECTNESS Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem Un.
+  (* Declare Module Export Idempotence : IDEMPOTENCE Ids Op OpAux Syn Cau Norm. *)
+End LUNNESTING.
 
-Module LDeLastFun
+Module LUnnestingFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -43,9 +45,10 @@ Module LDeLastFun
        (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
        (ClSem : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem)
-       <: LDELAST Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem.
-  Module Export DL := DeLastFun Ids Op OpAux Cks Senv Syn.
-  Module Export Typing := DLTypingFun Ids Op OpAux Cks Senv Syn Typ DL.
-  Module Export Clocking := DLClockingFun Ids Op OpAux Cks Senv Syn Clo DL.
-  Module Export Correct := DLCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem DL.
-End LDeLastFun.
+       <: LUNNESTING Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem.
+  Module Export Un := UnnestingFun Ids Op OpAux Cks Senv Syn.
+  Module Export Typing := UTypingFun Ids Op OpAux Cks Senv Syn Typ Un.
+  Module Export Clocking := UClockingFun Ids Op OpAux Cks Senv Syn Clo Un.
+  Module Export Correct := UCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem Un.
+  (* Module Export Idempotence := IdempotenceFun Ids Op OpAux Syn Cau Norm. *)
+End LUnnestingFun.

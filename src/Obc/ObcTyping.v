@@ -40,9 +40,9 @@ Module Type OBCTYPING
     | wt_Var: forall x ty,
         In (x, ty) Γv ->
         wt_exp (Var x ty)
-    | wt_State: forall x ty,
+    | wt_State: forall x ty islast,
         In (x, ty) Γm ->
-        wt_exp (State x ty)
+        wt_exp (State x ty islast)
     | wt_Const: forall c,
         wt_exp (Const c)
     | wt_Enum: forall c tx tn,
@@ -68,10 +68,10 @@ Module Type OBCTYPING
         In (x, typeof e) Γv ->
         wt_exp e ->
         wt_stmt (Assign x e)
-    | wt_AssignSt: forall x e,
+    | wt_AssignSt: forall x e isreset,
         In (x, typeof e) Γm ->
         wt_exp e ->
-        wt_stmt (AssignSt x e)
+        wt_stmt (AssignSt x e isreset)
     | wt_Switch: forall e ss d tx tn,
         wt_exp e ->
         typeof e = Tenum tx tn ->

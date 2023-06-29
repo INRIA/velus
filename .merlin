@@ -12,3 +12,4 @@ S CompCert/common
 S CompCert/lib
 S CompCert/cparser
 S CompCert/cfrontend
+PKG ocamlgraph

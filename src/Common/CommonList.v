@@ -129,6 +129,15 @@ Section Forall'.
     induction 2; constructor; auto.
   Qed.
 
+  Lemma Forall'_impl_In:
+    forall (P Q: list A -> A -> Prop) xs,
+      (forall x l, In x xs -> incl l xs -> P l x -> Q l x) ->
+      Forall' P xs ->
+      Forall' Q xs.
+  Proof.
+    induction 2; constructor; eauto with datatypes.
+  Qed.
+
   Lemma Forall'_In:
     forall P l x,
       Forall' P l ->
@@ -143,6 +152,15 @@ Section Forall'.
   Qed.
 
 End Forall'.
+
+Lemma Forall'_map {A B} (P: list B -> B -> Prop) (f: A -> B):
+  forall (xs: list A),
+    Forall' P (map f xs) <-> Forall' (fun xs x => P (map f xs) (f x)) xs.
+Proof.
+  induction xs; simpl in *; split; intros F;
+    inv F; constructor; auto.
+  1,2:apply IHxs; auto.
+Qed.
 
 Global Hint Constructors Forall' : datatypes.
 Global Hint Constructors NoDup : datatypes.
@@ -1803,6 +1821,23 @@ Section ForallExists.
     now setoid_rewrite Permutation.Permutation_rev at 1.
   Qed.
 
+  Lemma Exists_or_iff:
+    forall (l: list A) P Q,
+      Exists P l \/ Exists Q l <-> Exists (fun x => P x \/ Q x) l.
+  Proof.
+    intros; split; intros; auto using Exists_or, Exists_or_inv.
+  Qed.
+
+  Lemma Exists_filter:
+    forall (l: list A) P p,
+      Exists P (filter p l) <-> Exists (fun x => p x = true /\ P x) l.
+  Proof.
+    intros.
+    rewrite ? Exists_exists.
+    setoid_rewrite filter_In. setoid_rewrite and_assoc.
+    reflexivity.
+  Qed.
+
   Lemma Exists_rev:
     forall (l: list A) P,
       Exists P l <-> Exists P (rev l).
@@ -3181,6 +3216,15 @@ Proof.
     apply combine_nth_error in Hin; eauto.
   - intros (?& Hin).
     apply combine_nth_error, nth_error_In in Hin; auto.
+Qed.
+
+Fact nth_error_skipn {A} : forall n' (xs : list A) n x,
+    nth_error (skipn n' xs) n = Some x ->
+    nth_error xs (n' + n)%nat = Some x.
+Proof.
+  induction n'; intros * Nth; simpl in *; auto.
+  cases; try congruence.
+  destruct n; inv Nth.
 Qed.
 
 Lemma Forall2_trans_ex:

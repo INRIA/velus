@@ -32,25 +32,31 @@ environment.
 
    *)
 
-  Definition env := @FEnv.t ident svalue.
+  Definition env := @FEnv.t var_last svalue.
   Definition history := stream env.
+
+  Definition var_env (R : env) : @Str.env ident :=
+    fun x => R (Var x).
 
   (** ** Instantaneous semantics *)
 
   Section InstantSemantics.
 
     Variable base: bool.
+
+    Definition sem_vars_instant R (xs: list ident) (vs: list svalue) : Prop :=
+      Forall2 (sem_var_instant (var_env R)) xs vs.
+
+    Definition sem_clocked_var_instant R x (ck: clock) : Prop :=
+      (sem_clock_instant base (var_env R) ck true <-> exists c, sem_var_instant R x (present c))
+      /\ (sem_clock_instant base (var_env R) ck false <-> sem_var_instant R x absent).
+
+    Definition sem_clocked_vars_instant R (xs: list (ident * (clock * bool))) : Prop :=
+      Forall (fun '(x, (ck, islast)) =>
+                sem_clocked_var_instant R (Var x) ck
+                /\ if (islast: bool) then sem_clocked_var_instant R (Last x) ck else True) xs.
+
     Variable R: env.
-
-    Definition sem_vars_instant (xs: list ident) (vs: list svalue) : Prop :=
-      Forall2 (sem_var_instant R) xs vs.
-
-    Definition sem_clocked_var_instant (x: ident) (ck: clock) : Prop :=
-      (sem_clock_instant base R ck true <-> exists c, sem_var_instant R x (present c))
-      /\ (sem_clock_instant base R ck false <-> sem_var_instant R x absent).
-
-    Definition sem_clocked_vars_instant (xs: list (ident * clock)) : Prop :=
-      Forall (fun xc => sem_clocked_var_instant (fst xc) (snd xc)) xs.
 
     Inductive sem_exp_instant: exp -> svalue -> Prop:=
     | Sconst:
@@ -63,22 +69,26 @@ environment.
           sem_exp_instant (Eenum x ty) v
     | Svar:
         forall x v ty,
-          sem_var_instant R x v ->
+          sem_var_instant R (Var x) v ->
           sem_exp_instant (Evar x ty) v
+    | Slast:
+        forall x v ty,
+          sem_var_instant R (Last x) v ->
+          sem_exp_instant (Elast x ty) v
     | Swhen_eq:
         forall s x tx sc b,
-          sem_var_instant R x (present (Venum b)) ->
+          sem_var_instant R (Var x) (present (Venum b)) ->
           sem_exp_instant s (present sc) ->
           sem_exp_instant (Ewhen s (x, tx) b) (present sc)
     | Swhen_abs1:
         forall s x tx sc b b',
-          sem_var_instant R x (present (Venum b')) ->
+          sem_var_instant R (Var x) (present (Venum b')) ->
           b <> b' ->
           sem_exp_instant s (present sc) ->
           sem_exp_instant (Ewhen s (x, tx) b) absent
     | Swhen_abs:
         forall s x tx b,
-          sem_var_instant R x absent ->
+          sem_var_instant R (Var x) absent ->
           sem_exp_instant s absent ->
           sem_exp_instant (Ewhen s (x, tx) b) absent
     | Sunop_eq:
@@ -108,7 +118,7 @@ environment.
     Inductive sem_cexp_instant: cexp -> svalue -> Prop :=
     | Smerge_pres:
         forall x tx es ty b es1 e es2 c,
-          sem_var_instant R x (present (Venum b)) ->
+          sem_var_instant R (Var x) (present (Venum b)) ->
           es = es1 ++ e :: es2 ->
           length es1 = b ->
           sem_cexp_instant e (present c) ->
@@ -116,7 +126,7 @@ environment.
           sem_cexp_instant (Emerge (x, tx) es ty) (present c)
     | Smerge_abs:
         forall x tx es ty,
-          sem_var_instant R x absent ->
+          sem_var_instant R (Var x) absent ->
           Forall (fun e => sem_cexp_instant e absent) es ->
           sem_cexp_instant (Emerge (x, tx) es ty) absent
     | Scase_pres:
@@ -165,7 +175,7 @@ environment.
 
     Hypothesis merge_presCase:
       forall x tx es ty b es1 e es2 c,
-        sem_var_instant R x (present (Venum b)) ->
+        sem_var_instant R (Var x) (present (Venum b)) ->
         es = es1 ++ e :: es2 ->
         length es1 = b ->
         sem_cexp_instant base R e (present c) ->
@@ -176,7 +186,7 @@ environment.
 
     Hypothesis merge_absCase:
       forall x tx es ty,
-        sem_var_instant R x absent ->
+        sem_var_instant R (Var x) absent ->
         Forall (fun e => sem_cexp_instant base R e absent) es ->
         Forall (fun e => P e absent) es ->
         P (Emerge (x, tx) es ty) absent.
@@ -235,12 +245,12 @@ environment.
     | Stick:
         forall ck a c,
           sem_instant base R a (present c) ->
-          sem_clock_instant base R ck true ->
+          sem_clock_instant base (var_env R) ck true ->
           sem_annotated_instant sem_instant ck a (present c)
     | Sabs:
         forall ck a,
           sem_instant base R a absent ->
-          sem_clock_instant base R ck false ->
+          sem_clock_instant base (var_env R) ck false ->
           sem_annotated_instant sem_instant ck a absent.
 
     Definition sem_aexp_instant := sem_annotated_instant sem_exp_instant.
@@ -259,10 +269,10 @@ environment.
     Definition sem_vars (x: list ident) (xs: stream (list svalue)): Prop :=
       lift' H sem_vars_instant x xs.
 
-    Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
+    Definition sem_clocked_var x (ck: clock): Prop :=
       forall n, sem_clocked_var_instant (bk n) (H n) x ck.
 
-    Definition sem_clocked_vars (xs: list (ident * clock)) : Prop :=
+    Definition sem_clocked_vars (xs: list (ident * (clock * bool))) : Prop :=
       forall n, sem_clocked_vars_instant (bk n) (H n) xs.
 
     Definition sem_aexp ck (e: exp) (xs: stream svalue): Prop :=
@@ -327,11 +337,14 @@ environment.
   Proof.
     intros b H H' EH x.
     induction x; intros * Hsem; inv Hsem.
-    4:eapply Swhen_eq; eauto.
-    6:eapply Swhen_abs1; eauto.
-    8:eapply Swhen_abs; eauto.
-    1-3,10-13:econstructor; eauto.
-    1,8,10,12:rewrite <-EH; eauto.
+    5:eapply Swhen_eq; eauto.
+    7:eapply Swhen_abs1; eauto.
+    9:eapply Swhen_abs; eauto.
+    all:try econstructor; eauto.
+    all:match goal with
+        | |- sem_var_instant _ _ _ => rewrite <-EH; eauto
+        | _ => idtac
+        end.
     1-9:try eapply IHx; eauto.
     1-4:try eapply IHx1; eauto.
     1-2:eapply IHx2; eauto.
@@ -351,14 +364,12 @@ environment.
     1,4,6,8,10:erewrite <-EH; eauto.
     - eapply Forall_forall in H0. eapply H0; eauto.
       auto with datatypes.
-    - eapply Forall_impl_In; [|eauto]. intros ? Hin Hsem.
+    - simpl_Forall.
       eapply Forall_forall in H0. eapply H0; eauto.
-      apply in_app in Hin as [?|?]; auto with datatypes.
-    - rewrite Forall_forall in *. intros ? Hin.
-      eapply H0; eauto.
-    - eapply Forall2_impl_In; [|eauto]. intros.
-      eapply Forall_forall in H0; eauto. eapply H0; eauto.
-    - rewrite Forall_forall in *. intros. eapply H0; eauto.
+      apply in_app in H1 as [?|?]; auto with datatypes.
+    - simpl_Forall. eapply H0; eauto.
+    - simpl_Forall. eapply H0; eauto.
+    - simpl_Forall. eapply H0; eauto.
   Qed.
 
   Add Parametric Morphism : sem_rhs_instant
@@ -367,6 +378,13 @@ environment.
   Proof.
     intros b H H' EH xs xs' Sem; inv Sem; econstructor; eauto; simpl_Forall.
     all:rewrite <-EH; auto.
+  Qed.
+
+  Add Parametric Morphism : var_env
+      with signature FEnv.Equiv eq ==> FEnv.Equiv eq
+        as var_env_morph.
+  Proof.
+    intros * Eq id; unfold var_env; simpl; auto.
   Qed.
 
   Add Parametric Morphism A sem
@@ -397,7 +415,7 @@ environment.
     solve_proper.
   Qed.
 
-  Add Parametric Morphism A B H sem e: (fun b xs => @lift b H A B sem e xs)
+  Add Parametric Morphism A B (H: history) sem e: (fun b xs => @lift b _ A B H sem e xs)
       with signature eq_str ==> @eq_str B ==> Basics.impl
         as lift_eq_str.
   Proof.
@@ -405,7 +423,7 @@ environment.
     rewrite <-E, <-E'; auto.
   Qed.
 
-  Add Parametric Morphism A B sem H e: (@lift' H A B sem e)
+  Add Parametric Morphism A B sem (H: history) e: (@lift' _ A B H sem e)
       with signature @eq_str B ==> Basics.impl
         as lift'_eq_str.
   Proof.

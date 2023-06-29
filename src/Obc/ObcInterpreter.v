@@ -33,7 +33,7 @@ Module Type OBCINTERPRETER
     Fixpoint eval_exp (me: menv) (ve: venv) (e: exp) : res (option value) :=
       match e with
       | Var x _ => OK (Env.find x ve)
-      | State x _ =>
+      | State x _ _ =>
           match find_val x me with
           | Some v => OK (Some v)
           | None => Error (msg "state variable absent")
@@ -91,7 +91,7 @@ Module Type OBCINTERPRETER
           | None => Error (msg "value in assign is absent")
           | Some v => OK (me, Env.add x v ve)
           end
-      | AssignSt x e =>
+      | AssignSt x e _ =>
           do v <- eval_exp me ve e;
           match v with
           | None => Error (msg "value in stassign is absent")

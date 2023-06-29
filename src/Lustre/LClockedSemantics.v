@@ -1844,7 +1844,7 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** more `mask` properties *)
 
-  Lemma history_mask_count : forall r H n,
+  Lemma history_mask_count {K} : forall r (H: @history K) n,
       FEnv.Equiv eq (CIStr.tr_history (mask_hist (count r) # n r H) n) (CIStr.tr_history H n).
   Proof.
     intros * ?. simpl_fenv.
@@ -1852,7 +1852,7 @@ Module Type LCLOCKEDSEMANTICS
     unfold tr_Stream; rewrite maskv_nth, Nat.eqb_refl; auto with datatypes.
   Qed.
 
-  Corollary sem_var_instant_mask_hist_count: forall H n r x v,
+  Corollary sem_var_instant_mask_hist_count {K}: forall (H: @history K) n r x v,
       IStr.sem_var_instant (CIStr.tr_history H n) x v <->
         IStr.sem_var_instant (CIStr.tr_history (mask_hist ((count r) # n) r H) n) x v.
   Proof.
@@ -2516,7 +2516,7 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** Execution of a node with absent inputs *)
 
-  Lemma sem_var_instant_absent: forall H x v,
+  Lemma sem_var_instant_absent {K}: forall (H: @IStr.env K) x v,
       IStr.sem_var_instant H x v ->
       IStr.sem_var_instant (FEnv.map (fun _ => absent) H) x absent.
   Proof.

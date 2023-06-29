@@ -7,6 +7,7 @@ From Velus Require Export Obc.Equiv.
 From Velus Require Export Obc.ObcAddDefaults.
 From Velus Require Export Obc.Fusion.
 From Velus Require Export Obc.ObcSwitchesNormalization.
+From Velus Require Export Obc.ObcDeadCode.
 From Velus Require Export Obc.ObcInterpreter.
 
 From Velus Require Import Common.
@@ -24,6 +25,7 @@ Module Type OBC
   Declare Module Export Equ: EQUIV          Ids Op OpAux Syn ComTyp Sem     Typ.
   Declare Module Export Fus: FUSION         Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
   Declare Module Export SwN: OBCSWITCHESNORMALIZATION Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
+  Declare Module Export DCE: OBCDEADCODE    Ids Op OpAux Syn ComTyp Sem Inv Typ.
   Declare Module Export Def: OBCADDDEFAULTS Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
   Declare Module Export Int: OBCINTERPRETER Ids Op OpAux Syn Sem.
 End OBC.
@@ -41,6 +43,7 @@ Module ObcFun
   Module Export Equ := EquivFun                    Ids Op OpAux Syn ComTyp Sem     Typ.
   Module Export Fus := FusionFun                   Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
   Module Export SwN := ObcSwitchesNormalizationFun Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
+  Module Export DCE := ObcDeadCodeFun              Ids Op OpAux Syn ComTyp Sem Inv Typ.
   Module Export Def := ObcAddDefaultsFun           Ids Op OpAux Syn ComTyp Sem Inv Typ Equ.
   Module Export Int := ObcInterpreterFun           Ids Op OpAux Syn Sem.
 End ObcFun.

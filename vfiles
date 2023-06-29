@@ -53,12 +53,6 @@ src/Lustre/CompAuto/CAClocking.v
 src/Lustre/CompAuto/CACorrectness.v
 src/Lustre/CompAuto/LCompAuto.v
 
-src/Lustre/DeLast/DeLast.v
-src/Lustre/DeLast/DLTyping.v
-src/Lustre/DeLast/DLClocking.v
-src/Lustre/DeLast/DLCorrectness.v
-src/Lustre/DeLast/LDeLast.v
-
 src/Lustre/ClockSwitch/ClockSwitch.v
 src/Lustre/ClockSwitch/CSTyping.v
 src/Lustre/ClockSwitch/CSClocking.v
@@ -71,13 +65,23 @@ src/Lustre/InlineLocal/ILClocking.v
 src/Lustre/InlineLocal/ILCorrectness.v
 src/Lustre/InlineLocal/LInlineLocal.v
 
-src/Lustre/Normalization/Unnesting.v
-src/Lustre/Normalization/NormFby.v
-src/Lustre/Normalization/Normalization.v
-src/Lustre/Normalization/NTyping.v
-src/Lustre/Normalization/NClocking.v
-src/Lustre/Normalization/Correctness.v
-src/Lustre/Normalization/LNormalization.v
+src/Lustre/Unnesting/Unnesting.v
+src/Lustre/Unnesting/UTyping.v
+src/Lustre/Unnesting/UClocking.v
+src/Lustre/Unnesting/UCorrectness.v
+src/Lustre/Unnesting/LUnnesting.v
+
+src/Lustre/NormLast/NormLast.v
+src/Lustre/NormLast/NLTyping.v
+src/Lustre/NormLast/NLClocking.v
+src/Lustre/NormLast/NLCorrectness.v
+src/Lustre/NormLast/LNormLast.v
+
+src/Lustre/NormFby/NormFby.v
+src/Lustre/NormFby/NFTyping.v
+src/Lustre/NormFby/NFClocking.v
+src/Lustre/NormFby/NFCorrectness.v
+src/Lustre/NormFby/LNormFby.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
@@ -131,15 +135,10 @@ src/NLustre/ExprInlining/EICorrectness.v
 src/NLustre/ExprInlining/ExprInlining.v
 
 src/Stc/StcOrdered.v
-src/Stc/StcIsReset.v
-src/Stc/StcIsNext.v
 src/Stc/StcSemantics.v
-src/Stc/StcIsSystem.v
-src/Stc/StcIsVariable.v
 src/Stc/StcClockingSemantics.v
 src/Stc/StcTyping.v
 src/Stc/StcSchedule.v
-src/Stc/StcIsDefined.v
 src/Stc/StcClocking.v
 src/Stc/StcIsFree.v
 src/Stc/StcSyntax.v
@@ -149,12 +148,20 @@ src/Stc/StcMemoryCorres.v
 src/Stc/StcTypingSemantics.v
 src/Stc/Stc.v
 
+src/Stc/CutCycles/CC.v
+src/Stc/CutCycles/CCTyping.v
+src/Stc/CutCycles/CCClocking.v
+src/Stc/CutCycles/CCNormalArgs.v
+src/Stc/CutCycles/CCCorrectness.v
+src/Stc/CutCycles/CutCycles.v
+
 src/Obc/ObcSyntax.v
 src/Obc/ObcTyping.v
 src/Obc/ObcAddDefaults.v
 src/Obc/ObcSemantics.v
 src/Obc/Fusion.v
 src/Obc/ObcSwitchesNormalization.v
+src/Obc/ObcDeadCode.v
 src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
 src/Obc/ObcInterpreter.v

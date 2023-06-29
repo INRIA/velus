@@ -62,7 +62,7 @@ Module Type INDEXEDTOCOIND
 
   (** Translate an history from indexed to coinductive world.
         Every element of the history is translated. *)
-  Definition tr_history_from (n: nat) (H: IStr.history) : history :=
+  Definition tr_history_from {K} (n: nat) (H: @IStr.history K) : history :=
     FEnv.mapi (fun x _ => init_from n (fun n => match (H n) x with
                                          | Some v => v
                                          | None => absent
@@ -72,13 +72,13 @@ Module Type INDEXEDTOCOIND
   (** Translate an history from coinductive to indexed world.
       Every element of the history is translated.
    *)
-  Definition tr_history H :=
+  Definition tr_history {K} (H: @IStr.history K) :=
     tr_history_from 0 H.
   Global Hint Unfold tr_history_from tr_history : fenv.
 
   (** The counterpart of [tr_stream_from_tl] for histories. *)
-  Lemma tr_history_from_tl:
-    forall n H,
+  Lemma tr_history_from_tl {K}:
+    forall n (H: @IStr.history K),
       FEnv.Equiv (@EqSt _) (history_tl (tr_history_from n H)) (tr_history_from (S n) H).
   Proof.
     intros * x. simpl_fenv; simpl.
@@ -197,8 +197,8 @@ Module Type INDEXEDTOCOIND
 
   (** * SEMANTICS CORRESPONDENCE *)
 
-  Lemma sem_var_impl_from:
-    forall n H x xs,
+  Lemma sem_var_impl_from {K}:
+    forall n (H: @IStr.history K) x xs,
       IStr.sem_var H x xs ->
       sem_var (tr_history_from n H) x (tr_stream_from n xs).
   Proof.
@@ -212,63 +212,49 @@ Module Type INDEXEDTOCOIND
       now rewrite 2 init_from_nth, Sem.
   Qed.
 
-  Corollary sem_var_impl:
-    forall H x xs,
+  Corollary sem_var_impl {K}:
+    forall (H: @IStr.history K) x xs,
       IStr.sem_var H x xs ->
       sem_var (tr_history H) x (tr_stream xs).
   Proof. apply sem_var_impl_from. Qed.
   Global Hint Resolve sem_var_impl_from sem_var_impl : indexedstreams coindstreams nlsem.
 
-  (** This tactic automatically uses the interpretor to give a witness stream. *)
-  Ltac interp_str b H x Sem :=
-    let Sem_x := fresh "Sem_" x in
-    let sol sem interp complete :=
-        assert (sem b H x (interp b H x)) as Sem_x
-            by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                unfold interp, lift_interp; inv Sem; erewrite <-complete; eauto)
-    in
-    let sol' sem interp complete :=
-        assert (sem H x (interp H x)) as Sem_x
-            by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                unfold interp, lift_interp'; inv Sem; erewrite <-complete; eauto)
-    in
-    match type of x with
-    | ident => sol' IStr.sem_var interp_var interp_var_instant_complete
-    | clock => sol IStr.sem_clock interp_clock interp_clock_instant_complete
-    end.
-
   (** An inversion principle for [sem_clock] which also uses the interpretor. *)
-    Lemma sem_clock_inv:
-      forall H b bs ck x t k,
-        IStr.sem_clock b H (Con ck x (t, k)) bs ->
-        exists bs' xs,
-          IStr.sem_clock b H ck bs'
-          /\ IStr.sem_var H x xs
-          /\
+  Lemma sem_clock_inv:
+    forall H b bs ck x t k,
+      IStr.sem_clock b H (Con ck x (t, k)) bs ->
+      exists bs' xs,
+        IStr.sem_clock b H ck bs'
+        /\ IStr.sem_var H x xs
+        /\
           (forall n,
               (bs' n = true
                /\ xs n = present (Venum k)
                /\ bs n = true)
               \/
-              (bs' n = false
-               /\ xs n = absent
-               /\ bs n = false)
+                (bs' n = false
+                 /\ xs n = absent
+                 /\ bs n = false)
               \/
-              (exists k',
-                  bs' n = true
-                  /\ xs n = present (Venum k')
-                  /\ k <> k'
-                  /\ bs n = false)).
-    Proof.
-      intros * Sem.
-      interp_str b H ck Sem.
-      interp_str b H x Sem.
-      do 2 eexists; intuition; eauto.
-      specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
-      - left; repeat split; auto; intuition IStr.sem_det.
-      - right; left; repeat split; auto; intuition IStr.sem_det.
-      - right; right; exists b'; intuition; try IStr.sem_det.
-    Qed.
+                (exists k',
+                    bs' n = true
+                    /\ xs n = present (Venum k')
+                    /\ k <> k'
+                    /\ bs n = false)).
+  Proof.
+    intros * Sem.
+    assert (IStr.sem_clock b H ck (interp_clock b H ck)) as Sem_ck.
+    { intro n. specialize (Sem n). unfold interp_clock, lift_interp.
+      inv Sem; erewrite <-interp_clock_instant_complete; eauto. }
+    assert (IStr.sem_var H x (interp_var H x)) as Sem_x.
+    { intro n. specialize (Sem n). unfold interp_var, lift_interp'.
+      inv Sem; erewrite <-interp_var_instant_complete; eauto. }
+    do 2 eexists; intuition; eauto.
+    specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
+    - left; repeat split; auto; intuition IStr.sem_det.
+    - right; left; repeat split; auto; intuition IStr.sem_det.
+    - right; right; exists b'; intuition; try IStr.sem_det.
+  Qed.
 
     (** We can then deduce the correspondence lemma for [sem_clock].
         We go by induction on the clock [ck] then we use the above inversion

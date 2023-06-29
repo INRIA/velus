@@ -86,7 +86,7 @@ Section Translate.
       translate_var x ty
     | Valid x ty =>
       translate_var x ty
-    | State x ty =>
+    | State x ty _ =>
       deref_field (prefix obc2c self) owner.(c_name) x (translate_type ty)
     | Const c =>
       translate_const c
@@ -178,7 +178,7 @@ Section Translate.
     match s with
     | Assign x e =>
       assign x (translate_type (typeof e)) (translate_exp e)
-    | AssignSt x e =>
+    | AssignSt x e _ =>
       Clight.Sassign (deref_field (prefix obc2c self) owner.(c_name) x (translate_type (typeof e))) (translate_exp e)
     | Switch e branches default =>
       Clight.Sswitch (translate_exp e)

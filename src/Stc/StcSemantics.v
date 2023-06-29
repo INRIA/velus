@@ -9,13 +9,12 @@ From Coq Require Import Morphisms.
 From Velus Require Import Common.
 From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import VelusMemory.
 From Velus Require Import Stc.StcSyntax.
-From Velus Require Import Stc.StcIsSystem.
-From Velus Require Import Stc.StcIsNext.
 From Velus Require Import Stc.StcOrdered.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESemantics.
@@ -27,21 +26,20 @@ Module Type STCSEMANTICS
        (Import Cks   : CLOCKS      Ids Op OpAux)
        (Import CESyn : CESYNTAX    Ids Op OpAux Cks)
        (Import Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
-       (Import Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
-       (Import Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn Syst)
+       (Import Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn)
        (Import Str   : INDEXEDSTREAMS Ids Op OpAux Cks)
        (Import CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str).
 
   Definition state := memory value.
 
-  Definition state_closed_nexts (nexts: list ident) (S: state) : Prop :=
-    forall x, find_val x S <> None -> In x nexts.
+  Definition state_closed_states (states : list ident) (S: state) : Prop :=
+    forall x, find_val x S <> None -> In x states.
 
-  Inductive state_closed: program -> ident -> state -> Prop :=
+  Inductive state_closed {prefs} : @program prefs -> ident -> state -> Prop :=
     state_closed_intro:
       forall P f S s P',
         find_system f P = Some (s, P') ->
-        state_closed_nexts (map fst s.(s_nexts)) S ->
+        state_closed_states (map fst (s.(s_lasts) ++ s.(s_nexts))) S ->
         (forall i S',
             find_inst i S = Some S' ->
             exists g,
@@ -49,22 +47,22 @@ Module Type STCSEMANTICS
               /\ state_closed P' g S') ->
         state_closed P f S.
 
-  Definition state_closed_insts (P: program) (subs: list (ident * ident)) (S: state) : Prop :=
+  Definition state_closed_insts {prefs} (P: @program prefs) (subs: list (ident * ident)) (S: state) : Prop :=
     forall i Si,
       find_inst i S = Some Si ->
       exists g, In (i, g) subs
            /\ state_closed P g Si.
 
-  Definition reset_nexts (s: system) (S0: state) : Prop :=
+  Definition reset_states {prefs} (s: @system prefs) (S0: state) : Prop :=
     forall x c t ck,
-      In (x, (c, t, ck)) s.(s_nexts) ->
+      In (x, (c, t, ck)) (s.(s_lasts) ++ s.(s_nexts)) ->
       find_val x S0 = Some (sem_const c).
 
-  Inductive initial_state: program -> ident -> state -> Prop :=
+  Inductive initial_state {prefs} : (@program prefs) -> ident -> state -> Prop :=
     initial_state_intro:
       forall P f S0 s P',
         find_system f P = Some (s, P') ->
-        reset_nexts s S0 ->
+        reset_states s S0 ->
         (forall i g,
             In (i, g) s.(s_subs) ->
             exists Si0,
@@ -74,44 +72,54 @@ Module Type STCSEMANTICS
 
   Section Semantics.
 
-    Variable P: program.
+    Context {prefs : PS.t}.
+    Variable P: @program prefs.
 
     Inductive sem_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop :=
     | STcDef:
         forall base R S I S' x v ck ce,
           sem_arhs_instant base R ck ce v ->
-          sem_var_instant R x v ->
-          sem_trconstr base R S I S' (TcDef x ck ce)
-    | STcReset:
+          sem_var_instant R (Var x) v ->
+          sem_trconstr base R S I S' (TcDef ck x ce)
+    | STcResetState:
         forall base R S I S' x ckr ty c0 r c,
           find_val x S = Some c ->
-          sem_clock_instant base R ckr r ->
+          sem_clock_instant base (var_env R) ckr r ->
           (if r then find_val x I = Some (sem_const c0) else True) ->
-          sem_trconstr base R S I S' (TcReset x ckr ty c0)
-    | STcNext:
+          sem_trconstr base R S I S' (TcReset ckr (ResState x ty c0))
+    | STcResetInst:
+        forall base R S I S' ckr f i r Ii,
+          find_inst i I = Some Ii ->
+          sem_clock_instant base (var_env R) ckr r ->
+          (if r then initial_state P f Ii else True) ->
+          sem_trconstr base R S I S' (TcReset ckr (ResInst i f))
+    | STcUpdateLast:
         forall base R S I S' x ck e ckrs c v',
-          (Forall (fun ckr => sem_clock_instant base R ckr false) ckrs -> find_val x S = Some c) ->
+          (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_val x S = Some c) ->
+          find_val x I = Some c ->
+          sem_caexp_instant base R ck e v' ->
+          sem_var_instant R (Last x) (match v' with present _ => present c | absent => absent end) ->
+          sem_var_instant R (Var x) v' ->
+          find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
+          sem_trconstr base R S I S' (TcUpdate ck ckrs (UpdLast x e))
+    | STcUpdateNext:
+        forall base R S I S' x ck e ckrs c v',
+          (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_val x S = Some c) ->
           find_val x I = Some c ->
           sem_aexp_instant base R ck e v' ->
-          sem_var_instant R x (match v' with present c' => present c | absent => absent end) ->
+          sem_var_instant R (Var x) (match v' with present _ => present c | absent => absent end) ->
           find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
-          sem_trconstr base R S I S' (TcNext x ck ckrs e)
-    | STcInstReset:
-        forall base R S I S' ck f i r Ii,
-          sem_clock_instant base R ck r ->
-          find_inst i I = Some Ii ->
-          (if r then initial_state P f Ii else True) ->
-          sem_trconstr base R S I S' (TcInstReset i ck f)
-    | STcStep:
+          sem_trconstr base R S I S' (TcUpdate ck ckrs (UpdNext x e))
+    | STcUpdateInst:
         forall base R S I S' ys ck ckrs f i es xs Ii os Si',
-          (Forall (fun ckr => sem_clock_instant base R ckr false) ckrs -> find_inst i S ⌈≋⌉ Some Ii) ->
+          (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_inst i S ⌈≋⌉ Some Ii) ->
           find_inst i I = Some Ii ->
           sem_exps_instant base R es xs ->
-          sem_clock_instant base R ck (clock_of_instant xs) ->
+          sem_clock_instant base (var_env R) ck (clock_of_instant xs) ->
           sem_system f Ii xs os Si' ->
           sem_vars_instant R ys os ->
           find_inst i S' = Some Si' ->
-          sem_trconstr base R S I S' (TcStep i ys ck ckrs f es)
+          sem_trconstr base R S I S' (TcUpdate ck ckrs (UpdInst i ys f es))
 
     with sem_system: ident -> state -> list svalue -> list svalue -> state -> Prop :=
            SSystem:
@@ -119,7 +127,7 @@ Module Type STCSEMANTICS
                find_system f P = Some (s, P') ->
                sem_vars_instant R (map fst s.(s_in)) xs ->
                sem_vars_instant R (map fst s.(s_out)) ys ->
-               sem_clocked_vars_instant (clock_of_instant xs) R (idsnd s.(s_in)) ->
+               sem_clocked_vars_instant (clock_of_instant xs) R (map (fun '(x, (_, ck)) => (x, (ck, false))) s.(s_in)) ->
                Forall (sem_trconstr (clock_of_instant xs) R S I S') s.(s_tcs) ->
                state_closed P f S ->
                state_closed P f I ->
@@ -128,8 +136,11 @@ Module Type STCSEMANTICS
 
   End Semantics.
 
+  Global Hint Constructors sem_trconstr sem_system state_closed : stcsem.
+
   Section sem_system_mult.
-    Variable P: program.
+    Context {prefs : PS.t}.
+    Variable P: @program prefs.
 
     Variable P_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop.
     Variable P_system: ident -> state -> list svalue -> list svalue -> state -> Prop.
@@ -137,50 +148,60 @@ Module Type STCSEMANTICS
     Hypothesis TcDefCase:
       forall base R S I S' x v ck ce,
         sem_arhs_instant base R ck ce v ->
-        sem_var_instant R x v ->
-        P_trconstr base R S I S' (TcDef x ck ce).
+        sem_var_instant R (Var x) v ->
+        P_trconstr base R S I S' (TcDef ck x ce).
 
-    Hypothesis TcResetCase:
+    Hypothesis TcResetStateCase:
       forall base R S I S' x ckr ty c0 r c,
         find_val x S = Some c ->
-        sem_clock_instant base R ckr r ->
+        sem_clock_instant base (var_env R) ckr r ->
         (if r then find_val x I = Some (sem_const c0) else True) ->
-        P_trconstr base R S I S' (TcReset x ckr ty c0).
+        P_trconstr base R S I S' (TcReset ckr (ResState x ty c0)).
 
-    Hypothesis TcNextCase:
+    Hypothesis TcUpdateLastCase:
       forall base R S I S' x ck e ckrs c v',
-        (Forall (fun ckr => sem_clock_instant base R ckr false) ckrs -> find_val x S = Some c) ->
+        (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_val x S = Some c) ->
+        find_val x I = Some c ->
+        sem_caexp_instant base R ck e v' ->
+        sem_var_instant R (Last x) (match v' with present _ => present c | absent => absent end) ->
+        sem_var_instant R (Var x) v' ->
+        find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
+        P_trconstr base R S I S' (TcUpdate ck ckrs (UpdLast x e)).
+
+    Hypothesis TcUpdateNextCase:
+      forall base R S I S' x ck e ckrs c v',
+        (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_val x S = Some c) ->
         find_val x I = Some c ->
         sem_aexp_instant base R ck e v' ->
-        sem_var_instant R x (match v' with present c' => present c | absent => absent end) ->
+        sem_var_instant R (Var x) (match v' with present _ => present c | absent => absent end) ->
         find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
-        P_trconstr base R S I S' (TcNext x ck ckrs e).
+        P_trconstr base R S I S' (TcUpdate ck ckrs (UpdNext x e)).
 
-    Hypothesis TcIResetCase:
+    Hypothesis TcResetInstCase:
       forall base R S I S' ck f i r Ii,
-        sem_clock_instant base R ck r ->
+        sem_clock_instant base (var_env R) ck r ->
         find_inst i I = Some Ii ->
         (if r then initial_state P f Ii else True) ->
-        P_trconstr base R S I S' (TcInstReset i ck f).
+        P_trconstr base R S I S' (TcReset ck (ResInst i f)).
 
-    Hypothesis TcStepCase:
+    Hypothesis TcUpdateInstCase:
       forall base R S I S' ys ck ckrs f i es xs Ii os Si',
-        (Forall (fun ckr => sem_clock_instant base R ckr false) ckrs -> find_inst i S ⌈≋⌉ Some Ii) ->
+        (Forall (fun ckr => sem_clock_instant base (var_env R) ckr false) ckrs -> find_inst i S ⌈≋⌉ Some Ii) ->
         find_inst i I = Some Ii ->
         sem_exps_instant base R es xs ->
-        sem_clock_instant base R ck (clock_of_instant xs) ->
+        sem_clock_instant base (var_env R) ck (clock_of_instant xs) ->
         sem_system P f Ii xs os Si' ->
         sem_vars_instant R ys os ->
         find_inst i S' = Some Si' ->
         P_system f Ii xs os Si' ->
-        P_trconstr base R S I S' (TcStep i ys ck ckrs f es).
+        P_trconstr base R S I S' (TcUpdate ck ckrs (UpdInst i ys f es)).
 
     Hypothesis SystemCase:
       forall f s P' R S I S' xs ys,
         find_system f P = Some (s, P') ->
         sem_vars_instant R (map fst s.(s_in)) xs ->
         sem_vars_instant R (map fst s.(s_out)) ys ->
-        sem_clocked_vars_instant (clock_of_instant xs) R (idsnd s.(s_in)) ->
+        sem_clocked_vars_instant (clock_of_instant xs) R (map (fun '(x, (_, ck)) => (x, (ck, false))) s.(s_in)) ->
         Forall (sem_trconstr P (clock_of_instant xs) R S I S') s.(s_tcs) ->
         state_closed P f S ->
         state_closed P f I ->
@@ -203,12 +224,9 @@ Module Type STCSEMANTICS
         match goal with H: Forall _ _ |- _ => induction H; auto end.
     Qed.
 
-    Combined Scheme sem_trconstr_system_ind from
-             sem_trconstr_mult, sem_system_mult.
-
   End sem_system_mult.
 
-  CoInductive loop: program -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop :=
+  CoInductive loop {prefs}: (@program prefs) -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop :=
     loop_intro:
       forall P f xss yss Sn Sn' n,
         sem_system P f Sn (xss n) (yss n) Sn' ->
@@ -216,8 +234,8 @@ Module Type STCSEMANTICS
         loop P f xss yss Sn n.
 
   Section LoopCoind.
-
-    Variable R: program -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop.
+    Context {prefs : PS.t}.
+    Variable R: (@program prefs) -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop.
 
     Hypothesis Loop:
       forall P f xss yss Sn n,
@@ -237,15 +255,15 @@ Module Type STCSEMANTICS
 
   End LoopCoind.
 
-  Add Parametric Morphism system : (reset_nexts system)
+  Add Parametric Morphism {prefs} system : (@reset_states prefs system)
       with signature equal_memory ==> Basics.impl
-        as reset_nexts_equal_memory.
+        as reset_states_equal_memory.
   Proof.
     intros * E Rst ???? Hin.
     rewrite <-E; apply Rst in Hin; auto.
   Qed.
 
-  Add Parametric Morphism P f : (initial_state P f)
+  Add Parametric Morphism {prefs} P f : (@initial_state prefs P f)
       with signature equal_memory ==> Basics.impl
         as initial_state_equal_memory.
   Proof.
@@ -265,16 +283,16 @@ Module Type STCSEMANTICS
       symmetry in Hv'. eauto.
   Qed.
 
-  Add Parametric Morphism nexts : (state_closed_nexts nexts)
+  Add Parametric Morphism states : (state_closed_states states)
       with signature equal_memory ==> Basics.impl
-        as state_closed_nexts_equal_memory.
+        as state_closed_states_equal_memory.
   Proof.
-    unfold state_closed_nexts.
+    unfold state_closed_states.
     intros * E Closed ? Find.
     apply Closed; rewrite E; auto.
   Qed.
 
-  Add Parametric Morphism P b : (state_closed P b)
+  Add Parametric Morphism {prefs} P b : (@state_closed prefs P b)
       with signature equal_memory ==> Basics.impl
         as state_closed_equal_memory.
   Proof.
@@ -291,7 +309,7 @@ Module Type STCSEMANTICS
       specialize (Insts _ _ Sub') as (b' & ? & ?). eauto.
   Qed.
 
-  Add Parametric Morphism P : (state_closed_insts P)
+  Add Parametric Morphism {prefs} P : (@state_closed_insts prefs P)
       with signature @Permutation (ident * ident) ==> eq ==> Basics.impl
         as state_closed_insts_Permutation.
   Proof.
@@ -300,39 +318,48 @@ Module Type STCSEMANTICS
     now rewrite <-E.
   Qed.
 
-  Add Parametric Morphism P f: (sem_system P f)
+  Add Parametric Morphism {prefs} P f: (@sem_system prefs P f)
       with signature equal_memory ==> eq ==> eq ==> equal_memory ==> Basics.impl
         as sem_system_equal_memory.
   Proof.
     intros S1 S2 ??? S1' S2' ** Sem.
-    revert dependent S2; revert dependent S2'.
-    induction Sem as [| | |??????????? Find Init|
-                      ???????????????? Find ? Spec ?? Sub|] using sem_system_mult with
-                   (P_trconstr := fun base R S1 I1 S1' tc =>
-                                    forall S2 S2' I2,
-                                      S1 ≋ S2 ->
-                                      I1 ≋ I2 ->
-                                      S1' ≋ S2' ->
-                                      sem_trconstr P base R S2 I2 S2' tc);
-      eauto using sem_trconstr.
-    - intros * E EI E'.
+    eapply sem_system_mult with
+      (P_system := fun f S1 xs ys S1' =>
+                     forall S2 S2',
+                       S1 ≋ S2 ->
+                       S1' ≋ S2' ->
+                       sem_system P f S2 xs ys S2')
+      (P_trconstr := fun base R S1 I1 S1' tc =>
+                       forall S2 S2' I2,
+                         S1 ≋ S2 ->
+                         I1 ≋ I2 ->
+                         S1' ≋ S2' ->
+                         sem_trconstr P base R S2 I2 S2' tc) in Sem; eauto.
+    - intros * ??? * E EI E'.
+      econstructor; eauto.
+    - intros * ??? * E EI E'.
       econstructor; eauto.
       + rewrite <-E; eauto.
       + destruct r; try rewrite <-EI; eauto.
-    - intros * E EI E'.
+    - intros * ?????? * E EI E'.
       econstructor; eauto.
       + rewrite <-E; eauto.
       + rewrite <-EI; eauto.
       + rewrite <-E'; eauto.
-    - intros * E EI E'.
+    - intros * ????? * E EI E'.
+      econstructor; eauto.
+      + rewrite <-E; eauto.
+      + rewrite <-EI; eauto.
+      + rewrite <-E'; eauto.
+    - intros * ? Find ? * E EI E'.
       apply orel_eq in Find;
         setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto with memory.
       rewrite EI in Find.
       apply Env.orel_find_Some in Find as (Is' & Eq & Find').
       destruct r.
-      + econstructor; eauto; simpl. now rewrite Eq.
+      + econstructor; eauto; simpl. rewrite Eq; eauto.
       + econstructor; eauto; simpl.
-    - intros * E EI E'.
+    - intros * ? Find ? Spec ?? Sub Ind * E EI E'.
       apply orel_eq in Find;
         setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto with memory.
       rewrite EI in Find.
@@ -344,27 +371,27 @@ Module Type STCSEMANTICS
       symmetry in Eq, Eq'.
       econstructor; eauto.
       rewrite <-E, <-Eq; eauto.
-    - intros ? E ? E'.
+    - intros * ????????? * E E'.
       eapply SSystem with (I := I); eauto.
       + induction (s_tcs s); auto;
           repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
         constructor; auto.
         assert (I ≋ I) by reflexivity;
           auto.
-      + now rewrite <-E'.
       + now rewrite <-E.
+      + now rewrite <-E'.
   Qed.
 
-  Add Parametric Morphism : (state_closed_nexts)
+  Add Parametric Morphism : (state_closed_states)
       with signature (@Permutation ident) ==> eq ==> Basics.impl
-        as state_closed_nexts_permutation.
+        as state_closed_states_permutation.
   Proof.
-    unfold state_closed_nexts.
+    unfold state_closed_states.
     intros * E ? Closed ? Find.
     rewrite <-E; auto.
   Qed.
 
-  Add Parametric Morphism P b xss yss : (loop P b xss yss)
+  Add Parametric Morphism {prefs} P b xss yss : (@loop prefs P b xss yss)
       with signature equal_memory ==> eq ==> Basics.impl
         as loop_equal_memory.
   Proof.
@@ -375,8 +402,8 @@ Module Type STCSEMANTICS
     intros; rewrite <-E; auto.
   Qed.
 
-  Lemma initial_state_other:
-    forall S0 s P enums externs f,
+  Lemma initial_state_other {prefs}:
+    forall S0 s (P : list (@system prefs)) enums externs f,
       s_name s <> f ->
       (initial_state (Program enums externs P) f S0 <->
       initial_state (Program enums externs (s :: P)) f S0).
@@ -386,37 +413,37 @@ Module Type STCSEMANTICS
     - rewrite find_system_other in Find; eauto.
   Qed.
 
-  Fact reset_nexts_add_inst:
-    forall s S0 i Si0,
-      reset_nexts s S0 ->
-      reset_nexts s (add_inst i Si0 S0).
+  Fact reset_states_add_inst {prefs}:
+    forall (s: @system prefs) S0 i Si0,
+      reset_states s S0 ->
+      reset_states s (add_inst i Si0 S0).
   Proof.
-    unfold reset_nexts;
+    unfold reset_states;
       setoid_rewrite find_val_add_inst; auto.
   Qed.
 
-  Fact state_closed_nexts_add:
-    forall nexts S x v,
-      state_closed_nexts nexts S ->
-      state_closed_nexts (x::nexts) (add_val x v S).
+  Fact state_closed_states_add:
+    forall states S x v,
+      state_closed_states states S ->
+      state_closed_states (x::states) (add_val x v S).
   Proof.
-    unfold state_closed_nexts.
+    unfold state_closed_states.
     intros * Hfind1 * Hfind2.
     destruct (ident_eq_dec x0 x); subst; [left|right]; auto.
     rewrite find_val_gso in Hfind2; auto.
   Qed.
 
-  Fact state_closed_nexts_add_inst:
-    forall nexts S i Si,
-      state_closed_nexts nexts S ->
-      state_closed_nexts nexts (add_inst i Si S).
+  Fact state_closed_states_add_inst:
+    forall states S i Si,
+      state_closed_states states S ->
+      state_closed_states states (add_inst i Si S).
   Proof.
-    unfold state_closed_nexts;
+    unfold state_closed_states;
       setoid_rewrite find_val_add_inst; auto.
   Qed.
 
-  Lemma state_closed_insts_InMembers:
-    forall P subs S s Ss,
+  Lemma state_closed_insts_InMembers {prefs}:
+    forall (P: @program prefs) subs S s Ss,
       state_closed_insts P subs S ->
       find_inst s S = Some Ss ->
       InMembers s subs.
@@ -425,8 +452,8 @@ Module Type STCSEMANTICS
     eapply In_InMembers; eauto.
   Qed.
 
-  Lemma state_closed_other:
-    forall S s P f enums externs,
+  Lemma state_closed_other {prefs}:
+    forall S s (P: list (@system prefs)) f enums externs,
       s_name s <> f ->
       (state_closed (Program enums externs P) f S <->
       state_closed (Program enums externs (s :: P)) f S).
@@ -436,8 +463,8 @@ Module Type STCSEMANTICS
     - rewrite find_system_other in Find; eauto.
   Qed.
 
-  Lemma state_closed_find_system_other:
-    forall S i P P' f s g,
+  Lemma state_closed_find_system_other {prefs}:
+    forall S i (P: @program prefs) P' f s g,
       Ordered_systems P ->
       find_system f P = Some (s, P') ->
       In (i, g) s.(s_subs) ->
@@ -458,8 +485,8 @@ Module Type STCSEMANTICS
     eapply find_unit_cons in Find' as [[]|[]]; simpl in *; eauto; auto; contradiction.
   Qed.
 
-  Lemma state_closed_insts_find_system_other:
-    forall I s P P' f,
+  Lemma state_closed_insts_find_system_other {prefs}:
+    forall I (s: @system prefs) P P' f,
       Ordered_systems P ->
       find_system f P = Some (s, P') ->
       state_closed_insts P s.(s_subs) I ->
@@ -471,8 +498,8 @@ Module Type STCSEMANTICS
     eapply state_closed_find_system_other; eauto.
   Qed.
 
-  Lemma state_closed_insts_cons:
-    forall I s P enums externs,
+  Lemma state_closed_insts_cons {prefs}:
+    forall I (s: @system prefs) P enums externs,
       Ordered_systems (Program enums externs (s :: P)) ->
       state_closed_insts (Program enums externs P) s.(s_subs) I ->
       state_closed_insts (Program enums externs (s :: P)) s.(s_subs) I.
@@ -485,8 +512,8 @@ Module Type STCSEMANTICS
     apply Spec in Hin; intuition.
   Qed.
 
-  Lemma sem_system_cons:
-    forall P enums externs s f xs S S' ys,
+  Lemma sem_system_cons {prefs}:
+    forall (P: list (@system prefs)) enums externs s f xs S S' ys,
       Ordered_systems (Program enums externs (s :: P)) ->
       sem_system (Program enums externs (s :: P)) f xs S S' ys ->
       s.(s_name) <> f ->
@@ -494,20 +521,21 @@ Module Type STCSEMANTICS
   Proof.
     intros ? enums externs * Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | | |?????????????????????? IH|
-                       ????????? Hf ???? Closed ClosedI Closed' IH]
-                        using sem_system_mult
-      with (P_trconstr := fun bk H S I S' tc =>
-                            ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr (Program enums externs P) bk H S I S' tc);
-      eauto using sem_trconstr.
-    - intro Hnin; econstructor; eauto.
+    eapply sem_system_mult with
+      (P_system := fun f S xs ys S' =>
+                     s_name s <> f ->
+                     sem_system (Program enums externs P) f S xs ys S')
+      (P_trconstr := fun bk H S I S' tc =>
+                       ~Is_system_in_tc s.(s_name) tc ->
+                       sem_trconstr (Program enums externs P) bk H S I S' tc) in Hsem;
+      eauto with stcsem.
+    - intros * ??? Hnin; econstructor; eauto.
       destruct r; eauto.
       rewrite initial_state_other; eauto.
       intro E; apply Hnin; rewrite E; constructor.
-    - intro Hnin; econstructor; eauto.
+    - intros * ??????? IH Hnin; econstructor; eauto.
       apply IH; intro E; apply Hnin; rewrite E; constructor.
-    - intros.
+    - intros * Hf ???? Closed ClosedI Closed' IH Hneq.
       pose proof Hf.
       rewrite find_system_other in Hf; auto.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; auto.
@@ -520,35 +548,38 @@ Module Type STCSEMANTICS
       apply Exists_exists; eauto.
   Qed.
 
-  Lemma sem_system_cons2:
-    forall s P enums externs f xs S S' ys,
+  Lemma sem_system_cons2 {prefs}:
+    forall (s: @system prefs) P enums externs f xs S S' ys,
       Ordered_systems (Program enums externs (s :: P)) ->
       sem_system (Program enums externs P) f xs S S' ys ->
       sem_system (Program enums externs (s :: P)) f xs S S' ys.
   Proof.
     intros ?? enums externs * Hord Hsem.
-    induction Hsem as [| | | | |
-                       ????????? Hfind ???? Closed ClosedI Closed' IHtcs] using sem_system_mult
-      with (P_trconstr := fun bk H S I S' tc =>
-                            ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr (Program enums externs (s :: P)) bk H S I S' tc);
-      eauto using sem_trconstr.
-    - intros Notin; econstructor; eauto.
+    eapply sem_system_mult with
+      (P_system := fun f S xs ys S' =>
+                     sem_system (Program enums externs (s :: P)) f S xs ys S')
+      (P_trconstr := fun bk H S I S' tc =>
+                       ~Is_system_in_tc s.(s_name) tc ->
+                       sem_trconstr (Program enums externs (s :: P)) bk H S I S' tc) in Hsem;
+      eauto with stcsem.
+
+    - intros * ??? Notin; econstructor; eauto.
       destruct r; eauto.
       apply initial_state_other; auto.
       intro E; apply Notin; rewrite E; constructor.
-    - pose proof Hfind as Hfind'; apply find_unit_spec in Hfind' as (?&?& E & FindNone); simpl in *.
-      pose proof Hord as Hord'; rewrite E, app_comm_cons in Hord';
+    - intros * Hfind ???? Closed ClosedI Closed' IHtcs.
+      pose proof Hfind as Hfind'; apply find_unit_spec in Hfind' as (?&?& E & FindNone); simpl in *; subst.
+      pose proof Hord as Hord'; rewrite app_comm_cons in Hord';
         apply Ordered_systems_split in Hord'.
       pose proof Hord.
       inversion_clear Hord as [|?? [? Hnin]].
-      assert (s.(s_name) <> f) as Hnf.
+      assert (s_name s <> s_name s0) as Hnf.
       { intro Hnf.
         rewrite Hnf in *.
         apply find_unit_spec in Hfind as (?&?& Hp &?); simpl in *; subst.
         apply Forall_app in Hnin.
         destruct Hnin as [H' Hfg]; clear H'.
-        inv Hfg; congruence.
+        inv Hfg. congruence.
       }
       rewrite state_closed_other in Closed, ClosedI, Closed'; eauto.
       eapply SSystem with (I := I); eauto.
@@ -563,8 +594,10 @@ Module Type STCSEMANTICS
         apply Exists_exists; eauto.
   Qed.
 
-  Lemma sem_trconstrs_cons:
-    forall P enums externs bk H S I S' tcs s,
+  Global Hint Resolve sem_system_cons sem_system_cons2 : stcsem.
+
+  Lemma sem_trconstrs_cons {prefs}:
+    forall (P: list (@system prefs)) enums externs bk H S I S' tcs s,
       Ordered_systems (Program enums externs (s :: P)) ->
       ~ Is_system_in s.(s_name) tcs ->
       (Forall (sem_trconstr (Program enums externs P) bk H S I S') tcs <->
@@ -575,13 +608,12 @@ Module Type STCSEMANTICS
     apply not_Is_system_in_cons in Hnini as [Hnini Hninis].
     split; intros Hsem; apply Forall_cons2 in Hsem as [Htc Htcs];
       apply IH in Htcs; auto; constructor; auto.
-    - destruct Htc; eauto using sem_trconstr.
+    - destruct Htc; eauto with stcsem.
       + econstructor; eauto.
         destruct r; eauto.
         apply initial_state_other; auto.
         intro E; apply Hnini; rewrite E; constructor.
-      + eauto using sem_trconstr, sem_system_cons2.
-    - destruct Htc; eauto using sem_trconstr.
+    - destruct Htc; eauto with stcsem.
       + econstructor; eauto.
         destruct r; auto.
         rewrite initial_state_other; eauto.
@@ -591,13 +623,13 @@ Module Type STCSEMANTICS
         intro E; apply Hnini; rewrite E; constructor.
   Qed.
 
-  Lemma reset_nexts_det:
-    forall P f S S' s P',
+  Lemma reset_states_det {prefs}:
+    forall (P: @program prefs) f S S' s P',
       state_closed P f S ->
       state_closed P f S' ->
       find_system f P = Some (s, P') ->
-      reset_nexts s S ->
-      reset_nexts s S' ->
+      reset_states s S ->
+      reset_states s S' ->
       Env.Equal (values S) (values S').
   Proof.
     intros * Closed Closed' Find Rst Rst' x.
@@ -605,25 +637,25 @@ Module Type STCSEMANTICS
       rewrite Find' in Find; inv Find.
     inversion_clear Closed' as [????? Find Spec'];
       rewrite Find' in Find; inv Find.
-    unfold state_closed_nexts, reset_nexts, find_val in *.
+    unfold state_closed_states, reset_states, find_val in *.
     destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
       apply Spec, fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
       pose proof Hin as Hin'.
-      apply Rst in Hin; apply Rst' in Hin'.
+      eapply Rst in Hin; eapply Rst' in Hin'.
       congruence.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
       apply Spec, fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
-      apply Rst' in Hin.
+      eapply Rst' in Hin.
       congruence.
     - assert (Env.find x (values S') <> None) as E1 by (apply not_None_is_Some; eauto).
       apply Spec', fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
-      apply Rst in Hin.
+      eapply Rst in Hin.
       congruence.
   Qed.
 
-  Lemma initial_state_det:
-    forall S S' P f,
+  Lemma initial_state_det {prefs}:
+    forall S S' (P: @program prefs) f,
       state_closed P f S ->
       state_closed P f S' ->
       initial_state P f S ->
@@ -640,7 +672,7 @@ Module Type STCSEMANTICS
              rewrite H in H'; inv H'
            end.
     constructor.
-    - eapply reset_nexts_det; eauto using state_closed.
+    - eapply reset_states_det; eauto with stcsem.
     - unfold find_inst in *.
       split.
       + setoid_rewrite Env.In_find.
@@ -661,39 +693,91 @@ Module Type STCSEMANTICS
         eapply IH; subst; eauto.
   Qed.
 
-  Definition reset_clocks_have_sem b R tcs :=
+  Definition last_reset_clocks_have_sem b R tcs :=
+    forall x ckrs,
+      Last_with_reset_in x ckrs tcs ->
+      Forall (fun ckr => exists r, sem_clock_instant b R ckr r) ckrs.
+
+  Lemma last_reset_clocks_have_sem_cons: forall b R tc tcs,
+      last_reset_clocks_have_sem b R (tc::tcs) ->
+      last_reset_clocks_have_sem b R tcs.
+  Proof.
+    intros * Reset.
+    unfold last_reset_clocks_have_sem in *.
+    intros * Hin. eapply Reset. right; eauto.
+  Qed.
+
+  Corollary last_reset_clocks_have_sem_app: forall b R tcs tcs',
+      last_reset_clocks_have_sem b R (tcs' ++ tcs) ->
+      last_reset_clocks_have_sem b R tcs.
+  Proof.
+    induction tcs'; intros * Resets; auto.
+    apply last_reset_clocks_have_sem_cons in Resets; auto.
+  Qed.
+
+  Lemma sem_trconstrs_last_reset_clocks' {prefs}:
+    forall S I S' (P: @program prefs) R b tcs tcs',
+      Forall (sem_trconstr P b R S I S') (tcs' ++ tcs) ->
+      last_consistency (tcs' ++ tcs) ->
+      last_reset_clocks_have_sem b (var_env R) tcs.
+  Proof.
+    unfold last_reset_clocks_have_sem.
+    induction tcs; intros * Sem Reset * Hin; inv Hin.
+    - inv H0.
+      unfold last_consistency in Reset.
+      assert (Last_with_reset_in x ckrs (tcs' ++ TcUpdate ck ckrs (UpdLast x e) :: tcs)) as LastWithReset.
+      { apply Exists_app. left. constructor. }
+      eapply Forall_forall. intros ? Hin.
+      eapply Reset in LastWithReset as (Reset'&_). specialize (Reset' Hin).
+      eapply Exists_exists in Reset' as (?&Hin'&Reset'). inv Reset'.
+      eapply Forall_forall in Sem; eauto. inv Sem; eauto.
+    - specialize (IHtcs (tcs' ++ [a])).
+      rewrite <-app_assoc in IHtcs; simpl in IHtcs; eauto.
+  Qed.
+
+  Corollary sem_trconstrs_last_reset_clocks {prefs}:
+    forall S I S' (P: @program prefs) R b tcs,
+      Forall (sem_trconstr P b R S I S') tcs ->
+      last_consistency tcs ->
+      last_reset_clocks_have_sem b (var_env R) tcs.
+  Proof.
+    intros.
+    eapply sem_trconstrs_last_reset_clocks' with (tcs':=[]); simpl; eauto.
+  Qed.
+
+  Definition next_reset_clocks_have_sem b R tcs :=
     forall x ckrs,
       Next_with_reset_in x ckrs tcs ->
       Forall (fun ckr => exists r, sem_clock_instant b R ckr r) ckrs.
 
-  Lemma reset_clocks_have_sem_cons: forall b R tc tcs,
-      reset_clocks_have_sem b R (tc::tcs) ->
-      reset_clocks_have_sem b R tcs.
+  Lemma next_reset_clocks_have_sem_cons: forall b R tc tcs,
+      next_reset_clocks_have_sem b R (tc::tcs) ->
+      next_reset_clocks_have_sem b R tcs.
   Proof.
     intros * Reset.
-    unfold reset_clocks_have_sem in *.
+    unfold next_reset_clocks_have_sem in *.
     intros * Hin. eapply Reset. right; eauto.
   Qed.
 
-  Corollary reset_clocks_have_sem_app: forall b R tcs tcs',
-      reset_clocks_have_sem b R (tcs' ++ tcs) ->
-      reset_clocks_have_sem b R tcs.
+  Corollary next_reset_clocks_have_sem_app: forall b R tcs tcs',
+      next_reset_clocks_have_sem b R (tcs' ++ tcs) ->
+      next_reset_clocks_have_sem b R tcs.
   Proof.
     induction tcs'; intros * Resets; auto.
-    apply reset_clocks_have_sem_cons in Resets; auto.
+    apply next_reset_clocks_have_sem_cons in Resets; auto.
   Qed.
 
-  Lemma sem_trconstrs_reset_clocks':
-    forall S I S' P R b tcs tcs',
+  Lemma sem_trconstrs_next_reset_clocks' {prefs}:
+    forall S I S' (P: @program prefs) R b tcs tcs',
       Forall (sem_trconstr P b R S I S') (tcs' ++ tcs) ->
-      reset_consistency (tcs' ++ tcs) ->
-      reset_clocks_have_sem b R tcs.
+      next_consistency (tcs' ++ tcs) ->
+      next_reset_clocks_have_sem b (var_env R) tcs.
   Proof.
-    unfold reset_clocks_have_sem.
+    unfold next_reset_clocks_have_sem.
     induction tcs; intros * Sem Reset * Hin; inv Hin.
     - inv H0.
-      unfold reset_consistency in Reset.
-      assert (Next_with_reset_in x ckrs (tcs' ++ TcNext x ck ckrs es :: tcs)) as NextWithReset.
+      unfold next_consistency in Reset.
+      assert (Next_with_reset_in x ckrs (tcs' ++ TcUpdate ck ckrs (UpdNext x e) :: tcs)) as NextWithReset.
       { apply Exists_app. left. constructor. }
       eapply Forall_forall. intros ? Hin.
       eapply Reset in NextWithReset as (Reset'&_). specialize (Reset' Hin).
@@ -703,49 +787,49 @@ Module Type STCSEMANTICS
       rewrite <-app_assoc in IHtcs; simpl in IHtcs; eauto.
   Qed.
 
-  Corollary sem_trconstrs_reset_clocks:
-    forall S I S' P R b tcs,
+  Corollary sem_trconstrs_next_reset_clocks {prefs}:
+    forall S I S' (P: @program prefs) R b tcs,
       Forall (sem_trconstr P b R S I S') tcs ->
-      reset_consistency tcs ->
-      reset_clocks_have_sem b R tcs.
+      next_consistency tcs ->
+      next_reset_clocks_have_sem b (var_env R) tcs.
   Proof.
     intros.
-    eapply sem_trconstrs_reset_clocks' with (tcs':=[]); simpl; eauto.
+    eapply sem_trconstrs_next_reset_clocks' with (tcs':=[]); simpl; eauto.
   Qed.
 
-  Definition ireset_clocks_have_sem b R tcs :=
+  Definition inst_reset_clocks_have_sem b R tcs :=
     forall i ckrs,
-      Step_with_ireset_in i ckrs tcs ->
+      Inst_with_reset_in i ckrs tcs ->
       Forall (fun ckr => exists r, sem_clock_instant b R ckr r) ckrs.
 
-  Lemma ireset_clocks_have_sem_cons: forall b R tc tcs,
-      ireset_clocks_have_sem b R (tc::tcs) ->
-      ireset_clocks_have_sem b R tcs.
+  Lemma inst_reset_clocks_have_sem_cons: forall b R tc tcs,
+      inst_reset_clocks_have_sem b R (tc::tcs) ->
+      inst_reset_clocks_have_sem b R tcs.
   Proof.
     intros * Reset.
-    unfold ireset_clocks_have_sem in *.
+    unfold inst_reset_clocks_have_sem in *.
     intros * Hin. eapply Reset. right; eauto.
   Qed.
 
-  Corollary ireset_clocks_have_sem_app: forall b R tcs tcs',
-      ireset_clocks_have_sem b R (tcs' ++ tcs) ->
-      ireset_clocks_have_sem b R tcs.
+  Corollary inst_reset_clocks_have_sem_app: forall b R tcs tcs',
+      inst_reset_clocks_have_sem b R (tcs' ++ tcs) ->
+      inst_reset_clocks_have_sem b R tcs.
   Proof.
     induction tcs'; intros * Resets; auto.
-    apply ireset_clocks_have_sem_cons in Resets; auto.
+    apply inst_reset_clocks_have_sem_cons in Resets; auto.
   Qed.
 
-  Lemma sem_trconstrs_ireset_clocks':
-    forall S I S' P R b tcs tcs',
+  Lemma sem_trconstrs_inst_reset_clocks' {prefs}:
+    forall S I S' (P: @program prefs) R b tcs tcs',
       Forall (sem_trconstr P b R S I S') (tcs' ++ tcs) ->
-      ireset_consistency (tcs' ++ tcs) ->
-      ireset_clocks_have_sem b R tcs.
+      inst_consistency (tcs' ++ tcs) ->
+      inst_reset_clocks_have_sem b (var_env R) tcs.
   Proof.
-    unfold ireset_clocks_have_sem.
+    unfold inst_reset_clocks_have_sem.
     induction tcs; intros * Sem Reset * Hin; inv Hin.
     - inv H0.
-      unfold ireset_consistency in Reset.
-      assert (Step_with_ireset_in i ckrs (tcs' ++ TcStep i ys ck ckrs f es :: tcs)) as StepWithReset.
+      unfold inst_consistency in Reset.
+      assert (Inst_with_reset_in i ckrs (tcs' ++ TcUpdate ck ckrs (UpdInst i ys f es) :: tcs)) as StepWithReset.
       { apply Exists_app. left. constructor. }
       eapply Forall_forall. intros ? Hin.
       eapply Reset in StepWithReset as (Reset'&_). specialize (Reset' Hin).
@@ -755,87 +839,86 @@ Module Type STCSEMANTICS
       rewrite <-app_assoc in IHtcs; simpl in IHtcs; eauto.
   Qed.
 
-  Corollary sem_trconstrs_ireset_clocks:
-    forall S I S' P R b tcs,
+  Corollary sem_trconstrs_inst_reset_clocks {prefs}:
+    forall S I S' (P: @program prefs) R b tcs,
       Forall (sem_trconstr P b R S I S') tcs ->
-      ireset_consistency tcs ->
-      ireset_clocks_have_sem b R tcs.
+      inst_consistency tcs ->
+      inst_reset_clocks_have_sem b (var_env R) tcs.
   Proof.
     intros.
-    eapply sem_trconstrs_ireset_clocks' with (tcs':=[]); simpl; eauto.
+    eapply sem_trconstrs_inst_reset_clocks' with (tcs':=[]); simpl; eauto.
   Qed.
 
-  Lemma sem_trconstrs_absent_states:
-    forall S I S' P tcs R,
+  Lemma sem_trconstrs_absent_states {prefs}:
+    forall S I S' (P: @program prefs) tcs R,
     (forall f xs S ys S',
         sem_system P f S xs ys S' ->
         absent_list xs ->
         S' ≋ S) ->
-    state_closed_nexts (map fst (nexts_of tcs)) S ->
-    state_closed_nexts (map fst (nexts_of tcs)) S' ->
-    state_closed_insts P (steps_of tcs) S ->
-    state_closed_insts P (steps_of tcs) S' ->
-    reset_clocks_have_sem false R tcs ->
-    ireset_clocks_have_sem false R tcs ->
+    state_closed_states (map fst (lasts_of tcs ++ nexts_of tcs)) S ->
+    state_closed_states (map fst (lasts_of tcs ++ nexts_of tcs)) S' ->
+    state_closed_insts P (insts_of tcs) S ->
+    state_closed_insts P (insts_of tcs) S' ->
+    last_reset_clocks_have_sem false (var_env R) tcs ->
+    next_reset_clocks_have_sem false (var_env R) tcs ->
+    inst_reset_clocks_have_sem false (var_env R) tcs ->
     Forall (sem_trconstr P false R S I S') tcs ->
     S' ≋ S.
   Proof.
-    intros * IH Nexts Nexts' Insts Insts' Resets IResets Htcs.
+    intros * IH States States' Insts Insts' LResets NResets IResets Htcs.
     constructor.
 
     - clear Insts Insts' IResets.
       intros x.
-      unfold state_closed_nexts, find_val in *.
-      specialize (Nexts x); specialize (Nexts' x).
+      unfold state_closed_states, find_val in *.
+      specialize (States x); specialize (States' x).
+      assert (In x (map fst (lasts_of tcs ++ nexts_of tcs)) ->
+              Env.find x (values S') = Env.find x (values S)) as In.
+      { intros * Hin.
+        clear States States'.
+        rewrite map_app, in_app_iff in Hin. destruct Hin as [Hin|Hin].
+        - clear NResets.
+          induction tcs as [|[|? []|?? []]]; simpl in Hin; try contradiction;
+            assert (Resets':=LResets); apply last_reset_clocks_have_sem_cons in Resets';
+            inversion_clear Htcs as [|?? Htc]; auto.
+          destruct Hin; auto; subst.
+          inversion_clear Htc as [| | |??????????? ClockR Find Exp _ _ Find'| |]; unfold find_val in *.
+          inversion Exp as [???? Clock|];
+            [contradict Clock; apply not_subrate_clock|]; subst.
+          rewrite Find', ClockR; try congruence.
+          eapply Forall_impl; [|eapply LResets]. 2:left; auto with stcsyntax.
+          intros ? (?&Clock).
+          assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
+        - clear LResets.
+          induction tcs as [|[|? []|?? []]]; simpl in Hin; try contradiction;
+            assert (Resets':=NResets); apply next_reset_clocks_have_sem_cons in Resets';
+            inversion_clear Htcs as [|?? Htc]; auto.
+          destruct Hin; auto; subst.
+          inversion_clear Htc as [| | | |??????????? ClockR Find Exp _ Find'|]; unfold find_val in *.
+          inversion Exp as [???? Clock|];
+            [contradict Clock; apply not_subrate_clock|]; subst.
+          rewrite Find', ClockR; try congruence.
+          eapply Forall_impl; [|eapply NResets]. 2:left; auto with stcsyntax.
+          intros ? (?&Clock).
+          assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
+      }
       destruct (Env.find x (values S)) eqn: Find;
         destruct (Env.find x (values S')) eqn: Find'; auto.
-      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts'; congruence).
-        clear Nexts Nexts'.
-        induction tcs as [|[]]; simpl in Hin; try contradiction;
-          assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
-          inversion_clear Htcs as [|?? Htc]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Htc as [| |??????????? ClockR Find1 Exp Find1'| |]; unfold find_val in *.
-        inversion Exp as [???? Clock|];
-          [contradict Clock; apply not_subrate_clock|]; subst.
-        rewrite <-Find, <-Find', ClockR; try congruence.
-        eapply Forall_impl; [|eapply Resets]. 2:left; auto with stcsyntax.
-        intros ? (?&Clock).
-        assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
-      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts; congruence).
-        clear Nexts'.
-        induction tcs as [|[]]; simpl in Hin; try contradiction;
-          assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
-          inversion_clear Htcs as [|?? Htc]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Htc as [| |??????????? ClockR Find1 Exp Find1'| |]; unfold find_val in *.
-        inversion Exp as [???? Clock|];
-          [contradict Clock; apply not_subrate_clock|]; subst.
-        rewrite <-Find, <-Find', ClockR; try congruence.
-      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts'; congruence).
-        clear Nexts Nexts'.
-        induction tcs as [|[]]; simpl in Hin; try contradiction;
-          assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
-          inversion_clear Htcs as [|?? Htc]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Htc as [| |??????????? ClockR Find1 Exp Find1'| |]; unfold find_val in *.
-        inversion Exp as [???? Clock|];
-          [contradict Clock; apply not_subrate_clock|]; subst.
-        rewrite <-Find, <-Find', ClockR; try congruence.
-        eapply Forall_impl; [|eapply Resets]. 2:left; eauto with stcsyntax.
-        intros ? (?&Clock).
-        assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
+      all:eapply In.
+      + apply States. congruence.
+      + apply States. congruence.
+      + apply States'. congruence.
 
-    - clear Nexts Nexts' Resets.
+    - clear States States' LResets NResets.
       constructor.
       + setoid_rewrite Env.In_find.
         unfold state_closed_insts in *.
         intro s; split; intros (?& Find).
         *{ apply Insts' in Find as (b & Hin &?).
-           apply steps_of_In' in Hin as (?&?& cks &?& Hin).
+           apply insts_of_In' in Hin as (?&?& cks &?& Hin).
            pose proof Htcs as Htcs'.
            eapply Forall_forall in Htcs; eauto.
-           inversion_clear Htcs as [| | | |??????????????? ClockR].
+           inversion_clear Htcs as [| | | | |??????????????? ClockR].
            destruct (find_inst s S) eqn:Hfind; eauto.
            assert (None ⌈≋⌉ Some Ii) as contra. 2:inv contra.
            apply ClockR.
@@ -844,17 +927,17 @@ Module Type STCSEMANTICS
            assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
          }
         * apply Insts in Find as (b & Hin &?).
-          apply steps_of_In' in Hin as (?&?&?&?& Hin).
+          apply insts_of_In' in Hin as (?&?&?&?& Hin).
           eapply Forall_forall in Htcs; eauto.
           inv Htcs; eauto.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros s e e' Find' Find.
         pose proof Find as Hin.
         apply Insts in Hin as (b & Hin &?).
-        apply steps_of_In' in Hin as (?&?& rst &?& Hin).
+        apply insts_of_In' in Hin as (?&?& rst &?& Hin).
         pose proof Htcs as Htcs'.
         eapply Forall_forall in Htcs; eauto.
-        inversion_clear Htcs as [| | | |??????????????? ClockR FindI' Exps Clk SemSystem ? Find1'].
+        inversion_clear Htcs as [| | | | |??????????????? ClockR FindI' Exps Clk SemSystem ? Find1'].
         unfold find_inst in *; rewrite Find1' in Find'; inv Find'.
         assert (absent_list xs) by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
         apply IH in SemSystem; auto.
@@ -867,20 +950,20 @@ Module Type STCSEMANTICS
         symmetry; auto.
   Qed.
 
-  Lemma sem_trconstrs_absent_vars:
-    forall tcs S I S' P R x,
+  Lemma sem_trconstrs_absent_vars {prefs}:
+    forall tcs S I S' (P: @program prefs) R x,
     (forall f xs S ys S',
         sem_system P f S xs ys S' ->
         absent_list xs ->
         absent_list ys) ->
     In x (variables tcs) ->
     Forall (sem_trconstr P false R S I S') tcs ->
-    sem_var_instant R x absent.
+    sem_var_instant R (Var x) absent.
   Proof.
     unfold variables.
-    induction tcs as [|[]]; simpl; intros * IH Spec Htcs; try contradiction;
+    induction tcs as [|[|? []|?? []]]; simpl; intros * IH Spec Htcs; try contradiction;
       inversion_clear Htcs as [|?? Htc];
-      inversion_clear Htc as [????????? Exp| | | |]; eauto.
+      inversion_clear Htc as [????????? Exp| | | | |]; eauto.
     - destruct Spec; eauto; subst.
       apply sem_arhs_instant_absent in Exp; subst; auto.
     - assert (absent_list xs) as Abs
@@ -893,8 +976,8 @@ Module Type STCSEMANTICS
       subst; auto.
   Qed.
 
-  Lemma sem_system_absent:
-    forall P f xs S ys S',
+  Lemma sem_system_absent {prefs}:
+    forall (P: @program prefs) f xs S ys S',
       Ordered_systems P ->
       sem_system P f S xs ys S' ->
       absent_list xs ->
@@ -922,20 +1005,21 @@ Module Type STCSEMANTICS
         * intros; eapply IHsystems0; eauto.
         * rewrite <-s_vars_out_in_tcs.
           apply in_app; auto.
-      + inversion_clear Closed as [?????? Nexts Insts];
-          inversion_clear Closed' as [?????? Nexts' Insts'];
-          inversion_clear ClosedI as [?????? NextsI _].
+      + inversion_clear Closed as [?????? States Insts];
+          inversion_clear Closed' as [?????? States' Insts'];
+          inversion_clear ClosedI as [?????? StatesI _].
         repeat match goal with
                  H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                  rewrite H in H'; inv H'
                end.
-        rewrite s_nexts_in_tcs_fst in Nexts, Nexts', NextsI.
-        setoid_rewrite s_subs_steps_of in Insts;
-          setoid_rewrite s_subs_steps_of in Insts'.
+        rewrite map_app, s_lasts_in_tcs, s_nexts_in_tcs, <-map_app in States, States', StatesI.
+        setoid_rewrite s_subs_insts_of in Insts;
+          setoid_rewrite s_subs_insts_of in Insts'.
         eapply sem_trconstrs_absent_states in Htcs; eauto.
         * intros; eapply IHsystems0; eauto.
-        * eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency.
-        * eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
+        * eapply sem_trconstrs_last_reset_clocks; eauto using s_last_consistency.
+        * eapply sem_trconstrs_next_reset_clocks; eauto using s_next_consistency.
+        * eapply sem_trconstrs_inst_reset_clocks; eauto using s_inst_consistency.
     - pose proof Ord; inv Ord; eapply IHsystems0; eauto.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; eauto.
       eapply SSystem with (I := I); eauto.
@@ -943,21 +1027,21 @@ Module Type STCSEMANTICS
       eapply find_system_other_not_Is_system_in; eauto.
   Qed.
 
-  Lemma state_closed_nexts_empty:
-    forall nexts,
-      state_closed_nexts nexts (empty_memory _).
+  Lemma state_closed_states_empty:
+    forall states,
+      state_closed_states states (empty_memory _).
   Proof.
-    unfold state_closed_nexts; setoid_rewrite find_val_gempty; intuition.
+    unfold state_closed_states; setoid_rewrite find_val_gempty; intuition.
   Qed.
 
-  Lemma state_closed_empty:
-    forall P f s P',
+  Lemma state_closed_empty {prefs}:
+    forall (P: @program prefs) f s P',
       find_system f P = Some (s, P') ->
       state_closed P f (empty_memory _).
   Proof.
     intros * Find.
     econstructor; eauto.
-    - apply state_closed_nexts_empty.
+    - apply state_closed_states_empty.
     - setoid_rewrite find_inst_gempty; congruence.
   Qed.
 
@@ -971,54 +1055,68 @@ Module Type STCSEMANTICS
     destruct IHHf; auto.
   Qed.
 
-  Lemma sem_system_find_val:
-    forall P f S xs ys S' x s P',
+  Lemma sem_system_find_val {prefs}:
+    forall (P: @program prefs) f S xs ys S' x s P',
       sem_system P f S xs ys S' ->
       find_system f P = Some (s, P') ->
-      In x (map fst (s_nexts s)) ->
+      In x (map fst (s_lasts s ++ s_nexts s)) ->
       find_val x S <> None.
   Proof.
     inversion_clear 1 as [????????? Find ??? Htcs]; intros Find' Hin.
     rewrite Find in Find'; inv Find'.
-    rewrite s_nexts_in_tcs_fst in Hin.
-    assert (forall ckrs ck, Next_with_reset_in x ckrs (s_tcs s) -> In ck ckrs -> find_val x S <> None) as NextReset.
-    { clear Hin. intros * Hnext Hin.
-      apply s_reset_consistency in Hnext. rewrite Hnext in Hin. clear Hnext.
+     assert (forall ckrs ck, Last_with_reset_in x ckrs (s_tcs s) -> In ck ckrs -> find_val x S <> None) as LastReset.
+    { clear Hin. intros * Hlast Hin.
+      apply s_last_consistency in Hlast. rewrite Hlast in Hin. clear Hlast.
       induction Htcs as [|[] ? Htc]; simpl in *;
         inversion_clear Hin as [?? Hin'|?? Hin']; auto; inv Hin'.
-      inversion_clear Htc as [|??????????? Find'| | |].
+      inversion_clear Htc as [|??????????? Find'| | | |].
       congruence.
     }
-    assert (reset_clocks_have_sem (clock_of_instant xs) R (s_tcs s)) as Resets.
-    { eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency. }
-    induction Htcs as [|[] ? Htc]; simpl in *;
-      try (assert (Resets':=Resets); eapply reset_clocks_have_sem_cons in Resets');
-      try contradiction; auto.
-    1,2,4,5:(apply IHHtcs; auto; intros; eapply NextReset; eauto; right; auto).
-    destruct Hin; subst; auto.
-    - inversion_clear Htc as [| |??????????? ClockR Find1 Exp Find1'| |].
-      eapply reset_or_not_reset_dec in Resets as [NotReset|Reset].
-      + apply ClockR in NotReset. congruence.
-      + assert (Next_with_reset_in x l (TcNext x c l e :: l0)) as Next by (left; constructor).
-        eapply Exists_exists in Reset as (?&Hin&_).
-        eapply NextReset in Next; eauto.
-      + left; eauto with stcsyntax.
-    - apply IHHtcs; auto.
-      intros; eapply NextReset; eauto. right; auto.
+    assert (last_reset_clocks_have_sem (clock_of_instant xs) (var_env R) (s_tcs s)) as LResets.
+    { eapply sem_trconstrs_last_reset_clocks; eauto using s_last_consistency. }
+    assert (forall ckrs ck, Next_with_reset_in x ckrs (s_tcs s) -> In ck ckrs -> find_val x S <> None) as NextReset.
+    { clear Hin. intros * Hnext Hin.
+      apply s_next_consistency in Hnext. rewrite Hnext in Hin. clear Hnext LastReset LResets.
+      induction Htcs as [|[] ? Htc]; simpl in *;
+        inversion_clear Hin as [?? Hin'|?? Hin']; auto; inv Hin'.
+      inversion_clear Htc as [|??????????? Find'| | | |].
+      congruence.
+    }
+    assert (next_reset_clocks_have_sem (clock_of_instant xs) (var_env R) (s_tcs s)) as NResets.
+    { eapply sem_trconstrs_next_reset_clocks; eauto using s_next_consistency. }
+
+    rewrite map_app, s_lasts_in_tcs, s_nexts_in_tcs in Hin.
+    apply in_app_iff in Hin as [Hin|Hin].
+    - apply lasts_of_In, Exists_exists in Hin as (?&?&Upd). inv Upd.
+      assert (Last_with_reset_in x ckrs (s_tcs s)) as LR
+          by (apply Exists_exists; do 2 esplit; eauto; constructor).
+      eapply reset_or_not_reset_dec in LResets as [NotReset|Reset]; eauto.
+      + simpl_Forall. inv Htcs. eapply not_None_is_Some; eauto.
+      + simpl_Exists. apply s_last_consistency in LR.
+        apply LR, Exists_exists in Hin as (?&?&Res). inv Res.
+        simpl_Forall. inv Htcs.
+        eapply sem_clock_instant_det in Reset; eauto; subst. eapply not_None_is_Some; eauto.
+    - apply nexts_of_In, Exists_exists in Hin as (?&?&Upd). inv Upd.
+      assert (Next_with_reset_in x ckrs (s_tcs s)) as LR
+          by (apply Exists_exists; do 2 esplit; eauto; constructor).
+      eapply reset_or_not_reset_dec in NResets as [NotReset|Reset]; eauto.
+      + simpl_Forall. inv Htcs. eapply not_None_is_Some; eauto.
+      + simpl_Exists. apply s_next_consistency in LR.
+        apply LR, Exists_exists in Hin as (?&?&Res). inv Res.
+        simpl_Forall. inv Htcs.
+        eapply sem_clock_instant_det in Reset; eauto; subst. eapply not_None_is_Some; eauto.
   Qed.
 
-  Module Import StcIsNext := StcIsNextFun Ids Op OpAux Cks CESyn Syn.
-
-  Lemma sem_system_find_valI:
-    forall P s b R S I S' x v,
+  Lemma sem_system_find_valI {prefs}:
+    forall (P: @program prefs) (s: @system prefs) b R S I S' x v,
       Forall (sem_trconstr P b R S I S') (s_tcs s) ->
-      In x (map fst (s_nexts s)) ->
-      sem_var_instant R x (present v) ->
+      In x (map fst (s_lasts s)) ->
+      sem_var_instant R (Last x) (present v) ->
       find_val x I = Some v.
   Proof.
     intros * Sem Hin Var.
-    rewrite s_nexts_in_tcs_fst, <-nexts_of_In in Hin.
-    eapply Exists_exists in Hin as (?&Hin&Next). inv Next.
+    rewrite s_lasts_in_tcs, <-lasts_of_In in Hin.
+    eapply Exists_exists in Hin as (?&Hin&Last). inv Last.
     eapply Forall_forall in Sem; eauto. inv Sem.
     eapply sem_var_instant_det in Var; [|eauto].
     destruct v'; inv Var; auto.
@@ -1033,10 +1131,9 @@ Module StcSemanticsFun
        (Cks   : CLOCKS      Ids Op OpAux)
        (CESyn : CESYNTAX    Ids Op OpAux Cks)
        (Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
-       (Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
-       (Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn Syst)
+       (Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn)
        (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
        (CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str)
-<: STCSEMANTICS Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem.
-  Include STCSEMANTICS Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem.
+<: STCSEMANTICS Ids Op OpAux Cks CESyn Syn Ord Str CESem.
+  Include STCSEMANTICS Ids Op OpAux Cks CESyn Syn Ord Str CESem.
 End StcSemanticsFun.

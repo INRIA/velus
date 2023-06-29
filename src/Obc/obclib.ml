@@ -27,7 +27,7 @@ module type SYNTAX =
 
     type exp =
     | Var   of ident * typ
-    | State of ident * typ
+    | State of ident * typ * bool
     | Enum  of enumtag * typ
     | Const of cconst
     | Unop  of unop  * exp * typ
@@ -36,7 +36,7 @@ module type SYNTAX =
 
     type stmt =
     | Assign   of ident * exp
-    | AssignSt of ident * exp
+    | AssignSt of ident * exp * bool
     | Switch   of exp * stmt option list * stmt
     | Comp     of stmt * stmt
     | Call     of ident list * ident * ident * ident * exp list
@@ -203,7 +203,7 @@ sig
       begin match e with
       | Obc.Var (id, _) ->
           fprintf p "%s" (extern_atom id)
-      | Obc.State (id, _) ->
+      | Obc.State (id, _, _) ->
           fprintf p "state(%s)" (extern_atom id)
       | Obc.Const c ->
           Ops.print_cconst p c
@@ -236,7 +236,7 @@ sig
       | Obc.Assign (id, e) ->
           fprintf p "@[<hv 2>%s :=@ %a@]" (extern_atom id)
             print_expr e
-      | Obc.AssignSt (id, e) ->
+      | Obc.AssignSt (id, e, _) ->
           fprintf p "@[<hv 2>state(%s) :=@ %a@]" (extern_atom id)
             print_expr e
       | Obc.Switch (e, ss, default) ->

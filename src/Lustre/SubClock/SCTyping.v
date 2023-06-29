@@ -25,21 +25,28 @@ Module Type SCTYPING
 
   Section subclock.
     Variable bck : clock.
-    Variable sub : Env.t ident.
+    Variable sub subl : Env.t ident.
 
     Variable Γ Γ' : static_env.
 
-    Hypothesis NoLast : forall x, ~IsLast Γ x.
+    Hypothesis Htype : forall x ty,
+        HasType Γ x ty ->
+        HasType Γ' x ty.
+
+    Hypothesis Hlast : forall x,
+        IsLast Γ x ->
+        IsLast Γ' x.
 
     Hypothesis Hsub : forall x y ty,
         Env.find x sub = Some y ->
         HasType Γ x ty ->
         HasType Γ' y ty.
 
-    Hypothesis Hnsub : forall x ty,
-        Env.find x sub = None ->
+    Hypothesis Hsubl : forall x y ty,
+        Env.find x subl = Some y ->
         HasType Γ x ty ->
-        HasType Γ' x ty.
+        IsLast Γ x ->
+        HasType Γ' y ty.
 
     Lemma rename_var_wt : forall x ty,
         HasType Γ x ty ->
@@ -69,7 +76,7 @@ Module Type SCTYPING
         wt_exp G Γ' e ->
         wt_exp G Γ' (add_whens e ty bck).
     Proof.
-      clear Hsub Hnsub.
+      clear Hsub.
       induction bck as [|??? (?&?)]; intros * Hbase Hwt; inv Hwbck;
         simpl in *; auto.
       econstructor; eauto; simpl.
@@ -79,18 +86,18 @@ Module Type SCTYPING
 
     Lemma subclock_exp_wt : forall e,
         wt_exp G Γ e ->
-        wt_exp G Γ' (subclock_exp bck sub e).
+        wt_exp G Γ' (subclock_exp bck sub subl e).
     Proof with auto with ltyping.
       induction e using exp_ind2; intros * Hwt; inv Hwt; simpl in *.
-      3-14:econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
+      all:try econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
       all:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
       all:try rewrite subclock_exp_typeof.
       all:try rewrite subclock_exp_typesof.
       all:try (rewrite map_subclock_ann_clock; auto). all:try (rewrite map_subclock_ann_type; auto); auto.
       - apply add_whens_wt...
       - apply add_whens_wt...
-      - eapply NoLast in H2 as [].
-      - eapply NoLast in H2 as [].
+      - unfold rename_last.
+        cases_eqn Eq; constructor; eauto with ltyping.
       - simpl_Forall...
       - simpl_Forall...
       - erewrite map_map, map_ext; eauto. intros (?&?); auto.
@@ -125,13 +132,12 @@ Module Type SCTYPING
 
     Lemma subclock_equation_wt : forall eq,
         wt_equation G Γ eq ->
-        wt_equation G Γ' (subclock_equation bck sub eq).
+        wt_equation G Γ' (subclock_equation bck sub subl eq).
     Proof.
       intros (?&?) (Hwt1&Hwt2). constructor.
-      - rewrite Forall_map.
-        eapply Forall_impl; [|eauto]; eauto using subclock_exp_wt.
+      - simpl_Forall; eauto using subclock_exp_wt.
       - rewrite Forall2_map_1, subclock_exp_typesof.
-        eapply Forall2_impl_In; [|eauto]; intros; eauto using rename_var_wt.
+        simpl_Forall; eauto using rename_var_wt.
     Qed.
 
   End subclock.

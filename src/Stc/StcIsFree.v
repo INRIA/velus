@@ -1,5 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Clocks.
@@ -19,72 +20,78 @@ Module Type STCISFREE
        (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
        (Import CEIsF : CEISFREE  Ids Op OpAux Cks CESyn).
 
-  Inductive Is_free_in_tc: ident -> trconstr -> Prop :=
+  Inductive Is_free_in_tc: var_last -> trconstr -> Prop :=
   | FreeTcDef:
       forall x ck e y,
         Is_free_in_arhs y ck e ->
-        Is_free_in_tc y (TcDef x ck e)
+        Is_free_in_tc y (TcDef ck x e)
   | FreeTcReset:
-      forall x ckr ty c0 y,
+      forall ckr rsconstr y,
         Is_free_in_clock y ckr ->
-        Is_free_in_tc y (TcReset x ckr ty c0)
-  | FreeTcNext:
-      forall x ck ckrs e y,
-        Is_free_in_aexp y ck e ->
-        Is_free_in_tc y (TcNext x ck ckrs e)
-  | FreeTcIReset:
-      forall s ck b x,
-        Is_free_in_clock x ck ->
-        Is_free_in_tc x (TcInstReset s ck b)
-  | FreeTcStep:
-      forall s x ck rst b es y,
+        Is_free_in_tc (Var y) (TcReset ckr rsconstr)
+  | FreeTcUpdLast:
+      forall ck ckrs x e y,
+        Is_free_in_acexp y ck e ->
+        Is_free_in_tc y (TcUpdate ck ckrs (UpdLast x e))
+  | FreeTcUpdNext:
+    forall ck ckrs x e y,
+      Is_free_in_aexp y ck e ->
+      Is_free_in_tc y (TcUpdate ck ckrs (UpdNext x e))
+  | FreeTcUpdInst:
+      forall ck ckrs s xs b es y,
         Is_free_in_aexps y ck es ->
-        Is_free_in_tc y (TcStep s x ck rst b es).
+        Is_free_in_tc y (TcUpdate ck ckrs (UpdInst s xs b es)).
 
-  Definition Is_free_in (x: ident) (tcs: list trconstr) : Prop :=
+  Definition Is_free_in (x: var_last) (tcs: list trconstr) : Prop :=
     Exists (Is_free_in_tc x) tcs.
 
-  Definition free_in_tc (tc: trconstr) (fvs: PS.t) : PS.t :=
+  Definition free_in_tc (tc: trconstr) (fvs: (PS.t * PS.t)) : (PS.t * PS.t) :=
     match tc with
-    | TcDef _ ck e => free_in_arhs ck e fvs
-    | TcReset _ ckr _ _ => free_in_clock ckr fvs
-    | TcNext _ ck _ e => free_in_aexp ck e fvs
-    | TcInstReset _ ck _ => free_in_clock ck fvs
-    | TcStep _ _ ck _ _ es => free_in_aexps ck es fvs
+    | TcDef ck _ e => free_in_arhs ck e fvs
+    | TcReset ckr _ => (free_in_clock ckr (fst fvs), (snd fvs))
+    | TcUpdate ck _ (UpdLast _ e) => free_in_acexp ck e fvs
+    | TcUpdate ck _ (UpdNext _ e) => free_in_aexp ck e fvs
+    | TcUpdate ck _ (UpdInst _ _ _ es) => free_in_aexps ck es fvs
     end.
 
   Global Hint Constructors Is_free_in_tc : stcfree.
 
-  Lemma free_in_tc_spec:
+  Lemma free_in_tc_spec1:
     forall x tc m,
-      PS.In x (free_in_tc tc m)
-      <-> (Is_free_in_tc x tc \/ PS.In x m).
+      PS.In x (fst (free_in_tc tc m))
+      <-> (Is_free_in_tc (Var x) tc \/ PS.In x (fst m)).
   Proof.
-    Local Ltac aux :=
-      repeat (match goal with
-              | H:Is_free_in_tc _ _ |- _ => inversion_clear H
-              | o: option (clock * const) |- _ => destruct o as [(?&?)|]
-              | H:PS.In _ (free_in_tc _ _) |- _ =>
-                apply free_in_clock_spec in H
-                || apply free_in_arhs_spec in H
-                || apply free_in_aexp_spec in H
-                || apply free_in_aexps_spec in H
-              | |- PS.In _ (free_in_tc _ _) =>
-                apply free_in_clock_spec
-                || apply free_in_arhs_spec
-                || apply free_in_aexp_spec
-                || apply free_in_aexps_spec
-              | _ => intuition; eauto with stcfree
-              end).
-    destruct tc; split; intro H; aux.
+    intros. unfold free_in_tc. cases; simpl.
+    all:rewrite ?free_in_aexp_spec1, ?free_in_aexps_spec1, ?free_in_acexp_spec1, ?free_in_arhs_spec1, ?free_in_clock_spec.
+    all:split; intros [|]; auto with stcfree.
+    all:take (Is_free_in_tc _ _) and inv it; auto.
   Qed.
 
-  Corollary free_in_tc_spec':
+  Corollary free_in_tc_spec1':
     forall x tc,
-      PS.In x (free_in_tc tc PS.empty)
-      <-> Is_free_in_tc x tc.
+      PS.In x (fst (free_in_tc tc (PS.empty, PS.empty)))
+      <-> Is_free_in_tc (Var x) tc.
   Proof.
-    intros; rewrite free_in_tc_spec. intuition.
+    intros; rewrite free_in_tc_spec1. intuition.
+  Qed.
+
+  Lemma free_in_tc_spec2:
+    forall x tc m,
+      PS.In x (snd (free_in_tc tc m))
+      <-> (Is_free_in_tc (Last x) tc \/ PS.In x (snd m)).
+  Proof.
+    intros. unfold free_in_tc. cases; simpl.
+    all:rewrite ?free_in_aexp_spec2, ?free_in_aexps_spec2, ?free_in_acexp_spec2, ?free_in_arhs_spec2, ?free_in_clock_spec.
+    all:split; intros; try take (_ \/ _) and destruct it; auto with stcfree.
+    all:try take (Is_free_in_tc _ _) and inv it; auto. auto.
+  Qed.
+
+  Corollary free_in_tc_spec2':
+    forall x tc,
+      PS.In x (snd (free_in_tc tc (PS.empty, PS.empty)))
+      <-> Is_free_in_tc (Last x) tc.
+  Proof.
+    intros; rewrite free_in_tc_spec2. intuition.
   Qed.
 
 End STCISFREE.

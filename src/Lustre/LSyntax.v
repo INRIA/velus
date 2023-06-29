@@ -478,7 +478,7 @@ Module Type LSYNTAX
     The `PSyn` and `prefs` parameters are used to caracterize changes in nodes
     during compilation
     - `PSyn` indicates a property of the syntax of block
-      (see `nolast_block`, `noauto_block`, `noswitch_block`, `nolocal_top_block`)
+      (see `noauto_block`, `noswitch_block`, `nolocal_top_block`)
     - `prefs` indicates the possible prefix for variable names in a node.
       for instance, after elaboration, names of the form "elab$x$42" can appear.
       after compilation of last expressions, names of the form "last$x$42" can also appear.
@@ -1420,25 +1420,176 @@ Module Type LSYNTAX
     Qed.
   End wx_incl.
 
-  (** ** Specifications of some subset of the language *)
+  (** ** Specifications of some subsets of the language *)
+
+  (** *** Normalized expressions *)
+
+  Inductive normalized_lexp : exp -> Prop :=
+  | normalized_Econst : forall c, normalized_lexp (Econst c)
+  | normalized_Eenum : forall k ty, normalized_lexp (Eenum k ty)
+  | normalized_Evar : forall x ty ck, normalized_lexp (Evar x (ty, ck))
+  | normalized_Elast : forall x ty ck, normalized_lexp (Elast x (ty, ck))
+  | normalized_Eunop : forall op e1 ty cl,
+      normalized_lexp e1 ->
+      normalized_lexp (Eunop op e1 (ty, cl))
+  | normalized_Ebinop : forall op e1 e2 ty cl,
+      normalized_lexp e1 ->
+      normalized_lexp e2 ->
+      normalized_lexp (Ebinop op e1 e2 (ty, cl))
+  | normalized_Ewhen : forall e x b ty cl,
+      normalized_lexp e ->
+      normalized_lexp (Ewhen [e] x b ([ty], cl)).
+
+  Inductive normalized_cexp : exp -> Prop :=
+  | normalized_Emerge : forall x es ty cl,
+      Forall (fun es => exists e, (snd es) = [e] /\ normalized_cexp e) es ->
+      normalized_cexp (Emerge x es ([ty], cl))
+  | normalized_Ecase : forall e es d ty cl,
+      normalized_lexp e ->
+      Forall (fun es => exists e, (snd es) = [e] /\ normalized_cexp e) es ->
+      (forall ds, d = Some ds -> exists d, ds = [d] /\ normalized_cexp d) ->
+      normalized_cexp (Ecase e es d ([ty], cl))
+  | normalized_lexp_cexp : forall e,
+      normalized_lexp e ->
+      normalized_cexp e.
+
+  Global Hint Constructors normalized_lexp normalized_cexp : lsyntax norm.
+
+  (** *** Normalized blocks and nodes *)
+
+  Inductive normalized_constant : exp -> Prop :=
+  | constant_Econst : forall c,
+      normalized_constant (Econst c)
+  | constant_Eenum : forall k ty,
+      normalized_constant (Eenum k ty)
+  | constant_Ewhen : forall e x b ty cl,
+      normalized_constant e ->
+      normalized_constant (Ewhen [e] x b ([ty], cl)).
+
+  Inductive normalized_equation (outs: list ident) (lasts: list ident) : equation -> Prop :=
+  | normalized_eq_Eapp : forall xs f es er lann,
+      Forall normalized_lexp es ->
+      Forall (fun e => exists x ann, e = Evar x ann) er ->
+      Forall (fun x => ~In x lasts) xs ->
+      normalized_equation outs lasts (xs, [Eapp f es er lann])
+  | normalized_eq_Efby : forall x e0 e ann,
+      normalized_constant e0 ->
+      normalized_lexp e ->
+      ~In x outs ->
+      ~In x lasts ->
+      normalized_equation outs lasts ([x], [Efby [e0] [e] [ann]])
+  | normalized_eq_Eextcall : forall x f es ann,
+      Forall normalized_lexp es ->
+      ~In x lasts ->
+      normalized_equation outs lasts ([x], [Eextcall f es ann])
+  | normalized_eq_cexp : forall x e,
+      normalized_cexp e ->
+      normalized_equation outs lasts ([x], [e]).
+
+  Inductive normalized_block (outs: list ident) (lasts: list ident) : block -> Prop :=
+  | normalized_Beq : forall eq,
+      normalized_equation outs lasts eq ->
+      normalized_block outs lasts (Beq eq)
+  | normalized_Blast : forall x e,
+      normalized_constant e ->
+      normalized_block outs lasts (Blast x e)
+  | normalized_Breset : forall block x ann,
+      normalized_block outs lasts block ->
+      normalized_block outs lasts (Breset [block] (Evar x ann)).
+
+  Inductive normalized : list decl -> block -> Prop :=
+  | Normnode : forall out locs blks,
+      Forall (fun '(_, (_, _, o)) => o = None) out ->
+      Forall (normalized_block (List.map fst out) (lasts_of_decls locs)) blks ->
+      (exists xs, VarsDefinedComp (Blocal (Scope locs blks)) xs /\ Permutation xs (map fst out)) ->
+      normalized out (Blocal (Scope locs blks)).
+
+  Global Hint Constructors normalized_constant normalized_equation normalized_block : lsyntax norm.
+
+  (** *** Unnested equations *)
+
+  Inductive unnested_equation (lasts: list ident) : equation -> Prop :=
+  | unnested_eq_Eapp : forall xs f es er lann,
+      Forall normalized_lexp es ->
+      Forall (fun e => exists x ann, e = Evar x ann) er ->
+      Forall (fun x => ~In x lasts) xs ->
+      unnested_equation lasts (xs, [Eapp f es er lann])
+  | unnested_eq_Efby : forall x e0 e ann,
+      normalized_lexp e0 ->
+      normalized_lexp e ->
+      ~In x lasts ->
+      unnested_equation lasts ([x], [Efby [e0] [e] [ann]])
+  | unnested_eq_Earrow : forall x e0 e ann,
+      normalized_lexp e0 ->
+      normalized_lexp e ->
+      unnested_equation lasts ([x], [Earrow [e0] [e] [ann]])
+  | unnested_eq_Eextcall: forall x f es ann,
+      Forall normalized_lexp es ->
+      ~In x lasts ->
+      unnested_equation lasts ([x], [Eextcall f es ann])
+  | unnested_eq_cexp : forall x e,
+      normalized_cexp e ->
+      unnested_equation lasts ([x], [e]).
+
+  (** *** After normalization of last *)
+
+  Inductive normlast_block (lasts: list ident) : block -> Prop :=
+  | normlast_Beq : forall eq,
+      unnested_equation lasts eq ->
+      normlast_block lasts (Beq eq)
+  | normlast_Blast : forall x e,
+      normalized_constant e ->
+      normlast_block lasts (Blast x e)
+  | normlast_Breset : forall block x ann,
+      normlast_block lasts block ->
+      normlast_block lasts (Breset [block] (Evar x ann)).
+
+  Inductive normlast : list decl -> block -> Prop :=
+  | NormLnode : forall out locs blks,
+      Forall (fun '(_, (_, _, o)) => o = None) out ->
+      Forall (normlast_block (lasts_of_decls locs)) blks ->
+      (exists xs, VarsDefinedComp (Blocal (Scope locs blks)) xs /\ Permutation xs (map fst out)) ->
+      normlast out (Blocal (Scope locs blks)).
+
+  Global Hint Constructors normlast_block : lsyntax norm.
+
+  (** *** Unnested blocks and nodes *)
+
+  Inductive unnested_block : block -> Prop :=
+  | unnested_Beq : forall eq,
+      unnested_equation [] eq ->
+      unnested_block (Beq eq)
+  | unnested_Blast : forall x e,
+      normalized_lexp e ->
+      unnested_block (Blast x e)
+  | unnested_Breset : forall block x ann,
+      unnested_block block ->
+      unnested_block (Breset [block] (Evar x ann)).
+
+  Inductive unnested : list decl -> block -> Prop :=
+  | UNnode : forall out locs blks,
+      Forall unnested_block blks ->
+      (exists xs, VarsDefinedComp (Blocal (Scope locs blks)) xs /\ Permutation xs (map fst out)) ->
+      unnested out (Blocal (Scope locs blks)).
+
+  Global Hint Constructors unnested_equation unnested_block : lsyntax norm.
 
   (** *** Without local blocks *)
 
   Inductive nolocal_block : block -> Prop :=
   | NLeq : forall eq, nolocal_block (Beq eq)
+  | NLlast : forall x e, nolocal_block (Blast x e)
   | NLreset : forall blks er,
       Forall nolocal_block blks ->
       nolocal_block (Breset blks er).
 
   Inductive nolocal_top_block : block -> Prop :=
   | NLtop : forall locs blks,
-      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall nolocal_block blks ->
       nolocal_top_block (Blocal (Scope locs blks)).
 
   Inductive nolocal : list decl -> block -> Prop :=
   | NLnode : forall out blk,
-      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
       nolocal_top_block blk ->
       (exists xs, VarsDefinedComp blk xs /\ Permutation xs (map fst out)) ->
       nolocal out blk.
@@ -1447,17 +1598,16 @@ Module Type LSYNTAX
 
   Inductive noswitch_block : block -> Prop :=
   | NSeq : forall eq, noswitch_block (Beq eq)
+  | NSlast : forall x e, noswitch_block (Blast x e)
   | NSreset : forall blks er,
       Forall noswitch_block blks ->
       noswitch_block (Breset blks er)
   | NSlocal : forall locs blks,
-      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall noswitch_block blks ->
       noswitch_block (Blocal (Scope locs blks)).
 
   Inductive noswitch : list decl -> block -> Prop :=
   | NSnode : forall out blk,
-      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
       noswitch_block blk ->
       (exists xs, VarsDefinedComp blk xs /\ Permutation xs (map fst out)) ->
       noswitch out blk.
@@ -1466,7 +1616,6 @@ Module Type LSYNTAX
 
   Inductive noauto_scope {A} (P_noauto : A -> Prop) : scope A -> Prop :=
   | NAscope : forall locs blks,
-      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       P_noauto blks ->
       noauto_scope P_noauto (Scope locs blks).
 
@@ -1477,6 +1626,7 @@ Module Type LSYNTAX
 
   Inductive noauto_block : block -> Prop :=
   | NAeq : forall eq, noauto_block (Beq eq)
+  | NAlast : forall x e, noauto_block (Blast x e)
   | NAreset : forall blks er,
       Forall noauto_block blks ->
       noauto_block (Breset blks er)
@@ -1489,45 +1639,9 @@ Module Type LSYNTAX
 
   Inductive noauto : list decl -> block -> Prop :=
   | NAnode : forall out blk,
-      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
       noauto_block blk ->
       (exists xs, VarsDefinedComp blk xs /\ Permutation xs (map fst out)) ->
       noauto out blk.
-
-  (** *** Without last *)
-
-  Inductive nolast_scope {A} (P_nolast : A -> Prop) : scope A -> Prop :=
-  | NLscope : forall locs blks,
-      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
-      P_nolast blks ->
-      nolast_scope P_nolast (Scope locs blks).
-
-  Inductive nolast_branch {A} (P_nolast : A -> Prop) : branch A -> Prop :=
-  | NLbranch : forall caus blks,
-      P_nolast blks ->
-      nolast_branch P_nolast (Branch caus blks).
-
-  Inductive nolast_block : block -> Prop :=
-  | NLaeq : forall eq, nolast_block (Beq eq)
-  | NLareset : forall blks er,
-      Forall nolast_block blks ->
-      nolast_block (Breset blks er)
-  | NLaswitch : forall ec branches,
-      Forall (fun blks => nolast_branch (Forall nolast_block) (snd blks)) branches ->
-      nolast_block (Bswitch ec branches)
-  | NLaauto : forall type ini states ck,
-      Forall (fun blks => nolast_branch (fun blks => nolast_scope (fun blks => Forall nolast_block (fst blks)) (snd blks)) (snd blks)) states ->
-      nolast_block (Bauto type ck ini states)
-  | NLalocal : forall scope,
-      nolast_scope (Forall nolast_block) scope ->
-      nolast_block (Blocal scope).
-
-  Inductive nolast : list decl -> block -> Prop :=
-  | NLanode : forall out blk,
-      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
-      nolast_block blk ->
-      (exists xs, VarsDefinedComp blk xs /\ Permutation xs (map fst out)) ->
-      nolast out blk.
 
   (** *** After completion *)
 
@@ -1537,16 +1651,7 @@ Module Type LSYNTAX
       Permutation xs (map fst out) ->
       complete out blk.
 
-  (** Inclusion of these properties *)
-
-  Fact noauto_nolast : forall blk,
-      noauto_block blk ->
-      nolast_block blk.
-  Proof.
-    induction blk using block_ind2; intros * Hns;
-      inv Hns; constructor; simpl_Forall; eauto.
-    1,2:inv H1; econstructor; eauto; simpl_Forall; eauto.
-  Qed.
+  (** ** Inclusion of these properties *)
 
   Fact noswitch_noauto : forall blk,
       noswitch_block blk ->
@@ -1565,7 +1670,129 @@ Module Type LSYNTAX
       inv Hns; constructor; simpl_Forall; eauto.
   Qed.
 
-  (** *** Inversion tactics *)
+  Lemma unnested_nolocal : forall blk,
+      unnested_block blk ->
+      nolocal_block blk.
+  Proof.
+    induction 1; constructor; auto.
+  Qed.
+
+  Fact constant_normalized_lexp : forall e,
+      normalized_constant e ->
+      normalized_lexp e.
+  Proof.
+    induction 1; auto with norm.
+  Qed.
+
+  Fact unnested_eq_nil lasts : forall eq,
+      unnested_equation lasts eq ->
+      unnested_equation [] eq.
+  Proof.
+    induction 1; eauto using constant_normalized_lexp with norm.
+    constructor; auto. simpl_Forall. intros [].
+  Qed.
+
+  Fact normalized_eq_unnested_eq outs lasts : forall eq,
+      normalized_equation outs lasts eq ->
+      unnested_equation lasts eq.
+  Proof.
+    induction 1; eauto using constant_normalized_lexp with norm.
+  Qed.
+
+  Lemma normlast_unnested lasts : forall blk,
+      normlast_block lasts blk ->
+      unnested_block blk.
+  Proof.
+    induction 1; constructor; eauto using unnested_eq_nil, constant_normalized_lexp.
+  Qed.
+
+  Lemma normalized_normlast outs lasts : forall blk,
+      normalized_block outs lasts blk ->
+      normlast_block lasts blk.
+  Proof.
+    induction 1; constructor; eauto using normalized_eq_unnested_eq.
+  Qed.
+
+  Section normal_args.
+    (** ** Normalized arguments *)
+
+    Fixpoint noops_exp (ck: clock) (e : exp) : Prop :=
+      match ck with
+      | Cbase => True
+      | Con ck' _ _ =>
+          match e with
+          | Econst _ | Eenum _ _ | Evar _ _ => True
+          | Ewhen [e'] _ _ _ => noops_exp ck' e'
+          | _ => False
+          end
+      end.
+
+    Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
+    Variable G : @global PSyn prefs.
+
+    Inductive normal_args_eq : equation -> Prop :=
+    | normal_args_eq_Eapp : forall xs f n es er lann,
+        find_node f G = Some n ->
+        Forall2 noops_exp (map (fun '(_, (_, ck, _)) => ck) n.(n_in)) es ->
+        normal_args_eq (xs, [Eapp f es er lann])
+    | normal_args_eq_Efby : forall x e0 e ann,
+        normal_args_eq ([x], [Efby [e0] [e] [ann]])
+    | normal_args_eq_Earrow : forall x e0 e ann,
+        normal_args_eq ([x], [Earrow [e0] [e] [ann]])
+    | normal_args_eq_Eextcall: forall x f es ann,
+        normal_args_eq ([x], [Eextcall f es ann])
+    | normal_args_eq_cexp : forall x e,
+        normalized_cexp e ->
+        normal_args_eq ([x], [e]).
+
+    Inductive normal_args_blk : block -> Prop :=
+    | normal_args_Beq : forall eq,
+        normal_args_eq eq ->
+        normal_args_blk (Beq eq)
+    | normal_args_Blast : forall x e,
+        normal_args_blk (Blast x e)
+    | normal_args_Breset : forall blks e,
+        Forall normal_args_blk blks ->
+        normal_args_blk (Breset blks e)
+    | normal_args_Blocal : forall locs blks,
+        Forall normal_args_blk blks ->
+        normal_args_blk (Blocal (Scope locs blks)).
+
+    Definition normal_args_node (n: @node PSyn prefs) : Prop :=
+      normal_args_blk n.(n_block).
+
+  End normal_args.
+
+  Definition normal_args {PSyn prefs} (G: @global PSyn prefs) :=
+    Forall' (fun ns => normal_args_node (Global G.(types) G.(externs) ns)) G.(nodes).
+
+  Lemma iface_eq_normal_args_eq {PSyn1 PSyn2 prefs1 prefs2} : forall (G: @global PSyn1 prefs1) (G': @global PSyn2 prefs2) eq,
+      global_iface_eq G G' ->
+      normal_args_eq G eq ->
+      normal_args_eq G' eq.
+  Proof.
+    intros * Heq Hunt.
+    inv Hunt; try constructor; eauto.
+    destruct Heq as (_&_&Heq).
+    specialize (Heq f).
+    rewrite H in Heq. inv Heq. destruct H3 as (_&_&?&_).
+    econstructor; eauto.
+    erewrite map_ext, <-map_map, <-H1. simpl_Forall; eauto.
+    instantiate (1:=fun '(_, (_, ck)) => ck); eauto. intros; destruct_conjs; eauto.
+  Qed.
+
+  Lemma iface_eq_normal_args_blk {PSyn1 PSyn2 prefs1 prefs2} : forall (G: @global PSyn1 prefs1) (G': @global PSyn2 prefs2) d,
+      global_iface_eq G G' ->
+      normal_args_blk G d ->
+      normal_args_blk G' d.
+  Proof.
+    induction d using block_ind2; intros * Heq Hunt; inv Hunt; constructor.
+    - eapply iface_eq_normal_args_eq; eauto.
+    - simpl_Forall; eauto.
+    - simpl_Forall; eauto.
+  Qed.
+
+  (** ** Inversion tactics *)
 
   Ltac inv_exp :=
     match goal with
@@ -1584,7 +1811,6 @@ Module Type LSYNTAX
     | H:wl_scope _ _ _ |- _ => inv H
     | H:wx_scope _ _ _ |- _ => inv H
     | H:noauto_scope _ _ |- _ => inv H
-    | H:nolast_scope _ _ |- _ => inv H
     end;
     destruct_conjs; subst.
 
@@ -1599,7 +1825,6 @@ Module Type LSYNTAX
     | H:wl_branch _ _ |- _ => inv H
     | H:wx_branch _ _ |- _ => inv H
     | H:noauto_branch _ _ |- _ => inv H
-    | H:nolast_branch _ _ |- _ => inv H
     end;
     destruct_conjs; subst.
 
@@ -1616,10 +1841,9 @@ Module Type LSYNTAX
     | H:nolocal_top_block _ |- _ => inv H
     | H:noswitch_block _ |- _ => inv H
     | H:noauto_block _ |- _ => inv H
-    | H:nolast_block _ |- _ => inv H
     end.
 
-  (** *** Additional properties *)
+  (** ** Additional properties *)
 
   Fact NoDupScope_incl {A} (P_nd: _ -> A -> Prop) : forall locs blks xs xs',
       (forall xs xs', incl xs xs' -> P_nd xs' blks -> P_nd xs blks) ->
@@ -2013,13 +2237,15 @@ Module Type LSYNTAX
     induction blk using block_ind2; intros * NS VD; inv NS; inv VD.
     - (* equation *)
       constructor. auto.
+    - (* last *)
+      symmetry in H. apply map_eq_nil in H; subst. constructor.
     - (* reset *)
       apply map_eq_concat in H4 as (?&?&?); subst.
       constructor. simpl_Forall; eauto.
     - (* scope *)
       inv_scope. do 2 constructor.
-      rewrite <-map_fst_senv_of_decls, <-map_app in H1.
-      apply Permutation_map_inv in H1 as (?&Eq&Perm).
+      take (Permutation _ _) and rewrite <-map_fst_senv_of_decls, <-map_app in it.
+      apply Permutation_map_inv in it as (?&Eq&Perm).
       apply map_eq_concat in Eq as (?&?&?); subst.
       do 2 esplit; [|symmetry; eauto].
       simpl_Forall. eauto.

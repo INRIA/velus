@@ -55,11 +55,12 @@ Module Type TRORDERED
       revert dependent eq'. generalize (@nil (ident * clock)) as xr.
       induction a using L.block_ind2; intros; simpl in *;
         try solve [monadInv Hteq].
-      + destruct eq' as [| i ck x le |]; inv Hord'.
+      + destruct eq' as [| | i ck x le |]; inv Hord'.
         destruct eq as [ xs [|]]. inv Hteq.
         destruct l2; [ idtac | inv Hteq; cases ].
         destruct e; inv Hteq; cases; monadInv H0.
         do 2 econstructor; apply Lord.INEapp2.
+      + monadInv Hteq. inv Hord'.
       + cases. apply Forall_singl in H.
         eapply H in Hteq; eauto.
         constructor. eauto.

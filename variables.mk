@@ -54,7 +54,7 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 # ocamlbuild flags
 VERBOSITY=-verbose 1
 FLAGS=-Is $(SRC_DIR),$(EXTRACTED) -use-ocamlfind -use-menhir \
-      -pkgs str,unix,menhirLib -no-hygiene $(VERBOSITY)
+      -pkgs str,unix,menhirLib,ocamlgraph -no-hygiene $(VERBOSITY)
 	#-cflags $(MENHIR_INCLUDES)$(WARNINGS)
 TARGET=native
 BUILDDIR=_build

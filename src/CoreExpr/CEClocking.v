@@ -26,7 +26,7 @@ Module Type CECLOCKING
 
   Section WellClocked.
 
-    Variable vars : list (ident * clock).
+    Variable Γ : list (ident * (clock * bool)).
 
     Inductive wc_exp : exp -> clock -> Prop :=
     | Cconst:
@@ -36,13 +36,17 @@ Module Type CECLOCKING
         forall x ty,
           wc_exp (Eenum x ty) Cbase
     | Cvar:
-        forall x ck ty,
-          In (x, ck) vars ->
+        forall x ck islast ty,
+          In (x, (ck, islast)) Γ ->
           wc_exp (Evar x ty) ck
+    | Clast:
+      forall x ck ty,
+        In (x, (ck, true)) Γ ->
+        wc_exp (Elast x ty) ck
     | Cwhen:
-        forall e x tx t b ck,
+        forall e x tx t b ck islast,
           wc_exp e ck ->
-          In (x, ck) vars ->
+          In (x, (ck, islast)) Γ ->
           wc_exp (Ewhen e (x, tx) b) (Con ck x (t, b))
     | Cunop:
         forall op e ck ty,
@@ -56,8 +60,8 @@ Module Type CECLOCKING
 
     Inductive wc_cexp : cexp -> clock -> Prop :=
     | Cmerge:
-        forall x tx l ty ck,
-          In (x, ck) vars ->
+        forall x tx l ty ck islast,
+          In (x, (ck, islast)) Γ ->
           l <> nil ->
           Forall2 (fun i e => wc_cexp e (Con ck x (tx, i))) (seq 0 (length l)) l ->
           wc_cexp (Emerge (x, tx) l ty) ck
@@ -89,31 +93,33 @@ Module Type CECLOCKING
 
   Lemma wc_clock_exp:
     forall vars le ck,
-      wc_env vars ->
+      wc_env (idfst vars) ->
       wc_exp vars le ck ->
-      wc_clock vars ck.
+      wc_clock (idfst vars) ck.
   Proof.
-    induction le as [| | |le IH| |] (* using exp_ind2 *).
+    induction le as [| | | |le IH| |] (* using exp_ind2 *).
     - inversion_clear 2; now constructor.
     - inversion_clear 2; now constructor.
-    - intros ck Hwc; inversion_clear 1 as [| |? ? ? Hcv| | |].
-      apply wc_env_var with (1:=Hwc) (2:=Hcv).
+    - intros ck Hwc; inversion_clear 1 as [| |? ? ? Hcv| | | |].
+      eapply wc_env_var; eauto. solve_In.
+    - intros ck Hwc; inversion_clear 1 as [| | |? ? ? Hcv| | |].
+      eapply wc_env_var; eauto. solve_In.
     - intros ck Hwc.
-      inversion_clear 1 as [| | |????? ck' Hle Hcv | |].
-      constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
+      inversion_clear 1 as [| | | |?????? ck' Hle Hcv | |].
+      constructor; auto. solve_In.
     - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1; auto.
   Qed.
 
   Lemma wc_clock_cexp:
     forall vars ce ck,
-      wc_env vars ->
+      wc_env (idfst vars) ->
       wc_cexp vars ce ck ->
-      wc_clock vars ck.
+      wc_clock (idfst vars) ck.
   Proof.
     induction ce as [? ces ? IHces|? ces ? IHces|] using cexp_ind2'.
     - intros ck Hwc.
-      inversion_clear 1 as [????? Hcv ? Hcs| |].
+      inversion_clear 1 as [?????? Hcv ? Hcs| |].
       destruct ces as [|e]; try contradiction.
       inversion_clear Hcs as [|???? Hc]; inversion_clear IHces as [|?? IHce].
       apply IHce with (1:=Hwc) in Hc.
@@ -127,65 +133,30 @@ Module Type CECLOCKING
   Global Hint Resolve Forall_nil : nlclocking.
 
   Global Instance wc_exp_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq exp ==> @eq clock ==> iff)
+    Proper (@Permutation _ ==> @eq exp ==> @eq clock ==> iff)
            wc_exp.
   Proof.
     intros env' env Henv e' e He ck' ck Hck.
     rewrite He, Hck; clear He Hck e' ck'.
     revert ck.
-    induction e;
-      split; auto with nlclocking;
-        inversion_clear 1;
-        (rewrite Henv in * || rewrite <-Henv in * || idtac);
-        try edestruct IHe;
-        try edestruct IHe1, IHe2;
-        auto with nlclocking.
+    induction e; split; inversion_clear 1; econstructor; eauto.
+    all:try rewrite Henv; eauto.
+    all:try rewrite <-Henv; eauto.
+    all:repeat (take (forall ck, _ <-> _) and try apply it; clear it; auto).
   Qed.
 
   Global Instance wc_cexp_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq cexp ==> @eq clock ==> iff)
+    Proper (@Permutation _ ==> @eq cexp ==> @eq clock ==> iff)
            wc_cexp.
   Proof.
     intros env' env Henv e' e He ck' ck Hck.
     rewrite He, Hck; clear He Hck e' ck'.
     revert ck.
-    induction e using cexp_ind2';
-      split; inversion_clear 1;
-        try (
-        (rewrite Henv in * || rewrite <-Henv in *);
-         constructor; auto;
-         now (rewrite <-IHe1 || rewrite IHe1
-              || rewrite <-IHe2 || rewrite IHe2)).
-        - rewrite Henv in *.
-          constructor; auto.
-          take (_ <> nil) and clear it.
-          revert dependent l; intro.
-          generalize 0.
-          induction l; simpl; intros * IH H; auto.
-          inv H; inversion_clear IH as [|?? H'].
-          constructor; auto.
-          apply H'; auto.
-        - rewrite <-Henv in *.
-          constructor; auto.
-          take (_ <> nil) and clear it.
-          revert dependent l; intro.
-          generalize 0.
-          induction l; simpl; intros * IH H; auto.
-          inv H; inversion_clear IH as [|?? H'].
-          constructor; auto.
-          apply H'; auto.
-        - rewrite Henv in *.
-          constructor; auto.
-          + now apply IHe.
-          + intros * Hin;
-              repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-            apply it; auto.
-        - rewrite <-Henv in *.
-          constructor; auto.
-          + now apply IHe.
-          + intros * Hin;
-              repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-            apply it; auto.
+    induction e using cexp_ind2'; split; inversion_clear 1; econstructor; eauto.
+    all:try rewrite Henv; eauto.
+    all:try rewrite <-Henv; eauto.
+    all:intros; simpl_Forall.
+    all:repeat (take (forall ck, _ <-> _) and try apply it; clear it; auto).
   Qed.
 
   Global Instance wc_rhs_Proper:
@@ -198,6 +169,49 @@ Module Type CECLOCKING
     all:try rewrite Henv; auto.
     all:try rewrite <-Henv; auto.
   Qed.
+
+  Section incl.
+    Variable (Γ Γ' : list (ident * (clock * bool))).
+    Hypothesis Hincl : incl Γ Γ'.
+
+    Fact wc_clock_incl : forall ck,
+        wc_clock (idfst Γ) ck ->
+        wc_clock (idfst Γ') ck.
+    Proof.
+      intros * Hwc.
+      induction Hwc.
+      - constructor.
+      - constructor; auto.
+        eapply incl_map; eauto.
+    Qed.
+
+    Lemma wc_exp_incl : forall e ck,
+        wc_exp Γ e ck ->
+        wc_exp Γ' e ck.
+    Proof.
+      induction e; intros * Hwc; inv Hwc; econstructor; eauto.
+    Qed.
+
+    Lemma wc_cexp_incl : forall e ck,
+        wc_cexp Γ e ck ->
+        wc_cexp Γ' e ck.
+    Proof.
+      induction e using cexp_ind2'; intros * Hwc; inv Hwc; econstructor; eauto using wc_exp_incl.
+      - simpl_Forall. eauto.
+      - intros. eapply Forall_forall in H; eauto.
+        simpl in *; eauto.
+    Qed.
+
+    Lemma wc_rhs_incl : forall e ck,
+        wc_rhs Γ e ck ->
+        wc_rhs Γ' e ck.
+    Proof.
+      intros * Hwc; inv Hwc; econstructor; simpl_Forall; eauto using wc_exp_incl, wc_cexp_incl.
+    Qed.
+
+  End incl.
+
+  Global Hint Resolve wc_clock_incl wc_exp_incl wc_cexp_incl wc_rhs_incl : nlclocking stcclocking.
 
 End CECLOCKING.
 

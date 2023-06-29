@@ -6,11 +6,12 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics LClockedSemantics.
-From Velus Require Import Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.Normalization.Correctness.
-(* From Velus Require Import Lustre.Normalization.Idempotence. *)
+From Velus Require Import Lustre.NormFby.NormFby.
+From Velus Require Import Lustre.NormFby.NFTyping.
+From Velus Require Import Lustre.NormFby.NFClocking.
+From Velus Require Import Lustre.NormFby.NFCorrectness.
 
-Module Type LNORMALIZATION
+Module Type LNORMFBY
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -23,12 +24,13 @@ Module Type LNORMALIZATION
        (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
        (ClSem : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem).
-  Declare Module Export Norm : NORMALIZATION Ids Op OpAux Cks Senv Syn.
-  Declare Module Export Correct : CORRECTNESS Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem Norm.
-  (* Declare Module Export Idempotence : IDEMPOTENCE Ids Op OpAux Syn Cau Norm. *)
-End LNORMALIZATION.
+  Declare Module Export NF : NORMFBY Ids Op OpAux Cks Senv Syn.
+  Declare Module Export Typing : NFTYPING Ids Op OpAux Cks Senv Syn Typ NF.
+  Declare Module Export Clocking : NFCLOCKING Ids Op OpAux Cks Senv Syn Clo NF.
+  Declare Module Export Correct : NFCORRECTNESS Ids Op OpAux Cks CStr Senv Syn Clo Ord Sem ClSem NF.
+End LNORMFBY.
 
-Module LNormalizationFun
+Module LNormFbyFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
@@ -41,8 +43,9 @@ Module LNormalizationFun
        (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
        (ClSem : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem)
-       <: LNORMALIZATION Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem.
-  Module Export Norm := NormalizationFun Ids Op OpAux Cks Senv Syn.
-  Module Export Correct := CorrectnessFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem Norm.
-  (* Module Export Idempotence := IdempotenceFun Ids Op OpAux Syn Cau Norm. *)
-End LNormalizationFun.
+       <: LNORMFBY Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem ClSem.
+  Module Export NF := NormFbyFun Ids Op OpAux Cks Senv Syn.
+  Module Export Typing := NFTypingFun Ids Op OpAux Cks Senv Syn Typ NF.
+  Module Export Clocking := NFClockingFun Ids Op OpAux Cks Senv Syn Clo NF.
+  Module Export Correct := NFCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Clo Ord Sem ClSem NF.
+End LNormFbyFun.

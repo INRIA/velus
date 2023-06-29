@@ -19,19 +19,19 @@ Module Type OBCSYNTAX
        (Import OpAux : OPERATORS_AUX Ids Op).
 
   Inductive exp : Type :=
-  | Var   : ident -> type -> exp                (* variable  *)
-  | State : ident -> type -> exp                (* state variable  *)
+  | Var   : ident -> type -> exp              (* variable  *)
+  | State : ident -> type -> bool -> exp          (* state variable; boolean indicates if it is read as last *)
   | Enum  : enumtag -> type -> exp
-  | Const : cconst -> exp                         (* constant *)
-  | Unop  : unop -> exp -> type -> exp          (* unary operator *)
+  | Const : cconst -> exp                    (* constant *)
+  | Unop  : unop -> exp -> type -> exp         (* unary operator *)
   | Binop : binop -> exp -> exp -> type -> exp  (* binary operator *)
-  | Valid : ident -> type -> exp.                         (* valid value assertion *)
+  | Valid : ident -> type -> exp.             (* valid value assertion *)
 
   Definition typeof (e: exp): type :=
     match e with
     | Const c => Tprimitive (ctype_cconst c)
     | Var _ ty
-    | State _ ty
+    | State _ ty _
     | Enum _ ty
     | Unop _ _ ty
     | Binop _ _ _ ty
@@ -40,7 +40,9 @@ Module Type OBCSYNTAX
 
   Inductive stmt : Type :=
   | Assign   : ident -> exp -> stmt                    (* x = e *)
-  | AssignSt : ident -> exp -> stmt                  (* self.x = e *)
+  | AssignSt : ident -> exp -> bool -> stmt
+  (* self.x = e *)
+  (* boolean indicates if this is a reset write *)
   | Switch   : exp -> list (option stmt) -> stmt -> stmt
   | Comp     : stmt -> stmt -> stmt                      (* s1; s2 *)
   | Call     : list ident -> ident -> ident -> ident -> list exp -> stmt
@@ -59,8 +61,8 @@ Module Type OBCSYNTAX
         P (Assign x e).
 
     Hypothesis AssignStCase:
-      forall x e,
-        P (AssignSt x e).
+      forall x e isreset,
+        P (AssignSt x e isreset).
 
     Hypothesis SwitchCase:
       forall e ss d,
@@ -108,8 +110,8 @@ Module Type OBCSYNTAX
         P (Assign x e).
 
     Hypothesis AssignStCase:
-      forall x e,
-        P (AssignSt x e).
+      forall x e isreset,
+        P (AssignSt x e isreset).
 
     Hypothesis SwitchCase:
       forall e ss d,
@@ -504,57 +506,6 @@ Module Type OBCSYNTAX
     apply find_method_In in Findf.
     do 2 eapply Forall_forall in Spec; eauto.
   Qed.
-
-  (** Syntactic predicates *)
-
-  Inductive Is_free_in_exp : ident -> exp -> Prop :=
-  | FreeVar: forall i ty,
-      Is_free_in_exp i (Var i ty)
-  | FreeState: forall i ty,
-      Is_free_in_exp i (State i ty)
-  | FreeUnop: forall i op e ty,
-      Is_free_in_exp i e ->
-      Is_free_in_exp i (Unop op e ty)
-  | FreeBinop: forall i op e1 e2 ty,
-      Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
-      Is_free_in_exp i (Binop op e1 e2 ty)
-  | FreeValid: forall i t,
-      Is_free_in_exp i (Valid i t).
-
-  Lemma not_free_aux1 : forall i op e ty,
-      ~Is_free_in_exp i (Unop op e ty) ->
-      ~Is_free_in_exp i e.
-  Proof.
-    auto using Is_free_in_exp.
-  Qed.
-
-  Lemma not_free_aux2 : forall i op e1 e2 ty,
-      ~Is_free_in_exp i (Binop op e1 e2 ty) ->
-      ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
-  Proof.
-    intros i op e1 e2 ty Hfree; split; intro H; apply Hfree;
-      constructor; [now left | now right].
-  Qed.
-
-  Ltac not_free :=
-    lazymatch goal with
-    | H : ~Is_free_in_exp ?x (Var ?i ?ty) |- _ =>
-        let HH := fresh in
-        assert (HH : i <> x) by (intro; subst; apply H; constructor);
-        clear H; rename HH into H
-    | H : ~Is_free_in_exp ?x (State ?i ?ty) |- _ =>
-        let HH := fresh in
-        assert (HH : i <> x) by (intro; subst; apply H; constructor);
-        clear H; rename HH into H
-    | H : ~Is_free_in_exp ?x (Valid ?i ?ty) |- _ =>
-        let HH := fresh in
-        assert (HH : i <> x) by (intro; subst; apply H; constructor);
-        clear H; rename HH into H
-    | H : ~Is_free_in_exp ?x (Unop ?op ?e ?ty) |- _ =>
-        apply not_free_aux1 in H
-    | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2 ?ty) |- _ =>
-        destruct (not_free_aux2 x op e1 e2 ty H)
-    end.
 
   (** Misc. properties *)
 

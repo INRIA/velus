@@ -69,7 +69,8 @@ EXAMPLES = \
 	stopwatch.lus \
 	abro.lus \
 	colors.lus \
-	chrono.lus
+	chrono.lus \
+	stepper-motor.lus \
 
 ## Main targets
 

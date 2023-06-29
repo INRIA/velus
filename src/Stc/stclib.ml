@@ -32,17 +32,25 @@ module type SYNTAX =
     type cexp
     type rhs
 
+    type resetconstr =
+    | ResState of ident * typ * const
+    | ResInst of ident * ident
+
+    type updateconstr =
+    | UpdLast of ident * cexp
+    | UpdNext of ident * exp
+    | UpdInst of ident * ident list * ident * exp list
+
     type trconstr =
-    | TcDef   of ident * clock * rhs
-    | TcReset  of ident * clock * typ * const
-    | TcNext  of ident * clock * clock list * exp
-    | TcInstReset of ident * clock * ident
-    | TcStep  of ident * idents * clock * clock list * ident * exp list
+    | TcDef   of clock * ident * rhs
+    | TcReset  of clock * resetconstr
+    | TcUpdate of clock * clock list * updateconstr
 
     type system = {
       s_name : ident;
       s_in   : (ident * (typ * clock)) list;
       s_vars : (ident * (typ * clock)) list;
+      s_lasts: (ident * ((const * typ) * clock)) list;
       s_nexts: (ident * ((const * typ) * clock)) list;
       s_subs : (ident * ident) list;
       s_out  : (ident * (typ * clock)) list;
@@ -95,25 +103,29 @@ module PrintFun
 
     let rec print_trconstr p tc =
       match tc with
-      | Stc.TcDef (x, ck, e) ->
+      | Stc.TcDef (ck, x, e) ->
         fprintf p "@[<hov 2>%a =@ %a@]"
           print_ident x
           print_rhs e
-      | Stc.TcReset (x, ckr, ty, c0) ->
+      | Stc.TcReset (ckr, Stc.ResState (x, ty, c0)) ->
         fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
           print_ident x
           Ops.print_const (c0, ty)
           print_clock ckr
-      | Stc.TcNext (x, ck, _, e) ->
-        fprintf p "@[<hov 2>next@ %a =@ %a@]"
-          print_ident x
-          print_exp e
-      | Stc.TcInstReset (s, ck, f) ->
+      | Stc.TcReset (ckr, Stc.ResInst (s, f)) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
             print_ident s
-            print_clock ck
-      | Stc.TcStep (i, xs, ck, _, f, es) ->
+            print_clock ckr
+      | Stc.TcUpdate (ck, _, Stc.UpdLast (x, e)) ->
+        fprintf p "@[<hov 2>update@ %a =@ %a@]"
+          print_ident x
+          print_cexp e
+      | Stc.TcUpdate (ck, _, Stc.UpdNext (x, e)) ->
+        fprintf p "@[<hov 2>next@ %a =@ %a@]"
+          print_ident x
+          print_exp e
+      | Stc.TcUpdate (ck, _, Stc.UpdInst (i, xs, f, es)) ->
         fprintf p "@[<hov 2>%a =@ %a<%a>(@[<hv 0>%a@])@]"
           print_pattern xs
           print_ident f
@@ -171,6 +183,7 @@ module SchedulerFun
                  and type cexp   = CE.cexp
                  and type rhs    = CE.rhs) :
   sig
+    val cutting_points : ident list -> ident list -> Stc.trconstr list -> ident list
     val schedule : ident -> Stc.trconstr list -> BinNums.positive list
   end
   =
@@ -220,34 +233,30 @@ module SchedulerFun
       match e with
       | Evar (x, _)                   -> Some x
       | Ewhen (e, _, _)               -> resolve_variable e
-      | Econst _ | Eenum _ | Eunop _ | Ebinop _ -> None
-
-    let grouping_clock_of_tc = function
-      (* Push merges/iftes down a level to improve grouping *)
-      (* TODO: adapt this ! *)
-      (* | TcDef (_, ck, Emerge (y, _, _)) -> Con (ck, y, true)
-       * | TcDef (_, ck, Eite (e, _, _)) -> begin
-       *     match resolve_variable e with
-       *     | None -> ck
-       *     | Some x -> Con (ck, x, true)
-       *     end *)
-      (* Standard cases *)
-      | TcDef (_, ck, _)
-      | TcReset (_, ck, _, _)
-      | TcNext (_, ck, _, _)
-      | TcInstReset (_, ck, _)
-      | TcStep (_, _, ck, _, _, _) -> ck
+      | Econst _ | Eenum _ | Elast _ | Eunop _ | Ebinop _ -> None
 
     let rec clock_path acc = let open CE in function
       | Cbase          -> acc
       | Con (ck, x, _) -> clock_path (int_of_positive x :: acc) ck
+
+    let clock_path_of_tc = function
+      | TcDef (ck, _, Ecexp (Emerge ((y, ty), _, _))) ->
+        clock_path [int_of_positive y] ck
+      | TcDef (ck, _, Ecexp (Ecase (e, _, _))) -> begin
+          match resolve_variable e with
+          | None -> clock_path [] ck
+          | Some x -> clock_path [int_of_positive x] ck
+          end
+      | TcDef (ck, _, _)
+      | TcReset (ck, _)
+      | TcUpdate (ck, _, _) -> clock_path [] ck
 
     let new_tc_status i tc = {
       tc_id       = i;
       schedule    = None;
       depends_on  = TcSet.empty;
       required_by = TcSet.empty;
-      clock_path  = clock_path [] (grouping_clock_of_tc tc)
+      clock_path  = clock_path_of_tc tc;
     }
 
     (** Add dependencies between trconstrs *)
@@ -259,18 +268,19 @@ module SchedulerFun
       in
       go
 
-    let add_exp_deps add_dep =
+    let add_exp_deps add_dep add_last_dep =
       let rec go = function
         | Econst _
         | Eenum _               -> ()
         | Evar (x, _)           -> add_dep x
-        | Ewhen (e, (x, _), _)       -> add_dep x; go e
+        | Elast (x, _)          -> add_last_dep x
+        | Ewhen (e, (x, _), _)  -> add_dep x; go e
         | Eunop (_, e, _)       -> go e
         | Ebinop (_, e1, e2, _) -> go e1; go e2
       in go
 
-    let add_cexp_deps add_dep =
-      let go_exp = add_exp_deps add_dep in
+    let add_cexp_deps add_dep add_last_dep =
+      let go_exp = add_exp_deps add_dep add_last_dep in
       let rec go = function
         | Emerge ((x, _), ces, _) -> add_dep x; List.iter go ces
         | Ecase (e, ces, d) ->
@@ -280,32 +290,26 @@ module SchedulerFun
         | Eexp e         -> go_exp e
       in go
 
-    let add_rhs_deps add_dep = function
-      | Eextcall (_, es, _) -> List.iter (add_exp_deps add_dep) es
-      | Ecexp e -> add_cexp_deps add_dep e
+    let add_rhs_deps add_dep add_last_dep = function
+      | Eextcall (_, es, _) -> List.iter (add_exp_deps add_dep add_last_dep) es
+      | Ecexp e -> add_cexp_deps add_dep add_last_dep e
 
-    let add_dependencies add_dep_var add_dep_inst = function
-      | TcDef (_, ck, ce) ->
+    let add_dependencies add_dep_var add_dep_last add_dep_inst = function
+      | TcDef (ck, _, ce) ->
         add_clock_deps add_dep_var ck;
-        add_rhs_deps add_dep_var ce
-      | TcReset (x, ckr, _, _) ->
+        add_rhs_deps add_dep_var add_dep_last ce
+      | TcReset (ckr, _) ->
         add_clock_deps add_dep_var ckr
-      | TcNext (x, ck, _, e) ->
+      | TcUpdate (ck, _, UpdLast (x, ce)) ->
         add_clock_deps add_dep_var ck;
-        add_exp_deps (fun y -> if y <> x then add_dep_var y) e
-      | TcInstReset (_, ck, _) ->
-        add_clock_deps add_dep_var ck
-      | TcStep (i, _, ck, _, _, es) ->
+        add_cexp_deps add_dep_var (fun y -> if y <> x then add_dep_last y) ce
+      | TcUpdate (ck, _, UpdNext (x, e)) ->
         add_clock_deps add_dep_var ck;
-        List.iter (add_exp_deps add_dep_var) es;
+        add_exp_deps (fun y -> if y <> x then add_dep_var y) add_dep_last e
+      | TcUpdate (ck, _, UpdInst (i, _, _, es)) ->
+        add_clock_deps add_dep_var ck;
+        List.iter (add_exp_deps add_dep_var add_dep_last) es;
         add_dep_inst i
-
-    let add_reset_dependencies add_dep_next add_dep_step = function
-      | TcReset (x, _, _, _) ->
-        add_dep_next x
-      | TcInstReset (i, _, _) ->
-        add_dep_step i
-      | _ -> ()
 
     (** Map variable identifiers to trconstr ids *)
 
@@ -316,19 +320,23 @@ module SchedulerFun
       | None -> PM.add key [value] map
       | Some l -> PM.add key (value::l) map
 
+    type def_type = Reset | Def | Last | Next
+
     (* Each variable identifier is associated with a list of pairs giving the
        trconstr (id) that define (def, step, reset), and possibly remove it (next). *)
     let variable_inst_maps_from_tc id (vars, insts) = function
-      | TcDef (x, _, _) ->
-        PM.add x [(id, false)] vars, insts
-      | TcReset (x, _, _, _) ->
-        pm_update x (id, false) vars, insts
-      | TcNext (x, _, _, _) ->
-        pm_update x (id, true) vars, insts
-      | TcInstReset (i, _, _) ->
+      | TcDef (_, x, _) ->
+        PM.add x [(id, Def)] vars, insts
+      | TcReset (_, ResState (x, _, _)) ->
+        pm_update x (id, Reset) vars, insts
+      | TcReset (_, ResInst (i, _)) ->
         vars, pm_update i (id, false) insts
-      | TcStep (i, xs, _, _, _, _) ->
-        List.fold_left (fun m x -> PM.add x [(id, false)] m) vars xs,
+      | TcUpdate (_, _, UpdLast (x, _)) ->
+        pm_update x (id, Last) vars, insts
+      | TcUpdate (_, _, UpdNext (x, _)) ->
+        pm_update x (id, Next) vars, insts
+      | TcUpdate (_, _, UpdInst (i, xs, _, _)) ->
+        List.fold_left (fun m x -> PM.add x [(id, Def)] m) vars xs,
         pm_update i (id, true) insts
 
     let fold_left_i f acc l =
@@ -376,15 +384,17 @@ module SchedulerFun
     let pp_print_tc_lhs nltcs fmt i =
       let open Format in
       match List.nth nltcs i with
-      | TcDef (x, _, _) ->
+      | TcDef (_, x, _) ->
         pp_print_string fmt (extern_atom x)
-      | TcReset (x, _, _, _) ->
+      | TcReset (_, ResState (x, _, _)) ->
         fprintf fmt "reset %s" (extern_atom x)
-      | TcNext (x, _, _, _) ->
-        fprintf fmt "next %s" (extern_atom x)
-      | TcInstReset (f, _, _) ->
+      | TcReset (_, ResInst(f, _)) ->
         fprintf fmt "reset(%s)" (extern_atom f)
-      | TcStep (_, xs, _, _, _, _) ->
+      | TcUpdate (_, _, UpdLast (x, _)) ->
+        fprintf fmt "update %s" (extern_atom x)
+      | TcUpdate (_, _, UpdNext (x, _)) ->
+        fprintf fmt "next %s" (extern_atom x)
+      | TcUpdate (_, _, UpdInst (_, xs, _, _)) ->
         fprintf fmt "{@[<hov 2>%a@]}"
           (pp_print_list ~pp_sep:pp_print_space pp_print_string)
           (List.map extern_atom xs)
@@ -559,9 +569,19 @@ module SchedulerFun
         match PM.find y varmap with
         | None             -> ()        (* ignore inputs *)
         | Some ys ->
-          List.iter (fun (yi, isnext) ->
-              if isnext then add yi xi (* reverse dep for next *)
-              else add xi yi) ys
+          List.iter (fun (yi, typ) ->
+              match typ with
+              | Next -> add yi xi (* reverse dep for next *)
+              | _ -> add xi yi) ys
+      in
+      let add_dep_last xi y =
+        match PM.find y varmap with
+        | None -> ()
+        | Some ys ->
+          List.iter (fun (yi, typ) ->
+              match typ with
+              | Last -> add yi xi
+              | _ -> add xi yi) ys
       in
       let add_dep_inst xi y =
           match PM.find y instmap with
@@ -572,7 +592,7 @@ module SchedulerFun
       in
 
       (* Add dependencies to free variables *)
-      List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_inst n)) sbtcs;
+      List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_last n) (add_dep_inst n)) sbtcs;
 
       let ct = empty_clock_tree () in
       Array.iter (enqueue_tc ct) tcs;
@@ -585,5 +605,119 @@ module SchedulerFun
           "@[<hov 2>node %s@ has@ a@ dependency@ loop:@\n@[<hov 0>%a@].@]@."
           (extern_atom f) (print_loop sbtcs) tcs;
         []
+
+    (** Cutting next and update cycles *)
+
+    open Graph
+
+    module V = struct
+      type t = ident
+
+      let compare = Camlcoq.P.compare
+      let hash = Camlcoq.P.to_int
+      let equal = (=)
+    end
+
+    module G = Persistent.Digraph.Concrete(V)
+    module Viz = Graphviz.Dot(struct
+        include G
+
+        let graph_attributes _ = []
+        let default_vertex_attributes _ = []
+        let vertex_name = extern_atom
+        let vertex_attributes _ = []
+        let get_subgraph _ = None
+        let default_edge_attributes _ = []
+        let edge_attributes _ = []
+
+      end)
+
+    module Fashwo = Cycles.Fashwo(struct
+        module G = G
+        include G
+        let weight _ = Cycles.Normal 1
+        let empty () = G.empty
+        let copy g = g (* Its persistent right ? *)
+      end)
+
+    (** Calculates dependencies between updates of last and next variables *)
+    (** The calculated graph is a subset of the graph calculated for scheduling *)
+    (** We are only concerned about the dependency relations between state variables *)
+    (** For each expression, we consider the set of identifiers that must be updated/defined *)
+    (** before Bef(e) and after Aft(e) the expression is calculated *)
+    (** - Bef(x) = {  } if x in nexts, { x } otherwise *)
+    (** - Aft(x) = { x } if x in nexts, {  } otherwise *)
+    (** - Bef(last x) = {  } *)
+    (** - After(last x) = { x } *)
+    (** all other cases are morphisms *)
+    (** The dependencies are computed as follow: *)
+    (** reset _ : { } *)
+    (** update y = e : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) } *)
+    (** next y = e : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) } *)
+    (** _ = e : { x -> y | x in Bef(e), y in Aft(e) } *)
+    (** _ = f(es) : { x -> y | x in Bef(es), y in Aft(es) } *)
+    (** In the last two cases, we induce dependencies to treat the case where *)
+    (** `x` and `last x` both appear in the same expression *)
+    (** (in which case a copy must be added for `last x`) *)
+
+    let add_tc_dep nexts gr tc =
+
+      let add_dep = G.add_edge in
+      let add_dep_if_diff gr x y =
+        if x <> y then add_dep gr x y else gr
+      in
+
+      let rec free_exp acc = function
+        | Econst _ | Eenum _ -> acc
+        | Evar (x, _) ->
+          if PM.mem x nexts then fst acc, x::snd acc else x::fst acc, snd acc
+        | Elast (x, _) -> fst acc, x::snd acc
+        | Eunop (_, e, _) -> free_exp acc e
+        | Ebinop (_, e1, e2, _) ->
+          free_exp (free_exp acc e1) e2
+        | Ewhen (e, _, _) -> free_exp acc e
+      in
+
+      let free_exps = List.fold_left free_exp in
+
+      let rec free_cexp acc = function
+        | Emerge (_, es, _) -> List.fold_left free_cexp acc es
+        | Ecase (e, es, d) ->
+          List.fold_left
+            (fun acc -> Option.fold ~none:acc ~some:(free_cexp acc))
+            (free_cexp (free_exp acc e) d) es
+        | Eexp e -> free_exp acc e
+      in
+
+      let rec free_rhs acc = function
+        | Eextcall (_, es, _) -> free_exps acc es
+        | Ecexp e -> free_cexp acc e
+      in
+
+      match tc with
+      | TcReset _ -> gr
+      | TcDef (_, y, e) ->
+        let (bef, aft) = free_rhs ([], []) e in
+        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
+      | TcUpdate (_, _, UpdInst (_, _, _, es)) ->
+        let (bef, aft) = free_exps ([], []) es in
+        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
+      | TcUpdate (_, _, UpdLast (x, ce)) ->
+        let (bef, aft) = free_cexp ([], []) ce in
+        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
+        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
+      | TcUpdate (_, _, UpdNext (x, e)) ->
+        let (bef, aft) = free_exp ([], []) e in
+        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
+        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
+
+    let cutting_points _ nexts trconstrs =
+      let nexts = List.fold_left (fun nexts x -> PM.add x () nexts) PM.empty nexts in
+      let graph =
+        List.fold_left (add_tc_dep nexts) G.empty trconstrs in
+      (* Viz.fprint_graph Format.std_formatter graph; *)
+      (* Format.fprintf Format.std_formatter "\n"; *)
+      let args = Fashwo.feedback_arc_set graph in
+      List.map fst args
 
   end

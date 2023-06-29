@@ -1,5 +1,6 @@
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Common.
 From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Export Lustre.LSyntax.
@@ -12,13 +13,12 @@ From Velus Require Export Lustre.LClockedSemantics.
 From Velus Require Export Lustre.LSemDeterminism.
 From Velus Require Export Lustre.LClockCorrectness.
 From Velus Require Export Lustre.Complete.LComplete.
-From Velus Require Export Lustre.DeLast.LDeLast.
 From Velus Require Export Lustre.CompAuto.LCompAuto.
 From Velus Require Export Lustre.ClockSwitch.LClockSwitch.
 From Velus Require Export Lustre.InlineLocal.LInlineLocal.
-From Velus Require Export Lustre.Normalization.LNormalization.
-
-From Velus Require Import Common.
+From Velus Require Export Lustre.Unnesting.LUnnesting.
+From Velus Require Export Lustre.NormLast.LNormLast.
+From Velus Require Export Lustre.NormFby.LNormFby.
 
 Module Type LUSTRE
        (Ids   : IDS)
@@ -39,11 +39,12 @@ Module Type LUSTRE
   Declare Module Export CkCor: LCLOCKCORRECTNESS Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem CkSem.
 
   Declare Module Export Complete: LCOMPLETE       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem.
-  Declare Module Export DeLast: LDELAST           Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export Unnesting: LUNNESTING     Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export NormLast: LNORMLAST       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export NormFby: LNORMFBY         Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Declare Module Export CompAuto: LCOMPAUTO       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Declare Module Export ClockSwitch: LCLOCKSWITCH Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Declare Module Export InlineLocal: LINLINELOCAL Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
-  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
 End LUSTRE.
 
 Module LustreFun
@@ -66,9 +67,10 @@ Module LustreFun
   Module Export CkCor:= LClockCorrectnessFun Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem CkSem.
 
   Module Export Complete := LCompleteFun       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem.
-  Module Export DeLast := LDeLastFun           Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export Unnesting:= LUnnestingFun      Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export NormLast := LNormLastFun       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export NormFby  := LNormFbyFun        Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Module Export CompAuto := LCompAutoFun       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Module Export ClockSwitch := LClockSwitchFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
   Module Export InlineLocal := LInlineLocalFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
-  Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
 End LustreFun.

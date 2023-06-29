@@ -83,12 +83,13 @@ Module Export Ids <: IDS.
   Definition reset := str_to_pos "reset".
   Definition glob := str_to_pos "glob".
   Definition elab := str_to_pos "elab".
-  Definition last := str_to_pos "last".
   Definition auto := str_to_pos "auto".
   Definition switch := str_to_pos "swi".
   Definition local := str_to_pos "local".
-  Definition norm1 := str_to_pos "norm1".
-  Definition norm2 := str_to_pos "norm2".
+  Definition norm1 := str_to_pos "norm".
+  Definition last := str_to_pos "last".
+  Definition fby := str_to_pos "fby".
+  Definition stc := str_to_pos "stc".
   Definition obc2c := str_to_pos "obc2c".
 
   Definition default := 1%positive.
@@ -100,20 +101,30 @@ Module Export Ids <: IDS.
     end.
 
   Definition elab_prefs := PS.singleton elab.
-  Definition last_prefs := PS.add last elab_prefs.
-  Definition auto_prefs := PS.add auto last_prefs.
+  Definition auto_prefs := PS.add auto elab_prefs.
   Definition switch_prefs := PS.add switch auto_prefs.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
-  Definition norm2_prefs := PS.add norm2 norm1_prefs.
+  Definition last_prefs := PS.add last norm1_prefs.
+  Definition fby_prefs := PS.add fby last_prefs.
 
-  Definition gensym_prefs := [elab; last; auto; switch; local; norm1; norm2].
+
+  Definition lustre_prefs := [elab; auto; switch; local; norm1; last; fby].
+  Definition gensym_prefs := [elab; auto; switch; local; norm1; last; fby; stc].
+
+  Lemma lustre_prefs_NoDup : NoDup lustre_prefs.
+  Proof.
+    unfold lustre_prefs.
+    repeat constructor; auto.
+    all:repeat rewrite not_in_cons; repeat split; auto.
+    all:prove_str_to_pos_neq.
+  Qed.
 
   Lemma gensym_prefs_NoDup : NoDup gensym_prefs.
   Proof.
     unfold gensym_prefs.
     repeat constructor; auto.
-    1-6:repeat rewrite not_in_cons; repeat split; auto.
+    all:repeat rewrite not_in_cons; repeat split; auto.
     all:prove_str_to_pos_neq.
   Qed.
 
@@ -208,8 +219,6 @@ Module Export Ids <: IDS.
 
   Lemma elab_atom: atom elab.
   Proof. prove_atom. Qed.
-  Lemma last_atom: atom last.
-  Proof. prove_atom. Qed.
   Lemma auto_atom: atom auto.
   Proof. prove_atom. Qed.
   Lemma switch_atom: atom switch.
@@ -218,14 +227,18 @@ Module Export Ids <: IDS.
   Proof. prove_atom. Qed.
   Lemma norm1_atom: atom norm1.
   Proof. prove_atom. Qed.
-  Lemma norm2_atom: atom norm2.
+  Lemma last_atom: atom last.
+  Proof. prove_atom. Qed.
+  Lemma fby_atom: atom fby.
+  Proof. prove_atom. Qed.
+  Lemma stc_atom: atom stc.
   Proof. prove_atom. Qed.
   Lemma obc2c_atom: atom obc2c.
   Proof. prove_atom. Qed.
 
   Global Hint Resolve step_atom reset_atom fun_id_atom sync_id_atom
          out_atom main_id_atom main_proved_id_atom main_sync_id_atom
-         self_atom glob_atom elab_atom norm1_atom norm2_atom obc2c_atom : ident.
+         self_atom glob_atom elab_atom norm1_atom fby_atom obc2c_atom : ident.
 
   Axiom prefix : ident -> ident -> ident.
 

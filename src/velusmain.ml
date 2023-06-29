@@ -9,12 +9,15 @@ open Ctypes
 let print_c = ref false
 let write_lustre = ref false
 let write_complete = ref false
-let write_nolast = ref false
 let write_noauto = ref false
 let write_noswitch = ref false
 let write_nolocal = ref false
+let write_unnested = ref false
+let write_normlast = ref false
+let write_normfby = ref false
 let write_nlustre = ref false
 let write_stc = ref false
+let write_cut = ref false
 let write_sch = ref false
 let write_obc = ref false
 let write_cl = ref false
@@ -111,18 +114,24 @@ let compile source_name out_name =
   then Veluslib.lustre_destination := Some (out_name ^ ".parsed.lus");
   if !write_complete
   then Veluslib.complete_destination := Some (out_name ^ ".complete.lus");
-  if !write_nolast
-  then Veluslib.nolast_destination := Some (out_name ^ ".nolast.lus");
   if !write_noauto
   then Veluslib.noauto_destination := Some (out_name ^ ".noauto.lus");
   if !write_noswitch
   then Veluslib.noswitch_destination := Some (out_name ^ ".noswitch.lus");
   if !write_nolocal
   then Veluslib.nolocal_destination := Some (out_name ^ ".nolocal.lus");
+  if !write_unnested
+  then Veluslib.unnested_destination := Some (out_name ^ ".unn.lus");
+  if !write_normlast
+  then Veluslib.normlast_destination := Some (out_name ^ ".nlast.lus");
+  if !write_normfby
+  then Veluslib.normfby_destination := Some (out_name ^ ".nfby.lus");
   if !write_nlustre
   then Veluslib.nlustre_destination := Some (out_name ^ ".n.lus");
   if !write_stc
   then Veluslib.stc_destination := Some (out_name ^ ".stc");
+  if !write_cut
+  then Veluslib.cut_destination := Some (out_name ^ ".cut.stc");
   if !write_sch
   then Veluslib.sch_destination := Some (out_name ^ ".sch.stc");
   if !write_obc
@@ -176,13 +185,16 @@ let speclist = [
 
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
   "-dcomplete", Arg.Set write_complete, " Save Lustre after completion in <output>.complete.lus";
-  "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <output>.nolast.lus";
   "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <output>.noauto.lus";
   "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <output>.noswitch.lus";
   "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <output>.nolocal.lus";
+  "-dunnested", Arg.Set write_normlast, " Save unnested Lustre in <output>.unn.lus";
+  "-dnormlast", Arg.Set write_normlast, " Save Lustre with normalized last in <output>.nolast.lus";
+  "-dnormfby", Arg.Set write_normlast, " Save Lustre with normalized fby in <output>.nfby.lus";
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <output>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <output>.stc";
+  "-dcut", Arg.Set write_cut, " Save Stc with cut cycles in <output>.cut.stc";
   "-dsch", Arg.Set write_sch, " Save re-scheduled Stc in <output>.sch.stc";
   "-dobc", Arg.Set write_obc, " Save generated Obc in <output>.obc";
   "-dclight", Arg.Set write_cl, " Save generated Clight in <output>.light.c";
@@ -196,6 +208,7 @@ let speclist = [
   "-noremovedupregs", Arg.Clear Veluslib.dupregrem, " Skip duplicate register removal";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
   "-nonormswitches", Arg.Clear Veluslib.normalize_switches, " Skip Obc switches normalization";
+  "-noobcdce", Arg.Clear Veluslib.obc_dce, " Skip Obc dead code elimination";
 ]
 
 let usage_msg =

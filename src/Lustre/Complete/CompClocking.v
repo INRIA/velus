@@ -20,16 +20,6 @@ Module Type COMPCLOCKING
        (Import Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
        (Import Comp: COMPLETE Ids Op OpAux Cks Senv Syn).
 
-  Fact HasClock_idck_incl : forall Γ1 Γ2,
-      (forall x ck, HasClock Γ1 x ck -> HasClock Γ2 x ck) ->
-      incl (idck Γ1) (idck Γ2).
-  Proof.
-    intros * InclCk ? In.
-    unfold idck in *. simpl_In.
-    assert (HasClock Γ2 i0 a0.(clo)) as Ck by eauto with senv.
-    inv Ck. solve_In. congruence.
-  Qed.
-
   Section complete_node_wc.
     Variable G1 : @global (fun _ _ => True) elab_prefs.
     Variable G2 : @global complete elab_prefs.

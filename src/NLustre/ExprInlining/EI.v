@@ -33,16 +33,6 @@ Module Type EI
       | Ebinop op e1 e2 ty => Ebinop op (inline_in_exp e1) (inline_in_exp e2) ty
       | _ => e
       end.
-
-    (* Fixpoint inline_exp_in_cexp e := *)
-    (*   match e with *)
-    (*   | Emerge xt es ty => Emerge xt (List.map inline_exp_in_cexp es) ty *)
-    (*   | Ecase e es d => *)
-    (*       Ecase (inline_exp_in_exp e) *)
-    (*         (List.map (option_map inline_exp_in_cexp) es) *)
-    (*         (inline_exp_in_cexp d) *)
-    (*   | Eexp e => Eexp (inline_exp_in_exp e) *)
-    (*   end. *)
   End inline_exp.
 
   Section inline_cexp.
@@ -78,6 +68,7 @@ Module Type EI
 
   End inline_cexp.
 
+  (* Heuristics part 1 : inline all equations where the variable is only used once *)
   Section nb_usage.
     Variable x : ident.
 
@@ -107,18 +98,54 @@ Module Type EI
       | EqDef _ _ (Ecexp ce) => nb_usage_in_cexp ce
       | EqApp xs _ _ es xr =>
           fold_left (fun n e => n + nb_usage_in_exp e) es 0
-      | EqFby _ _ _ _ _ => 0
+      | EqFby _ _ _ _ _
+      | EqLast _ _ _ _ _ => 0
       end.
 
     Definition nb_usage_in_equations eqs :=
       fold_left (fun n e => n + nb_usage_in_equation e) eqs 0.
   End nb_usage.
 
+  (* Heuristics 2 : inline all equations where the calculation is "free"
+     (read variable, possibly with when) *)
+  Section always_inline.
+    Variable x : ident.
+
+    Fixpoint always_inline_exp e :=
+      match e with
+      | Evar _ _ => true
+      | Ewhen e _ _ => always_inline_exp e
+      | _ => false
+      end.
+
+    Definition always_inline_cexp ce :=
+      match ce with
+      | Eexp e => always_inline_exp e
+      | _ => false
+      end.
+
+    Definition always_inline_rhs e :=
+      match e with
+      | Ecexp ce => always_inline_cexp ce
+      | _ => false
+      end.
+
+    Definition always_inline_eq eq :=
+      match eq with
+      | EqDef x' _ e => (negb (x' ==b x)) || (always_inline_rhs e)
+      | _ => true
+      end.
+
+    Definition always_inline eqs :=
+      forallb always_inline_eq eqs.
+  End always_inline.
+
   Section inlinable.
     Variable x : ident.
 
     Fixpoint inlinable_in_exp e :=
       match e with
+      | Elast x' _ => negb (x ==b x')
       | Ewhen e (x', _) _ => negb (x ==b x') && inlinable_in_exp e
       | Eunop _ e1 _ => inlinable_in_exp e1
       | Ebinop _ e1 e2 _ => inlinable_in_exp e1 && inlinable_in_exp e2
@@ -147,13 +174,16 @@ Module Type EI
           negb (x ==b x')
           && (nb_usage_in_exp x e =? 0)
           && negb (mem_assoc_ident x xr)
+      | EqLast x' _ _ _ xr =>
+          negb (x ==b x')
+          && negb (mem_assoc_ident x xr)
       end.
 
     Definition inlinable_in_equations := forallb inlinable_in_equation.
   End inlinable.
 
   Definition inlinable vars (eqs: list equation) : list (ident * cexp) :=
-    let vars' := PSP.of_list (map fst vars) in
+    let vars' := PSP.of_list (map_filter (fun '(x, (_, islast)) => if (islast : bool) then None else Some x) vars) in
     (* Variables that are defined with a cexp *)
     let inl := map_filter
                  (fun equ => match equ with
@@ -163,14 +193,67 @@ Module Type EI
                           end) eqs in
     filter
       (fun '(x, e) =>
-         inlinable_in_equations x eqs
-         && (nb_usage_in_equations x eqs =? 1)
-         && forallb (fun '(_, ck) => if (Is_free_in_clock_dec x ck) then false else true) vars)
+         inlinable_in_equations x eqs (* Mandatory check *)
+         && ((nb_usage_in_equations x eqs =? 1) || (always_inline x eqs)) (* Heuristics *)
+         && forallb (fun '(_, (ck, islast)) => if (Is_free_in_clock_dec x ck) then false else true) vars
+      )
       inl.
 
   Definition inline_all_possible vars eqs :=
     let toinline := inlinable vars eqs in
     List.fold_left (fun eqs '(x, ce) => inline_in_equations x ce eqs) toinline eqs.
+
+  Lemma inline_all_possible_vars : forall vars eqs,
+      vars_defined (inline_all_possible vars eqs) = vars_defined eqs.
+  Proof.
+    intros.
+    unfold inline_all_possible.
+    rewrite <-fold_left_rev_right.
+    induction (rev _) as [|(?&?)]; simpl; auto.
+    unfold inline_in_equations, vars_defined in *.
+    rewrite <-IHl, 2 flat_map_concat_map, map_map.
+    f_equal. eapply map_ext. intros [??[]| | |]; simpl; auto.
+  Qed.
+
+  Lemma inline_all_possible_vars_fby : forall vars eqs,
+      vars_defined (filter is_fby (inline_all_possible vars eqs)) = vars_defined (filter is_fby eqs).
+  Proof.
+    intros.
+    unfold inline_all_possible.
+    rewrite <-fold_left_rev_right.
+    induction (rev _) as [|(?&?)]; simpl; auto.
+    unfold inline_in_equations, vars_defined in *.
+    rewrite <-IHl, 2 flat_map_concat_map.
+    f_equal.
+    clear - i. induction (fold_right _ _ _); simpl; auto.
+    destruct a as [??[]| | |]; simpl; auto.
+  Qed.
+
+  Lemma inline_all_possible_vars_def_cexp : forall vars eqs,
+      vars_defined (filter is_def_cexp (inline_all_possible vars eqs)) = vars_defined (filter is_def_cexp eqs).
+  Proof.
+    intros.
+    unfold inline_all_possible.
+    rewrite <-fold_left_rev_right.
+    induction (rev _) as [|(?&?)]; simpl; auto.
+    unfold inline_in_equations, vars_defined in *.
+    rewrite <-IHl, 2 flat_map_concat_map.
+    f_equal.
+    clear - i. induction (fold_right _ _ _); simpl; auto.
+    destruct a as [??[]| | |]; simpl; auto.
+  Qed.
+
+  Lemma inline_all_possible_lasts : forall lasts eqs,
+      lasts_defined (inline_all_possible lasts eqs) = lasts_defined eqs.
+  Proof.
+    intros.
+    unfold inline_all_possible.
+    rewrite <-fold_left_rev_right.
+    induction (rev _) as [|(?&?)]; simpl; auto.
+    unfold inline_in_equations, lasts_defined in *.
+    rewrite <-IHl, 2 flat_map_concat_map, map_map.
+    f_equal. eapply map_ext. intros [??[]| | |]; simpl; auto.
+  Qed.
 
   (** ** Transformation of the node and global *)
 
@@ -180,8 +263,11 @@ Module Type EI
     econstructor. reflexivity.
   Defined.
 
+  Definition idck (vars : list (ident * (type * clock * bool))) :=
+    List.map (fun x => (fst x, (snd (fst (snd x)), snd (snd x)))) vars.
+
   Program Definition exp_inlining_node (n : node) : node :=
-    let eqs' := inline_all_possible' (idsnd n.(n_vars)) n.(n_eqs) in
+    let eqs' := inline_all_possible' (idck n.(n_vars)) n.(n_eqs) in
     {| n_name := n.(n_name);
        n_in := n.(n_in);
        n_out := n.(n_out);
@@ -191,28 +277,16 @@ Module Type EI
   Next Obligation. exact n.(n_ingt0). Qed.
   Next Obligation. exact n.(n_outgt0). Qed.
   Next Obligation.
-    replace (vars_defined (inline_all_possible (idsnd (n_vars n)) (n_eqs n)))
-      with (vars_defined (n_eqs n)).
-    exact n.(n_defd).
-    unfold inline_all_possible.
-    rewrite <-fold_left_rev_right.
-    induction (rev _) as [|(?&?)]; simpl; auto.
-    unfold inline_in_equations, vars_defined in *.
-    rewrite IHl, 2 flat_map_concat_map, map_map.
-    f_equal. eapply map_ext. intros [??[]| |]; simpl; auto.
+    rewrite inline_all_possible_vars. exact n.(n_defd).
   Qed.
   Next Obligation.
-    replace (vars_defined (filter is_fby (inline_all_possible (idsnd (n_vars n)) (n_eqs n))))
-      with (vars_defined (filter is_fby (n_eqs n))).
-    now apply n.(n_vout).
-    unfold inline_all_possible.
-    rewrite <-fold_left_rev_right.
-    induction (rev _) as [|(?&?)]; simpl; auto.
-    unfold inline_in_equations, vars_defined in *.
-    rewrite IHl, 2 flat_map_concat_map.
-    f_equal.
-    clear - H. induction (fold_right _ _ _); simpl; auto.
-    destruct a as [??[]| |]; simpl; auto.
+    rewrite inline_all_possible_lasts. exact n.(n_lastd1).
+  Qed.
+  Next Obligation.
+    rewrite inline_all_possible_vars_def_cexp. eapply n.(n_lastd2); eauto.
+  Qed.
+  Next Obligation.
+    rewrite inline_all_possible_vars_fby. eapply n.(n_vout); eauto.
   Qed.
   Next Obligation. exact n.(n_nodup). Qed.
   Next Obligation. exact n.(n_good). Qed.

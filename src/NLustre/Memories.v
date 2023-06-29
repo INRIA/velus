@@ -16,14 +16,9 @@ From Coq Require Import Permutation.
 (** * Collecting memory cells *)
 
 (**
-
   The [memories] function collects the set of variables that will turn
   into heap variables after compilation, ie. variables denoting an
   [fby] equation.
-
-  We (ought to) have the following equivalence:
-    [forall x, PS.In x (memories eqs) <-> ~ Is_Variable x eqs]
-
  *)
 
 Module Type MEMORIES
@@ -34,125 +29,83 @@ Module Type MEMORIES
        (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
        (Import Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn).
 
-  Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
+  Definition memory_eq (mems: (PS.t * PS.t)) (eq: equation) : (PS.t * PS.t) :=
     match eq with
-    | EqFby x _ _ _ _ => PS.add x mems
+    | EqFby x _ _ _ _ => (PS.add x (fst mems), snd mems)
+    | EqLast x _ _ _ _ => (fst mems, PS.add x (snd mems))
     | _ => mems
     end.
 
-  Definition memories (eqs: list equation) : PS.t :=
-    List.fold_left memory_eq eqs PS.empty.
+  Definition memories (eqs: list equation) : (PS.t * PS.t) :=
+    List.fold_left memory_eq eqs (PS.empty, PS.empty).
 
   (** ** Properties *)
 
-  Lemma In_fold_left_memory_eq:
-    forall x eqs m,
-      PS.In x (fold_left memory_eq eqs m)
-      <-> PS.In x (fold_left memory_eq eqs PS.empty) \/ PS.In x m.
+  Lemma memory_eq1 : forall x m eq,
+      PS.In x (fst (memory_eq m eq))
+      <-> PS.In x (fst (memory_eq (PS.empty, PS.empty) eq)) \/ PS.In x (fst m).
+  Proof.
+    intros ?? []; simpl; rewrite ?PS.add_spec, ?PSF.empty_iff.
+    all:split; auto; intros; repeat (take (_ \/ _) and destruct it); auto; try now exfalso.
+  Qed.
+
+  Lemma memory_eq2 : forall x m eq,
+      PS.In x (snd (memory_eq m eq))
+      <-> PS.In x (snd (memory_eq (PS.empty, PS.empty) eq)) \/ PS.In x (snd m).
+  Proof.
+    intros ?? []; simpl; rewrite ?PS.add_spec, ?PSF.empty_iff.
+    all:split; auto; intros; repeat (take (_ \/ _) and destruct it); auto; try now exfalso.
+  Qed.
+
+  Lemma In_fold_left_memory_eq1: forall x eqs m,
+      PS.In x (fst (fold_left memory_eq eqs m))
+      <-> Exists (fun eq => PS.In x (fst (memory_eq (PS.empty, PS.empty) eq))) eqs \/ PS.In x (fst m).
   Proof.
     induction eqs as [|eq]; simpl.
     - split; auto.
-      intros [Hin|]; auto.
-      apply not_In_empty in Hin; contradiction.
-    - setoid_rewrite IHeqs; split.
-      + intros [?|Hin]; auto.
-        destruct eq; simpl; auto.
-        apply PS.add_spec in Hin as [|]; auto.
-        subst; rewrite PS.add_spec; auto.
-      + intros [[?|Hin]|?]; auto.
-        * destruct eq; simpl; try (apply not_In_empty in Hin; contradiction).
-          apply PS.add_spec in Hin as [|Hin]; try (apply not_In_empty in Hin; contradiction).
-          subst; rewrite PS.add_spec; auto.
-        * destruct eq; simpl; auto.
-          rewrite PS.add_spec; auto.
+      intros [Ex|]; auto. inv Ex.
+    - intros ?. rewrite IHeqs, memory_eq1.
+      split; intros; repeat (take (_ \/ _) and destruct it); auto.
+      inv H; auto.
   Qed.
 
-  Global Instance List_fold_left_memory_eq_Proper (eqs: list equation) :
-    Proper (PS.eq ==> PS.eq) (fold_left memory_eq eqs).
-  Proof.
-    induction eqs as [|[]]; intros * ?? E; simpl; auto.
-    apply IHeqs; rewrite E; reflexivity.
-  Qed.
+  (* Global Instance List_fold_left_memory_eq_Proper (eqs: list equation) : *)
+  (*   Proper (PS.eq ==> PS.eq) (fold_left memory_eq eqs). *)
+  (* Proof. *)
+  (*   induction eqs as [|[]]; intros * ?? E; simpl; auto. *)
+  (*   apply IHeqs; rewrite E; reflexivity. *)
+  (* Qed. *)
 
   Lemma in_memories_var_defined:
     forall x eqs,
-      PS.In x (memories eqs) ->
+      PS.In x (fst (memories eqs)) ->
       In x (vars_defined eqs).
   Proof.
-    unfold memories.
-    intros * Hin.
-    induction eqs as [|eq]; simpl in *.
-    - now apply PSF.empty_iff in Hin.
-    - apply In_fold_left_memory_eq in Hin as [Hin|Hin].
-      + apply in_app; auto.
-      + destruct eq; simpl in Hin;
-          try (apply PSF.empty_iff in Hin; contradiction).
-        apply PS.add_spec in Hin as [|Hin];
-          try (apply PSF.empty_iff in Hin; contradiction).
-        subst; simpl; left; auto.
-  Qed.
-
-  Lemma in_memories_is_fby:
-    forall eqs eq,
-      In eq eqs ->
-      NoDup (vars_defined eqs) ->
-      forall x, In x (var_defined eq) ->
-      PS.mem x (memories eqs) = is_fby eq.
-  Proof.
-    unfold memories.
-    induction eqs as [|eq eqs]; simpl; try now intuition.
-    intros eq' Hin Hndup ? Hin'.
-    apply NoDup_app'_iff in Hndup as (Hndup_eq & Hndup_eqs & Hndup_def).
-    destruct Hin as [|Hin].
-    - subst eq'.
-      assert (PS.mem x (fold_left memory_eq eqs PS.empty) = false).
-      { apply PSP.Dec.F.not_mem_iff; intro.
-        eapply Forall_forall in Hndup_def; eauto.
-        eapply Hndup_def; eauto.
-        now apply in_memories_var_defined.
-      }
-      destruct eq; simpl in *; auto.
-      apply In_fold_left_memory_eq.
-      right; apply PS.add_spec; intuition.
-    - erewrite <-IHeqs; eauto.
-      destruct eq; simpl; auto.
-      assert (x <> i).
-      { intro; subst x.
-        eapply Forall_forall in Hndup_def; [|simpl; eauto].
-        apply Hndup_def; simpl; eauto.
-        unfold vars_defined. rewrite flat_map_concat_map.
-        eapply in_concat'; eauto.
-        now apply in_map.
-      }
-      destruct (PS.mem x (fold_left memory_eq eqs PS.empty)) eqn: E.
-      + rewrite PS.mem_spec in *.
-        rewrite In_fold_left_memory_eq; auto.
-      + rewrite <-PSP.Dec.F.not_mem_iff in *.
-        rewrite In_fold_left_memory_eq, PS.add_spec, PSF.empty_iff.
-        intros [?|[?|?]]; auto.
+    intros * In. unfold memories in *.
+    rewrite In_fold_left_memory_eq1, ?PSF.empty_iff in In.
+    destruct In as [In|[]]. simpl_Exists.
+    unfold vars_defined. solve_In.
+    destruct x0; simpl in *; rewrite ?PS.add_spec, ?PSF.empty_iff in *; try now exfalso.
+    destruct In; auto.
   Qed.
 
   Lemma in_memories_filter_is_fby:
     forall x eqs,
-      PS.In x (memories eqs) <-> In x (vars_defined (filter is_fby eqs)).
+      PS.In x (fst (memories eqs)) <-> In x (vars_defined (filter is_fby eqs)).
   Proof.
-    unfold memories.
-    induction eqs as [|eq eqs].
-    - split; intro HH; try apply not_In_empty in HH; intuition.
-    - destruct eq; simpl; (try now rewrite IHeqs).
-      split; intro HH.
-      + apply In_fold_left_memory_eq in HH.
-        destruct HH as [HH|HH].
-        * right; now apply IHeqs.
-        * apply PS.add_spec in HH.
-          destruct HH as [HH|HH]; subst; auto.
-          contradiction (not_In_empty x).
-      + apply In_fold_left_memory_eq.
-        destruct HH as [HH|HH].
-        * rewrite PS.add_spec; intuition.
-        * apply IHeqs in HH; now left.
+    intros. unfold memories, vars_defined.
+    rewrite In_fold_left_memory_eq1, ?PSF.empty_iff.
+    split; [intros [In|[]]|intros In].
+    - simpl_Exists.
+      destruct x0; simpl in *; rewrite ?PS.add_spec, ?PSF.empty_iff in *; try now exfalso.
+      destruct In; subst; try now exfalso.
+      solve_In. now constructor.
+    - simpl_In.
+      left. solve_Exists.
+      destruct x0; simpl in *; try congruence.
+      rewrite ?PS.add_spec, ?PSF.empty_iff.
+      destruct Hinf; auto.
   Qed.
-
 
   Remark filter_mem_fst:
     forall A B p (xs: list (ident * (A * B))),
@@ -180,178 +133,87 @@ Module Type MEMORIES
     forall n,
       Permutation
         (map fst (fst (partition
-                         (fun x => PS.mem (fst x) (memories n.(n_eqs)))
+                         (fun x => PS.mem (fst x) (fst (memories n.(n_eqs))))
                          n.(n_vars))))
         (vars_defined (filter is_fby n.(n_eqs))).
   Proof.
     intro n.
-    match goal with |- Permutation (map fst (fst (partition ?p ?l))) _ =>
-      assert (Permutation (map fst (fst (partition p l)))
-                          (map fst (filter p n.(n_vars))))
-                      as Hperm by now rewrite fst_partition_filter
-    end.
-    rewrite Hperm; clear Hperm.
-    match goal with |- context[filter ?p ?l] =>
-      rewrite <-(app_nil_r (filter p l))
-    end.
-
-    assert (NoDup (filter (fun x => PS.mem (fst x) (memories (n_eqs n))) (n_out n))).
-    {
-      apply NoDupMembers_NoDup, fst_NoDupMembers.
-      rewrite filter_mem_fst.
-      apply nodup_filter.
-      pose proof (n.(n_nodup)) as Hnodup.
-      do 2 apply NoDupMembers_app_r in Hnodup.
-      now apply fst_NoDupMembers.
-    }
-
-    assert (filter (fun x=>PS.mem (fst x) (memories n.(n_eqs))) n.(n_out) = [])
-      as Hfout.
-    { simpl.
-      apply Permutation_nil.
-      apply NoDup_Permutation; auto using NoDup. intros x.
-      split; try (now intuition); []. intro Hin.
-
-      apply filter_In in Hin as [Hin Hmem].
-
-      assert (In (fst x) (map fst (n_out n)))
-        by now eapply in_map.
-
-      assert (In (fst x) (vars_defined (filter is_fby (n_eqs n))))
-        by now apply in_memories_filter_is_fby.
-
-      eapply n.(n_vout); eauto.
-    }
-
-    rewrite <-Hfout; clear Hfout.
-    rewrite <-filter_app, filter_mem_fst, <-n_defd.
-    remember (memories n.(n_eqs)) as mems.
-    set (P:=fun eqs eq=> In eq eqs ->
-                      forall x, In x (var_defined eq) ->
-                           PS.mem x mems = is_fby eq).
-    assert (forall eq, P n.(n_eqs) eq) as Peq.
-    { subst P mems.
-      intro. intro Hin.
-      apply in_memories_is_fby; auto.
-      rewrite n_defd.
-      apply fst_NoDupMembers.
-      pose proof (n.(n_nodup)) as Hnodup.
-      now apply NoDupMembers_app_r in Hnodup.
-    }
-    clear Heqmems.
-    induction n.(n_eqs) as [|eq eqs]; auto.
-    assert (forall eq, P eqs eq) as Peq'
-        by (intros e Hin; apply Peq; now constructor 2).
-    specialize (IHeqs Peq'). clear Peq'.
-    destruct eq eqn:Heq; simpl;
-      specialize (Peq eq); red in Peq; subst eq;
-        simpl in Peq.
-
-    + (* Case: EqDef *)
-      rewrite Peq; eauto.
-    + (* Case: EqApp *)
-      assert (Pfilter: Permutation (filter (fun x => PS.mem x mems) l) []).
-      {
-        assert (Hmem_in: forall x, In x l -> PS.mem x mems = false)
-          by now apply Peq; eauto.
-
-        assert (Hfilter: filter (fun x => PS.mem x mems) l = []).
-        {
-          clear - Hmem_in.
-          induction l as [ | a i IHi] ; auto; simpl.
-          rewrite Hmem_in; try now constructor.
-          apply IHi. intros.
-          apply Hmem_in. now constructor 2.
-        }
-
-        now rewrite Hfilter.
-      }
-
-      unfold vars_defined; unfold var_defined; simpl.
-      now rewrite filter_app, IHeqs, Pfilter.
-
-    + (* Case: EqFby *)
-      unfold vars_defined;
-        simpl; unfold var_defined; simpl.
-      rewrite Peq; eauto.
+    rewrite fst_partition_filter.
+    apply NoDup_Permutation.
+    - apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers.
+      eauto using NoDup_app_l, NoDup_app_r, n_nodup.
+    - pose proof (NoDup_var_defined_n_eqs n) as ND.
+      rewrite <-is_filtered_vars_defined in ND.
+      eauto using NoDup_app_l, NoDup_app_r.
+    - intros.
+      split; intros In.
+      + apply in_memories_filter_is_fby. simpl_In; auto using PSF.mem_2.
+      + assert (List.In x (vars_defined (n_eqs n))) as In'
+            by (apply in_memories_var_defined, in_memories_filter_is_fby; auto).
+        rewrite n_defd in In'. apply in_app_iff in In' as [In'|In'].
+        * solve_In. now apply in_memories_filter_is_fby.
+        * exfalso. eapply n_vout; eauto.
   Qed.
 
   Lemma snd_partition_memories_var_defined:
     forall n,
       Permutation
         (map fst (snd (partition
-                         (fun x => PS.mem (fst x) (memories n.(n_eqs)))
-                         n.(n_vars)) ++ n.(n_out)))
+                         (fun x => PS.mem (fst x) (fst (memories n.(n_eqs))))
+                         n.(n_vars))) ++ map fst n.(n_out))
         (vars_defined (filter (notb is_fby) n.(n_eqs))).
   Proof.
     intro n.
-    match goal with |- Permutation (map fst (snd (partition ?p ?l) ++ _)) _ =>
-      assert (Permutation (map fst (snd (partition p l)))
-                          (map fst (filter (notb p) n.(n_vars))))
-                      as Hperm by (now rewrite snd_partition_filter)
-    end.
-    rewrite map_app, Hperm, <-map_app; clear Hperm.
+    eapply Permutation_app_inv_l.
+    rewrite app_assoc, <-map_app, <-permutation_partition, fst_partition_memories_var_defined, <-n_defd.
+    induction (n_eqs n) as [|[]]; simpl; auto.
+    - rewrite <-Permutation_middle; auto.
+    - rewrite Permutation_swap. apply Permutation_app_head; auto.
+  Qed.
 
-    assert (filter (notb (fun x => PS.mem (fst x) (memories n.(n_eqs)))) n.(n_out) = n.(n_out))
-      as Hfout.
-    { simpl.
-      pose proof (n_vout n) as Out.
-      setoid_rewrite <-in_memories_filter_is_fby in Out.
-      unfold notb.
-      induction (n_out n) as [|(x, t)]; simpl; auto.
-      destruct (PS.mem x (memories (n_eqs n))) eqn: E; simpl.
-      - apply PSE.MP.Dec.F.mem_iff in E.
-        exfalso; eapply Out; eauto.
-        simpl; auto.
-      - rewrite IHl; auto.
-        intros ???; eapply Out; eauto.
-        simpl; auto.
-    }
+  (** ** Fbys and Lasts in an equation *)
 
-    rewrite <-Hfout; clear Hfout.
-    rewrite <-filter_app, notb_filter_mem_fst, <-n_defd.
-    remember (memories n.(n_eqs)) as mems.
-    set (P := fun eqs eq =>  In eq eqs ->
-                          forall x, In x (var_defined eq) ->
-                               PS.mem x mems = is_fby eq).
-    assert (forall eq, P n.(n_eqs) eq) as Peq.
-    { subst P mems.
-      intro. intro Hin.
-      apply in_memories_is_fby; auto.
-      rewrite n_defd.
-      apply fst_NoDupMembers.
-      pose proof (n.(n_nodup)) as Hnodup.
-      now apply NoDupMembers_app_r in Hnodup.
-    }
-    clear Heqmems.
-    unfold notb, vars_defined.
-    induction n.(n_eqs) as [|eq eqs]; auto.
-    assert (forall eq, P eqs eq) as Peq'
-        by (intros e Hin; apply Peq; now constructor 2).
-    specialize (IHeqs Peq'). clear Peq'.
-    destruct eq eqn:Heq; simpl;
-      specialize (Peq eq); red in Peq; subst eq;
-        simpl in Peq.
+  Inductive Is_fby_in_eq : ident -> equation -> Prop :=
+  | DefEqFby:
+      forall x ck v e r,
+        Is_fby_in_eq x (EqFby x ck v e r).
 
-    + rewrite Peq; eauto.
-      simpl; auto.
+  Definition Is_fby_in x (eqs: list equation) : Prop :=
+    List.Exists (Is_fby_in_eq x) eqs.
 
-    + assert (Hmem_in: forall x, In x l -> PS.mem x mems = false)
-        by now apply Peq; eauto.
+  Lemma Is_fby_in_vars_defined : forall x eqs,
+      Is_fby_in x eqs <-> In x (vars_defined (filter is_fby eqs)).
+  Proof.
+    unfold Is_fby_in, vars_defined. split; intros In.
+    - simpl_Exists. inv In. solve_In. simpl. auto.
+    - simpl_In. destruct x0; simpl in *; try now exfalso.
+      destruct Hinf; subst; [|now exfalso].
+      solve_Exists. constructor.
+  Qed.
 
-      assert (Hfilter: filter (fun x => negb (PS.mem x mems)) l = l).
-      { clear - Hmem_in.
-        induction l as [ | a i IHi] ; auto; simpl.
-        rewrite Hmem_in; simpl; try now constructor.
-        rewrite IHi; auto.
-        intros.
-        apply Hmem_in. now constructor 2.
-      }
+  Inductive Is_last_in_eq : ident -> equation -> Prop :=
+  | DefEqLast:
+      forall x ty ck c0 ckrs,
+        Is_last_in_eq x (EqLast x ty ck c0 ckrs).
 
-      rewrite filter_app; setoid_rewrite Hfilter.
-      apply Permutation_app_head; auto.
+  Definition Is_last_in x (eqs: list equation) : Prop :=
+    List.Exists (Is_last_in_eq x) eqs.
 
-    + rewrite Peq; eauto.
+  Lemma Is_last_in_lasts_defined : forall x eqs,
+      Is_last_in x eqs <-> In x (lasts_defined eqs).
+  Proof.
+    unfold Is_last_in, lasts_defined. split; intros In.
+    - simpl_Exists. inv In. solve_In. simpl. auto.
+    - simpl_In. destruct x0; simpl in *; try now exfalso.
+      destruct Hinf; subst; [|now exfalso].
+      solve_Exists. constructor.
+  Qed.
+
+  Lemma fby_last_NoDup : forall n,
+      forall x, Is_last_in x (n_eqs n) -> ~Is_fby_in x (n_eqs n).
+  Proof.
+    intros *. rewrite Is_fby_in_vars_defined, Is_last_in_lasts_defined.
+    apply n_lastfby.
   Qed.
 
 End MEMORIES.

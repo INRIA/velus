@@ -9,7 +9,6 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LOrdered.
-From Velus Require Import Lustre.Normalization.Normalization.
 
 From Velus Require Import CoreExpr.CESyntax CoreExpr.CETyping.
 From Velus Require Import NLustre.NLSyntax NLustre.NLNormalArgs NLustre.NLOrdered NLustre.NLTyping.
@@ -23,7 +22,6 @@ Module Type TRNORMALARGS
        (Import Senv  : STATICENV Ids Op OpAux Cks)
        (Import LSyn  : LSYNTAX Ids Op OpAux Cks Senv)
        (LOrd         : LORDERED Ids Op OpAux Cks Senv LSyn)
-       (Import Norm  : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (Import CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp        : CETYPING Ids Op OpAux Cks CE)
        (NL           : NLSYNTAX Ids Op OpAux Cks CE)
@@ -36,7 +34,7 @@ Module Type TRNORMALARGS
 
   Lemma to_lexp_noops_exp : forall ck e e',
     normalized_lexp e ->
-    Unnesting.noops_exp ck e ->
+    LSyn.noops_exp ck e ->
     to_lexp e = OK e' ->
     noops_exp ck e'.
   Proof.
@@ -46,7 +44,7 @@ Module Type TRNORMALARGS
 
   Corollary to_lexps_noops_exps : forall cks es es',
     Forall normalized_lexp es ->
-    Forall2 Unnesting.noops_exp cks es ->
+    Forall2 LSyn.noops_exp cks es ->
     Errors.mmap to_lexp es = OK es' ->
     Forall2 noops_exp cks es'.
   Proof.
@@ -56,17 +54,19 @@ Module Type TRNORMALARGS
     eapply to_lexp_noops_exp; eauto.
   Qed.
 
-  Lemma to_equation_normal_args : forall G G' to_cut env envo xr eq eq',
+  Lemma to_equation_normal_args : forall G G' outs lasts env envo xr eq eq',
     to_global G = OK G' ->
-    normalized_equation G to_cut eq ->
+    normalized_equation outs lasts eq ->
+    LSyn.normal_args_eq G eq ->
     to_equation env envo xr eq = OK eq' ->
     normal_args_eq G' eq'.
   Proof.
-    intros * Htog Hnormed Htoeq.
+    intros * Htog Hnormed Hnorma Htoeq.
     inv Hnormed; simpl in *.
     - (* app *)
       destruct (vars_of _); monadInv Htoeq.
-      eapply find_node_global in H0 as (n'&Hfind'&Htonode); eauto.
+      inv Hnorma; [|inv H3; inv H2].
+      eapply find_node_global in H4 as (n'&Hfind'&Htonode); eauto.
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
@@ -79,40 +79,45 @@ Module Type TRNORMALARGS
       constructor.
     - (* cexp *)
       inv H. 3:inv H0.
-      1-8:monadInv Htoeq; constructor.
+      all:monadInv Htoeq; constructor.
   Qed.
 
-  Lemma block_to_equation_normal_args : forall G G' to_cut env envo d xr eq',
+  Lemma block_to_equation_normal_args outs lasts : forall G G' env envo d xr eq',
       to_global G = OK G' ->
-      normalized_block G to_cut d ->
+      normalized_block outs lasts d ->
+      LSyn.normal_args_blk G d ->
       block_to_equation env envo xr d = OK eq' ->
       normal_args_eq G' eq'.
   Proof.
-    intros * Htog Hnormed Htoeq. revert dependent xr.
-    induction Hnormed; intros; simpl in *.
+    intros * Htog Hnormed Hnorma Htoeq. revert dependent xr.
+    induction Hnormed; inv Hnorma; intros; simpl in *.
     - (* eq *)
       eapply to_equation_normal_args in Htoeq; eauto.
+    - (* last *)
+      monadInv Htoeq. constructor.
     - (* reset *)
+      simpl_Forall.
       cases; eauto.
   Qed.
 
   Lemma to_node_normal_args : forall G G' n n',
     to_global G = OK G' ->
-    normalized_node G n ->
+    LSyn.normal_args_node G n ->
     to_node n = OK n' ->
     normal_args_node G' n'.
   Proof.
-    unfold normal_args_node.
+    unfold normal_args_node, LSyn.normal_args_node.
     intros * Htog Hnormed Hton.
-    tonodeInv Hton; simpl in *.
-    inversion_clear Hnormed as [??? Hblk _ Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
-    eapply mmap_inversion in EQ. clear Hblk.
-    induction EQ; inv Hnorm; constructor; auto.
+    pose proof (LSyn.n_syn n) as Syn. inversion Syn as [??? _ Blk _].
+    tonodeInv Hton; simpl in *. rewrite <-H0 in *. monadInv Hmmap.
+    eapply mmap_inversion in EQ.
+    inv Hnormed. clear - Htog Blk H1 EQ.
+    induction EQ; inv H1; inv Blk; constructor; auto.
     eapply block_to_equation_normal_args; eauto.
   Qed.
 
   Theorem to_global_normal_args : forall G G',
-      normalized_global G ->
+      LSyn.normal_args G ->
       to_global G = OK G' ->
       normal_args G'.
   Proof.
@@ -120,8 +125,7 @@ Module Type TRNORMALARGS
     revert dependent x.
     induction nodes0; intros * Htog; simpl in *; monadInv Htog; inv Hnormed;
       constructor; simpl; auto.
-    - destruct H1.
-      eapply to_node_normal_args; eauto.
+    - eapply to_node_normal_args; eauto.
       unfold to_global; simpl. rewrite EQ1; auto.
     - eapply IHnodes0; eauto.
   Qed.
@@ -136,7 +140,6 @@ Module TrNormalArgsFun
        (Senv  : STATICENV Ids Op OpAux Cks)
        (LSyn  : LSYNTAX Ids Op OpAux Cks Senv)
        (LOrd  : LORDERED Ids Op OpAux Cks Senv LSyn)
-       (Norm  : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp : CETYPING Ids Op OpAux Cks CE)
        (NL    : NLSYNTAX Ids Op OpAux Cks CE)
@@ -144,6 +147,6 @@ Module TrNormalArgsFun
        (Typ   : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
        (NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
        (TR    : TR Ids Op OpAux Cks Senv LSyn CE NL)
-       <: TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
-  Include TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
+       <: TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd CE CETyp NL Ord Typ NLNA TR.
+  Include TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd CE CETyp NL Ord Typ NLNA TR.
 End TrNormalArgsFun.

@@ -149,12 +149,15 @@ Extract Constant Cabs.char_code => "int64".
 
 Extract Constant Velus.print_lustre => "Veluslib.print_lustre_if".
 Extract Constant Velus.print_complete => "Veluslib.print_complete_if".
-Extract Constant Velus.print_nolast => "Veluslib.print_nolast_if".
 Extract Constant Velus.print_noauto => "Veluslib.print_noauto_if".
 Extract Constant Velus.print_noswitch => "Veluslib.print_noswitch_if".
 Extract Constant Velus.print_nolocal => "Veluslib.print_nolocal_if".
+Extract Constant Velus.print_unnested => "Veluslib.print_unnested_if".
+Extract Constant Velus.print_normlast => "Veluslib.print_normlast_if".
+Extract Constant Velus.print_normfby => "Veluslib.print_normfby_if".
 Extract Constant Velus.print_nlustre => "Veluslib.print_nlustre_if".
 Extract Constant Velus.print_stc => "Veluslib.print_stc_if".
+Extract Constant Velus.print_cut => "Veluslib.print_cut_if".
 Extract Constant Velus.print_sch => "Veluslib.print_sch_if".
 Extract Constant Velus.print_obc => "Veluslib.print_obc_if".
 Extract Constant Velus.print_header => "Veluslib.print_header_if".
@@ -163,8 +166,10 @@ Extract Constant Velus.do_dce => "Veluslib.do_dce".
 Extract Constant Velus.do_dupregrem => "Veluslib.do_dupregrem".
 Extract Constant Velus.do_fusion => "Veluslib.do_fusion".
 Extract Constant Velus.do_norm_switches => "Veluslib.do_normalize_switches".
+Extract Constant Velus.do_obc_dce => "Veluslib.do_obc_dce".
 Extract Constant Velus.do_sync   => "Veluslib.do_sync".
 Extract Constant Velus.do_expose => "Veluslib.do_expose".
+Extract Constant Velus.cutting_points => "Interfacelib.Scheduler.cutting_points".
 Extract Constant Velus.schedule  => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)

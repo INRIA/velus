@@ -8,6 +8,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CETyping.
@@ -64,14 +65,14 @@ Module Type EICORRECTNESS
 
   Section inline.
     Variable (G : global).
-    Variable (Γ : list (ident * type)).
+    Variable (Γ : list (ident * (type * bool))).
     Variable (b : bool) (R : env) (x : ident).
 
     Section inline_exp.
       Variable (xe : exp).
 
-      Hypothesis Wt1 : forall ty, In (x, ty) Γ -> typeof xe = ty.
-      Hypothesis Sem1 : forall v, sem_var_instant R x v -> sem_exp_instant b R xe v.
+      Hypothesis Wt1 : forall ty islast, In (x, (ty, islast)) Γ -> typeof xe = ty.
+      Hypothesis Sem1 : forall v, sem_var_instant R (Var x) v -> sem_exp_instant b R xe v.
 
       Lemma inline_in_exp_sem : forall e v,
           wt_exp G.(types) Γ e ->
@@ -94,8 +95,8 @@ Module Type EICORRECTNESS
     Section inline_cexp.
       Variable (xe : cexp).
 
-      Hypothesis Wt1 : forall ty, In (x, ty) Γ -> typeofc xe = ty.
-      Hypothesis Sem1 : forall v, sem_var_instant R x v -> sem_cexp_instant b R xe v.
+      Hypothesis Wt1 : forall ty islast, In (x, (ty, islast)) Γ -> typeofc xe = ty.
+      Hypothesis Sem1 : forall v, sem_var_instant R (Var x) v -> sem_cexp_instant b R xe v.
 
       Lemma try_inline_in_exp_sem : forall e v,
           wt_exp G.(types) Γ e ->
@@ -140,11 +141,12 @@ Module Type EICORRECTNESS
 
   Lemma inlinable_sem : forall H G bs vars eqs,
       Forall (sem_equation G bs H) eqs ->
-      Forall (fun '(x, ce) => forall n vs, sem_var_instant (H n) x vs -> sem_cexp_instant (bs n) (H n) ce vs) (inlinable vars eqs).
+      Forall (fun '(x, ce) => forall n vs, sem_var_instant (H n) (Var x) vs -> sem_cexp_instant (bs n) (H n) ce vs)
+        (inlinable vars eqs).
   Proof.
     intros * Hsem.
     unfold inlinable. simpl_Forall. simpl_In. simpl_Forall.
-    destruct x as [?? []| |]; inv Hf0.
+    destruct x as [?? []| | |]; inv Hf0.
     cases; inv H1.
     intros * Hv.
     inv Hsem. specialize (H5 n). specialize (H7 n). simpl in *.
@@ -168,9 +170,9 @@ Module Type EICORRECTNESS
     induction (rev (inlinable vars eqs)) as [|(?&?)]; inv Wt'; inv Sem'; simpl; auto.
     specialize (IHl H3 H5) as (Sem'&Wt').
     unfold inline_in_equations. split; simpl_Forall; eauto using inline_in_equation_wt.
-    destruct x as [?? []| |]; simpl; eauto; inv Wt'; inv Sem'.
+    destruct x as [?? []| | |]; simpl; eauto; inv Wt'; inv Sem'.
     1,2:(econstructor; eauto; take (wt_rhs _ _ _ _) and inv it;
-         intros k; take (sem_arhs _ _ _ _ _) and specialize (it k); simpl in *).
+         intros k; take (sem_arhs _ _ _ _ _) and specialize (it k); simpl in * ).
     - inv it; econstructor; eauto.
       1,2:take (sem_rhs_instant _ _ _ _) and inv it; econstructor; eauto.
       3:instantiate (1:=tyins). 1-4:simpl_Forall.
@@ -179,7 +181,7 @@ Module Type EICORRECTNESS
     - inv it; econstructor; eauto.
       1-2:take (sem_rhs_instant _ _ _ _) and inv it; constructor.
       1,2:eapply inline_in_cexp_sem; eauto.
-         Qed.
+  Qed.
 
   Theorem exp_inlining_sem : forall G f ins outs,
       wt_global G ->
@@ -204,7 +206,11 @@ Module Type EICORRECTNESS
       destruct H1 as (Wt&_). inv Wt. simpl in *.
       eapply inline_all_possible_sem; eauto.
       2:{ simpl_Forall. eapply global_iface_eq_wt_eq; [|eauto]. apply exp_inlining_iface_eq. }
-      1:{ apply NoDupMembers_idfst. apply n_nodup. }
+      1:{ erewrite fst_NoDupMembers, map_app, 2 map_map, map_app, <-app_assoc,
+          Permutation.Permutation_app_comm with (l':=map _ (n_vars _)),
+          map_ext with (l:=n_in _), map_ext with (l:=n_out _), map_ext with (l:=n_vars _).
+        apply n_nodup.
+        all:intros; destruct_conjs; auto. }
       simpl_Forall. take (sem_equation _ _ _ _) and inv it; eauto with nlsem.
       econstructor; eauto.
       intros. take (forall k, _) and specialize (it k).

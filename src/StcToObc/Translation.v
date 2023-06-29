@@ -34,7 +34,7 @@ Module Type TRANSLATION
 
     Definition tovar (xt: ident * type) : exp :=
       let (x, ty) := xt in
-      if PS.mem x memories then State x ty else Var x ty.
+      if PS.mem x memories then State x ty false else Var x ty.
 
     Fixpoint skip_branches_with_aux (acc: list (option stmt)) (n i: enumtag) (s: stmt): list (option stmt) :=
       match n with
@@ -52,24 +52,31 @@ Module Type TRANSLATION
       | _ => Skip
       end.
 
+    Definition translate_const (ty: type) (c: const) :=
+      match c with
+      | Op.Const c => Const c
+      | Op.Enum e => Enum e ty
+      end.
+
     Fixpoint translate_exp (e: CESyn.exp) : exp :=
       match e with
       | Econst c           => Const c
       | Eenum c ty         => Enum c ty
       | Evar x ty          => tovar (x, ty)
+      | Elast x ty         => State x ty true
       | Ewhen e c x        => translate_exp e
       | Eunop op e ty      => Unop op (translate_exp e) ty
       | Ebinop op e1 e2 ty => Binop op (translate_exp e1) (translate_exp e2) ty
       end.
 
-    Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
+    Fixpoint translate_cexp (assign: exp -> stmt) (e: cexp) : stmt :=
       match e with
       | Emerge yt es _ =>
-        Switch (tovar yt) (map (fun e => Some (translate_cexp x e)) es) Skip
+        Switch (tovar yt) (map (fun e => Some (translate_cexp assign e)) es) Skip
       | Ecase b es d =>
-        Switch (translate_exp b) (map (option_map (translate_cexp x)) es) (translate_cexp x d)
+        Switch (translate_exp b) (map (option_map (translate_cexp assign)) es) (translate_cexp assign d)
       | Eexp l =>
-        Assign x (translate_exp l)
+        assign (translate_exp l)
       end.
 
     Definition var_on_base_clock (ck: clock) (x: ident) : bool :=
@@ -90,33 +97,29 @@ Module Type TRANSLATION
 
     Definition translate_tc (tc: trconstr) : stmt :=
       match tc with
-      | TcDef x ck (Ecexp ce) =>
-        Control ck (translate_cexp x ce)
-      | TcDef x ck (Eextcall f es ty) =>
+      | TcDef ck x (Ecexp ce) =>
+        Control ck (translate_cexp (Assign x) ce)
+      | TcDef ck x (Eextcall f es ty) =>
         Control ck (ExternCall x f (map translate_exp es) ty)
-      | TcReset x ckr _ (Op.Const c0) =>
-        Control ckr (AssignSt x (Const c0))
-      | TcReset x ckr ty (Op.Enum t) =>
-        Control ckr (AssignSt x (Enum t ty))
-      | TcNext x ck _ le =>
-        Control ck (AssignSt x (translate_exp le))
-      | TcStep s xs ck rst f es =>
+      | TcReset ckr (ResState x ty c) =>
+        Control ckr (AssignSt x (translate_const ty c) true)
+      | TcReset ckr (ResInst s f) =>
+        Control ckr (Call [] f s reset [])
+      | TcUpdate ck _ (UpdLast x ce) =>
+        Control ck (translate_cexp (fun e => AssignSt x e false) ce)
+      | TcUpdate ck _ (UpdNext x le) =>
+        Control ck (AssignSt x (translate_exp le) false)
+      | TcUpdate ck _ (UpdInst s xs f es) =>
         Control ck (Call xs f s step (map (translate_arg ck) es))
-      | TcInstReset s ck f =>
-        Control ck (Call [] f s reset [])
       end.
-
-    (*   (** Remark: tcs ordered in reverse order of execution for coherence with *)
-     (*      [Is_well_sch]. *) *)
 
     Definition translate_tcs (tcs: list trconstr) : stmt :=
       fold_left (fun i tc => Comp (translate_tc tc) i) tcs Skip.
 
   End Translate.
 
-  Program Definition step_method (s: system) : method :=
-    let memids := map fst s.(s_nexts) in
-    let mems := ps_from_list memids in
+  Program Definition step_method (s: @system (PSP.of_list gensym_prefs)) : method :=
+    let mems := ps_from_list (map fst (s.(s_lasts) ++ s.(s_nexts))) in
     let typvars := Env.adds_with fst s.(s_out)
                                          (Env.adds_with fst s.(s_vars)
                                                                 (Env.from_list_with fst s.(s_in)))
@@ -148,14 +151,14 @@ Module Type TRANSLATION
                  Comp s (AssignSt (fst init) (match fst (fst (snd init)) with
                                      | Op.Const c => Const c
                                      | Op.Enum c  => Enum c (snd (fst (snd init)))
-                                     end)))
+                                     end) true))
               inits Skip.
 
   Definition reset_insts (insts: list (ident * ident)) : stmt :=
     fold_left (fun s inst => Comp s (Call [] (snd inst) (fst inst) reset [])) insts Skip.
 
-  Definition translate_reset (b: system) : stmt :=
-    Comp (reset_mems b.(s_nexts)) (reset_insts b.(s_subs)).
+  Definition translate_reset (b: @system (PSP.of_list gensym_prefs)) : stmt :=
+    Comp (reset_mems (b.(s_lasts) ++ b.(s_nexts))) (reset_insts b.(s_subs)).
 
   Program Definition reset_method (b: system) : method :=
     {| m_name := reset;
@@ -172,12 +175,12 @@ Module Type TRANSLATION
 
   Program Definition translate_system (b: system) : class :=
     {| c_name    := b.(s_name);
-       c_mems    := map (fun xc => (fst xc, snd (fst (snd xc)))) b.(s_nexts);
+       c_mems    := map (fun xc => (fst xc, snd (fst (snd xc)))) (b.(s_lasts) ++ b.(s_nexts));
        c_objs    := b.(s_subs);
        c_methods := [ step_method b; reset_method b ]
     |}.
   Next Obligation.
-    rewrite map_map; simpl; apply s_nodup_resets_subs.
+    rewrite ? map_app, ? map_map, <- ? app_assoc; simpl; apply s_nodup_states_subs.
   Qed.
   Next Obligation.
     constructor; auto using NoDup.
@@ -185,7 +188,7 @@ Module Type TRANSLATION
     now apply reset_not_step.
   Qed.
   Next Obligation.
-    pose proof b.(s_good) as (?&?& Subs &?).
+    pose proof b.(s_good) as (?&?&?& Subs &?).
     split; auto.
   Qed.
 
@@ -233,7 +236,7 @@ Module Type TRANSLATION
     inversion 1; auto.
   Qed.
 
-  Global Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
+  Global Program Instance program_program_without_units : TransformProgramWithoutUnits (@SynStc.program (PSP.of_list gensym_prefs)) program :=
     { transform_program_without_units := fun p => Program p.(SynStc.types) p.(SynStc.externs) [] }.
 
   Definition translate: SynStc.program -> program := transform_units.

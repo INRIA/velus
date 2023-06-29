@@ -1,0 +1,44 @@
+node twolast(a : int) returns (z : int)
+var x, y : int;
+let
+    last x = 0;
+    last y = 0;
+    x = last y + 1;
+    y = last x + 1;
+    z = x + y;
+tel
+
+node twolastout(a : int) returns (x, y : int)
+let
+    last x = 0;
+    last y = 0;
+    x = last y + 1;
+    y = last x + 1;
+tel
+
+node plus(a : int) returns (y : int)
+var x : int;
+let
+    last x = 0;
+    x = last x + 1;
+    y = last x + x;
+tel
+
+node drive_sequence(step : bool) returns (motA, motB : bool)
+let
+    last motA = true;
+    last motB = true;
+    switch step
+    | true do (motA, motB) = (not (last motB), last motA)
+    | false do
+    end;
+tel
+
+node lastfby(b : int) returns (z : int)
+var x, y : int;
+let
+    x = 0 fby last y;
+    y = x;
+    last y = 0;
+    z = x + y;
+tel

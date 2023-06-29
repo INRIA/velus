@@ -22,13 +22,13 @@ Module Type CETYPING
 
     Variable types : list type.
     Variable externs : list (ident * (list ctype * ctype)).
-    Variable Γ : list (ident * type).
+    Variable Γ : list (ident * (type * bool)).
 
     Inductive wt_clock : clock -> Prop :=
     | wt_Cbase:
         wt_clock Cbase
-    | wt_Con: forall ck x tx tn c,
-        In (x, Tenum tx tn) Γ ->
+    | wt_Con: forall ck x tx tn islast c,
+        In (x, (Tenum tx tn, islast)) Γ ->
         In (Tenum tx tn) types ->
         c < length tn ->
         wt_clock ck ->
@@ -41,11 +41,14 @@ Module Type CETYPING
         In (Tenum tx tn) types ->
         x < length tn ->
         wt_exp (Eenum x (Tenum tx tn))
-    | wt_Evar: forall x ty,
-        In (x, ty) Γ ->
+    | wt_Evar: forall x ty islast,
+        In (x, (ty, islast)) Γ ->
         wt_exp (Evar x ty)
-    | wt_Ewhen: forall e x b tx tn,
-        In (x, Tenum tx tn) Γ ->
+    | wt_Elast: forall x ty,
+        In (x, (ty, true)) Γ ->
+        wt_exp (Elast x ty)
+    | wt_Ewhen: forall e x b tx tn islast,
+        In (x, (Tenum tx tn, islast)) Γ ->
         In (Tenum tx tn) types ->
         b < length tn ->
         wt_exp e ->
@@ -61,8 +64,8 @@ Module Type CETYPING
         wt_exp (Ebinop op e1 e2 ty).
 
     Inductive wt_cexp : cexp -> Prop :=
-    | wt_Emerge: forall x l ty tx tn,
-        In (x, Tenum tx tn) Γ ->
+    | wt_Emerge: forall x l ty tx tn islast,
+        In (x, (Tenum tx tn, islast)) Γ ->
         In (Tenum tx tn) types ->
         length tn = length l ->
         Forall (fun e => typeofc e = ty) l ->
@@ -109,7 +112,7 @@ Module Type CETYPING
 
   Global Instance wt_clock_Proper:
     Proper (@Permutation.Permutation type ==>
-            @Permutation.Permutation (ident * type) ==>
+            @Permutation.Permutation _ ==>
             @eq clock ==> iff)
            wt_clock.
   Proof.
@@ -126,7 +129,7 @@ Module Type CETYPING
 
   Global Instance wt_exp_Proper:
     Proper (@Permutation.Permutation type ==>
-            @Permutation.Permutation (ident * type) ==>
+            @Permutation.Permutation _ ==>
             @eq exp ==> iff)
            wt_exp.
   Proof.
@@ -147,7 +150,7 @@ Module Type CETYPING
 
   Global Instance wt_exp_pointwise_Proper:
     Proper (@Permutation.Permutation type ==>
-            @Permutation.Permutation (ident * type) ==>
+            @Permutation.Permutation _ ==>
             pointwise_relation exp iff)
            wt_exp.
   Proof.
@@ -157,7 +160,7 @@ Module Type CETYPING
 
   Global Instance wt_cexp_Proper:
     Proper (@Permutation.Permutation type ==>
-            @Permutation.Permutation (ident * type) ==>
+            @Permutation.Permutation _ ==>
             @eq cexp ==> iff)
            wt_cexp.
   Proof.
@@ -166,26 +169,20 @@ Module Type CETYPING
     induction e using cexp_ind2'; try destruct IHe1, IHe2;
       split; inversion_clear 1; try rewrite Henv in *; try rewrite Henums in *;
         econstructor; eauto; try rewrite Henv in *; try rewrite Henums in *; eauto.
-    - apply Forall_forall; intros * Hin.
-      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      apply it; auto.
-    - apply Forall_forall; intros * Hin.
-      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      apply it; auto.
+    - simpl_Forall. apply H; auto.
+    - simpl_Forall. apply H; auto.
     - now apply IHe.
     - intros * Hin.
-      take (Forall _ _) and eapply Forall_forall in it; eauto.
-      apply it; auto.
+      simpl_Forall. apply H; auto.
     - now apply IHe.
     - intros * Hin.
-      take (Forall _ _) and eapply Forall_forall in it; eauto.
-      apply it; auto.
+      simpl_Forall. apply H; auto.
   Qed.
 
   Global Instance wt_rhs_Proper:
     Proper (@Permutation.Permutation _ ==>
             @Permutation.Permutation _ ==>
-            @Permutation.Permutation (ident * type) ==>
+            @Permutation.Permutation _ ==>
             @eq _ ==> iff)
            wt_rhs.
   Proof.
@@ -195,6 +192,48 @@ Module Type CETYPING
     all:try rewrite <-Htypes, <-Henv; auto.
     all:try rewrite Hexterns; auto; try rewrite <-Hexterns; auto.
   Qed.
+
+  Section incl.
+    Variable (types : list type).
+    Variable (vars vars' : list (ident * (type * bool))).
+    Hypothesis Hincl : incl vars vars'.
+
+    Fact wt_clock_incl : forall ck,
+      wt_clock types vars ck ->
+      wt_clock types vars' ck.
+    Proof.
+      intros * Hwt.
+      induction Hwt.
+      - constructor.
+      - econstructor; eauto.
+    Qed.
+
+    Lemma wt_exp_incl : forall e,
+        wt_exp types vars e ->
+        wt_exp types vars' e.
+    Proof.
+      induction e; intros Hwt; inv Hwt; econstructor; eauto.
+    Qed.
+
+    Lemma wt_cexp_incl : forall e,
+        wt_cexp types vars e ->
+        wt_cexp types vars' e.
+    Proof.
+      induction e using cexp_ind2'; intros Hwt; inv Hwt; econstructor; eauto using wt_exp_incl.
+      - simpl_Forall; eauto.
+      - intros. eapply Forall_forall in H; eauto.
+        simpl in *; eauto.
+    Qed.
+
+    Lemma wt_rhs_incl externs : forall e,
+        wt_rhs types externs vars e ->
+        wt_rhs types externs vars' e.
+    Proof.
+      intros * Wt; inv Wt; econstructor; simpl_Forall; eauto using wt_exp_incl, wt_cexp_incl.
+    Qed.
+
+  End incl.
+  Global Hint Resolve wt_clock_incl wt_exp_incl wt_cexp_incl wt_rhs_incl : nltyping stctyping.
 
 End CETYPING.
 

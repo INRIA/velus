@@ -3,7 +3,6 @@ From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
-From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Clocks.
 
 From Coq Require Import List.
@@ -16,10 +15,9 @@ Module Type STCORDERED
        (Import OpAux : OPERATORS_AUX   Ids Op)
        (Import Cks   : CLOCKS      Ids Op OpAux)
        (Import CESyn : CESYNTAX    Ids Op OpAux Cks)
-       (Import Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
-       (Import Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn).
+       (Import Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn).
 
-  Definition Ordered_systems := Ordered_program (fun f s => In f (map snd s.(s_subs))).
+  Definition Ordered_systems {prefs} := Ordered_program (fun f (s: @system prefs) => In f (map snd s.(s_subs))).
   (* Inductive Ordered_systems: program -> Prop := *)
   (* | Ordered_nil: forall enums, *)
   (*     Ordered_systems (Program enums []) *)
@@ -33,16 +31,16 @@ Module Type STCORDERED
   (*       Forall (fun s' => s.(s_name) <> s'.(s_name))%type P -> *)
   (*       Ordered_systems (Program enums (s :: P)). *)
 
-  Lemma Ordered_systems_append:
-    forall P P' enums externs,
+  Lemma Ordered_systems_append {prefs}:
+    forall (P P': list (@system prefs)) enums externs,
       Ordered_systems (Program enums externs (P ++ P')) ->
       Ordered_systems (Program enums externs P').
   Proof.
     intros * Ord; eapply Ordered_program_append' in Ord as (?&?); simpl in *; eauto.
   Qed.
 
-  Lemma Ordered_systems_split:
-    forall P1 s P enums externs,
+  Lemma Ordered_systems_split {prefs}:
+    forall P1 (s: @system prefs) P enums externs,
       Ordered_systems (Program enums externs (P1 ++ s :: P)) ->
       Forall (fun xb =>
                   find_system (snd xb) (Program enums externs P1) = None
@@ -64,8 +62,8 @@ Module Type STCORDERED
     - apply Spec, in_map_iff; eexists; (intuition eauto); reflexivity.
   Qed.
 
-  Corollary Ordered_systems_find_In_systems:
-    forall P b s P',
+  Corollary Ordered_systems_find_In_systems {prefs} :
+    forall P b (s: @system prefs) P',
       Ordered_systems P ->
       find_system b P = Some (s, P') ->
       forall x b,
@@ -82,8 +80,8 @@ Module Type STCORDERED
     eapply Forall_forall in Hin; eauto; simpl in *; intuition.
   Qed.
 
-  Lemma Ordered_systems_find_system:
-    forall P b s P',
+  Lemma Ordered_systems_find_system {prefs} :
+    forall P b (s: @system prefs) P',
       Ordered_systems P ->
       find_system b P = Some (s, P') ->
       Ordered_systems P'.
@@ -97,8 +95,8 @@ Module Type STCORDERED
     rewrite Etypes, Eexterns in Ord; now inv Ord.
   Qed.
 
-  Lemma find_system_other_not_Is_system_in:
-    forall f s P s' P' types externs,
+  Lemma find_system_other_not_Is_system_in {prefs} :
+    forall f (s: @system prefs) P s' P' types externs,
       Ordered_systems (Program types externs (s :: P)) ->
       find_system f (Program types externs P) = Some (s', P') ->
       ~ Is_system_in s.(s_name) s'.(s_tcs).
@@ -110,8 +108,8 @@ Module Type STCORDERED
     now apply s_subs_in_tcs.
   Qed.
 
-  Lemma find_system_not_Is_system_in:
-    forall f s P P',
+  Lemma find_system_not_Is_system_in {prefs}:
+    forall f (s: @system prefs) P P',
       Ordered_systems P ->
       find_system f P = Some (s, P') ->
       ~ Is_system_in s.(s_name) s.(s_tcs).
@@ -133,7 +131,6 @@ Module StcOrderedFun
        (Cks   : CLOCKS      Ids Op OpAux)
        (CESyn : CESYNTAX    Ids Op OpAux Cks)
        (Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
-       (Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
-<: STCORDERED Ids Op OpAux Cks CESyn Syn Syst.
-  Include STCORDERED Ids Op OpAux Cks CESyn Syn Syst.
+<: STCORDERED Ids Op OpAux Cks CESyn Syn.
+  Include STCORDERED Ids Op OpAux Cks CESyn Syn.
 End StcOrderedFun.

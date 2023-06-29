@@ -34,6 +34,7 @@ module type SYNTAX =
 
     type equation =
     | EqDef of ident * clock * rhs
+    | EqLast of ident * typ * clock * const * (ident * clock) list
     | EqApp of idents * clock * ident * exp list * (ident * clock) list
     | EqFby of ident * clock * const * exp * (ident * clock) list
 
@@ -41,7 +42,7 @@ module type SYNTAX =
       n_name : ident;
       n_in   : (ident * (typ * clock)) list;
       n_out  : (ident * (typ * clock)) list;
-      n_vars : (ident * (typ * clock)) list;
+      n_vars : (ident * ((typ * clock) * bool)) list;
       n_eqs  : equation list }
 
     type global = {
@@ -107,6 +108,16 @@ module PrintFun
           Ops.print_const (v0, CE.typeof e)
           print_exp e
           (print_comma_list print_ident) (List.map fst ckrs)
+      | NL.EqLast (x, ty, _, v0, []) ->
+          fprintf p "@[<hov 2>last %a =@ %a;@]"
+            print_ident x
+            Ops.print_const (v0, ty)
+      | NL.EqLast (x, ty, _, v0, ckrs) ->
+        fprintf p "@[<hov 2>last %a =@ %a every %a;@]"
+          print_ident x
+          Ops.print_const (v0, ty)
+          (print_comma_list print_ident) (List.map fst ckrs)
+
 
     let print_equations p =
       pp_print_list ~pp_sep:pp_force_newline print_equation p
@@ -127,7 +138,7 @@ module PrintFun
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        (print_semicol_list_as "var" print_decl) locals
+        (print_semicol_list_as "var" print_decl) (List.map (fun (x, (tyck, _)) -> (x, tyck)) locals)
         print_equations (List.rev eqs)
 
     let print_extern_decl p (f, (tyins, tyout)) =

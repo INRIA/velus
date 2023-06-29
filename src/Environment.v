@@ -490,6 +490,13 @@ Module Env.
       now apply Props.P.F.empty_in_iff in HH.
     Qed.
 
+    Fact from_list_find_iff : forall xs x (y : A),
+        NoDupMembers xs ->
+        Env.find x (from_list xs) = Some y <-> List.In (x, y) xs.
+    Proof.
+      intros * ND; split; intros; eauto using from_list_find_In, find_In_from_list.
+    Qed.
+
     Lemma In_find:
       forall x (s: t A),
         In x s <-> (exists v, find x s = Some v).
@@ -942,6 +949,18 @@ Module Env.
     Qed.
 
   End Extra.
+
+  Fact from_list_rev : forall xs,
+      NoDupMembers xs ->
+      NoDup (List.map snd xs) ->
+      forall x y, Env.find x (from_list xs) = Some y
+             <-> Env.find y (from_list (List.map (fun x => (snd x, fst x)) xs)) = Some x.
+  Proof.
+    intros * ND1 ND2 *.
+    rewrite ? from_list_find_iff; auto.
+    2:now rewrite fst_NoDupMembers, List.map_map.
+    split; intros In; [solve_In|simpl_In; auto].
+  Qed.
 
   (** Equivalence of Environments *)
 

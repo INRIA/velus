@@ -11,6 +11,7 @@ From Velus Require Import Common.
 From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
@@ -315,6 +316,8 @@ Module Type NLINDEXEDSEMANTICS
       destruct n; simpl; rewrite Hrs'; auto.
   Qed.
 
+  Definition var_history (H: history) := fun n => (var_env (H n)).
+
   Section NodeSemantics.
 
     Variable G: global.
@@ -322,27 +325,36 @@ Module Type NLINDEXEDSEMANTICS
     Inductive sem_equation: stream bool -> history -> equation -> Prop :=
     | SEqDef:
         forall bk H x xs ck ce,
-          sem_var H x xs ->
+          sem_var H (Var x)  xs ->
           sem_arhs bk H ck ce xs ->
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
         forall bk H x ck f arg xrs ys rs ls xs,
           sem_exps bk H arg ls ->
           sem_vars H x xs ->
-          sem_clock bk H ck (clock_of ls) ->
-          Forall2 (sem_var H) (map fst xrs) ys ->
+          sem_clock bk (var_history H) ck (clock_of ls) ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
           bools_ofs ys rs ->
           (forall k, sem_node f (mask k rs ls) (mask k rs xs)) ->
           sem_equation bk H (EqApp x ck f arg xrs)
     | SEqFby:
         forall bk H x ls xs c0 ck le xrs ys rs,
           sem_aexp bk H ck le ls ->
-          sem_var H x xs ->
-          Forall2 (sem_var H) (map fst xrs) ys ->
-          sem_clocked_vars bk H xrs ->
+          sem_var H (Var x) xs ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars bk H (map (fun '(x, ck) => (x, (ck, false))) xrs) -> *)
           bools_ofs ys rs ->
           xs = reset (sem_const c0) (fby (sem_const c0) ls) rs ->
           sem_equation bk H (EqFby x ck c0 le xrs)
+    | SEqLast:
+        forall bk H x ty ck c0 xrs xs ys rs,
+          sem_var H (Var x) xs ->
+          sem_clocked_var bk H (Var x) ck ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars bk H (map (fun '(x, ck) => (x, (ck, false))) xrs) -> *)
+          bools_ofs ys rs ->
+          sem_var H (Last x) (reset (sem_const c0) (fby (sem_const c0) xs) rs) ->
+          sem_equation bk H (EqLast x ty ck c0 xrs)
 
     with sem_node: ident -> stream (list svalue) -> stream (list svalue) -> Prop :=
          | SNode:
@@ -351,7 +363,7 @@ Module Type NLINDEXEDSEMANTICS
                find_node f G = Some n ->
                sem_vars H (map fst n.(n_in)) xss ->
                sem_vars H (map fst n.(n_out)) yss ->
-               sem_clocked_vars bk H (idsnd n.(n_in)) ->
+               sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
                Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
 
@@ -460,7 +472,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqDefCase:
       forall bk H x xs ck ce,
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         sem_arhs bk H ck ce xs ->
         P_equation bk H (EqDef x ck ce).
 
@@ -468,8 +480,8 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H x ck f arg xrs ys rs ls xs,
         sem_exps bk H arg ls ->
         sem_vars H x xs ->
-        sem_clock bk H ck (clock_of ls) ->
-        Forall2 (sem_var H) (map fst xrs) ys ->
+        sem_clock bk (var_history H) ck (clock_of ls) ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
         bools_ofs ys rs ->
         (forall k, sem_node G f (mask k rs ls) (mask k rs xs)
               /\ P_node f (mask k rs ls) (mask k rs xs)) ->
@@ -478,12 +490,21 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqFbyCase:
       forall bk H x ls xs c0 ck le xrs ys rs,
         sem_aexp bk H ck le ls ->
-        sem_var H x xs ->
-        Forall2 (sem_var H) (map fst xrs) ys ->
-        sem_clocked_vars bk H xrs ->
+        sem_var H (Var x) xs ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
         bools_ofs ys rs ->
+        (* sem_clocked_vars bk H xrs -> *)
         xs = reset (sem_const c0) (fby (sem_const c0) ls) rs ->
         P_equation bk H (EqFby x ck c0 le xrs).
+
+    Hypothesis EqLastCase:
+      forall bk H x ty ck c0 xrs xs ys rs,
+        sem_var H (Var x) xs ->
+        sem_clocked_var bk H (Var x) ck ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+        bools_ofs ys rs ->
+        sem_var H (Last x) (reset (sem_const c0) (fby (sem_const c0) xs) rs) ->
+        P_equation bk H (EqLast x ty ck c0 xrs).
 
     Hypothesis NodeCase:
       forall bk H f xss yss n,
@@ -491,7 +512,7 @@ enough: it does not support the internal fixpoint introduced by
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        sem_clocked_vars bk H (idsnd n.(n_in)) ->
+        sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
         Forall (sem_equation G bk H) n.(n_eqs) ->
         Forall (P_equation bk H) n.(n_eqs) ->
         P_node f xss yss.
@@ -552,19 +573,17 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros node G enums externs f xs ys Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
-                     |
-                     | bk H f xs ys n Hbk Hf ??? Heqs IH]
+    induction Hsem as
+      [| bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+      | |
+      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation (Global enums externs G) bk H eq).
-    - econstructor; eassumption.
+                                      -> sem_equation (Global enums externs G) bk H eq); eauto with nlsem.
     - intro Hnin.
       eapply SEqApp; eauto.
       intro k; specialize (Hnodes k); destruct Hnodes as (?&IH).
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
-    - intro; eapply SEqFby; eassumption.
     - intro.
       rewrite find_node_other with (1:=Hnf) in Hf.
       eapply SNode; eauto.
@@ -583,19 +602,17 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros node G enums externs f xs ys Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
-                     |
-                     | bk H f xs ys n Hbk Hf ??? Heqs IH]
-                        using sem_node_mult
+    induction Hsem as
+      [| bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+      | |
+      | bk H f xs ys n Hbk Hf ??? Heqs IH]
+        using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation (Global enums externs (node::G)) bk H eq).
-    - econstructor; eassumption.
+                                      -> sem_equation (Global enums externs (node::G)) bk H eq); eauto with nlsem.
     - intro Hnin.
       eapply SEqApp; eauto.
       intro k; specialize (Hnodes k); destruct Hnodes as (?&IH).
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
-    - intro; eapply SEqFby; eassumption.
     - intro; subst.
       econstructor; auto.
       rewrite find_node_other; eauto.
@@ -679,10 +696,8 @@ enough: it does not support the internal fixpoint introduced by
       with signature eq_str ==> eq ==> eq ==> Basics.impl
         as sem_equation_eq_str.
   Proof.
-    intros * E ?? Sem.
-    induction Sem; econstructor; eauto;
-      try eapply lift_eq_str; eauto; try reflexivity.
-    rewrite <-E. eauto.
+    intros * E ?? Sem; inv Sem; econstructor; eauto.
+    all:intros ?; now rewrite <-E.
   Qed.
 
   Add Parametric Morphism G f: (sem_node G f)

@@ -35,7 +35,7 @@ Module Type COINDINDEXED
     reflexivity.
   Qed.
 
-  Fact tr_history_equiv: forall H,
+  Fact tr_history_equiv {K}: forall (H: @CStr.history K),
       FEnv.Equiv (@EqSt _) (ICStr.tr_history (CIStr.tr_history H)) H.
   Proof.
     intros H.
@@ -46,7 +46,7 @@ Module Type COINDINDEXED
     rewrite init_from_nth, Nat.add_0_r; auto.
   Qed.
 
-  Lemma sem_var_equiv : forall H x v,
+  Lemma sem_var_equiv {K} : forall (H: @CStr.history K) x v,
       CStr.sem_var H x v <->
       IStr.sem_var (CIStr.tr_history H) x (tr_Stream v).
   Proof.

@@ -23,6 +23,7 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> rhs -> equation
+  | EqLast : ident -> type -> clock -> const -> list (ident * clock) -> equation
   | EqApp : list ident -> clock -> ident -> list exp -> list (ident * clock) -> equation
   | EqFby : ident -> clock -> const -> exp -> list (ident * clock) -> equation.
 
@@ -31,12 +32,22 @@ Module Type NLSYNTAX
   Definition var_defined (eq: equation) : list ident :=
     match eq with
     | EqDef x _ _ => [x]
+    | EqLast _ _ _ _ _ => []
     | EqApp x _ _ _ _ => x
     | EqFby x _ _ _ _ => [x]
     end.
 
   Definition vars_defined (eqs: list equation) : list ident :=
     flat_map var_defined eqs.
+
+  Definition last_defined (eq: equation) : list ident :=
+    match eq with
+    | EqLast x _ _ _ _ => [x]
+    | _ => []
+    end.
+
+  Definition lasts_defined (eqs: list equation) : list ident :=
+    flat_map last_defined eqs.
 
   Definition is_fby (eq: equation) : bool :=
     match eq with
@@ -56,22 +67,46 @@ Module Type NLSYNTAX
     | _ => false
     end.
 
+  Definition is_def_cexp (eq: equation) : bool :=
+    match eq with
+    | EqDef _ _ (Ecexp _) => true
+    | _ => false
+    end.
+
+  Definition is_def_rhs (eq: equation) : bool :=
+    match eq with
+    | EqDef _ _ (Eextcall _ _ _) => true
+    | _ => false
+    end.
+
+  Definition is_last (eq: equation) : bool :=
+    match eq with
+    | EqLast _ _ _ _ _ => true
+    | _ => false
+    end.
+
   Record node : Type :=
     mk_node {
         n_name   : ident;                                (* name *)
         n_in     : list (ident * (type * clock));  (* inputs *)
         n_out    : list (ident * (type * clock));  (* outputs *)
-        n_vars   : list (ident * (type * clock));  (* local variables *)
-        n_eqs    : list equation;                        (* equations *)
+        n_vars   : list (ident * (type * clock * bool));  (* local variables *)
+        n_eqs    : list equation;                      (* equations *)
 
         n_ingt0  : 0 < length n_in;
         n_outgt0 : 0 < length n_out;
         n_defd   : Permutation (vars_defined n_eqs)
-                               (map fst (n_vars ++ n_out));
+                     (map fst n_vars ++ map fst n_out);
+        n_lastd1 : Permutation (lasts_defined n_eqs)
+                     (map fst (filter (fun '(x, (_, _, islast)) => islast) n_vars));
+        n_lastd2 : forall x ty ck, In (x, (ty, ck, true)) n_vars ->
+                              In x (vars_defined (filter is_def_cexp n_eqs));
         n_vout   : forall out, In out (map fst n_out) ->
                           ~ In out (vars_defined (filter is_fby n_eqs));
-        n_nodup  : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good   : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst (n_in ++ n_vars ++ n_out)) /\ atom n_name
+        n_nodup  : NoDup (map fst n_in ++ map fst n_vars ++ map fst n_out);
+        n_good   : Forall (AtomOrGensym (PSP.of_list lustre_prefs))
+                     (map fst n_in ++ map fst n_vars ++ map fst n_out)
+                   /\ atom n_name
       }.
 
   Global Instance node_unit: ProgramUnit node :=
@@ -158,20 +193,12 @@ Module Type NLSYNTAX
   Lemma is_filtered_eqs:
     forall eqs,
       Permutation
-        (filter is_def eqs ++ filter is_app eqs ++ filter is_fby eqs)
+        (filter is_def eqs ++ filter is_last eqs ++ filter is_app eqs ++ filter is_fby eqs)
         eqs.
   Proof.
     induction eqs as [|eq eqs]; auto.
     destruct eq; simpl.
-    - now apply Permutation_cons.
-    - rewrite <-Permutation_cons_app.
-      apply Permutation_cons; reflexivity.
-      now symmetry.
-    - symmetry.
-      rewrite <-Permutation_app_assoc.
-      apply Permutation_cons_app.
-      rewrite Permutation_app_assoc.
-      now symmetry.
+    all:repeat rewrite <-Permutation_middle; now apply Permutation_cons.
   Qed.
 
   Lemma is_filtered_vars_defined:
@@ -198,8 +225,47 @@ Module Type NLSYNTAX
   Proof.
     intro n.
     rewrite n.(n_defd).
-    apply fst_NoDupMembers.
-    apply (NoDupMembers_app_r _ _ n.(n_nodup)).
+    eapply NoDup_app_r, n_nodup.
+  Qed.
+
+  Corollary NoDup_var_defined_def:
+    forall n,
+      NoDup (vars_defined (filter is_def n.(n_eqs))).
+  Proof.
+    intro n.
+    pose proof (NoDup_var_defined_n_eqs n) as ND.
+    rewrite <-is_filtered_vars_defined in ND.
+    eauto using NoDup_app_l, NoDup_app_r.
+  Qed.
+
+  Corollary NoDup_var_defined_fby:
+    forall n,
+      NoDup (vars_defined (filter is_fby n.(n_eqs))).
+  Proof.
+    intro n.
+    pose proof (NoDup_var_defined_n_eqs n) as ND.
+    rewrite <-is_filtered_vars_defined in ND.
+    eauto using NoDup_app_r.
+  Qed.
+
+  Corollary NoDup_var_defined_app:
+    forall n,
+      NoDup (vars_defined (filter is_app n.(n_eqs))).
+  Proof.
+    intro n.
+    pose proof (NoDup_var_defined_n_eqs n) as ND.
+    rewrite <-is_filtered_vars_defined in ND.
+    eauto using NoDup_app_r, NoDup_app_l.
+  Qed.
+
+  Lemma NoDup_last_defined_n_eqs:
+    forall n,
+      NoDup (lasts_defined n.(n_eqs)).
+  Proof.
+    intro n.
+    rewrite n.(n_lastd1).
+    eapply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers, NoDup_app_r, NoDup_app_l.
+    rewrite <-app_assoc; auto using n_nodup.
   Qed.
 
   Lemma n_eqsgt0:
@@ -210,8 +276,67 @@ Module Type NLSYNTAX
     pose proof (n_outgt0 n) as Out.
     unfold vars_defined in Defd.
     apply Permutation_length in Defd.
-    rewrite flat_map_length, map_length, app_length in Defd.
+    rewrite flat_map_length, app_length, 2 map_length in Defd.
     destruct (n_eqs n); simpl in *; lia.
+  Qed.
+
+  Fact def_cexp_def : forall eq,
+      is_def_cexp eq = true ->
+      is_def eq = true.
+  Proof.
+    unfold is_def_cexp, is_def.
+    intros; cases; auto.
+  Qed.
+
+  Fact def_cexp_rhs : forall eqs,
+      Permutation
+        (vars_defined (filter is_def eqs))
+        (vars_defined (filter is_def_cexp eqs) ++ vars_defined (filter is_def_rhs eqs)).
+  Proof.
+    induction eqs as [|[]]; simpl; auto.
+    destruct r; simpl; auto.
+    rewrite <-Permutation_middle. constructor; auto.
+  Qed.
+
+  Lemma n_lastrhs: forall n x,
+      In x (lasts_defined (n_eqs n)) ->
+      ~In x (vars_defined (filter is_def_rhs (n_eqs n))).
+  Proof.
+    intros * In1 In2.
+    rewrite n_lastd1 in In1. simpl_In.
+    eapply n_lastd2 in Hin0.
+    eapply NoDup_app_In.
+    - rewrite <-def_cexp_rhs. apply NoDup_var_defined_def.
+    - eauto.
+    - eauto.
+  Qed.
+
+  Lemma n_lastfby: forall n x,
+      In x (lasts_defined (n_eqs n)) ->
+      ~In x (vars_defined (filter is_fby (n_eqs n))).
+  Proof.
+    intros * In1 In2.
+    rewrite n_lastd1 in In1. simpl_In.
+    eapply n_lastd2 in Hin0.
+    eapply NoDup_app_In.
+    - rewrite is_filtered_vars_defined. apply NoDup_var_defined_n_eqs.
+    - clear In2. unfold vars_defined in *.
+      solve_In. eauto using def_cexp_def.
+    - apply in_app_iff; eauto.
+  Qed.
+
+  Lemma n_lastapp: forall n x,
+      In x (lasts_defined (n_eqs n)) ->
+      ~In x (vars_defined (filter is_app (n_eqs n))).
+  Proof.
+    intros * In1 In2.
+    rewrite n_lastd1 in In1. simpl_In.
+    eapply n_lastd2 in Hin0.
+    eapply NoDup_app_In.
+    - rewrite is_filtered_vars_defined. apply NoDup_var_defined_n_eqs.
+    - clear In2. unfold vars_defined in *.
+      solve_In. eauto using def_cexp_def.
+    - apply in_app_iff; eauto.
   Qed.
 
   (* XXX: computationally, the following [gather_*] are useless: they
@@ -221,12 +346,14 @@ Module Type NLSYNTAX
     match eq with
     | EqDef _ _ _
     | EqApp _ _ _ _ _ => []
+    | EqLast x ty _ _ _ => [(x, ty)]
     | EqFby x _ _ e _ => [(x, typeof e)]
     end.
 
   Definition gather_inst_eq (eq: equation): list (ident * ident) :=
     match eq with
     | EqDef _ _ _
+    | EqLast _ _ _ _ _
     | EqFby _ _ _ _ _ => []
     | EqApp i _ f _ _ =>
       match i with
@@ -237,9 +364,8 @@ Module Type NLSYNTAX
 
   Definition gather_app_vars_eq (eq: equation): list ident :=
     match eq with
-    | EqDef _ _ _
-    | EqFby _ _ _ _ _ => []
     | EqApp xs _ _ _ _ => tl xs
+    | _ => []
     end.
 
   Definition gather_mems := flat_map gather_mem_eq.
@@ -247,6 +373,8 @@ Module Type NLSYNTAX
   Definition gather_app_vars := flat_map gather_app_vars_eq.
 
   (** Basic syntactical properties *)
+
+  (* TODO remove *)
 
   (* Lemma In_gather_mems_cons: *)
   (*   forall eq eqs x, *)
@@ -313,30 +441,43 @@ Module Type NLSYNTAX
     rewrite E in H; simpl in H; lia.
   Qed.
 
-  Lemma InMembers_gather_mems_In_vars_defined:
-    forall eqs x,
-      InMembers x (gather_mems eqs) -> In x (vars_defined eqs).
+  Lemma vars_defined_fby_vars : forall n x,
+      In x (vars_defined (filter is_fby (n_eqs n))) ->
+      In x (map fst (n_vars n)).
   Proof.
-    induction eqs as [|[]]; simpl; auto; intros * Hin.
-    - apply in_app; auto.
-    - intuition.
+    intros * Def.
+    assert (In x (vars_defined (n_eqs n))) as Def'.
+    { unfold vars_defined in *. solve_In. }
+    rewrite n_defd in Def'. apply in_app_iff in Def' as [|Def']; auto.
+    exfalso. eapply n_vout; eauto.
   Qed.
 
-  Lemma n_nodup_gather_mems:
-    forall n,
-      NoDup (gather_mems (n_eqs n)).
-  Proof.
-    intro.
-    pose proof (NoDup_var_defined_n_eqs n) as Hnodup.
-    unfold gather_mems, vars_defined in *.
-    induction (n_eqs n) as [|[]]; simpl in *; intros; auto.
-    - constructor.
-    - inv Hnodup; auto.
-    - rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup; auto.
-    - inv Hnodup; constructor; auto.
-      apply NotInMembers_NotIn; auto.
-      intros Hin; apply InMembers_gather_mems_In_vars_defined in Hin; contradiction.
-  Qed.
+  (* TODO fix or remove *)
+
+  (* Lemma InMembers_gather_mems_In_vars_defined: *)
+  (*   forall eqs x, *)
+  (*     InMembers x (gather_mems eqs) -> In x (vars_defined eqs). *)
+  (* Proof. *)
+  (*   induction eqs as [|[]]; simpl; auto; intros * Hin. *)
+  (*   - apply in_app; auto. *)
+  (*   - intuition. *)
+  (* Qed. *)
+
+  (* Lemma n_nodup_gather_mems: *)
+  (*   forall n, *)
+  (*     NoDup (gather_mems (n_eqs n)). *)
+  (* Proof. *)
+  (*   intro. *)
+  (*   pose proof (NoDup_var_defined_n_eqs n) as Hnodup. *)
+  (*   unfold gather_mems, vars_defined in *. *)
+  (*   induction (n_eqs n) as [|[]]; simpl in *; intros; auto. *)
+  (*   - constructor. *)
+  (*   - inv Hnodup; auto. *)
+  (*   - rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup; auto. *)
+  (*   - inv Hnodup; constructor; auto. *)
+  (*     apply NotInMembers_NotIn; auto. *)
+  (*     intros Hin; apply InMembers_gather_mems_In_vars_defined in Hin; contradiction. *)
+  (* Qed. *)
 
   (** Interface equivalence between nodes *)
 

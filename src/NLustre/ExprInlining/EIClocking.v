@@ -35,20 +35,21 @@ Module Type EICLOCKING
       NoDupMembers Γ ->
       Forall (wc_equation G Γ) eqs ->
       Forall (fun '(x, e) => exists ck, wc_cexp Γ e ck
-                          /\ forall ck', In (x, ck') Γ -> ck' = ck) (inlinable vars eqs).
+                          /\ forall ck' islast, In (x, (ck', islast)) Γ -> ck' = ck) (inlinable vars eqs).
   Proof.
     intros * Nd Wc.
     unfold inlinable. simpl_Forall. simpl_In. simpl_Forall.
     clear Hf. cases. inv Hf0.
     inv Wc. take (wc_rhs _ _ _) and inv it. simpl in *. do 2 esplit; eauto.
-    intros * Hin; eauto using NoDupMembers_det.
+    intros * Hin.
+    eapply NoDupMembers_det in H1; eauto. now inv H1.
   Qed.
 
   Section inline.
-    Variable (G : global) (Γ : list (ident * clock)).
+    Variable (G : global) (Γ : list (ident * (clock * bool))).
     Variable (x : ident) (ck : clock).
 
-    Hypothesis Wc2 : forall ck', In (x, ck') Γ -> ck' = ck.
+    Hypothesis Wc2 : forall ck' islast, In (x, (ck', islast)) Γ -> ck' = ck.
 
     Section inline_exp.
       Variable (xe : exp).
@@ -60,10 +61,10 @@ Module Type EICLOCKING
           wc_exp Γ (inline_in_exp x xe e) ck.
       Proof.
         induction e; simpl; auto; intros * Wc; inv Wc.
-        - cases_eqn Eq; auto with nlclocking.
+        - cases_eqn Eq; eauto with nlclocking.
           rewrite equiv_decb_equiv in Eq. inv Eq.
-          apply Wc2 in H2; subst; auto.
-        - auto with nlclocking.
+          apply Wc2 in H2; subst; eauto.
+        - eauto with nlclocking.
         - constructor; auto.
         - constructor; auto.
       Qed.
@@ -88,7 +89,7 @@ Module Type EICLOCKING
           wc_cexp Γ (inline_in_cexp x xe ce) ck.
       Proof.
         induction ce using cexp_ind2'; intros * Wc; inv Wc; simpl; auto.
-        - constructor; auto; simpl_Forall; auto.
+        - econstructor; auto; simpl_Forall; eauto.
           + intro contra. apply map_eq_nil in contra; auto.
           + rewrite map_length. simpl_Forall; auto.
         - econstructor; eauto using try_inline_in_exp_wc.
@@ -119,7 +120,13 @@ Module Type EICLOCKING
     intros * (Wc1&Wc2&Wc3&Wc4).
     repeat (split; auto). simpl.
     unfold inline_all_possible.
-    eapply inlinable_wc with (vars:=idsnd (n_vars n)) in Wc4 as Wc5; [|apply NoDupMembers_idsnd, n_nodup].
+    eapply inlinable_wc with (vars:=idck (n_vars n)) in Wc4 as Wc5.
+    2:{ erewrite fst_NoDupMembers, map_app, 2 map_map, map_app, <-app_assoc,
+          Permutation.Permutation_app_comm with (l':=map _ (n_vars _)),
+          map_ext with (l:=n_in _), map_ext with (l:=n_out _), map_ext with (l:=n_vars _).
+        apply n_nodup.
+        all:intros; destruct_conjs; auto.
+    }
     rewrite Forall_rev in Wc5. rewrite <-fold_left_rev_right.
     induction Wc5 as [|(?&?)]; simpl.
     - simpl_Forall; eauto using global_iface_eq_wc_eq, exp_inlining_iface_eq.

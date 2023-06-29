@@ -35,22 +35,26 @@ Module Type NLCOINDSEMANTICS
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Ord   : NLORDERED     Ids Op OpAux Cks CESyn Syn).
 
-  Definition history := @history ident.
-  Definition sem_var := @sem_var ident.
+  Definition history := @history var_last.
+  Definition sem_var := @sem_var var_last.
 
-  Definition sem_clocked_var (H: history) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
+  Definition var_history (H : history) := fun x => H (Var x).
+
+  Definition sem_clocked_var (H: history) (b: Stream bool) (x: var_last) (ck: clock) : Prop :=
     (forall xs,
         sem_var H x xs ->
         exists bs,
-          sem_clock H b ck bs
+          sem_clock (var_history H) b ck bs
           /\ aligned xs bs)
     /\ (forall bs,
-          sem_clock H b ck bs ->
+          sem_clock (var_history H) b ck bs ->
           exists xs,
             sem_var H x xs).
 
-  Definition sem_clocked_vars (H: history) (b: Stream bool) (xs: list (ident * clock)) : Prop :=
-    Forall (fun xc => sem_clocked_var H b (fst xc) (snd xc)) xs.
+  Definition sem_clocked_vars (H: history) (b: Stream bool) (xs: list (ident * (clock * bool))) : Prop :=
+    Forall (fun '(x, (ck, islast)) =>
+              sem_clocked_var H b (Var x) ck
+              /\ if (islast: bool) then sem_clocked_var H b (Last x) ck else True) xs.
 
   Inductive sem_exp: history -> Stream bool -> exp -> Stream svalue -> Prop :=
   | Sconst:
@@ -63,12 +67,16 @@ Module Type NLCOINDSEMANTICS
         sem_exp H b (Eenum x ty) cs
   | Svar:
       forall H b x ty xs,
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         sem_exp H b (Evar x ty) xs
+  | Slast:
+      forall H b x ty xs,
+        sem_var H (Last x) xs ->
+        sem_exp H b (Elast x ty) xs
   | Swhen:
       forall H b e x tx c es xs os,
         sem_exp H b e es ->
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         when c es xs os ->
         sem_exp H b (Ewhen e (x, tx) c) os
   | Sunop:
@@ -86,7 +94,7 @@ Module Type NLCOINDSEMANTICS
   Inductive sem_cexp: history -> Stream bool -> cexp -> Stream svalue -> Prop :=
   | Smerge:
       forall H b x tx es ty xs ess os,
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         Forall2 (sem_cexp H b) es ess ->
         merge xs (combine (seq 0 (length ess)) ess) os ->
         sem_cexp H b (Emerge (x, tx) es ty) os
@@ -119,7 +127,7 @@ Module Type NLCOINDSEMANTICS
 
     Hypothesis MergeCase:
       forall H b x tx es ty xs ess os,
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         Forall2 (sem_cexp H b) es ess ->
         Forall2 (P_cexp H b) es ess ->
         merge xs (combine (seq 0 (length ess)) ess) os ->
@@ -159,13 +167,13 @@ Module Type NLCOINDSEMANTICS
   | Stick:
       forall H b ck a e es bs,
         sem H b a (present e ⋅ es) ->
-        sem_clock H b ck (true ⋅ bs) ->
+        sem_clock (var_history H) b ck (true ⋅ bs) ->
         sem_annot sem (history_tl H) (tl b) ck a es ->
         sem_annot sem H b ck a (present e ⋅ es)
   | Sabs:
       forall H b ck a es bs,
         sem H b a (absent ⋅ es) ->
-        sem_clock H b ck (false ⋅ bs) ->
+        sem_clock (var_history H) b ck (false ⋅ bs) ->
         sem_annot sem (history_tl H) (tl b) ck a es ->
         sem_annot sem H b ck a (absent ⋅ es).
 
@@ -274,35 +282,45 @@ Module Type NLCOINDSEMANTICS
     | SeqDef:
         forall H b x ck e es,
           sem_arhs H b ck e es ->
-          sem_var H x es ->
+          sem_var H (Var x) es ->
           sem_equation H b (EqDef x ck e)
     | SeqApp:
         forall H b xs ck f es xrs ys rs ess oss,
           Forall2 (sem_exp H b) es ess ->
-          sem_clock H b ck (clocks_of ess) ->
-          Forall2 (sem_var H) (List.map fst xrs) ys ->
+          sem_clock (var_history H) b ck (clocks_of ess) ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
           bools_ofs ys rs ->
           (forall k, sem_node f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)) ->
-          Forall2 (sem_var H) xs oss ->
+          Forall2 (fun x => sem_var H (Var x)) xs oss ->
           sem_equation H b (EqApp xs ck f es xrs)
     | SeqFby:
         forall H b x ck c0 e xrs es os ys rs,
           sem_aexp H b ck e es ->
-          Forall2 (sem_var H) (List.map fst xrs) ys ->
-          sem_clocked_vars H b xrs ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars H b xrs -> *)
           bools_ofs ys rs ->
           os = reset (sem_const c0) (sfby (sem_const c0) es) rs ->
-          sem_var H x os ->
+          sem_var H (Var x) os ->
           sem_equation H b (EqFby x ck c0 e xrs)
+    | SEqLast:
+        forall bk H x ty ck c0 xrs xs ys rs,
+          sem_var H (Var x) xs ->
+          sem_clocked_var H bk (Var x) ck ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars bk H (map (fun '(x, ck) => (x, (ck, false))) xrs) -> *)
+          bools_ofs ys rs ->
+          sem_var H (Last x) (reset (sem_const c0) (sfby (sem_const c0) xs) rs) ->
+          sem_equation H bk (EqLast x ty ck c0 xrs)
 
     with sem_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
       SNode:
-        forall H f n xss oss,
+        forall bk H f n xss oss,
+          bk = clocks_of xss ->
           find_node f G = Some n ->
-          Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
-          Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-          sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
-          Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) n.(n_in) xss ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) n.(n_out) oss ->
+          sem_clocked_vars H bk (List.map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
+          Forall (sem_equation H bk) n.(n_eqs) ->
           sem_node f xss oss.
 
   End NodeSemantics.
@@ -319,38 +337,49 @@ Module Type NLCOINDSEMANTICS
     Hypothesis EqDefCase:
       forall H b x ck e es,
         sem_arhs H b ck e es ->
-        sem_var H x es ->
+        sem_var H (Var x) es ->
         P_equation H b (EqDef x ck e).
 
     Hypothesis EqAppCase:
       forall H b xs ck f es xrs ys rs ess oss,
         Forall2 (sem_exp H b) es ess ->
-        sem_clock H b ck (clocks_of ess) ->
-        Forall2 (sem_var H) (List.map fst xrs) ys ->
+        sem_clock (var_history H) b ck (clocks_of ess) ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
         bools_ofs ys rs ->
         (forall k, sem_node G f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)
               /\ P_node f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)) ->
-        Forall2 (sem_var H) xs oss ->
+        Forall2 (fun x => sem_var H (Var x)) xs oss ->
         P_equation H b (EqApp xs ck f es xrs).
 
     Hypothesis EqFbyCase:
       forall H b x ck c0 e xrs es os ys rs,
         sem_aexp H b ck e es ->
-        Forall2 (sem_var H) (List.map fst xrs) ys ->
-        sem_clocked_vars H b xrs ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+        (* sem_clocked_vars H b xrs -> *)
         bools_ofs ys rs ->
         os = reset (sem_const c0) (sfby (sem_const c0) es) rs ->
-        sem_var H x os ->
+        sem_var H (Var x) os ->
         P_equation H b (EqFby x ck c0 e xrs).
 
+    Hypothesis EqLastCase:
+      forall bk H x ty ck c0 xrs xs ys rs,
+        sem_var H (Var x) xs ->
+        sem_clocked_var H bk (Var x) ck ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+        (* sem_clocked_vars bk H (map (fun '(x, ck) => (x, (ck, false))) xrs) -> *)
+        bools_ofs ys rs ->
+        sem_var H (Last x) (reset (sem_const c0) (sfby (sem_const c0) xs) rs) ->
+        P_equation H bk (EqLast x ty ck c0 xrs).
+
     Hypothesis NodeCase:
-      forall H f n xss oss,
+      forall bk H f n xss oss,
+        bk = clocks_of xss ->
         find_node f G = Some n ->
-        Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
-        Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-        sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
-        Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
-        Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) n.(n_in) xss ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) n.(n_out) oss ->
+        sem_clocked_vars H bk (List.map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
+        Forall (sem_equation G H bk) n.(n_eqs) ->
+        Forall (P_equation H bk) n.(n_eqs) ->
         P_node f xss oss.
 
     Fixpoint sem_equation_mult
@@ -385,10 +414,7 @@ Module Type NLCOINDSEMANTICS
     intros * Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [
-                     |
-                     |
-                     | bk f n xs ys Hfind Hinp Hout Hscvs Heqs IH]
+    induction Hsem as [| | | | bk H f n xs ys Hbk Hfind Hinp Hout Hscvs Heqs IH]
       using sem_node_mult
       with (P_equation := fun bk H eq =>
                    ~Is_node_in_eq nd.(n_name) eq
@@ -406,9 +432,9 @@ Module Type NLCOINDSEMANTICS
       intros eq Hin HH. apply HH; clear HH.
       destruct eq; try inversion 1; subst.
       pose proof Hin as Hsem; apply Forall_forall with (1:=Heqs)in Hsem.
-      inversion_clear Hsem as [| ??????????????? Hsemn|].
+      inversion_clear Hsem as [| ??????????????? Hsemn| |].
       specialize (Hsemn 0).
-      inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
+      inversion_clear Hsemn as [ ??????? Hfind'].
       eapply find_node_In in Hfind' as (?&Hfind').
       apply Forall_forall with (1:=Hnin) in Hfind'. auto.
   Qed.
@@ -511,6 +537,8 @@ Module Type NLCOINDSEMANTICS
     - econstructor; eauto.
       eapply sem_var_EqSt; eauto.
     - econstructor; eauto.
+      eapply sem_var_EqSt; eauto.
+    - econstructor; eauto.
       apply IHSem; auto; try reflexivity.
       erewrite <-EH; eauto.
       now rewrite <-Exs.
@@ -558,6 +586,13 @@ Module Type NLCOINDSEMANTICS
     inv Sem; econstructor; eauto.
     instantiate (1:=ss). simpl_Forall.
     1,3:rewrite <-Eb, <-EH; auto. 1,2:now rewrite <-Exs.
+  Qed.
+
+  Add Parametric Morphism : var_history
+      with signature FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _)
+        as var_history_morph.
+  Proof.
+    intros * Eq id; unfold var_history; simpl; auto.
   Qed.
 
   Add Parametric Morphism A sem
@@ -629,11 +664,7 @@ Module Type NLCOINDSEMANTICS
   Proof.
     unfold Basics.impl; intros b b' Eb e Sem.
     induction Sem; econstructor; eauto; try now rewrite <-Eb.
-    - eapply Forall2_impl_In with (P := sem_exp H b); auto.
-      intros; now rewrite <-Eb.
-    - unfold sem_clocked_vars in *.
-      eapply Forall_impl; [|eauto].
-      intros; now rewrite <-Eb.
+    - simpl_Forall. now rewrite <-Eb.
   Qed.
 
   Add Parametric Morphism H : (sem_clocked_vars H)
@@ -641,8 +672,9 @@ Module Type NLCOINDSEMANTICS
         as sem_clocked_vars_morph.
   Proof.
     intros bs bs' E xs Sem.
-    induction Sem; constructor; auto.
-    now rewrite <-E.
+    unfold sem_clocked_vars in *.
+    simpl_Forall.
+    cases; now rewrite <-E.
   Qed.
 
   Add Parametric Morphism G : (sem_node G)
@@ -651,13 +683,13 @@ Module Type NLCOINDSEMANTICS
   Proof.
     unfold Basics.impl; intros f xss xss' Exss yss yss' Eyss Sem.
     induction Sem.
-    econstructor; eauto.
-    + instantiate (1:=H).
-      now rewrite <-Exss.
-    + now rewrite <-Eyss.
-    + now rewrite <-Exss.
-    + apply Forall_impl with (P:=sem_equation G H (clocks_of xss)); auto.
-      intro; now rewrite Exss.
+    econstructor; eauto. instantiate (1:=H).
+    + eapply Forall2_trans_ex in Exss; eauto. simpl_Forall.
+      take (_ ≡ _) and now rewrite <-it.
+    + eapply Forall2_trans_ex in Eyss; eauto. simpl_Forall.
+      take (_ ≡ _) and now rewrite <-it.
+    + subst. now rewrite <-Exss.
+    + simpl_Forall. subst. now rewrite <-Exss.
   Qed.
 
 End NLCOINDSEMANTICS.

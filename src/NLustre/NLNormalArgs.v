@@ -58,6 +58,9 @@ Module Type NLNORMALARGS
   | CEqDef:
       forall x ck ce,
         normal_args_eq G (EqDef x ck ce)
+  | CEqLast:
+    forall x ty ck c0 ckrs,
+      normal_args_eq G (EqLast x ty ck c0 ckrs)
   | CEqApp:
       forall xs ck f les r n,
         find_node f G = Some n ->
@@ -82,9 +85,9 @@ Module Type NLNORMALARGS
     intros node G enums externs Hnarg Hord.
     apply Forall_forall.
     intros eq Hin.
-    destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
+    destruct eq as [| |ys ck f les|]; eauto using normal_args_eq.
     eapply Forall_forall in Hnarg; eauto.
-    inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
+    inversion_clear Hnarg as [| |? ? ? ? ? ? Hfind Hnargs|].
     rewrite find_node_other in Hfind; eauto using normal_args_eq.
     rewrite Is_node_in_Forall in Hord.
     eapply Forall_forall in Hord; eauto.
@@ -100,9 +103,9 @@ Module Type NLNORMALARGS
     intros node G enums externs Hnarg Hord.
     apply Forall_forall.
     intros eq Hin.
-    destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
+    destruct eq as [| |ys ck f les|]; eauto using normal_args_eq.
     eapply Forall_forall in Hnarg; eauto.
-    inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
+    inversion_clear Hnarg as [| |? ? ? ? ? ? Hfind Hnargs|].
     erewrite <-find_node_other in Hfind; eauto using normal_args_eq.
     rewrite Is_node_in_Forall in Hord.
     eapply Forall_forall in Hord; eauto.

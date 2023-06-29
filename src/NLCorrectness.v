@@ -26,9 +26,9 @@ Import Obc.Sem.
 Import Obc.Typ.
 Import Obc.Equ.
 Import Obc.Def.
-Import Obc.Fus.
+Import Obc.Fus Fusion.
 Import Obc.SwN.
-Import Fusion.
+Import Obc.DCE.
 Import Stc2ObcInvariants.
 Import IStr.
 Import CStr.
@@ -120,44 +120,42 @@ Proof.
 Qed.
 
 Local Hint Resolve
-     fuse_wt_program
      fuse_call
      normalize_switches_call
-     fuse_wt_memory
-     normalize_switches_wt_memory
+     deadcode_call
+     stmt_call_eval_add_defaults
      fuse_loop_call
      normalize_switches_loop_call
-     wt_add_defaults_class
-     normalize_switches_wt_program
-     wt_memory_add_defaults
-     stmt_call_eval_add_defaults
+     deadcode_loop_call
      loop_call_add_defaults
+     fuse_wt_program
+     normalize_switches_wt_program
+     deadcode_program_wt
+     fuse_wt_memory
+     normalize_switches_wt_memory
+     deadcode_program_wt_memory
+     wt_add_defaults_class
+     wt_memory_add_defaults
      ProgramFusible_translate
+     CutCycles.CCTyp.cut_cycles_wt_program
+     CutCycles.CCClo.cut_cycles_wc_program
      Scheduler.scheduler_wc_program
-     NL2StcClocking.translate_wc
      Scheduler.scheduler_wt_program
+     NL2StcClocking.translate_wc
      NL2StcTyping.translate_wt
      Stc2ObcTyping.translate_wt
      No_Naked_Vars_add_defaults_class
+     translate_No_Overwrites
      fuse_No_Overwrites
      normalize_switches_No_Overwrites
-     translate_No_Overwrites
-     fuse_cannot_write_inputs
+     deadcode_program_No_Overwrites
      translate_cannot_write_inputs
+     fuse_cannot_write_inputs
      normalize_switches_cannot_write_inputs
+     deadcode_program_cannot_write_inputs
      wt_add_defaults_class
      wt_memory_add_defaults
      stmt_call_eval_add_defaults
-     loop_call_add_defaults
-     ProgramFusible_translate
-     Scheduler.scheduler_wc_program
-     NL2StcClocking.translate_wc
-     Scheduler.scheduler_wt_program
-     NL2StcTyping.translate_wt
-     Stc2ObcTyping.translate_wt
-     No_Naked_Vars_add_defaults_class
-     translate_No_Overwrites
-     translate_cannot_write_inputs
      node_in_out_not_nil : core.
 
 (** The trace of a NLustre node *)
@@ -381,10 +379,10 @@ Proof.
   rename G' into G, Hwti' into Hwti, Hsem' into Hsem.
 
   (* well-scheduled Stc program *)
-  destruct (is_well_sch (Scheduler.schedule (NL2Stc.translate G))) eqn: Sch;
-    simpl in COMP; try discriminate.
+  destruct (is_well_sch (Scheduler.schedule (CutCycles.CC.cut_cycles (NL2Stc.translate G)))) eqn: Sch;
+    setoid_rewrite Sch in COMP; simpl in COMP; try discriminate.
   unfold is_well_sch in Sch.
-  destruct (fold_left is_well_sch_system (Stc.Syn.systems (Scheduler.schedule (NL2Stc.translate G)))
+  destruct (fold_left is_well_sch_system (Stc.Syn.systems (Scheduler.schedule (CutCycles.CC.cut_cycles (NL2Stc.translate G))))
                       (OK tt)) eqn: Wsch; try discriminate; destruct u.
   inv Sch.
   apply is_well_sch_program in Wsch.
@@ -396,6 +394,7 @@ Proof.
       by (inv Hsem; eauto).
   pose proof Find as Find_node.
   apply find_node_find_system in Find as (P' & Find).
+  apply CutCycles.CC.cut_cycles_find_system in Find.
   apply Scheduler.scheduler_find_system in Find.
   pose proof Find as Find_system.
 
@@ -417,12 +416,13 @@ Proof.
   apply sem_msem_node in Hsem as (M & Hsem); auto.
 
   (* NLustre with memory to Stc loop *)
-  assert (Stc.Wdef.Well_defined (Scheduler.schedule (NL2Stc.translate G))).
+  assert (Stc.Wdef.Well_defined (Scheduler.schedule (CutCycles.CC.cut_cycles (NL2Stc.translate G)))).
   { split; [|split]; auto.
-    - apply Scheduler.scheduler_ordered, NL2StcCorr.Ordered_nodes_systems; auto.
-    - apply Scheduler.scheduler_normal_args, NL2StcNormalArgs.translate_normal_args; auto.
+    - apply Scheduler.scheduler_ordered, CutCycles.CCCor.cut_cycles_ordered, NL2StcCorr.Ordered_nodes_systems; auto.
+    - apply Scheduler.scheduler_normal_args, CutCycles.CCNorm.cut_cycles_normal_args, NL2StcNormalArgs.translate_normal_args; auto.
   }
   apply NL2StcCorr.correctness_loop in Hsem as (?& Hsem); auto.
+  apply CutCycles.CCCor.cut_cycles_loop in Hsem; auto.
   apply Scheduler.scheduler_loop in Hsem; auto.
 
   assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins' n) (map Some (ins' n)))
@@ -432,24 +432,27 @@ Proof.
              destruct (ins' n); simpl in *; try lia;
              constructor; discriminate).
 
-  assert (ComTyp.wt_memory (M 0) (Scheduler.schedule P')
-                           (Stc.Syn.mems_of_nexts (Stc.Syn.s_nexts (Scheduler.schedule_system (NL2Stc.translate_node main_node))))
-                           (Stc.Syn.s_subs (Scheduler.schedule_system (NL2Stc.translate_node main_node))))
-    by (take (Stc.Sem.initial_state _ _ _) and apply Scheduler.scheduler_initial_state in it;
-        eapply Stc.TypSem.initial_state_wt_memory with (2 := it); eauto).
+  remember (Scheduler.schedule_system (CutCycles.CC.cut_cycles_system (NL2Stc.translate_node main_node))) as sys.
+
+  assert (ComTyp.wt_memory (M 0) (Scheduler.schedule (CutCycles.CC.cut_cycles P'))
+                           (Stc.Syn.mems_of_states (Stc.Syn.s_lasts sys++Stc.Syn.s_nexts sys))
+                           (Stc.Syn.s_subs (Scheduler.schedule_system (CutCycles.CC.cut_cycles_system (NL2Stc.translate_node main_node))))).
+  { subst. take (Stc.Sem.initial_state _ _ _) and
+             apply CutCycles.CCCor.cut_cycles_initial_state, Scheduler.scheduler_initial_state in it.
+    eapply Stc.TypSem.initial_state_wt_memory with (2 := it); eauto. }
   assert (forall n,
              Forall2
                (fun xt vo =>
                   wt_option_value vo (fst (snd xt)))
-               (Stc.Syn.s_in (Scheduler.schedule_system (NL2Stc.translate_node main_node)))
+               (Stc.Syn.s_in sys)
                (map Some (ins' n))).
-  { subst ins'; simpl.
+  { subst sys ins'; simpl.
     apply Hwti in Find_node; clear - Find_node.
     rewrite wt_streams_spec in Find_node.
     intro n; specialize (Find_node n).
     setoid_rewrite Forall2_map_2 in Find_node.
     induction Find_node; simpl; auto.
-  }
+  } subst.
 
   (* Stc loop to Obc loop *)
   eapply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins' n))
@@ -458,10 +461,12 @@ Proof.
 
   (* aliases *)
   set (tr_G := NL2Stc.translate G) in *;
-    set (sch_tr_G := Scheduler.schedule tr_G) in *;
+    set (cut_tr_G := CutCycles.CC.cut_cycles tr_G) in *;
+    set (sch_tr_G := Scheduler.schedule cut_tr_G) in *;
     set (tr_sch_tr_G := Stc2Obc.translate sch_tr_G) in *;
     set (tr_main_node := NL2Stc.translate_node main_node) in *;
-    set (sch_tr_main_node := Scheduler.schedule_system tr_main_node) in *;
+    set (cut_tr_main_node := CutCycles.CC.cut_cycles_system tr_main_node) in *;
+    set (sch_tr_main_node := Scheduler.schedule_system cut_tr_main_node) in *;
     set (main_class := Stc2Obc.translate_system sch_tr_main_node) in *.
 
   (* Obc methods step and reset *)
@@ -471,11 +476,12 @@ Proof.
     set (m_reset := Stc2Obc.reset_method sch_tr_main_node) in *.
 
   (* well-typing *)
-  assert (Stc.Typ.wt_program sch_tr_G) by (subst sch_tr_G tr_G; auto).
+  assert (Stc.Typ.wt_program sch_tr_G) by (subst sch_tr_G cut_tr_G tr_G; auto).
   assert (wt_program tr_sch_tr_G) by (subst tr_sch_tr_G; auto).
-  assert (ComTyp.wt_memory me0 (Stc2Obc.translate (Scheduler.schedule P'))
+  assert (ComTyp.wt_memory me0 (Stc2Obc.translate (Scheduler.schedule (CutCycles.CC.cut_cycles P')))
                            (c_mems main_class) (c_objs main_class))
-    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?); eauto; simpl; auto with typing).
+    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?); eauto;
+        simpl; auto with typing).
   assert (wt_outs G main outs) as Hwto.
   { unfold wt_outs.
     intros * Find_node'; rewrite Find_node' in Find_node; inv Find_node.
@@ -498,52 +504,51 @@ Proof.
           apply wt_streams_spec, Hwto; auto).
 
   set (obc_p := add_defaults
-                  (total_if do_norm_switches normalize_switches
-                            (total_if do_fusion fuse_program tr_sch_tr_G))) in *.
+                  (total_if do_obc_dce deadcode_program
+                     (total_if do_norm_switches normalize_switches
+                        (total_if do_fusion fuse_program tr_sch_tr_G)))) in *.
   set (obc_p' := add_defaults
-                   (total_if do_norm_switches normalize_switches
-                             (total_if do_fusion fuse_program
-                                       (Stc2Obc.translate (Scheduler.schedule P'))))) in *.
+                   (total_if do_obc_dce deadcode_program
+                      (total_if do_norm_switches normalize_switches
+                         (total_if do_fusion fuse_program
+                            (Stc2Obc.translate (Scheduler.schedule (CutCycles.CC.cut_cycles P'))))))) in *.
   set (main_class' := GenerationProperties.c_main main obc_p P (do_sync tt) (do_expose tt) COMP) in *.
   set (main_step' := GenerationProperties.main_step main obc_p P (do_sync tt) (do_expose tt) COMP) in *.
 
   assert (obc_p' =
           GenerationProperties.prog_main main
-                                         (add_defaults (total_if do_norm_switches normalize_switches
-                                                                 (total_if do_fusion fuse_program tr_sch_tr_G)))
+                                         (add_defaults
+                                            (total_if do_obc_dce deadcode_program
+                                               (total_if do_norm_switches normalize_switches
+                                                  (total_if do_fusion fuse_program tr_sch_tr_G))))
                                          P (do_sync tt) (do_expose tt) COMP
           /\ main_class' =
             add_defaults_class
-              (total_if do_norm_switches normalize_class
-                        (total_if do_fusion fuse_class main_class))) as [Eq_prog Eq_main].
+              (total_if do_obc_dce deadcode_class
+                 (total_if do_norm_switches normalize_class
+                    (total_if do_fusion fuse_class main_class)))) as [Eq_prog Eq_main].
   { pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP) as Find'.
     subst obc_p main_class'; unfold total_if in *.
-    destruct (do_fusion tt), (do_norm_switches tt).
-    - apply fuse_find_class, normalize_switches_find_class, find_class_add_defaults_class in Find.
-      rewrite Find' in Find; injection Find; intros -> ->; split; auto.
-    - apply fuse_find_class, find_class_add_defaults_class in Find.
-      rewrite Find' in Find; injection Find; intros -> ->; auto.
-    - apply normalize_switches_find_class, find_class_add_defaults_class in Find.
-      rewrite Find' in Find; injection Find; intros -> ->; auto.
-    - apply find_class_add_defaults_class in Find.
-      rewrite Find' in Find; injection Find; intros -> ->; auto.
+    destruct (do_fusion tt); [apply fuse_find_class in Find|];
+      (destruct (do_norm_switches tt); [apply normalize_switches_find_class in Find|];
+       (destruct (do_obc_dce tt); [apply deadcode_find_class in Find|]));
+      apply find_class_add_defaults_class in Find;
+      subst tr_sch_tr_G sch_tr_G;
+      setoid_rewrite Find' in Find; inv Find; auto.
   }
   assert (main_step' =
           add_defaults_method
-            (total_if do_norm_switches normalize_method
-                      (total_if do_fusion fuse_method m_step))) as Eq_step.
+            (total_if do_obc_dce deadcode_method
+               (total_if do_norm_switches normalize_method
+                  (total_if do_fusion fuse_method m_step)))) as Eq_step.
   { pose proof (GenerationProperties.find_main_step _ _ _ _ _ COMP) as Find_step'.
-    subst obc_p main_class main_class' main_step'; unfold total_if in *.
-    rewrite Eq_main, add_defaults_class_find_method in Find_step'.
+    subst obc_p main_class main_class' main_step' tr_sch_tr_G sch_tr_G; unfold total_if in *.
+    setoid_rewrite Eq_main in Find_step'. rewrite add_defaults_class_find_method in Find_step'.
     apply option_map_inv in Find_step' as (?& Find_step' &?).
-    destruct (do_fusion tt), (do_norm_switches tt).
-    - apply fuse_find_method', normalize_switches_find_method in Find_step.
+    destruct (do_fusion tt); [apply fuse_find_method' in Find_step|];
+      (destruct (do_norm_switches tt); [apply normalize_switches_find_method in Find_step|];
+       (destruct (do_obc_dce tt); [apply deadcode_find_method in Find_step|]));
       rewrite Find_step' in Find_step; inv Find_step; auto.
-    - apply fuse_find_method' in Find_step.
-      rewrite Find_step' in Find_step; inv Find_step; auto.
-    - apply normalize_switches_find_method in Find_step.
-      rewrite Find_step' in Find_step; inv Find_step; auto.
-    - rewrite Find_step' in Find_step; inv Find_step; auto.
   }
   assert (forall n, wt_values (ins' n) (m_in main_step')) as WTins.
   { intro; specialize (Hwt_in n).
@@ -564,8 +569,10 @@ Proof.
            || (right; intro; eapply Neq, map_eq_nil; eauto))).
     unfold total_if; cases; simpl.
   }
-  assert (wt_program (total_if do_norm_switches normalize_switches
-                               (total_if do_fusion fuse_program tr_sch_tr_G)))
+  assert (wt_program
+            (total_if do_obc_dce deadcode_program
+               (total_if do_norm_switches normalize_switches
+                  (total_if do_fusion fuse_program tr_sch_tr_G))))
     by (unfold total_if; cases).
 
   eexists; split.
@@ -578,12 +585,12 @@ Proof.
                              with (3 := Call); eauto.
     + change [] with (map Some (@nil value)); eauto.
       apply stmt_call_eval_add_defaults; auto;
-        subst tr_sch_tr_G sch_tr_G tr_G;
-        unfold total_if; cases; eauto 6.
+        subst tr_sch_tr_G sch_tr_G cut_tr_G tr_G;
+        unfold total_if; cases; eauto 8.
     + apply loop_call_add_defaults; auto;
-        subst tr_sch_tr_G sch_tr_G tr_G;
-        unfold total_if; cases; eauto 6.
-    + subst main_class' obc_p'; rewrite Eq_main, <-Eq_prog.
+        subst tr_sch_tr_G sch_tr_G cut_tr_G tr_G;
+        unfold total_if; cases; eauto 8.
+    + subst main_class' obc_p' tr_sch_tr_G sch_tr_G. setoid_rewrite Eq_main. setoid_rewrite <-Eq_prog.
       apply wt_memory_add_defaults;
         unfold total_if; cases; eauto.
 
@@ -604,7 +611,8 @@ Proof.
 
     eapply IOStep with (Len_ins := Len_ins) (Len_outs := Len_outs) (Spec_in_out := Node_in_out_spec); auto.
     apply trace_inf_sim_step_node; auto;
-      subst main_step'; rewrite Eq_step; unfold total_if; cases.
+      subst obc_p main_step' tr_sch_tr_G sch_tr_G.
+    1,2:setoid_rewrite Eq_step; unfold total_if; cases.
 Qed.
 
 (** Correctness from NLustre to ASM  *)

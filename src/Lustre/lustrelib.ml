@@ -322,7 +322,7 @@ module PrintFun
     let rec print_block p = function
       | L.Beq eq -> print_equation p eq
       | L.Blast (x, e) ->
-        fprintf p "@[<hov 2>%a = %a@]"
+        fprintf p "@[<hov 2>last %a = %a@]"
           print_ident x
           print_exp e
       | L.Breset (blks, er) ->
