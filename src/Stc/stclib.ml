@@ -199,13 +199,6 @@ module SchedulerFun
 
     (** Status information for each trconstr *)
 
-    module Int = struct
-      type t = int
-      let compare = (Stdlib.compare : t -> t -> int)
-    end
-
-    module TcSet = Set.Make (Int)
-
     (* For each trconstr, we track
        - id: index in the array of trconstrs;
        - clock_path: sequence of variable identifiers ordered from
@@ -218,16 +211,37 @@ module SchedulerFun
        - depends_on: these trconstrs must be scheduled beforehand;
        - required_by: these trconstrs must be scheduled afterward. *)
 
-    type tc_status = {
-      tc_id               : int;
-      clock_path          : int list;
-      mutable schedule    : positive option;
-      mutable depends_on  : TcSet.t;
-      mutable required_by : TcSet.t;
+    type 'a _node = {
+      n_id                  : int;
+      n_clock_path          : int list;
+      mutable n_visited     : bool;
+      mutable n_schedule    : positive option;
+      mutable n_depends_on  : 'a;
+      mutable n_required_by : 'a;
     }
 
+    module rec OrderedNode :
+      Set.OrderedType with type t = NodeSet.t _node =
+    struct
+      type t = NodeSet.t _node
+      let compare n1 n2 = Int.compare n1.n_id n2.n_id
+    end
+    and NodeSet : Set.S with type elt = OrderedNode.t = Set.Make(OrderedNode)
+
+    type node = OrderedNode.t
+
+    let linked g1 g2 =
+      (NodeSet.mem g2 g1.n_depends_on) || (NodeSet.mem g1 g2.n_depends_on)
+      || (NodeSet.mem g2 g1.n_required_by) || (NodeSet.mem g1 g2.n_required_by)
+
+    let add_depends node1 node2 =
+      if not (node1.n_id = node2.n_id) then (
+        node1.n_depends_on <- NodeSet.add node2 node1.n_depends_on;
+        node2.n_required_by <- NodeSet.add node1 node2.n_required_by;
+      )
+
     let drop_dep x tc =
-      tc.depends_on <- TcSet.remove x tc.depends_on
+      tc.n_depends_on <- NodeSet.remove x tc.n_depends_on
 
     let rec resolve_variable e =
       match e with
@@ -240,9 +254,11 @@ module SchedulerFun
       | Con (ck, x, _) -> clock_path (int_of_positive x :: acc) ck
 
     let clock_path_of_tc = function
-      | TcDef (ck, _, Ecexp (Emerge ((y, ty), _, _))) ->
+      | TcDef (ck, _, Ecexp (Emerge ((y, _), _, _)))
+      | TcUpdate (ck, _, (UpdLast (_, Emerge ((y, _), _, _)))) ->
         clock_path [int_of_positive y] ck
-      | TcDef (ck, _, Ecexp (Ecase (e, _, _))) -> begin
+      | TcDef (ck, _, Ecexp (Ecase (e, _, _)))
+      | TcUpdate (ck, _, (UpdLast (_, Ecase (e, _, _)))) -> begin
           match resolve_variable e with
           | None -> clock_path [] ck
           | Some x -> clock_path [int_of_positive x] ck
@@ -251,12 +267,13 @@ module SchedulerFun
       | TcReset (ck, _)
       | TcUpdate (ck, _, _) -> clock_path [] ck
 
-    let new_tc_status i tc = {
-      tc_id       = i;
-      schedule    = None;
-      depends_on  = TcSet.empty;
-      required_by = TcSet.empty;
-      clock_path  = clock_path_of_tc tc;
+    let new_tc_node i tc = {
+      n_id       = i;
+      n_clock_path  = clock_path_of_tc tc;
+      n_visited = false;
+      n_schedule    = None;
+      n_depends_on  = NodeSet.empty;
+      n_required_by = NodeSet.empty;
     }
 
     (** Add dependencies between trconstrs *)
@@ -364,7 +381,7 @@ module SchedulerFun
     module IM = Map.Make (Int)
 
     type clock_tree = {
-      mutable ready_tcs : tc_status list;
+      mutable ready_tcs : node list;
       mutable subclocks : clock_tree IM.t
     }
 
@@ -399,7 +416,7 @@ module SchedulerFun
           (pp_print_list ~pp_sep:pp_print_space pp_print_string)
           (List.map extern_atom xs)
 
-    let pp_tc_status f tc = Format.fprintf f "%d" tc.tc_id
+    let pp_tc_status f tc = Format.fprintf f "%d" tc.n_id
 
     let pp_print_comma f () = Format.fprintf f ",@ "
 
@@ -422,7 +439,7 @@ module SchedulerFun
 
     (* If an trconstr is ready to schedule, place it in the queue according
        to its clock path. *)
-    let enqueue_tc ct ({ depends_on; clock_path } as tc) =
+    let enqueue_tc ct tc =
       let rec seek ct = function
         | [] -> ct.ready_tcs <- tc :: ct.ready_tcs
         | x :: ck ->
@@ -434,15 +451,14 @@ module SchedulerFun
               seek ct' ck
             end
       in
-      if TcSet.is_empty depends_on then seek ct clock_path
+      if NodeSet.is_empty tc.n_depends_on then seek ct tc.n_clock_path
 
     let schedule_from_queue sbtcs ct_t tcs =
       let enqueue = enqueue_tc ct_t in
 
-      let check_dep x y =
-        let tc_y = tcs.(y) in
-        drop_dep x tc_y;
-        enqueue tc_y
+      let check_dep n_x n_y =
+        drop_dep n_x n_y;
+        enqueue n_y
       in
 
       (* Track the scheduled position. *)
@@ -452,10 +468,10 @@ module SchedulerFun
       in
 
       (* Schedule an trconstr and update any that depend on it. *)
-      let enschedule ({tc_id; required_by} as tc) =
-        eprint "@;schedule %d (%a)" tc_id (pp_print_tc_lhs sbtcs) tc_id;
-        tc.schedule <- Some (next_pos ());
-        TcSet.iter (check_dep tc_id) required_by
+      let enschedule n =
+        eprint "@;schedule %d (%a)" n.n_id (pp_print_tc_lhs sbtcs) n.n_id;
+        n.n_schedule <- Some (next_pos ());
+        NodeSet.iter (check_dep n) n.n_required_by
       in
 
       (* Iteratively schedule at the same level of the clock tree whenever
@@ -501,12 +517,12 @@ module SchedulerFun
     exception Found of int
     exception Done of int list
 
-    let find_unscheduled i { schedule } =
-      if schedule = None then raise (Found i)
+    let find_unscheduled i { n_schedule } =
+      if n_schedule = None then raise (Found i)
 
     let find_next_none tcs deps =
       try
-        TcSet.iter (fun i -> find_unscheduled i tcs.(i)) deps;
+        NodeSet.iter (fun { n_id } -> find_unscheduled n_id tcs.(n_id)) deps;
         None
       with Found i -> Some i
 
@@ -515,15 +531,15 @@ module SchedulerFun
         Array.iteri find_unscheduled tcs; []
       with Found start ->
         let rec track i =
-          if TcSet.is_empty tcs.(i).depends_on
-          then (tcs.(i).schedule <- Some Coq_xH; [i])
+          if NodeSet.is_empty tcs.(i).n_depends_on
+          then (tcs.(i).n_schedule <- Some Coq_xH; [i])
           else begin
-            match find_next_none tcs tcs.(i).depends_on with
+            match find_next_none tcs tcs.(i).n_depends_on with
             | None -> failwith "find_dep_loop failed"
             | Some i' ->
-                tcs.(i).depends_on <- TcSet.empty;
+                tcs.(i).n_depends_on <- NodeSet.empty;
                 let r = track i' in
-                if tcs.(i).schedule <> None
+                if tcs.(i).n_schedule <> None
                 then (* cycle found; ignore any prefix leading to it. *)
                      raise (Done (i :: r))
                 else (* "rewind" along cycle *) i :: r
@@ -543,16 +559,80 @@ module SchedulerFun
 
     exception IncompleteSchedule
 
-    let extract_schedule { schedule } res =
-      match schedule with
+    let extract_schedule { n_schedule } res =
+      match n_schedule with
       | None -> raise IncompleteSchedule
       | Some s -> s :: res
 
     let show_tc tcs i tc =
-      eprint "@;%d: %a :: %a" i (pp_print_tc_lhs tcs) i pp_clock_path tc.clock_path
+      eprint "@;%d: %a :: %a" i (pp_print_tc_lhs tcs) i pp_clock_path tc.n_clock_path
 
+    (** First candidate schedule *)
+
+    let schedule_with_queue f sbtcs tcs =
+      let ct = empty_clock_tree () in
+      Array.iter (enqueue_tc ct) tcs;
+      schedule_from_queue sbtcs ct tcs;
+
+      let _ = (* checks that the schedule is complete *)
+        try
+          Array.fold_right extract_schedule tcs []
+        with IncompleteSchedule ->
+          Format.eprintf
+            "@[<hov 2>node %s@ has@ a@ dependency@ loop:@\n@[<hov 0>%a@].@]@."
+            (extern_atom f) (print_loop sbtcs) tcs;
+          []
+      in
+
+      let node_compare_sch n1 n2 =
+        match n1.n_schedule, n2.n_schedule with
+        | Some p1, Some p2 -> Camlcoq.P.compare p1 p2
+        | _, _ -> invalid_arg "node_compare_sch"
+      in
+
+      let node_list = Array.to_list tcs in
+      List.sort node_compare_sch node_list
+
+    (** Recooking algorithm from heptagon *)
+
+    let recooking node_list =
+
+      (* possible overlapping between clocks *)
+      let rec clock_score p1 p2 =
+        match p1, p2 with
+        | x1 :: p1, x2 :: p2 when x1 = x2 -> 1 + clock_score p1 p2
+        | _ -> 0
+      in
+
+      let rec insert node s = function
+        | [] -> raise Not_found
+        | node1 :: node_list ->
+          if linked node node1 then raise Not_found
+          else
+            let ns = clock_score (List.rev node.n_clock_path) (List.rev node1.n_clock_path) in
+            try
+              node1 :: (insert node ns node_list)
+            with
+            | Not_found ->
+              if ns > s
+              then node :: node1 :: node_list
+              else raise Not_found in
+
+      let rec recook = function
+        | [] -> []
+        | node :: node_list ->
+          let node_list' = recook node_list in
+          try
+            insert node 0 node_list'
+          with
+            Not_found -> node :: node_list'
+      in
+
+      node_list |> recook |> List.rev |> recook |> List.rev
+
+    (** Full scheduling *)
     let schedule f sbtcs =
-      let tcs = Array.of_list (List.mapi new_tc_status sbtcs) in
+      let tcs = Array.of_list (List.mapi new_tc_node sbtcs) in
 
       eprint "@[<v>--scheduling %s" (extern_atom f);
       eprint "@;@[<v 2>trconstrs =";
@@ -561,10 +641,7 @@ module SchedulerFun
 
       let varmap, instmap = variable_inst_maps sbtcs in
 
-      let add xi yi =
-        tcs.(xi).depends_on  <- TcSet.add yi tcs.(xi).depends_on;
-        tcs.(yi).required_by <- TcSet.add xi tcs.(yi).required_by
-      in
+      let add xi yi = add_depends tcs.(xi) tcs.(yi) in
       let add_dep_var xi y =
         match PM.find y varmap with
         | None             -> ()        (* ignore inputs *)
@@ -594,17 +671,15 @@ module SchedulerFun
       (* Add dependencies to free variables *)
       List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_last n) (add_dep_inst n)) sbtcs;
 
-      let ct = empty_clock_tree () in
-      Array.iter (enqueue_tc ct) tcs;
-      schedule_from_queue sbtcs ct tcs;
+      let node_list = schedule_with_queue f sbtcs tcs in
+      (* let node_list = recooking node_list in *)
+
+      List.iteri (fun i n -> tcs.(n.n_id).n_schedule <- Some (Camlcoq.P.of_int (i+1))) node_list;
+
       eprint "@;--done@]@.";
-      try
-        Array.fold_right extract_schedule tcs []
-      with IncompleteSchedule ->
-        Format.eprintf
-          "@[<hov 2>node %s@ has@ a@ dependency@ loop:@\n@[<hov 0>%a@].@]@."
-          (extern_atom f) (print_loop sbtcs) tcs;
-        []
+
+      Array.fold_right extract_schedule tcs []
+
 
     (** Cutting next and update cycles *)
 
