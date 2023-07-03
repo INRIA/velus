@@ -139,13 +139,14 @@ module PrintFun
                          Stc.s_in     = inputs;
                          Stc.s_out    = outputs;
                          Stc.s_vars   = locals;
+                         Stc.s_lasts  = lasts;
                          Stc.s_nexts  = nexts;
                          Stc.s_subs   = subs;
                          Stc.s_tcs    = tcs } =
       fprintf p "@[<v>\
                  @[<v 2>system %a {@;\
                  @[<v>\
-                 %a%a\
+                 %a%a%a\
                  @[<hov 0>\
                  @[<h>transition(%a)@]@;\
                  @[<h>returns (%a)@]\
@@ -154,6 +155,7 @@ module PrintFun
                  @[<v 2>{@;%a@;<0 -2>@]\
                  }@]@]@]@;}"
         print_ident name
+        (print_comma_list_as "init" print_reset) lasts
         (print_comma_list_as "init" print_reset) nexts
         (print_comma_list_as "sub" print_subsystem) subs
         print_decl_list inputs
