@@ -669,7 +669,8 @@ Module Type LSEMDETERMINISM
         inversion_clear Hs2 as [| | | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
         eapply det_exps_n' in H; eauto.
         rewrite <-Forall2_map_2 in Her1, Her2.
-        eapply det_exps_n' in H0; eauto. repeat rewrite concat_map_singl1 in H0.
+        eapply det_exps_n' in H0; eauto.
+        rewrite 2 map_id in H0.
         eapply bools_ofs_detn in Hbools2; eauto.
         eapply EqStNs_unmask; [eapply Hbools2|]; intros. clear H0.
         eapply HdetG. 2,3:eauto.
@@ -926,7 +927,7 @@ Module Type LSEMDETERMINISM
         inversion_clear Hsem2 as [| | | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
         eapply P_exps_det_exp_inv_all in Hes; eauto.
         rewrite <-Forall2_map_2 in Her1, Her2. eapply P_exps_det_exp_inv_all in Her; eauto.
-        do 2 rewrite concat_map_singl1 in Her.
+        rewrite 2 map_id in Her.
         eapply bools_ofs_detn in Hbools2; eauto.
         assert (Forall2 (EqStN (S n)) ss1 ss2) as Heq.
         2:{ eapply Forall2_forall2 in Heq as (_&Heq).
