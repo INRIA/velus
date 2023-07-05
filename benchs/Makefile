@@ -63,7 +63,7 @@ EXAMPLES = \
 
 all: wcet
 
-realclean: clean
+cleanall: clean
 	@rm -f *.wcet
 
 clean:

@@ -86,16 +86,46 @@ documentation: proof $(MAKEFILEAUTO)
 	make -s -f $(MAKEFILEAUTO) $@
 	@echo "${bold}OK.${normal}"
 
+# ARTIFACT
+velus.tar.gz: cleanall
+	tar -czf $@ \
+	    CompCert \
+	    readme.md \
+	    configure \
+	    includes \
+	    variables.mk \
+	    tools/automake.mll \
+	    Makefile \
+	    vfiles \
+	    src/ \
+	    extraction/ \
+	    tests/*.lus \
+	    examples/ \
+	    doc/
+
 # CLEAN
 clean:
 	if [ -f $(MAKEFILEAUTO) ] ; then $(MAKE) -s -f $(MAKEFILEAUTO) $@; fi;
 	rm -f $(MAKEFILEAUTO)
 	rm -f $(AUTOMAKE) $(TOOLSDIR)/$(AUTOMAKE).ml $(TOOLSDIR)/$(AUTOMAKE).cm* $(TOOLSDIR)/$(AUTOMAKE).o
 	$(MAKE) $(PARSERFLAGS) $@
-	$(MAKE) $(EXAMPLESFLAGS) $@
+	$(MAKE) -C examples $@
+	$(MAKE) -C tools $@
+	$(MAKE) -C tests $@
+	$(MAKE) -C benchs $@
+	$(MAKE) -C src/Lustre/Parser $@
 	ocamlbuild -clean
 
-realclean: clean
+cleanall: clean
 	rm -f $(MAKEFILECONFIG) $(COQPROJECT)
-	$(MAKE) $(COMPCERTFLAGS) $<
-	$(MAKE) $(EXAMPLESFLAGS) $@
+	$(MAKE) -C CompCert distclean
+	$(MAKE) -C examples $@
+	$(MAKE) -C tools $@
+	$(MAKE) -C benchs $@
+	$(MAKE) -C src/Lustre/Parser $@
+	$(MAKE) -C tests $@
+
+distclean: cleanall
+
+realclean: cleanall
+

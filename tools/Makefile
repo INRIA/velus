@@ -29,6 +29,8 @@ clean:
 	rm -f rat.ml
 	rm -f rat.o rat.cm?
 
+cleanall: clean
+
 # PREFIX=/usr/local
 # BINDIR=$(PREFIX)/bin
 

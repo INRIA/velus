@@ -44,8 +44,8 @@ all: velus
 
 velus: $(EXAMPLES:.lus=.exe)
 
-realclean: clean
-	@rm -f *.wcet
+cleanall: clean
+	@rm -f $(EXAMPLES:.lus=.exe)
 
 clean:
 	@rm -f *.exe

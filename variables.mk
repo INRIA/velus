@@ -13,7 +13,7 @@ MAKEFILEAUTO=$(MKFILE_DIR)/Makefile.auto
 MAKEFILECONFIG=$(MKFILE_DIR)/Makefile.config
 COQPROJECT=$(MKFILE_DIR)/_CoqProject
 
-ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
+ifeq ($(filter clean cleanall, $(MAKECMDGOALS)),)
     ifeq ($(wildcard $(MAKEFILECONFIG)),)
     $(error Please run ./configure first)
     endif
@@ -42,7 +42,7 @@ EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
 
 # Menhir includes from CompCert
-ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
+ifeq ($(filter clean cleanall, $(MAKECMDGOALS)),)
 include $(COMPCERTDIR)/Makefile.menhir
 endif
 export MENHIR
