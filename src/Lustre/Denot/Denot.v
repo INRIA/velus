@@ -170,7 +170,7 @@ Fixpoint sbools_ofs {n} : @nprod (DS (sampl value)) n -C-> DS (sampl bool) :=
   | O => CTE _ _ (DS_const abs)
   | S _ => (ZIP (fun b acc =>
                   match b, acc with
-                  | pres (Venum true_tag), _ => pres true
+                  | pres (Venum 1), _ => pres true (* 1 = OpAux.true_tag *)
                   | err e, _ => err e
                   | _, _ => acc
                   end
