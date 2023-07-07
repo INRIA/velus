@@ -365,7 +365,7 @@ Module Type UCORRECTNESS
       Corollary unnest_resets_sem : forall b es H vs es' eqs' st st',
           Forall (wc_exp G1 (vars++st_senv st)) es ->
           Forall (fun e => numstreams e = 1) es ->
-          Forall2 (fun e v => sem_exp_ck G1 H b e [v]) es vs ->
+          Forall2 (fun e v => sem_exp_ck G1 H b e v) es vs ->
           hist_st vars b H st ->
           Forall2 (fun e v => forall H e' eqs' st st',
                        wc_exp G1 (vars++st_senv st) e ->
@@ -376,26 +376,32 @@ Module Type UCORRECTNESS
                            FEnv.refines (@EqSt _) H H' /\
                              hist_st vars b H' st' /\
                              sem_exp_ck G2 H' b e' [v] /\
-                             Forall (sem_equation_ck G2 H' b) eqs')) es vs ->
+                             Forall (sem_equation_ck G2 H' b) eqs')) es (concat vs) ->
           mmap2 (unnest_reset (unnest_exp G1 true)) es st = (es', eqs', st') ->
           (exists H',
               FEnv.refines (@EqSt _) H H' /\
                 hist_st vars b H' st' /\
-                Forall2 (fun e v => sem_exp_ck G2 H' b e [v]) es' vs /\
+                Forall2 (fun e v => sem_exp_ck G2 H' b e v) es' vs /\
                 Forall (sem_equation_ck G2 H' b) (concat eqs')).
       Proof with eauto.
         induction es; intros * Hwt Hnum Hsem Histst Hf Hmap;
           inv Hwt; inv Hnum; inv Hsem; inv Hf; repeat inv_bind.
         - exists H; simpl. repeat (split; eauto). reflexivity.
-        - assert (Hr:=H0). eapply unnest_reset_sem in H0 as (H'&Href1&Histst1&Hsem1&Hsem1'); eauto.
-          assert (Forall2 (fun e v => sem_exp_ck G1 H' b e [v]) es l') as Hsem'.
+        - assert (Hr:=H0).
+          take (sem_exp_ck G1 H b a y) and
+            apply sem_exp_ck_numstreams in it as Num; eauto with lclocking.
+          take (numstreams a = 1) and rewrite it in Num.
+          singleton_length.
+          take (_ :: _ = _ :: _) and inv it.
+          eapply unnest_reset_sem in H0 as (H'&Href1&Histst1&Hsem1&Hsem1'); eauto.
+          assert (Forall2 (fun e v => sem_exp_ck G1 H' b e v) es l') as Hsem'.
           { eapply Forall2_impl_In; [|eapply H8]; intros. eapply sem_exp_refines... }
           eapply IHes in H1 as (H''&Href2&Histst2&Hsem2&Hsem2')...
           2:simpl_Forall; repeat solve_incl.
           clear IHes H9.
           exists H''. repeat (split; eauto).
           + etransitivity...
-          + constructor; eauto. subst.
+          + constructor; eauto.
             eapply sem_exp_refines; eauto.
           + apply Forall_app. split...
             simpl_Forall; eauto using sem_equation_refines.
@@ -1247,12 +1253,25 @@ Module Type UCORRECTNESS
           2:{ eapply mmap2_unnest_exp_wc in Hun1 as (?&?); eauto. }
 
           assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).
-          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er [sr]) er rs) as Hsemr' by (simpl_Forall; eauto using sem_exp_refines).
+          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er sr) er rs) as Hsemr' by (simpl_Forall; eauto using sem_exp_refines).
+          assert (Hl : Forall (fun e => numstreams e = 1) er).
+          { eapply Forall_impl; [|eapply H15]; intros ? Hck. destruct Hck as (?&Hck).
+            rewrite <-length_clockof_numstreams, Hck; auto. }
           assert (Hun3:=H4). eapply unnest_resets_sem in H4...
           2:(simpl_Forall; repeat solve_incl).
-          2:{ eapply Forall_impl; [|eapply H15]; intros ? Hck. destruct Hck as (?&Hck).
-              rewrite <-length_clockof_numstreams, Hck; auto. }
-          2:{ simpl_Forall. eapply H0 in H9 as (H'''&?&?&?&?); eauto. exists H'''; split;[|split;[|split]]; eauto.
+          2:{ assert (exists r, rs = map (fun x => [x]) r) as (r & Hr); subst.
+              { clear - H11 Hsemr' Hl.
+                apply Forall2_ignore1 in Hsemr'.
+                induction rs; intros. exists []; auto.
+                simpl_Forall.
+                edestruct IHrs as (?&?); subst; auto.
+                eapply sem_exp_ck_numstreams in H0 as Num; eauto with lclocking.
+                rewrite Hl in Num.
+                singleton_length.
+                eexists (_::_); simpl; f_equal; eauto.
+              }
+              rewrite concat_map_singl1.
+              simpl_Forall. eapply H0 in H9 as (H'''&?&?&?&?); eauto. exists H'''; split;[|split;[|split]]; eauto.
               simpl_Forall; eauto. }
           destruct H4 as (H'''&Href3&Histst3&Hsem3&Hsem3').
 
@@ -1409,13 +1428,26 @@ Module Type UCORRECTNESS
           2:{ eapply mmap2_unnest_exp_wc. 1,3:eauto. simpl_Forall; repeat solve_incl. }
 
           assert (length rs = length l0) as Hlen3 by (eapply Forall2_length in H18; eauto).
-          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er [sr]) l0 rs) as Hsemr'
+          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er sr) l0 rs) as Hsemr'
               by (simpl_Forall; eauto using sem_exp_refines).
+          assert (Hl : Forall (fun e => numstreams e = 1) l0).
+          { simpl_Forall.
+            rewrite <-length_clockof_numstreams, H1; auto. }
           assert (Hr:=H2). eapply unnest_resets_sem in H2...
           2:(simpl_Forall; repeat solve_incl).
-          2:{ simpl_Forall.
-              now rewrite <-length_clockof_numstreams, H1. }
-          2:{ simpl_Forall. eapply unnest_exp_sem in H14 as (H'''&?&?&Sem1&?)... inv Sem1... }
+          2:{ assert (exists r, rs = map (fun x => [x]) r) as (r & ?); subst.
+              { clear - H8 Hsemr' Hl.
+                apply Forall2_ignore1 in Hsemr'.
+                induction rs; intros. exists []; auto.
+                simpl_Forall.
+                edestruct IHrs as (?&?); subst; auto.
+                eapply sem_exp_ck_numstreams in H0 as Num; eauto with lclocking.
+                rewrite Hl in Num.
+                singleton_length.
+                eexists (_::_); simpl; f_equal; eauto.
+              }
+              rewrite concat_map_singl1.
+              simpl_Forall. eapply unnest_exp_sem in H14 as (H'''&?&?&Sem1&?)... inv Sem1... }
           destruct H2 as (H'''&Href3&Hhistst3&Hsem3&Hsem3').
 
           exists H'''. repeat (split; auto).
@@ -1606,13 +1638,26 @@ Module Type UCORRECTNESS
           2:{ eapply mmap2_unnest_exp_wc. 1,3:eauto. simpl_Forall; repeat solve_incl. }
 
           assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).
-          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er [sr]) er rs) as Hsemr'
+          assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er sr) er rs) as Hsemr'
               by (simpl_Forall; repeat (eapply sem_exp_refines; eauto)).
+          assert (Hl : Forall (fun e => numstreams e = 1) er).
+          { simpl_Forall.
+            rewrite <-length_clockof_numstreams, H1; auto. }
           assert (Hr:=H9). eapply unnest_resets_sem in H9...
           2:(simpl_Forall; repeat solve_incl).
-          2:{ simpl_Forall.
-              now rewrite <-length_clockof_numstreams, H1. }
-          2:{ simpl_Forall. eapply unnest_exp_sem in H16 as (H'''&?&?&Sem1&?)... inv Sem1... }
+          2:{ assert (exists r, rs = map (fun x => [x]) r) as (r & ?); subst.
+              { clear - H3 Hsemr' Hl.
+                apply Forall2_ignore1 in Hsemr'.
+                induction rs; intros. exists []; auto.
+                simpl_Forall.
+                edestruct IHrs as (?&?); subst; auto.
+                eapply sem_exp_ck_numstreams in H0 as Num; eauto with lclocking.
+                rewrite Hl in Num.
+                singleton_length.
+                eexists (_::_); simpl; f_equal; eauto.
+              }
+              rewrite concat_map_singl1.
+              simpl_Forall. eapply unnest_exp_sem in H16 as (H'''&?&?&Sem1&?)... inv Sem1... }
           destruct H9 as (H'''&Href3&Hhistst3&Hsem3&Hsem3').
 
           exists H'''. repeat (split; auto). 2:repeat rewrite Forall_app; repeat split.

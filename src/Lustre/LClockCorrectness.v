@@ -2101,7 +2101,7 @@ Module Type LCLOCKCORRECTNESS
       induction e using exp_ind2; intros * Hnd1 Hnd3 Hsc Hwt Hwc Hsem;
         inv Hwt; inv Hwc; inv Hsem;
           econstructor; eauto.
-      1-6,11:(eapply Forall2_impl_In; [|eauto]; intros;
+      1-6,11-12:(eapply Forall2_impl_In; [|eauto]; intros;
                  rewrite Forall_forall in *; eauto).
       - (* merge *)
         eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -2116,18 +2116,6 @@ Module Type LCLOCKCORRECTNESS
         simpl in *.
         specialize (H23 _ eq_refl). specialize (H25 _ eq_refl).
         simpl_Forall; eauto.
-      - (* app reset *)
-        apply Forall2_map_2.
-        replace (map (fun y : Stream svalue => [y]) (concat rs)) with rs.
-        simpl_Forall; eauto.
-        take (Forall (wt_exp _ _) er) and rename it into Wt.
-        take (Forall2 (sem_exp _ _ _) er rs) and rename it into Hsem.
-        take (Forall (fun _ => typeof  _ = _) er) and rename it into Tys.
-        clear - Wt Hsem Tys.
-        induction Hsem; auto; inv Wt; inv Tys; simpl.
-        eapply sem_exp_numstreams in H0; eauto with ltyping.
-        rewrite <- length_typeof_numstreams, H5 in H0.
-        singleton_length; auto.
       - (* app *)
         intros k. eapply Hnode; eauto.
         specialize (H26 k). inv H26. rewrite H15 in H3; inv H3.
@@ -2153,19 +2141,11 @@ Module Type LCLOCKCORRECTNESS
         econstructor; eauto.
         apply Forall_singl in H0. inv H0.
         inv H1; inv H14. inv H5. do 2 (econstructor; eauto).
-        + eapply Forall2_impl_In; [|eauto]; intros.
-          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
-        + apply Forall2_map_2.
-          replace (map (fun y : Stream svalue => [y]) (concat rs)) with rs.
-          simpl_Forall; eauto using sem_exp_sem_exp_ck.
-          take (Forall (wt_exp _ _) er) and rename it into Wt.
-          take (Forall2 (sem_exp _ _ _) er rs) and rename it into Hsem.
-          take (Forall (fun _ => typeof  _ = _) er) and rename it into Tys.
-          clear - Wt Hsem Tys.
-          induction Hsem; auto; inv Wt; inv Tys; simpl.
-          eapply sem_exp_numstreams in H0; eauto with ltyping.
-          rewrite <- length_typeof_numstreams, H5 in H0.
-          singleton_length; auto.
+        + instantiate (1 := ss).
+          simpl_Forall.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto.
+        + simpl_Forall.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto.
         + intros k. eapply Hnode; eauto.
           specialize (H28 k). inv H28. rewrite H1 in H17; inv H17. rewrite H1 in H8; inv H8.
           repeat (esplit; eauto).

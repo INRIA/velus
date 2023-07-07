@@ -1417,7 +1417,7 @@ Module Type CORRECTNESS
         inv H2. eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H11].
         eapply Forall2_ignore1, Forall_forall in Vars as (?&?&?&?&Hs&Hx); eauto.
         destruct Hx as (?&?); subst. inv Hs.
-        eapply sem_var_mask_inv in H7 as (?&?&?); eauto.
+        eapply sem_var_mask_inv in H10 as (?&?&?); eauto.
       }
       assert (exists sr', Forall2 bools_of vr' sr') as (sr'&Hbools2).
       { clear - Vars Hsem Hvr.
@@ -1434,7 +1434,9 @@ Module Type CORRECTNESS
         destruct Hx as (?&?); subst. inv Hs.
         eapply sem_var_mask with (r:=r) (k:=k) in Hvar.
         eapply sem_var_det in Hvar; eauto.
-        destruct H12 as (?&Hbools&_). eapply Forall2_ignore2, Forall_forall in Hbools as (?&?&Hbools); eauto.
+        destruct H12 as (?&Hbools&_).
+        assert (In s (concat rs)). { apply incl_concat in H0; apply H0; simpl; auto. }
+        eapply Forall2_ignore2, Forall_forall in Hbools as (?&?&Hbools); eauto.
         rewrite Hvar in Hbools.
         assert (Hbm:=Hbools). eapply bools_of_mask_inv in Hbm as (v&Heq).
         rewrite Heq in Hbools; eauto.
@@ -1483,16 +1485,31 @@ Module Type CORRECTNESS
         assert (bs ≡ (maskb k1 r (disj_str sr'))) as Hbs.
         { eapply bools_ofs_det; eauto.
           econstructor; split. 2:rewrite disj_str_maskb; reflexivity.
-          assert (EqSts rs0 (map (maskv k1 r) vr')) as Heq.
+          assert (EqSts (concat rs0) (map (maskv k1 r) vr')) as Heq.
           2:{ clear -Hbools2 Heq. unfold EqSts in *. rewrite Forall2_map_2 in Heq. rewrite Forall2_map_2.
               eapply Forall2_trans_ex in Hbools2; [|eapply Heq].
               eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (?&?&Heq'&?).
               rewrite Heq'; auto. eapply bools_of_mask; eauto. }
+          apply LC.wc_equation_wl_equation in Hwc as Hwl.
+          inv Hwl; simpl_Forall; take (L.wl_exp _ _) and inv it.
+          assert (exists r, rs0 = map (fun x => [x]) r) as (r' & Hr); subst.
+          { clear - H8 H11 H12.
+            apply Forall2_ignore1 in H12.
+            induction rs0; intros. exists []; auto.
+            simpl_Forall.
+            edestruct IHrs0 as (?&?); subst; auto.
+            eapply sem_exp_ck_numstreams in H1 as Num; eauto with lclocking.
+            rewrite H11 in *.
+            singleton_length.
+            eexists (_::_); simpl; f_equal; eauto.
+          }
           clear - Hvr Hbools2 H12 Vars.
           eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H12].
           unfold EqSts in *.
-          rewrite Forall2_map_1 in Hvr. rewrite Forall2_map_2. unfold EqSts.
+          rewrite Forall2_map_2. unfold EqSts.
           eapply Forall2_trans_ex in Hvr; [|eapply Vars]. clear - Hvr.
+          rewrite concat_map_singl1 in *.
+          apply Forall2_map_1 in Hvr.
           eapply Forall2_impl_In; [|eauto]. intros ?? _ _ ((?&?)&_&(?&_&?&(?&?))&?); subst.
           inv H0. eapply sem_var_mask in H2.
           eapply sem_var_det in H2; eauto.
