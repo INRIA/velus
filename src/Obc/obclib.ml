@@ -286,7 +286,7 @@ sig
         ) brs;
       match default with
       | Some d ->
-        fprintf p "@;| default => @[<hv 0>%a@]" print_stmt d
+        fprintf p "@;| _ => @[<hv 0>%a@]" print_stmt d
       | _ -> ()
 
     let print_semicol_list p =
