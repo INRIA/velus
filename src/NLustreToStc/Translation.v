@@ -4,12 +4,11 @@ From Velus Require Import Common.
 From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Environment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.Memories.
 From Velus Require Import Stc.StcSyntax.
-From Velus Require Import Stc.StcIsReset.
-From Velus Require Import Stc.StcIsNext.
 From Velus Require Environment.
 
 From Coq Require Import List.
@@ -32,165 +31,136 @@ Module Type TRANSLATION
        (SynStc       : STCSYNTAX Ids Op OpAux Cks CESyn)
        (Import Mem   : MEMORIES  Ids Op OpAux Cks CESyn SynNL).
 
-  Definition gather_eq (acc: list (ident * (const * type * clock)) * list (ident * ident)) (eq: equation):
-    list (ident * (const * type * clock)) * list (ident * ident) :=
+  Definition gather_eq acc (eq: equation): (_ * _ * _) :=
     match eq with
-    | EqDef _ _ _ => acc
-    | EqApp [] _ _ _ _ => acc
+    | EqLast x ty ck c0 xrs => ((x, (c0, ty, ck, xrs)) :: fst (fst acc), snd (fst acc), snd acc)
+    | EqFby x ck c0 e xrs => (fst (fst acc), (x, (c0, typeof e, ck)) :: snd (fst acc), snd acc)
     | EqApp (x :: _) _ f _ _ => (fst acc, (x, f) :: snd acc)
-    | EqFby x ck c0 e _ => ((x, (c0, typeof e, ck)) :: fst acc, snd acc)
+    | _ => acc
     end.
 
-  Definition gather_eqs (eqs: list equation) : list (ident * (const * type * clock)) * list (ident * ident) :=
-    fold_left gather_eq eqs ([], []).
+  Definition gather_eqs (eqs: list equation) :=
+    fold_left gather_eq eqs (([], []), []).
 
   (** ** Translation *)
 
-  Definition translate_eqn (eqn: equation) : list SynStc.trconstr :=
-    match eqn with
-    | EqDef x ck e =>
-      [ SynStc.TcDef x ck e ]
-    | EqApp [] _ _ _ _ =>
-      []                        (* This way we can ensure b_blocks_in_eqs *)
-    | EqApp (x :: xs) ck f les xrs =>
-      let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
-      (SynStc.TcStep x (x :: xs) ck ckrs f les)
-        ::(map (fun ckr => SynStc.TcInstReset x ckr f) ckrs)
-    | EqFby x ck c0 e xrs =>
-      let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
-      (SynStc.TcNext x ck ckrs e)
-        ::(map (fun ckr => SynStc.TcReset x ckr (typeof e) c0) ckrs)
-    end.
+  Section translate_eqns.
+    Variable lasts : Env.t (list (ident * clock)).
 
-  (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
-  (*      [Is_well_sch]. *) *)
+    Definition translate_eqn (eqn: equation) : list SynStc.trconstr :=
+      match eqn with
+      | EqDef x ck (Ecexp e) =>
+          match Env.find x lasts with
+          | None => [ SynStc.TcDef ck x (Ecexp e) ]
+          | Some xrs =>
+              let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
+              [ SynStc.TcUpdate ck ckrs (SynStc.UpdLast x e) ]
+          end
+      | EqDef x ck r => [ SynStc.TcDef ck x r ]
+      | EqApp [] _ _ _ _ =>
+          []                        (* This way we can ensure b_blocks_in_eqs *)
+      | EqApp (x :: xs) ck f les xrs =>
+          let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
+          SynStc.TcUpdate ck ckrs (SynStc.UpdInst x (x :: xs) f les)
+            ::(map (fun ckr => SynStc.TcReset ckr (SynStc.ResInst x f)) ckrs)
+      | EqLast x ty ck c0 xrs =>
+          let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
+          (map (fun ckr => SynStc.TcReset ckr (SynStc.ResState x ty c0)) ckrs)
+      | EqFby x ck c0 e xrs =>
+          let ckrs := map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs in
+          SynStc.TcUpdate ck ckrs (SynStc.UpdNext x e)
+            ::(map (fun ckr => SynStc.TcReset ckr (SynStc.ResState x (typeof e) c0)) ckrs)
+      end.
 
-  Definition translate_eqns (eqns: list equation) : list SynStc.trconstr :=
-    flat_map translate_eqn eqns.
+    Definition translate_eqns (eqns: list equation) : list SynStc.trconstr :=
+      flat_map translate_eqn eqns.
+
+  End translate_eqns.
 
   (** Properties of translation functions *)
 
-  Lemma ps_from_list_gather_eqs_memories:
-    forall eqs, PS.eq (ps_from_list (map fst (fst (gather_eqs eqs)))) (memories eqs).
+  Lemma gather_eqs_last_flat_map:
+    forall eqs, Permutation (fst (fst (gather_eqs eqs)))
+             (flat_map (fun eq => fst (fst (gather_eq ([], [], []) eq))) eqs).
   Proof.
-    induction eqs as [|eq eqs IH]; [reflexivity|].
-    unfold memories, gather_eqs.
-    assert (forall eqs F S,
-               PS.eq (ps_from_list (map fst (fst (fold_left gather_eq eqs (F, S)))))
-                     (fold_left memory_eq eqs (ps_from_list (map fst F)))) as HH.
-    {
-      clear eq eqs IH; induction eqs as [|eq eqs IH]; [reflexivity|].
-      intros F S.
-      destruct eq;
-        [ now apply IH
-        | now destruct l; apply IH
-        | ].
-      simpl; rewrite IH; rewrite add_ps_from_list_cons; reflexivity.
-    }
-    rewrite HH; reflexivity.
+    unfold gather_eqs. intros eqs.
+    rewrite <-fold_left_rev_right, Permutation_flat_map; [|apply Permutation_rev].
+    generalize (rev eqs) as eqs'. clear eqs.
+    induction eqs' as [ | eq eqs IHeqs ]; intros; simpl; auto.
+    unfold gather_eq. cases; simpl; auto.
   Qed.
 
-  Lemma gather_eqs_fst_spec:
-    forall eqs, Permutation (map (fun x => (fst x, snd (fst (snd x)))) (fst (gather_eqs eqs))) (gather_mems eqs).
+  Lemma gather_eqs_next_flat_map:
+    forall eqs, Permutation (snd (fst (gather_eqs eqs)))
+             (flat_map (fun eq => snd (fst (gather_eq ([], [], []) eq))) eqs).
   Proof.
-    intro eqs.
-    assert (Hgen: forall F S,
-               Permutation (map (fun x => (fst x, snd (fst (snd x)))) (fst (fold_left gather_eq eqs (F, S))))
-                           (map (fun x => (fst x, snd (fst (snd x)))) F ++ gather_mems eqs)).
-    {
-      induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
-      - now rewrite app_nil_r.
-      - destruct eq.
-        + simpl; rewrite IHeqs; auto.
-        + destruct l; simpl; rewrite IHeqs; auto.
-        + simpl. rewrite IHeqs.
-          simpl. now rewrite <-Permutation_middle.
-    }
-    now apply Hgen.
+    unfold gather_eqs. intros eqs.
+    rewrite <-fold_left_rev_right, Permutation_flat_map; [|apply Permutation_rev].
+    generalize (rev eqs) as eqs'. clear eqs.
+    induction eqs' as [ | eq eqs IHeqs ]; intros; simpl; auto.
+    unfold gather_eq. cases; simpl; auto.
   Qed.
 
-  Lemma gather_eqs_snd_spec:
+  Lemma gather_eqs_inst_flat_map:
+    forall eqs, Permutation (snd (gather_eqs eqs))
+             (flat_map (fun eq => snd (gather_eq ([], [], []) eq)) eqs).
+  Proof.
+    unfold gather_eqs. intros eqs.
+    rewrite <-fold_left_rev_right, Permutation_flat_map; [|apply Permutation_rev].
+    generalize (rev eqs) as eqs'. clear eqs.
+    induction eqs' as [ | eq eqs IHeqs ]; intros; simpl; auto.
+    unfold gather_eq. cases; simpl; auto.
+  Qed.
+
+  Lemma gather_eqs_inst:
     forall eqs, Permutation (snd (gather_eqs eqs)) (gather_insts eqs).
   Proof.
     intro eqs.
     assert (Hgen: forall F S,
                Permutation (snd (fold_left gather_eq eqs (F, S)))
                            (S ++ gather_insts eqs)).
-    {
-      induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
+    { induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
       - now rewrite app_nil_r.
-      - destruct eq as [ | is ck f les | ]; simpl; try rewrite IHeqs; auto.
+      - destruct eq as [| | is ck f les | ]; simpl; try rewrite IHeqs; auto.
         unfold gather_insts.
         destruct is; rewrite IHeqs; auto;
           rewrite <-app_comm_cons, Permutation_middle; auto.
     }
-
     now apply Hgen.
   Qed.
 
-  Lemma fst_snd_gather_eqs_var_defined:
+  Lemma gather_eqs_inst_var_defined:
     forall eqs,
       Permutation (map fst (snd (gather_eqs eqs)) ++ gather_app_vars eqs)
                   (vars_defined (filter is_app eqs)).
   Proof.
     intro eqs.
-    assert (Hperm: Permutation (map fst (gather_insts eqs) ++ gather_app_vars eqs)
-                               (vars_defined (filter is_app eqs))).
-    {
-      induction eqs as [|[] eqs]; simpl; auto.
-      destruct l as [ | x xs ]; simpl; auto.
-      assert (Happ: gather_app_vars (EqApp (x :: xs) c i l0 l1 :: eqs)
-                    = xs ++ gather_app_vars eqs)
-        by now unfold gather_app_vars.
-
-      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i l0 l1 :: eqs))
-                     = x :: map fst (gather_insts eqs))
-        by now unfold gather_insts.
-
-      simpl.
-      apply Permutation_cons; auto.
-      rewrite Permutation_swap.
-      apply Permutation_app; auto.
-    }
-
-    rewrite <- Hperm.
-    apply Permutation_app_tail.
-    now rewrite gather_eqs_snd_spec.
+    rewrite gather_eqs_inst.
+    induction eqs as [|[] eqs]; simpl; auto.
+    cases; simpl; auto.
+    constructor. now rewrite Permutation_swap, IHeqs.
   Qed.
 
-  Lemma fst_fst_gather_eqs_var_defined:
+  Lemma gather_eqs_last_defined:
     forall eqs,
-      Permutation (map fst (fst (gather_eqs eqs)))
-                  (vars_defined (filter is_fby eqs)).
+      Permutation (map fst (fst (fst (gather_eqs eqs)))) (lasts_defined eqs).
   Proof.
-    intro eqs.
-    assert (Hperm: Permutation (map fst (gather_mems eqs))
-                               (vars_defined (filter is_fby eqs))).
-    {
-      induction eqs as [|eq eqs]; auto.
-      destruct eq; try (now simpl; auto).
-    }
-
-    rewrite <- Hperm.
-    rewrite <-gather_eqs_fst_spec.
-    clear; induction (fst (gather_eqs eqs)); simpl; auto.
+    intros. rewrite gather_eqs_last_flat_map.
+    induction eqs as [|eq eqs]; simpl; auto.
+    rewrite map_app, IHeqs. apply Permutation_app_tail.
+    unfold gather_eq, last_defined.
+    cases; simpl; auto.
   Qed.
 
-  Lemma In_fst_fold_left_gather_eq:
-    forall eqs xc mems insts,
-      In xc (fst (fold_left gather_eq eqs (mems, insts))) <->
-      In xc mems \/ In xc (fst (fold_left gather_eq eqs ([], insts))).
+  Lemma gather_eqs_next_defined:
+    forall eqs,
+      Permutation (map fst (snd (fst (gather_eqs eqs)))) (vars_defined (filter is_fby eqs)).
   Proof.
-    induction eqs as [|[]]; simpl; intros; auto.
-    - split; auto; intros [|]; auto; contradiction.
-    - destruct l; simpl in *; auto.
-    - rewrite IHeqs; symmetry; rewrite IHeqs.
-      split; intros [Hin|Hin']; auto.
-      + now left; right.
-      + destruct Hin' as [[|]|]; auto; try contradiction.
-        now left; left.
-      + destruct Hin; auto.
-        now right; left; left.
+    intros. rewrite gather_eqs_next_flat_map.
+    induction eqs as [|eq eqs]; simpl; auto.
+    rewrite map_app, IHeqs.
+    destruct eq; simpl; auto.
+    cases; simpl; auto.
   Qed.
 
   Lemma In_snd_fold_left_gather_eq:
@@ -210,300 +180,529 @@ Module Type TRANSLATION
         now right; left; left.
   Qed.
 
-  Lemma gather_mems_nexts_of : forall eqs,
-      Permutation (gather_mems eqs) (SynStc.nexts_of (translate_eqns eqs)).
+  Lemma translate_eqn_variables env : forall eqs,
+      (forall x, Env.In x env ->
+            ~In x (vars_defined (filter is_def_rhs [eqs]))
+            /\ ~In x (vars_defined (filter is_app [eqs]))) ->
+      SynStc.variables (translate_eqn env eqs)
+      = filter (notb (fun x => (Env.mem x env))) (vars_defined (filter (notb is_fby) [eqs])).
+  Proof.
+    intros * Env. unfold notb.
+    destruct eqs; simpl in *.
+    - cases_eqn Eq; simpl in *.
+      + exfalso. edestruct Env as (?&?); eauto using Env.mem_2.
+      + exfalso. rewrite Env.mem_find, Eq2 in Eq1. congruence.
+      + exfalso. rewrite Env.mem_find, Eq2 in Eq1. congruence.
+    - induction l; simpl; auto.
+    - rewrite filter_idem.
+      2:{ simpl_Forall. apply Bool.negb_true_iff, Env.Props.P.F.not_mem_in_iff.
+          intros EnvIn. edestruct Env as (?&?); eauto. }
+      cases. induction l1; simpl; auto.
+    - induction l; auto.
+  Qed.
+
+  Lemma translate_eqns_variables env : forall eqs,
+      (forall x, Env.In x env ->
+            ~In x (vars_defined (filter is_def_rhs eqs))
+            /\ ~In x (vars_defined (filter is_app eqs))) ->
+      SynStc.variables (translate_eqns env eqs)
+      = filter (notb (fun x => (Env.mem x env))) (vars_defined (filter (notb is_fby) eqs)).
+  Proof.
+    intros * Env. unfold notb.
+    induction eqs; simpl; auto.
+    rewrite SynStc.variables_app, translate_eqn_variables, IHeqs; simpl.
+    - unfold notb. cases. rewrite app_nil_r, filter_app; auto.
+    - intros. edestruct Env as (Nin1&Nin2); eauto. simpl in *.
+      split; cases; simpl in *; auto with datatypes.
+    - intros. edestruct Env as (Nin1&Nin2); eauto. simpl in *.
+      split; cases; simpl in *; rewrite app_nil_r; auto with datatypes.
+  Qed.
+
+  Lemma translate_eqn_last env : forall eqs,
+      SynStc.lasts_of (translate_eqn env eqs)
+      = map_filter (fun eq => match eq with
+                           | EqDef x _ (Ecexp e) =>
+                               if Env.mem x env then Some (x, typeofc e) else None
+                           | _ => None
+                           end) [eqs].
+  Proof.
+    intros.
+    destruct eqs; simpl in *.
+    - cases_eqn Eq; simpl in *.
+      + exfalso. rewrite Env.mem_find, Eq0 in Eq2. congruence.
+      + exfalso. rewrite Env.mem_find, Eq0 in Eq2. congruence.
+    - induction l; simpl; auto.
+    - cases. simpl. induction l1; auto.
+    - induction l; auto.
+  Qed.
+
+  Lemma translate_eqns_last env : forall eqs,
+      SynStc.lasts_of (translate_eqns env eqs)
+      = map_filter (fun eq => match eq with
+                           | EqDef x _ (Ecexp e) =>
+                               if (Env.mem x env) then Some (x, typeofc e) else None
+                           | _ => None
+                           end) eqs.
+  Proof.
+    induction eqs; simpl; auto.
+    rewrite SynStc.lasts_of_app, translate_eqn_last, IHeqs; simpl.
+    cases; auto.
+  Qed.
+
+  Lemma translate_eqn_next env : forall eqs x,
+      SynStc.Is_update_next_in x (translate_eqn env eqs) <-> Is_fby_in_eq x eqs.
+  Proof.
+    unfold SynStc.Is_update_next_in.
+    intros *. destruct eqs; (split; [intros Ex|intros Fby; inv Fby]); simpl in *.
+    - cases; simpl_Exists; destruct Hin; subst; inv Ex; now exfalso.
+    - simpl_Exists. inv Ex.
+    - cases. simpl_Exists. destruct Hin; subst; [inv Ex|]. simpl_In. inv Ex.
+    - simpl_Exists. destruct Hin; subst; [inv Ex; constructor|]. simpl_In. inv Ex.
+    - left. constructor.
+  Qed.
+
+  Corollary translate_eqns_next env : forall eqs x,
+      SynStc.Is_update_next_in x (translate_eqns env eqs) <-> Is_fby_in x eqs.
   Proof.
     intros *.
-    unfold gather_mems, translate_eqns.
-    induction eqs as [|[]]; simpl; auto.
-    - destruct l; simpl; auto.
-      induction l1; simpl; auto.
-    - induction l; simpl; auto.
+    unfold SynStc.Is_update_next_in, Is_fby_in, translate_eqns.
+    rewrite Exists_flat_map.
+    apply Exists_Exists_iff; eauto using translate_eqn_next.
   Qed.
 
-  Lemma resets_of_incl : forall eqs,
-      incl (SynStc.resets_of (translate_eqns eqs)) (map fst (SynStc.nexts_of (translate_eqns eqs))).
+  Lemma translate_eqn_reset_state env : forall eqs x ck,
+      SynStc.Is_reset_state_in x ck (translate_eqn env eqs) -> Is_fby_in_eq x eqs \/ Is_last_in_eq x eqs.
   Proof.
-    induction eqs as [|[]]; simpl in *; auto.
-    - reflexivity.
-    - destruct l; auto.
-      induction l1; simpl; auto.
-    - induction l; simpl; auto using incl_tl, incl_cons, in_eq.
+    unfold SynStc.Is_reset_state_in.
+    intros * Ex. destruct eqs; simpl in *.
+    - cases; simpl_Exists; destruct Hin; subst; inv Ex; now exfalso.
+    - simpl_Exists. inv Ex. right. constructor.
+    - cases. simpl_Exists. destruct Hin; subst; [inv Ex|]. simpl_In. inv Ex.
+    - simpl_Exists. destruct Hin; subst; [inv Ex; constructor|]. simpl_In. inv Ex.
+      left. constructor.
   Qed.
 
-  Lemma iresets_of_incl : forall eqs,
-      incl (SynStc.iresets_of (translate_eqns eqs)) (SynStc.steps_of (translate_eqns eqs)).
+  Corollary translate_eqns_reset_state env : forall eqs x ck,
+      SynStc.Is_reset_state_in x ck (translate_eqns env eqs) -> Is_fby_in x eqs \/ Is_last_in x eqs.
   Proof.
-    induction eqs as [|[]]; simpl in *; auto.
-    - reflexivity.
-    - destruct l; simpl; auto using incl_tl', incl_tl.
-      induction l1; simpl; auto using incl_tl, incl_cons, in_eq.
-    - induction l; simpl; auto.
+    intros * Res.
+    unfold Is_fby_in, Is_last_in, translate_eqns in *.
+    apply Exists_or_inv. apply Exists_flat_map in Res.
+    eapply Exists_impl; [|eauto]; intros; simpl in *; eauto using translate_eqn_reset_state.
   Qed.
 
-  Corollary iresets_of_incl' : forall eqs,
-      incl (map fst (SynStc.iresets_of (translate_eqns eqs))) (map fst (SynStc.steps_of (translate_eqns eqs))).
+  Lemma translate_eqn_inst env : forall eqs x,
+      SynStc.Is_update_inst_in x (translate_eqn env eqs) -> In x (vars_defined (filter is_app [eqs])).
   Proof.
-    intros. apply incl_map, iresets_of_incl.
+    unfold SynStc.Is_update_inst_in.
+    intros * Ex. destruct eqs; simpl in *.
+    - cases; simpl_Exists; destruct Hin; subst; inv Ex; now exfalso.
+    - simpl_Exists. inv Ex.
+    - cases. simpl_Exists. destruct Hin; subst; [inv Ex|]; auto. simpl_In. inv Ex.
+    - simpl_Exists. destruct Hin; subst; [inv Ex; constructor|]. simpl_In. inv Ex.
   Qed.
 
-  Module Import StcIsReset := StcIsResetFun Ids Op OpAux Cks CESyn SynStc.
-  Module Import StcIsNext := StcIsNextFun Ids Op OpAux Cks CESyn SynStc.
+  Corollary translate_eqns_inst env : forall eqs x,
+      SynStc.Is_update_inst_in x (translate_eqns env eqs) -> In x (vars_defined (filter is_app eqs)).
+  Proof.
+    intros * Upd.
+    unfold SynStc.Is_update_inst_in, Is_fby_in, translate_eqns.
+    apply Exists_flat_map, Exists_exists in Upd as (?&?&Ex).
+    eapply translate_eqn_inst in Ex.
+    unfold vars_defined in *; simpl in *.
+    cases_eqn Eq; simpl in *. solve_In.
+  Qed.
 
-  (* =translate_node= *)
-  Program Definition translate_node (n: node) : SynStc.system :=
+  Lemma translate_eqn_reset_inst env : forall eqs x ck,
+      SynStc.Is_reset_inst_in x ck (translate_eqn env eqs) -> In x (vars_defined (filter is_app [eqs])).
+  Proof.
+    unfold SynStc.Is_reset_inst_in.
+    intros * Ex. destruct eqs; simpl in *.
+    - cases; simpl_Exists; destruct Hin; subst; inv Ex; now exfalso.
+    - simpl_Exists. inv Ex.
+    - cases. simpl_Exists. destruct Hin; subst; [inv Ex|]. simpl_In. inv Ex; auto.
+    - simpl_Exists. destruct Hin; subst; [inv Ex; constructor|]. simpl_In. inv Ex.
+  Qed.
+
+  Corollary translate_eqns_reset_inst env : forall eqs x ck,
+      SynStc.Is_reset_inst_in x ck (translate_eqns env eqs) -> In x (vars_defined (filter is_app eqs)).
+  Proof.
+    intros * Res.
+    apply Exists_flat_map, Exists_exists in Res as (?&?&Res). eapply translate_eqn_reset_inst in Res.
+    unfold vars_defined in *; simpl in *.
+    cases_eqn Eq; simpl in *. solve_In.
+  Qed.
+
+  (** *** Full node *)
+
+  Program Definition translate_node (n: node) : @SynStc.system (PSP.of_list lustre_prefs) :=
     let gathered := gather_eqs n.(n_eqs) in
-    let nexts := fst gathered in
-    let resets_ids := ps_from_list (map fst (fst gathered)) in
+    let lasts := fst (fst gathered) in
+    let nexts := snd (fst gathered) in
+    let lastsenv := Env.from_list (List.map (fun xr => (fst xr, snd (snd xr))) lasts) in
+    let tcs := translate_eqns lastsenv n.(n_eqs) in
     let subs := snd gathered in
-    let partitioned := partition (fun x => PS.mem (fst x) resets_ids) n.(n_vars) in
-    let vars := snd partitioned in
+    let mems := ps_from_list (map fst lasts ++ map fst nexts) in
+    let vars := filter (notb (fun x => PS.mem (fst x) mems)) n.(n_vars) in
     {| SynStc.s_name  := n.(n_name);
        SynStc.s_subs  := subs;
        SynStc.s_in    := n.(n_in);
-       SynStc.s_vars  := vars;
+       SynStc.s_vars  := idfst vars;
+       SynStc.s_lasts := idfst lasts;
        SynStc.s_nexts := nexts;
        SynStc.s_out   := n.(n_out);
-       SynStc.s_tcs   := translate_eqns n.(n_eqs)
+       SynStc.s_tcs   := tcs;
     |}.
   Next Obligation. apply n_ingt0. Qed.
   Next Obligation.
-    rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
-    setoid_rewrite ps_from_list_gather_eqs_memories.
-    rewrite Permutation_app_comm, <-app_assoc, NoDup_swap,
-    <-app_assoc, (app_assoc _ _ (map fst (n_in n))),
-    <-map_app, <-permutation_partition, Permutation_app_comm, <-app_assoc.
-    apply NoDup_swap; rewrite <-2 map_app; apply fst_NoDupMembers, n_nodup.
+    pose proof (n_nodup n) as ND.
+    rewrite ? map_app, ? map_fst_idfst.
+    eapply Permutation_NoDup, n_nodup.
+    rewrite gather_eqs_last_defined, gather_eqs_next_defined.
+    apply Permutation_app_head. rewrite Permutation_swap, Permutation_app_comm. apply Permutation_app_head.
+    erewrite <-filter_notb_app with (xs:=n_vars _) at 1. rewrite ? map_app.
+    apply Permutation_app_head.
+    eapply NoDup_Permutation.
+    - apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers.
+      eauto using NoDup_app_l, NoDup_app_r.
+    - apply NoDup_app'; auto using NoDup_last_defined_n_eqs, NoDup_var_defined_fby.
+      simpl_Forall. eapply n_lastfby; eauto.
+    - unfold notb. split; intros * In.
+      + simpl_In. apply Bool.negb_true_iff, Bool.negb_false_iff, ps_from_list_In in Hf.
+        now rewrite gather_eqs_last_defined, gather_eqs_next_defined in Hf.
+      + assert (List.In x (map fst (n_vars n))) as In'.
+        { apply in_app_iff in In as [In|In].
+          - rewrite n_lastd1 in In. solve_In.
+          - apply vars_defined_fby_vars in In; auto. }
+        solve_In.
+        apply Bool.negb_true_iff, Bool.negb_false_iff, ps_from_list_In.
+        now rewrite gather_eqs_last_defined, gather_eqs_next_defined.
   Qed.
   Next Obligation.
-    rewrite fst_fst_gather_eqs_var_defined.
-    eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))).
-    rewrite <-app_assoc.
-    rewrite fst_snd_gather_eqs_var_defined.
-    rewrite Permutation_app_comm.
-    eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
-    rewrite Permutation_app_comm.
-    unfold vars_defined.
-    setoid_rewrite flat_map_concat_map.
-    rewrite <- 2 concat_app.
-    rewrite <- 2 map_app.
-    rewrite is_filtered_eqs.
-    pose proof (NoDup_var_defined_n_eqs) as HH.
-    unfold vars_defined in HH. setoid_rewrite flat_map_concat_map in HH.
-    apply HH.
+    rewrite ? map_fst_idfst, gather_eqs_last_defined, gather_eqs_next_defined.
+    apply NoDup_app'; [|apply NoDup_app'|]; auto using NoDup_last_defined_n_eqs, NoDup_var_defined_fby.
+    - pose proof (NoDup_var_defined_app n) as ND.
+      rewrite <-gather_eqs_inst_var_defined in ND. eauto using NoDup_app_l.
+    - simpl_Forall. intros contra.
+      pose proof (NoDup_var_defined_n_eqs n) as ND. rewrite <-is_filtered_vars_defined in ND.
+      eapply NoDup_app_r, NoDup_app_In in ND; eauto.
+      rewrite <-gather_eqs_inst_var_defined; auto using in_or_app.
+    - simpl_Forall. rewrite in_app_iff, not_or'.
+      split; auto using n_lastfby.
+      intros contra.
+      pose proof (NoDup_var_defined_n_eqs n) as ND. rewrite <-is_filtered_vars_defined in ND.
+      eapply n_lastapp; eauto.
+      rewrite <-gather_eqs_inst_var_defined; auto using in_or_app.
   Qed.
   Next Obligation.
-    setoid_rewrite gather_eqs_snd_spec.
-    unfold gather_insts, translate_eqns.
-    induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
-    destruct l; simpl; auto.
-    - rewrite IHl. induction l1; simpl; try reflexivity.
-      rewrite <-Permutation_middle; simpl.
-      rewrite <-IHl1. intuition.
-    - rewrite IHl. induction l; simpl; try reflexivity.
-      rewrite <-IHl0. reflexivity.
+    pose proof (n_nodup n) as ND.
+    rewrite map_fst_idfst.
+    rewrite translate_eqns_variables.
+    2:{ intros * In. rewrite Env.In_from_list, fst_InMembers, map_map, gather_eqs_last_defined in In.
+        split; eauto using n_lastapp, n_lastrhs. }
+    apply NoDup_Permutation.
+    - eapply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
+      + apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers.
+        eauto using NoDup_app_l, NoDup_app_r.
+      + simpl_Forall. intros ?.
+        eapply NoDup_app_r, NoDup_app_In in ND; eauto. solve_In.
+    - apply NoDup_filter.
+      pose proof (NoDup_var_defined_n_eqs n) as ND1. unfold vars_defined in *.
+      rewrite <-filter_notb_app with (xs:=n_eqs _), flat_map_app in ND1.
+      eauto using NoDup_app_r.
+    - intros. rewrite in_app_iff.
+      split; [intros [|]|intros]; simpl_In.
+      + apply Bool.negb_true_iff, PSE.mem_4 in Hf.
+        rewrite ps_from_list_In, gather_eqs_last_defined, gather_eqs_next_defined, in_app_iff in Hf.
+        apply not_or' in Hf as (N1&N2).
+        solve_In.
+        * assert (In x (vars_defined (n_eqs n))) as Def.
+          { rewrite n_defd, in_app_iff. left. solve_In. }
+          unfold vars_defined in *.
+          erewrite <-filter_notb_app with (xs:=n_eqs _), flat_map_app, in_app_iff in Def.
+          destruct Def; [|eauto]. contradiction.
+        * apply Bool.negb_true_iff, Env.Props.P.F.not_mem_in_iff.
+          rewrite Env.In_from_list, fst_InMembers, map_map, gather_eqs_last_defined. auto.
+      + solve_In.
+        * assert (In x (vars_defined (n_eqs n))) as Def.
+          { rewrite n_defd, in_app_iff. right. solve_In. }
+          unfold vars_defined in *.
+          erewrite <-filter_notb_app with (xs:=n_eqs _), flat_map_app, in_app_iff in Def.
+          destruct Def; [|eauto]. exfalso.
+          eapply n_vout; eauto. solve_In.
+        * apply Bool.negb_true_iff, Env.Props.P.F.not_mem_in_iff.
+          rewrite Env.In_from_list, fst_InMembers, map_map, gather_eqs_last_defined.
+          rewrite n_lastd1. intros In. simpl_In.
+          eapply NoDup_app_r, NoDup_app_In in ND. eapply ND. 1,2:solve_In.
+      + apply Bool.negb_true_iff, Env.Props.P.F.not_mem_in_iff in Hf.
+        rewrite Env.In_from_list, fst_InMembers, map_map, gather_eqs_last_defined in Hf.
+        assert (In x (vars_defined (n_eqs n))) as Def.
+        { unfold vars_defined in *. solve_In. }
+        rewrite n_defd, in_app_iff in Def. destruct Def; auto.
+        left. solve_In.
+        apply Bool.negb_true_iff, PSE.mem_3.
+        rewrite ps_from_list_In, gather_eqs_last_defined, gather_eqs_next_defined, not_In_app.
+        split; auto. intros contra.
+        pose proof (NoDup_var_defined_n_eqs n) as ND1. unfold vars_defined in *.
+        erewrite <-filter_notb_app with (xs:=n_eqs _), flat_map_app in ND1.
+        eapply NoDup_app_In in ND1; eauto.
   Qed.
   Next Obligation.
-    rewrite gather_eqs_snd_spec.
-    unfold gather_insts, translate_eqns.
-    induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct l; simpl; auto.
-    - constructor.
-      induction l1; simpl; auto.
-    - induction l; simpl; auto.
-  Qed.
-  Next Obligation.
-    setoid_rewrite gather_eqs_fst_spec.
-    unfold gather_eqs, translate_eqns.
-    apply gather_mems_nexts_of.
-  Qed.
-  Next Obligation.
-    pose proof (translate_node_obligation_3 n) as Nodup; simpl in *.
-    replace (map fst (fst (gather_eqs (n_eqs n)))) with (map fst (map (fun x => (fst x, snd (fst (snd x)))) (fst (gather_eqs (n_eqs n))))) in Nodup.
-    2:{ rewrite map_map. eapply map_ext. intros (?&?&?); auto. }
-    rewrite gather_eqs_fst_spec, gather_mems_nexts_of in Nodup.
-    apply NoDup_app_weaken in Nodup.
-    unfold SynStc.reset_consistency.
-    unfold translate_eqns in *; intros.
-    induction (n_eqs n) as [|[]]; simpl in *.
-    - inv H.
-    - inv H. inv H1.
-      rewrite IHl; auto.
-      split; intro H. right; auto. inv H; auto. inv H2.
-    - destruct l; simpl in *; auto.
-      rewrite SynStc.Next_with_reset_in_cons_not_next in H. 2:congruence.
-      induction l1 as [|(?&?) ?]; simpl in *; auto.
-      + rewrite Is_reset_in_reflect in *; auto.
-      + rewrite SynStc.Next_with_reset_in_cons_not_next in H. 2:congruence.
-        rewrite Is_reset_in_reflect in *; simpl in *. auto.
-    - inv Nodup.
-      rewrite SynStc.nexts_of_app, map_app in H2, H3.
-      split; intros.
-      + right.
-        inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]].
-        * apply Exists_app'; left.
-          apply Exists_map, Exists_exists.
-          exists ckr; split; auto using SynStc.Is_reset_in_tc.
-        * exfalso. clear - Ex.
-          induction l; simpl in *; inv Ex; auto. inv H0.
-        * apply Exists_app'; right.
-          apply NoDup_app_r in H3.
-          apply IHl; auto.
-      + inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]];
-          (inv H0; [inv H1|apply Exists_app' in H1 as [Ex'|Ex']]).
-        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&In&Res).
-          inv Res; auto.
-        * apply Exists_exists in Ex' as (?&In&Res).
-          exfalso.
-          apply H2, in_or_app, or_intror, resets_of_incl, resets_of_In. exists ckr.
-          apply Exists_exists; eauto.
-        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
-        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
-        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&?&Ex'). inv Ex'.
-          exfalso.
-          eapply H2, in_or_app, or_intror, nexts_of_In, Next_with_reset_in_Is_next_in; eauto.
-        * apply NoDup_app_r in H3.
-          rewrite IHl; auto.
-  Qed.
-  Next Obligation.
-    induction (n_eqs n) as [|[]]; simpl; auto.
-    - inversion 1.
-    - destruct l; simpl; auto.
-      induction l1; simpl; auto.
-    - induction l; simpl; auto using incl_tl, incl_cons, in_eq.
-  Qed.
-  Next Obligation.
-    rewrite <-map_app.
-    assert (Permutation (map fst
-                             (snd
-                                (partition
-                                   (fun x0 =>
-                                      PS.mem (fst x0) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
-                                   (n_vars n)) ++ n_out n))
-                        (map fst
-                             (snd
-                                (partition
-                                   (fun x0 =>
-                                      PS.mem (fst x0) (memories (n_eqs n)))
-                                   (n_vars n)) ++ n_out n))) as E.
-    { rewrite 2 map_app; apply Permutation_app_tail, Permutation_map.
-      now setoid_rewrite ps_from_list_gather_eqs_memories.
+    rewrite map_fst_idfst, translate_eqns_last, gather_eqs_last_defined.
+    remember (Env.from_list _) as env.
+    assert (forall x ckrs,
+               (exists ty ck c0, In (EqLast x ty ck c0 ckrs) (n_eqs n)) <->
+               Env.find x env = Some ckrs) as Env.
+    { subst. split; intros * In.
+      - apply Env.find_In_from_list.
+        + rewrite gather_eqs_last_flat_map. solve_In. auto.
+        + rewrite fst_NoDupMembers, map_map, gather_eqs_last_defined.
+          apply NoDup_last_defined_n_eqs.
+      - apply Env.from_list_find_In in In.
+        rewrite gather_eqs_last_flat_map in In. simpl_In.
+        unfold gather_eq in *. cases. simpl in *.
+        destruct Hinf as [Eq|Eq]; inv Eq. eauto.
     }
-    rewrite E; clear E.
-    rewrite snd_partition_memories_var_defined.
-    unfold SynStc.variables, translate_eqns, vars_defined.
-    induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct l; simpl; auto.
-    - constructor. apply Permutation_app_head.
-      induction l1; simpl; auto.
-    - induction l; simpl; auto.
+    clear Heqenv.
+
+    eapply NoDup_Permutation; eauto using NoDup_last_defined_n_eqs.
+    - apply fst_NoDupMembers.
+      pose proof (NoDup_var_defined_n_eqs n) as ND. clear Env.
+      induction (n_eqs n); simpl in *; [constructor|].
+      destruct a as [?? []| | |]; eauto using NoDup_app_r. inv ND.
+      destruct (Env.mem _ _); auto. constructor; eauto using NoDup_app_r.
+      contradict H1. unfold vars_defined. solve_In.
+      destruct x as [?? []| | |]; simpl in *; try congruence.
+      cases; auto.
+    - intros. split; intros In.
+      + assert (L:=In). rewrite n_lastd1 in In. simpl_In.
+        apply n_lastd2 in Hin0. unfold vars_defined in Hin0. simpl_In.
+        destruct x0 as [?? []| | |]; simpl in *; try congruence.
+        destruct Hinf; [|now exfalso]; subst.
+        solve_In.
+        2:{ unfold lasts_defined in *. simpl_In.
+            destruct x0; simpl in *; try now exfalso.
+            destruct Hinf as [|]; [|now exfalso]; subst; eauto.
+            edestruct Env as (Env1&_); eauto.
+            erewrite Env.mem_find, Env1; eauto. }
+        simpl; auto.
+      + simpl_In. cases_eqn Eq; subst; auto. inv Hf.
+        rewrite Env.mem_find in Eq1. cases_eqn Eq.
+        apply Env in Eq as (?&?&?&In).
+        unfold lasts_defined. clear - In. solve_In. simpl; auto.
   Qed.
   Next Obligation.
-    pose proof (translate_node_obligation_3 n) as Nodup; simpl in *.
-    pose proof (translate_node_obligation_5 n) as Insts; simpl in *.
-    rewrite Insts in Nodup. clear Insts.
-    apply NoDup_app_r in Nodup.
-    unfold SynStc.ireset_consistency.
-    unfold translate_eqns in *; intros.
-    induction (n_eqs n) as [|[]]; simpl in *.
-    - inv H.
-    - inv H. inv H1.
-      rewrite IHl; auto.
-      split; intro H. right; auto. inv H; auto. inv H2.
-    - destruct l; simpl in *; auto.
-      inv Nodup.
-      rewrite SynStc.steps_of_app, map_app in H2, H3.
-      split; intros.
-      + right.
-        inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]].
-        * apply Exists_app'; left.
-          apply Exists_map, Exists_exists.
-          exists ckr; split; auto using SynStc.Is_ireset_in_tc.
-        * exfalso. clear - Ex.
-          induction l1; simpl in *; inv Ex; auto. inv H0.
-        * apply Exists_app'; right.
-          apply NoDup_app_r in H3.
-          apply IHl; auto.
-      + inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]];
-          (inv H0; [inv H1|apply Exists_app' in H1 as [Ex'|Ex']]).
-        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&In&Res).
-          inv Res; auto.
-        * apply Exists_exists in Ex' as (?&In&Res).
-          exfalso.
-          apply H2, in_or_app, or_intror, iresets_of_incl', SynStc.iresets_of_In. exists ckr.
-          apply Exists_exists; eauto.
-        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
-        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
-        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&?&Ex'). inv Ex'.
-          exfalso.
-          eapply H2, in_or_app, or_intror, SynStc.steps_of_In, SynStc.Step_with_ireset_in_Is_step_in; eauto.
-        * apply NoDup_app_r in H3.
-          rewrite IHl; auto.
-    - inv H. inv H1.
-      rewrite SynStc.steps_of_app, map_app in Nodup.
-      apply NoDup_app_r in Nodup.
-      apply Exists_app' in H1 as [Ex|Ex].
-      + exfalso. clear - Ex. induction l; inv Ex; auto. inv H0.
-      + rewrite IHl; auto.
-        unfold SynStc.Is_ireset_in.
-        rewrite Exists_cons, Exists_app'. intuition.
-        * inv H2.
-        * exfalso. clear - H0. induction l; inv H0; auto. inv H1.
+    intros ?? LR.
+    unfold SynStc.Last_with_reset_in, translate_eqns in *.
+    simpl_Exists. simpl_In.
+    destruct x0; simpl in *.
+    2:{ simpl_In. inv LR. }
+    2:{ cases. inv Hinf; simpl_In; inv LR. }
+    2:{ destruct Hinf; subst; simpl_In; inv LR. }
+    cases_eqn Eq; apply In_singleton in Hinf; subst; inv LR.
+    apply Env.from_list_find_In in Eq0. rewrite gather_eqs_last_flat_map in Eq0.
+    simpl_In.
+    unfold gather_eq in *. cases. destruct Hinf as [Hinf|Hinf]; inv Hinf.
+    intros; split; intros In; simpl_In.
+    - apply Exists_exists; do 2 esplit. solve_In. simpl. solve_In.
+      constructor.
+    - apply Exists_exists in In as (?&?&R). simpl_In.
+      destruct x0; simpl in *.
+      + cases; apply In_singleton in Hinf; subst; inv R.
+      + simpl_In. inv R.
+        assert (l = l0); subst; [|solve_In].
+        pose proof (NoDup_last_defined_n_eqs n) as ND. unfold lasts_defined in ND.
+        clear - Hin1 Hin ND.
+        induction (n_eqs n); inv Hin1; inv Hin; simpl in *.
+        * now inv H.
+        * exfalso. eapply NoDup_cons'; eauto. solve_In. simpl; auto.
+        * exfalso. eapply NoDup_cons'; eauto. solve_In. simpl; auto.
+        * eauto using NoDup_app_r.
+      + cases. inv Hinf; simpl_In; inv R.
+      + destruct Hinf; subst; simpl_In; inv R. exfalso.
+        pose proof (n_lastfby n) as ND.
+        eapply ND; unfold lasts_defined, vars_defined.
+        * clear Hin. solve_In. simpl; auto.
+        * clear Hin1. solve_In. simpl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns.
+    rewrite gather_eqs_next_defined.
+    remember (Env.from_list _) as env. clear Heqenv.
     induction (n_eqs n) as [|[]]; simpl; auto.
-    - inversion 1.
-    - destruct l; simpl; auto.
-      induction l1; simpl; auto using incl_tl, incl_cons, in_eq.
-    - induction l; simpl; auto.
-   Qed.
+    - cases; auto.
+    - induction l; auto.
+    - cases. induction l1; auto.
+    - constructor. induction l; auto.
+  Qed.
   Next Obligation.
-    pose proof n.(n_good) as [ValidApp].
-    split; [|split; [|split]]; auto.
-    - rewrite (Permutation_app_comm n.(n_in)).
-      rewrite Permutation_app_assoc.
-      rewrite Forall_map in *.
-      match goal with |- context [snd (partition ?p ?l)] =>
-                      apply (Forall_app_weaken _ (fst (partition p l))) end.
-      rewrite <-(Permutation_app_assoc (fst _)).
-      rewrite <- (permutation_partition _ n.(n_vars)).
-      rewrite <-(Permutation_app_assoc n.(n_vars)).
-      rewrite Permutation_app_comm; auto.
-    - pose proof (n_defd n) as Perm.
-      apply Forall_forall; rewrite Forall_forall in ValidApp.
-      intros * Hin.
-      rewrite fst_fst_gather_eqs_var_defined in Hin.
-      rewrite <-is_filtered_vars_defined in Perm.
-      assert (In x (vars_defined (filter is_def (n_eqs n)) ++
-                                       vars_defined (filter is_app (n_eqs n)) ++
-                                       vars_defined (filter is_fby (n_eqs n)))) as Hin'
-          by (rewrite 2 in_app; intuition).
-      eapply Permutation_in in Perm; eauto.
-      apply in_map_iff in Perm as (? & E & Perm).
-      rewrite <-E; apply ValidApp.
-      apply in_map, in_app; auto.
-    - pose proof (n_defd n) as Perm.
-      apply Forall_forall; rewrite Forall_forall in ValidApp.
-      intros * Hin.
-      assert (In x (map fst (snd (gather_eqs (n_eqs n))) ++ gather_app_vars (n_eqs n))) as Hin'
-          by (apply in_app; auto).
-      rewrite fst_snd_gather_eqs_var_defined in Hin'.
-      rewrite <-is_filtered_vars_defined in Perm.
-      assert (In x (vars_defined (filter is_def (n_eqs n)) ++
-                                 vars_defined (filter is_app (n_eqs n)) ++
-                                 vars_defined (filter is_fby (n_eqs n)))) as Hin''
-          by (rewrite 2 in_app; intuition).
-      eapply Permutation_in in Perm; eauto.
-      apply in_map_iff in Perm as (? & E & Perm).
-      rewrite <-E; apply ValidApp.
-      apply in_map, in_app; auto.
+    remember (Env.from_list _) as env. clear Heqenv.
+    pose proof (NoDup_var_defined_fby n) as NDFby.
+    pose proof (fby_last_NoDup n) as ND.
+    intros ?? Next ?.
+    induction (n_eqs n); simpl in *. inv Next.
+    unfold SynStc.Is_reset_state_in. rewrite Exists_app.
+    apply Exists_app in Next as [|Ex].
+    - clear IHl. rewrite or_not_right.
+      2:{ intros In.
+          apply SynStc.Next_with_reset_in_Is_update_next_in, translate_eqn_next in H. inv H; simpl in *.
+          apply translate_eqns_reset_state in In as [Fby|Last].
+          + apply Is_fby_in_vars_defined in Fby. inv NDFby; auto.
+          + eapply ND; [right|left]; eauto. constructor.
+      }
+      destruct a; simpl_Exists.
+      + cases; simpl_Exists; take (_ \/ _) and destruct it; subst; inv H; now exfalso.
+      + simpl_In. inv H.
+      + cases. inv Hin; [inv H|]. simpl_In. inv H.
+      + rewrite Exists_cons, or_not_left.
+        destruct Hin; subst.
+        * inv H. split; [intros; simpl_In; solve_Exists; constructor
+                        |intros; simpl_Exists; inv H; solve_In].
+        * simpl_In. inv H.
+        * intros * Res. inv Res.
+    - rewrite or_not_left; auto.
+      2:{ clear - NDFby ND Ex. intros In.
+          apply SynStc.Next_with_reset_in_Is_update_next_in, translate_eqns_next, Is_fby_in_vars_defined in Ex.
+          apply translate_eqn_reset_state in In as [Fby|Last].
+          + inv Fby. simpl in *. inv NDFby; eauto.
+          + eapply ND; [left|right]; eauto.
+            apply Is_fby_in_vars_defined; auto.
+      }
+      apply IHl; auto.
+      + cases; eauto using NoDup_app_r.
+      + intros * L1 F. eapply ND; right; eauto.
+  Qed.
+  Next Obligation.
+    remember (Env.from_list _) as env.
+    assert (forall x ty ck c0 ckrs,
+               In (EqLast x ty ck c0 ckrs) (n_eqs n) ->
+               Env.find x env = Some ckrs) as Env.
+    { subst. intros * In.
+      apply Env.find_In_from_list.
+      - rewrite gather_eqs_last_flat_map. solve_In. auto.
+      - rewrite fst_NoDupMembers, map_map, gather_eqs_last_defined.
+        apply NoDup_last_defined_n_eqs.
+    }
+    clear Heqenv.
+    intros ? In. rewrite map_app, in_app_iff.
+    apply SynStc.reset_states_of_In in In as (?&Res).
+    rewrite <-SynStc.lasts_of_In, <-SynStc.nexts_of_In.
+    unfold SynStc.Is_reset_state_in, SynStc.Is_update_last_in, SynStc.Is_update_next_in in *.
+    rewrite Exists_or_iff. unfold translate_eqns in *.
+    simpl_Exists. simpl_In.
+    destruct x1; simpl in *.
+    - cases; simpl_In; apply In_singleton in Hinf; subst; inv Res.
+    - simpl_In. inv Res.
+      assert (In i (lasts_defined (n_eqs n))) as Last.
+      { unfold lasts_defined. solve_In. simpl. auto. }
+      rewrite n_lastd1 in Last. simpl_In.
+      apply n_lastd2 in Hin2. unfold vars_defined in Hin2. simpl_In.
+      destruct x; simpl in *; try congruence. destruct r; simpl in *; try congruence.
+      destruct Hinf; subst; try now exfalso.
+      solve_Exists; [|left; constructor].
+      solve_In. simpl. erewrite Env; eauto with datatypes.
+    - cases. inv Hinf; [|simpl_In]; inv Res.
+    - inv Hinf; [|simpl_In]; inv Res.
+      solve_Exists. solve_In. simpl; eauto.
+      right; constructor.
+  Qed.
+  Next Obligation.
+    remember (Env.from_list _) as env. clear Heqenv.
+    rewrite gather_eqs_inst, map_app, in_app_iff.
+    split; [intros In|intros []];
+      induction (n_eqs n) as [|]; simpl in *; eauto.
+    all:rewrite ? SynStc.insts_of_app, ? SynStc.inst_resets_of_app, ? map_app, ? in_app_iff in *.
+    - destruct In; [clear IHl|edestruct IHl; eauto].
+      destruct a; simpl in *.
+      + cases.
+      + induction l0; auto.
+      + cases; simpl in *; inv H; subst; auto. now exfalso.
+      + induction l0; simpl in *; auto.
+    - destruct H; auto; clear IHl.
+      destruct a; simpl in *.
+      + cases.
+      + induction l0; auto.
+      + cases; inv H; simpl; auto with datatypes.
+        induction l2; simpl in *; auto.
+      + induction l0; simpl in *; auto.
+    - destruct H; auto; clear IHl.
+      destruct a; simpl in *.
+      + cases.
+      + induction l0; auto.
+      + cases. simpl in *.
+        induction l2; simpl in *; inv H; auto.
+      + induction l0; simpl in *; auto.
+  Qed.
+  Next Obligation.
+    remember (Env.from_list _) as env. clear Heqenv.
+    rewrite  gather_eqs_inst_flat_map.
+    induction (n_eqs n) as [|[]]; simpl; auto.
+    - cases; auto.
+    - induction l; auto.
+    - cases. constructor. induction l1; auto.
+    - induction l; auto.
+  Qed.
+  Next Obligation.
+    remember (Env.from_list _) as env. clear Heqenv.
+    pose proof (NoDup_var_defined_app n) as ND.
+    intros ?? Inst ?.
+    induction (n_eqs n); simpl in *. inv Inst.
+    unfold SynStc.Is_reset_inst_in. rewrite Exists_app.
+    apply Exists_app in Inst as [|Ex].
+    - clear IHl. rewrite or_not_right.
+      2:{ intros In.
+          apply SynStc.Inst_with_reset_in_Is_update_inst_in, translate_eqn_inst in H.
+          apply translate_eqns_reset_inst in In. simpl in *.
+          cases. simpl in *. rewrite app_nil_r in *.
+          eapply NoDup_app_In in ND; eauto.
+      }
+      destruct a; simpl_Exists.
+      + cases; simpl_Exists; take (_ \/ _) and destruct it; subst; inv H; now exfalso.
+      + simpl_In. inv H.
+      + cases. rewrite Exists_cons, or_not_left.
+        destruct Hin; subst.
+        * inv H. split; [intros; simpl_In; solve_Exists; constructor
+                        |intros; simpl_Exists; inv H; solve_In].
+        * simpl_In. inv H.
+        * intros * Res. inv Res.
+      + cases. inv Hin; [inv H|]. simpl_In. inv H.
+    - rewrite or_not_left; auto.
+      2:{ clear - ND Ex. intros In.
+          apply SynStc.Inst_with_reset_in_Is_update_inst_in, translate_eqns_inst in Ex.
+          apply translate_eqn_reset_inst in In. simpl in *.
+          cases. simpl in *. rewrite app_nil_r in *.
+          eapply NoDup_app_In in ND; eauto.
+      }
+      apply IHl; auto.
+      + cases; eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    remember (Env.from_list _) as env; clear Heqenv.
+    induction (n_eqs) as [|[]]; simpl; auto.
+    - reflexivity.
+    - cases; simpl; auto.
+    - induction l; auto.
+    - cases. induction l1; simpl in *; auto using incl_tl, incl_cons with datatypes.
+    - induction l; auto.
+  Qed.
+  Next Obligation.
+    pose proof (n_good n) as (Good1&Good2).
+    assert (Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (vars_defined (n_eqs n))) as Good3.
+    { rewrite n_defd. apply Forall_app in Good1 as (?&?); auto. }
+    rewrite <-is_filtered_vars_defined in Good3.
+    rewrite ? map_app, ? map_fst_idfst. rewrite gather_eqs_last_defined, gather_eqs_next_defined.
+    rewrite ? Forall_app in *. destruct Good1 as (G1&G2&G3). destruct Good3 as (G4&G5&G6).
+    repeat split; auto.
+    - simpl_Forall. simpl_In. simpl_Forall. auto.
+    - eapply Forall_incl; [eapply G2|].
+      rewrite n_lastd1. intros ??. solve_In.
+    - eapply Forall_incl; [eapply G5|].
+      rewrite <-gather_eqs_inst_var_defined. apply incl_appl, incl_refl.
   Qed.
 
   Global Program Instance translate_node_transform_unit: TransformUnit node SynStc.system :=
     { transform_unit := translate_node }.
 
-  Global Program Instance global_program_without_units : TransformProgramWithoutUnits global SynStc.program :=
+  Global Program Instance global_program_without_units : TransformProgramWithoutUnits global (@SynStc.program (PSP.of_list lustre_prefs)) :=
     { transform_program_without_units := fun g => SynStc.Program g.(types) g.(externs) [] }.
 
   Definition translate : global -> SynStc.program := transform_units.

@@ -13,7 +13,7 @@ MAKEFILEAUTO=$(MKFILE_DIR)/Makefile.auto
 MAKEFILECONFIG=$(MKFILE_DIR)/Makefile.config
 COQPROJECT=$(MKFILE_DIR)/_CoqProject
 
-ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
+ifeq ($(filter clean cleanall, $(MAKECMDGOALS)),)
     ifeq ($(wildcard $(MAKEFILECONFIG)),)
     $(error Please run ./configure first)
     endif
@@ -42,7 +42,7 @@ EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
 
 # Menhir includes from CompCert
-ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
+ifeq ($(filter clean cleanall, $(MAKECMDGOALS)),)
 include $(COMPCERTDIR)/Makefile.menhir
 endif
 export MENHIR
@@ -54,7 +54,7 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 # ocamlbuild flags
 VERBOSITY=-verbose 1
 FLAGS=-Is $(SRC_DIR),$(EXTRACTED) -use-ocamlfind -use-menhir \
-      -pkgs str,unix,menhirLib -no-hygiene $(VERBOSITY)
+      -pkgs str,unix,menhirLib,ocamlgraph -no-hygiene $(VERBOSITY)
 	#-cflags $(MENHIR_INCLUDES)$(WARNINGS)
 TARGET=native
 BUILDDIR=_build

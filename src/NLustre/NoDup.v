@@ -19,8 +19,6 @@ From Velus Require Import NLustre.Memories.
   The [NoDup_def] predicate states that variables are only defined
   once. This is asking for some sort of SSA.
 
-  Remark: [Ordered_nodes] is implied by [Welldef_global].
-
  *)
 
 Module Type NODUP
@@ -51,49 +49,55 @@ Module Type NODUP
     destruct eq; inversion_clear Hndd; assumption.
   Qed.
 
-  Lemma not_Is_variable_in_memories:
-    forall x eqs,
-      PS.In x (memories eqs)
-      -> NoDup_defs eqs
-      -> ~Is_variable_in x eqs.
-  Proof.
-    intros x eqs Hinm Hndd Hvar.
+  (* TODO is this useful ? *)
+  (* Lemma not_Is_variable_in_memories: *)
+  (*   forall x eqs, *)
+  (*     PS.In x (memories eqs) *)
+  (*     -> NoDup_defs eqs *)
+  (*     -> ~Is_variable_in x eqs. *)
+  (* Proof. *)
+  (*   intros x eqs Hinm Hndd Hvar. *)
 
-    induction eqs as [ | eq eqs IHeqs ].
-    - inv Hvar.
-    - unfold memories in *; simpl in *.
-      inv Hndd.
-      apply In_fold_left_memory_eq in Hinm as [Hinm|Hinm]; inv Hvar; eauto.
-      + apply In_fold_left_memory_eq_defined_eq, Is_defined_inP in Hinm.
-        take (forall x, _ -> ~ Is_defined_in x _) and
-             eapply it; eauto using Is_variable_in_eq_Is_defined_in_eq.
-      + take (Is_variable_in_eq _ _) and inv it; simpl in *; inv Hinm.
-      + apply In_memory_eq_In_defined_eq, Is_defined_in_eqP in Hinm.
-        take (forall x, _ -> ~ Is_defined_in x _) and
-             eapply it; eauto using Is_variable_in_Is_defined_in.
-  Qed.
+  (*   induction eqs as [ | eq eqs IHeqs ]. *)
+  (*   - inv Hvar. *)
+  (*   - unfold memories in *; simpl in *. *)
+  (*     inv Hndd. *)
+  (*     apply In_fold_left_memory_eq in Hinm as [Hinm|Hinm]; inv Hvar; eauto. *)
+  (*     + apply In_fold_left_memory_eq_defined_eq, Is_defined_inP in Hinm. *)
+  (*       take (forall x, _ -> ~ Is_defined_in x _) and *)
+  (*            eapply it; eauto using Is_variable_in_eq_Is_defined_in_eq. *)
+  (*     + take (Is_variable_in_eq _ _) and inv it; simpl in *; inv Hinm. *)
+  (*     + apply In_memory_eq_In_defined_eq, Is_defined_in_eqP in Hinm. *)
+  (*       take (forall x, _ -> ~ Is_defined_in x _) and *)
+  (*            eapply it; eauto using Is_variable_in_Is_defined_in. *)
+  (* Qed. *)
 
   Lemma NoDup_defs_NoDup_vars_defined:
     forall eqs,
       NoDup (vars_defined eqs) ->
+      NoDup (lasts_defined eqs) ->
       NoDup_defs eqs.
   Proof.
-    unfold vars_defined.
-    induction eqs as [|eq eqs].
+    unfold vars_defined, lasts_defined.
+    induction eqs as [|eq eqs]; simpl; intros * VD LD.
     - auto using NoDup_defs.
-    - simpl. intro Hnodup.
+    - simpl.
       constructor; eauto using NoDup_app_r.
-      intros ? Hdef1 Hdef2.
-      eapply NoDup_app_In in Hnodup. eapply Hnodup.
-      + apply Is_defined_in_vars_defined; eauto.
-      + apply Is_defined_in_var_defined; eauto.
+      intros ? Hdef1 Hdef2. destruct x.
+      + eapply NoDup_app_In in VD. eapply VD.
+        * apply Is_defined_in_vars_defined; eauto.
+        * apply Is_defined_in_var_defined; eauto.
+      + eapply NoDup_app_In in LD. eapply LD.
+        * apply Is_defined_in_lasts_defined; eauto.
+        * apply Is_defined_in_last_defined; eauto.
   Qed.
 
   Lemma NoDup_defs_node:
     forall n,
       NoDup_defs n.(n_eqs).
   Proof.
-    intro; apply NoDup_defs_NoDup_vars_defined, NoDup_var_defined_n_eqs.
+    intros.
+    apply NoDup_defs_NoDup_vars_defined; auto using NoDup_var_defined_n_eqs, NoDup_last_defined_n_eqs.
   Qed.
 
 End NODUP.

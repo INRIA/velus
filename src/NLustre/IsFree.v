@@ -1,6 +1,7 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import CoreExpr.CEIsFree.
@@ -26,20 +27,25 @@ Module Type ISFREE
        (Import Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
        (Import CEIsF : CEISFREE Ids  Op OpAux Cks CESyn).
 
-  Inductive Is_free_in_eq : ident -> equation -> Prop :=
+  Inductive Is_free_in_eq : var_last -> equation -> Prop :=
   | FreeEqDef:
       forall x ck ce i,
         Is_free_in_arhs i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
+  | FreeEqLast:
+      forall x ty ck c0 xrs i,
+        Is_free_in_clock i ck \/
+        Exists (fun '(xr, ckr) => i = xr \/ Is_free_in_clock i ckr) xrs ->
+        Is_free_in_eq (Var i) (EqLast x ty ck c0 xrs)
   | FreeEqApp:
       forall x f ck les xrs i,
         Is_free_in_aexps i ck les \/
-        Exists (fun '(xr, ckr) => xr = i \/ Is_free_in_clock i ckr) xrs ->
+        Exists (fun '(xr, ckr) => i = Var xr \/ exists y, i = Var y /\ Is_free_in_clock y ckr) xrs ->
         Is_free_in_eq i (EqApp x ck f les xrs)
   | FreeEqFby:
       forall x v ck le xrs i,
         Is_free_in_aexp i ck le \/
-        Exists (fun '(xr, ckr) => xr = i \/ Is_free_in_clock i ckr) xrs ->
+        Exists (fun '(xr, ckr) => i = Var xr \/ exists y, i = Var y /\ Is_free_in_clock y ckr) xrs ->
         Is_free_in_eq i (EqFby x ck v le xrs).
 
   Global Hint Constructors Is_free_in_clock Is_free_in_exp
@@ -48,22 +54,24 @@ Module Type ISFREE
 
   (** * Decision procedure *)
 
-  Definition free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
+  Definition free_in_equation (eq: equation) (fvs: (PS.t * PS.t)) : (PS.t * PS.t) :=
     match eq with
     | EqDef _ ck cae      => free_in_arhs ck cae fvs
+    | EqLast _ _ ck _ xrs =>
+        (fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs (free_in_clock ck (fst fvs)), snd fvs)
     | EqApp _ ck f laes xrs =>
-      let fvs := free_in_aexps ck laes fvs in
-      fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs fvs
+        let fvs := free_in_aexps ck laes fvs in
+        (fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs (fst fvs), (snd fvs))
     | EqFby _ ck v lae xrs =>
-      let fvs := free_in_aexp ck lae fvs in
-      fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs fvs
+        let fvs := free_in_aexp ck lae fvs in
+        (fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs (fst fvs), (snd fvs))
     end.
 
   (** * Specification lemmas *)
 
   Lemma free_in_fold_left_spec : forall xr fvs x,
     PS.In x (fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xr fvs) <->
-    PS.In x fvs \/ Exists (fun '(xr, ckr) => xr = x \/ Is_free_in_clock x ckr) xr.
+    PS.In x fvs \/ Exists (fun '(xr, ckr) => x = xr \/ Is_free_in_clock x ckr) xr.
   Proof.
     intros *; split; revert fvs.
     1,2:induction xr as [|(?&?)]; intros * Hin; simpl in *; auto.
@@ -77,39 +85,43 @@ Module Type ISFREE
       inv H; auto. destruct H1; auto.
   Qed.
 
-  Lemma free_in_equation_spec:
-    forall x eq m, PS.In x (free_in_equation eq m)
-                   <-> (Is_free_in_eq x eq \/ PS.In x m).
+  Lemma free_in_equation_spec1: forall x eq m,
+      PS.In x (fst (free_in_equation eq m))
+      <-> (Is_free_in_eq (Var x) eq \/ PS.In x (fst m)).
   Proof.
-    Local Ltac aux :=
-      repeat (simpl in *;
-              match goal with
-              | o:option (_ * _) |- _ => destruct o as [[? ?]|]
-              | H:Is_free_in_eq _ _ |- _ => inversion_clear H
-              | H:PS.In _ (free_in_arhs _ _ _) |- _ => rewrite free_in_arhs_spec in H
-              | H:PS.In _ (free_in_aexp _ _ _) |- _ => rewrite free_in_aexp_spec in H
-              | H:PS.In _ (free_in_aexps _ _ _) |- _ => rewrite free_in_aexps_spec in H
-              | H:PS.In _ (free_in_clock _ _) |- _  => rewrite free_in_clock_spec in H
-              | H:PS.In _ (PS.add _ _) |- _ => rewrite PS.add_spec in H
-              | H:PS.In _ (fold_left _ _ _) |- _ => rewrite free_in_fold_left_spec in H
-              | |- context [PS.In _ (free_in_arhs _ _ _)] => rewrite free_in_arhs_spec
-              | |- context [PS.In _ (free_in_aexp _ _ _)] => rewrite free_in_aexp_spec
-              | |- context [PS.In _ (free_in_aexps _ _ _)] => rewrite free_in_aexps_spec
-              | |- context [PS.In _ (free_in_clock _ _)] => rewrite free_in_clock_spec
-              | |- context [PS.In _ (PS.add _ _)] => rewrite PS.add_spec
-              | |- context [PS.In _ (fold_left _ _ _)] => rewrite free_in_fold_left_spec
-              | H:_ \/ _ |- _ => destruct H
-              end; eauto with nlfree).
-
-    destruct eq; split; intro H; aux; simpl in *.
+    intros. unfold free_in_equation. cases; simpl.
+    all:rewrite ?free_in_fold_left_spec, ?free_in_aexp_spec1, ?free_in_aexps_spec1, ?free_in_arhs_spec1, ?free_in_clock_spec.
+    all:(split; intros [|]; try (take (Is_free_in_eq _ _) and inv it);
+         repeat (take (_ \/ _) and destruct it); auto with nlfree).
+    1,3:left; constructor; right; solve_Exists; take (_ \/ _) and destruct it; subst; eauto.
+    all:right; solve_Exists; take (_ \/ _) and destruct it as [Eq|]; [|destruct_conjs]; take (Var _ = Var _) and inv it; eauto.
   Qed.
 
-  Lemma free_in_equation_spec':
-    forall x eq, PS.In x (free_in_equation eq PS.empty)
-               <-> Is_free_in_eq x eq.
+  Corollary free_in_equation_spec1': forall x eq,
+      PS.In x (fst (free_in_equation eq (PS.empty, PS.empty)))
+      <-> Is_free_in_eq (Var x) eq.
   Proof.
-    intros; rewrite (free_in_equation_spec x eq PS.empty).
-    intuition.
+    intros. rewrite free_in_equation_spec1, PSF.empty_iff; simpl.
+    split; [intros [|[]]|intros]; auto.
+  Qed.
+
+  Lemma free_in_equation_spec2: forall x eq m,
+      PS.In x (snd (free_in_equation eq m))
+      <-> (Is_free_in_eq (Last x) eq \/ PS.In x (snd m)).
+  Proof.
+    intros. unfold free_in_equation. cases; simpl.
+    all:rewrite ?free_in_fold_left_spec, ?free_in_aexp_spec2, ?free_in_aexps_spec2, ?free_in_arhs_spec2, ?free_in_clock_spec.
+    all:(split; auto; intros [|]; try (take (Is_free_in_eq _ _) and inv it);
+         repeat (take (_ \/ _) and destruct it); auto with nlfree).
+    1-2:simpl_Exists; take (_ \/ _) and destruct it; destruct_conjs; congruence.
+  Qed.
+
+  Corollary free_in_equation_spec2': forall x eq,
+      PS.In x (snd (free_in_equation eq (PS.empty, PS.empty)))
+      <-> Is_free_in_eq (Last x) eq.
+  Proof.
+    intros. rewrite free_in_equation_spec2, PSF.empty_iff; simpl.
+    split; [intros [|[]]|intros]; auto.
   Qed.
 
 End ISFREE.

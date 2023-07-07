@@ -76,9 +76,9 @@ Module Type OBCSEMANTICS
       forall x ty,
         exp_eval me ve (Var x ty) (Env.find x ve)
   | estate:
-      forall x v ty,
+      forall x v ty islast,
         find_val x me = Some v ->
-        exp_eval me ve (State x ty) (Some v)
+        exp_eval me ve (State x ty islast) (Some v)
   | econst:
       forall c,
         exp_eval me ve (Const c) (Some (Vscalar (sem_cconst c)))
@@ -114,9 +114,9 @@ Module Type OBCSEMANTICS
         exp_eval me ve e (Some v) ->
         stmt_eval prog me ve (Assign x e) (me, Env.add x v ve)
   | Iassignst:
-    forall prog me ve x e v,
+    forall prog me ve x e isreset v,
       exp_eval me ve e (Some v) ->
-      stmt_eval prog me ve (AssignSt x e) (add_val x v me, ve)
+      stmt_eval prog me ve (AssignSt x e isreset) (add_val x v me, ve)
   | Icall:
       forall prog me ve es vos clsid o f ys ome' rvos,
         Forall2 (exp_eval me ve) es vos ->
@@ -169,9 +169,9 @@ Module Type OBCSEMANTICS
         P_stmt prog me ve (Assign x e) (me, Env.add x v ve).
 
     Hypothesis assignstCase:
-      forall prog me ve x e v,
+      forall prog me ve x e isreset v,
         exp_eval me ve e (Some v) ->
-        P_stmt prog me ve (AssignSt x e) (add_val x v me, ve).
+        P_stmt prog me ve (AssignSt x e isreset) (add_val x v me, ve).
 
     Hypothesis callCase:
       forall prog me ve es vos clsid o f ys ome' rvos,
@@ -498,73 +498,6 @@ Proof.
   Qed.
 
   (** ** Other properties *)
-
-  (** If we add irrelevent values to [ve], evaluation does not change. *)
-  Lemma exp_eval_extend_venv : forall me ve x v' e v,
-      ~Is_free_in_exp x e ->
-      (exp_eval me ve e v <-> exp_eval me (Env.add x v' ve) e v).
-  Proof.
-    intros me ve x v' e v Hfree.
-    split; intro Heval.
-    - revert v Hfree Heval.
-      induction e; intros ? Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      + erewrite <-Env.gso; eauto; constructor.
-      + now constructor; rewrite Env.gso.
-    - revert v Hfree Heval.
-      induction e; intros ? Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      + rewrite Env.gso; auto; constructor.
-      + constructor; erewrite <-Env.gso; eauto.
-  Qed.
-
-  Lemma exp_eval_adds_extend_venv:
-    forall me e xs rvs ve v,
-      (forall x, In x xs -> ~Is_free_in_exp x e) ->
-      (exp_eval me (Env.adds_opt xs rvs ve) e v <-> exp_eval me ve e v).
-  Proof.
-    induction xs as [|x xs IH]; destruct rvs as [|rv rvs]; auto; try reflexivity.
-    destruct rv.
-    2:now setoid_rewrite Env.adds_opt_cons_cons_None; auto with datatypes.
-    intros ve v' Hnfree.
-    rewrite Env.adds_opt_cons_cons, <-exp_eval_extend_venv; auto with datatypes.
-  Qed.
-
-  Lemma exp_eval_adds_opt_extend_venv:
-    forall me e xs rvs ve v,
-      (forall x, In x xs -> ~Is_free_in_exp x e) ->
-      (exp_eval me (Env.adds_opt xs rvs ve) e v <-> exp_eval me ve e v).
-  Proof.
-    induction xs as [|x xs IH]; destruct rvs as [|rv rvs]; auto; try reflexivity.
-    intros ve v' Hnfree.
-    destruct rv.
-    - rewrite Env.adds_opt_cons_cons, <-exp_eval_extend_venv; auto with datatypes.
-    - rewrite Env.adds_opt_cons_cons_None; auto with datatypes.
-  Qed.
-
-  (** If we add irrelevent values to [me], evaluation does not change. *)
-  Lemma exp_eval_extend_menv : forall me ve x v' e v,
-      ~Is_free_in_exp x e ->
-      (exp_eval (add_val x v' me) ve e v <-> exp_eval me ve e v).
-  Proof.
-    intros me ve x v' e v Hfree. split.
-    - revert v Hfree.
-      induction e; intros v1 Hfree Heval; inv Heval;
-        try not_free; try rewrite find_val_gso in *; eauto using exp_eval.
-    - revert v Hfree.
-      induction e; intros v1 Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      now constructor; rewrite find_val_gso.
-  Qed.
-
-  (** If we add objects to [me], evaluation does not change. *)
-  Lemma exp_eval_extend_menv_by_obj : forall me ve f obj e v,
-      exp_eval (add_inst f obj me) ve e v <-> exp_eval me ve e v.
-  Proof.
-    intros me ve f v' e v. split; revert v.
-    - induction e; intros v1 Heval; inv Heval; eauto using exp_eval.
-    - induction e; intros v1 Heval; inv Heval; eauto using exp_eval.
-  Qed.
 
   Lemma Forall2_exp_eval_not_None:
     forall me ve es vos,

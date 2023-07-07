@@ -2,6 +2,7 @@ From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import IndexedStreams.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.CESyntax.
@@ -44,21 +45,21 @@ Module Type NLCLOCKINGSEMANTICS
        (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn     Str     CESem           CEClo).
 
   Lemma sem_clocked_var_eq:
-    forall G bk H vars x ck eq,
+    forall G bk H vars x ck islast eq,
       Ordered_nodes G ->
       wc_global G ->
       NoDupMembers vars ->
       sem_equation G bk H eq ->
       wc_equation G vars eq ->
-      Is_defined_in_eq x eq ->
-      In (x, ck) vars ->
-      sem_clocked_var bk H x ck.
+      Is_defined_in_eq (Var x) eq ->
+      In (x, (ck, islast)) vars ->
+      sem_clocked_var bk H (Var x) ck.
   Proof.
-    intros ??????? Ord WCG Nodup Sem WC Def Hin.
-    revert dependent ck; revert dependent x; revert dependent vars.
+    intros * Ord WCG Nodup Sem WC Def Hin.
+    revert dependent ck; revert dependent islast; revert dependent x; revert dependent vars.
     induction Sem as [?????? Hvar Hexp|
                       ???????????? Hvars ??? Hsem|
-                      ??????????? Hexp Hvar|
+                      ??????????? Hexp Hvar| |
                       ?????? Hbk Find Hins Houts Hvars Heqs IH] using sem_equation_mult with
         (P_node := fun f xss yss =>
                      forall n H bk,
@@ -66,23 +67,18 @@ Module Type NLCLOCKINGSEMANTICS
                        bk = clock_of xss ->
                        sem_vars H (map fst n.(n_in)) xss ->
                        sem_vars H (map fst n.(n_out)) yss ->
-                       sem_clocked_vars bk H (idsnd n.(n_in)) ->
-                       sem_clocked_vars bk H (idsnd n.(n_out)));
-      try intros ??????? n;
-      try inversion_clear WC as [|????? node' sub Hfind' Hfai Hfao|].
+                       sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
+                       sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_out)));
+      try intros ???????? n;
+      try inversion_clear WC as [| |????? node' sub Hfind' Hfai Hfao|]; try inv Def.
 
     - (* EqDef *)
-      inv Def.
-      match goal with H1:In (?x, _) vars, H2:In (?x, _) vars |- _ =>
-        apply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
-      specialize (Hvar n); specialize (Hexp n).
-      unfold sem_clocked_var_instant.
-      inv Hexp;
-        match goal with H:_ = xs n |- _ => rewrite <-H in * end;
-        intuition; eauto; by_sem_det.
+      match goal with H1:In (?y, _) vars, H2:In (?y, _) vars |- _ =>
+        eapply NoDupMembers_det with (2:=H1) in H2; eauto; inv H2 end.
+      eapply sem_annotated_instant_sem_clocked_instant in Hexp; eauto.
 
     - (* EqApp *)
-      inversion_clear Def as [|????? Hyys|].
+      take (In x0 _) and rename it into Hyys.
       specialize (Hsem (count rs n)); destruct Hsem as (Hsems & IHHsem).
 
       inversion_clear Hsems as [cks' H' ??? node Hco' Hfind Hvi Hvo Hsck].
@@ -95,15 +91,13 @@ Module Type NLCLOCKINGSEMANTICS
       assert (forall x y ys,
                  InMembers x (idsnd (node'.(n_in) ++ node'.(n_out))) ->
                  sub x = Some y ->
-                 sem_var_instant (H' n) x ys ->
-                 sem_var_instant (H  n) y ys) as Htranso.
+                 sem_var_instant (H' n) (Var x) ys ->
+                 sem_var_instant (H  n) (Var y) ys) as Htranso.
       { setoid_rewrite InMembers_idsnd.
         eapply sem_var_instant_transfer_out_instant; eauto.
         - pose proof node'.(n_nodup) as Hnd.
-          rewrite <-Permutation_app_assoc,
-                  (Permutation.Permutation_app_comm node'.(n_in)),
-                  Permutation_app_assoc in Hnd.
-          now apply NoDupMembers_app_r in Hnd.
+          rewrite Permutation_swap, <-map_app in Hnd.
+          apply fst_NoDupMembers; eauto using NoDup_app_r.
         - apply Forall2_impl_In with (2:=Hfai); intuition.
         - apply Forall2_impl_In with (2:=Hfao); intuition.
         - rewrite mask_transparent; auto.
@@ -119,61 +113,61 @@ Module Type NLCLOCKINGSEMANTICS
       apply Forall2_trans_ex with (1:=Hfao) in Hvo.
       apply Forall2_swap_args in Hvars.
       apply Forall2_trans_ex with (1:=Hvo) in Hvars.
-      apply Forall2_same in Hvars.
-      eapply Forall_forall in Hvars
-        as (s & Hins & ((x', (xty, xck)) & Hxin & ((Hoeq & yck' & Hin' & Hinst) & Hsvx)) & Hsvy);
-        eauto; simpl in *.
-      apply NoDupMembers_det with (2:=Hin) in Hin'; eauto; subst yck'.
+      simpl_Forall.
+      take (In _ vars) and apply NoDupMembers_det with (2:=Hin) in it; eauto; inv it.
       specialize (Hscv' n); setoid_rewrite Forall_map in Hscv'.
-      eapply Forall_forall in Hscv'; eauto; simpl in Hscv'.
+      eapply Forall_forall in Hscv'; eauto. destruct Hscv' as (Hscv'&_).
       destruct G; apply wc_find_node with (1:=WCG) in Hfind as (G'' & G' & HG' & Hfind).
       destruct Hfind as (WCi & WCo & WCv & WCeqs).
-      assert (In (x', xck) (idsnd (node'.(n_in) ++ node'.(n_out)))) as Hxin'
+      assert (In (i, c) (idsnd (node'.(n_in) ++ node'.(n_out)))) as Hxin'
         by (rewrite idsnd_app, in_app; right;
             apply In_idsnd_exists; eauto).
       apply wc_env_var with (1:=WCo) in Hxin'.
       unfold clock_of in Hscv'; rewrite mask_transparent in Hscv'; auto.
-      destruct s.
-      + split; intuition; eauto; try by_sem_det.
-        * eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx; eauto; try by_sem_det.
-        * eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx; eauto.
-      + split; intuition; eauto; try by_sem_det.
-        * eapply sem_clock_instant_transfer_out; eauto; eapply Hscv'; eauto.
-        * assert (exists c, sem_var_instant (H' n) x' (present c)) as Hsvx' by eauto.
-          eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx'; eauto; by_sem_det.
+      take (sem_var_instant (var_env (H' n)) _ _) and rename it into Hsvx.
+      destruct x1.
+      + eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx; eauto.
+        split; intuition; eauto; try by_sem_det.
+        destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
+      + assert (exists c, sem_var_instant (H' n) (Var i) (present c)) as Hsvx' by eauto.
+        eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx'; eauto.
+        split; intuition; eauto; try by_sem_det.
+        destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
 
     - (* EqFby *)
-      inv Def.
       match goal with H1:In (?y, _) vars, H2:In (?y, _) vars |- _ =>
-        eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
-      specialize (Hexp n); specialize (Hvar n).
-      unfold fby, reset in Hvar.
-      unfold sem_clocked_var_instant.
-      inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end.
-      destruct (doreset _ _ _). 1-3:intuition; eauto; by_sem_det.
+        eapply NoDupMembers_det with (2:=H1) in H2; eauto; inv H2 end.
+      eapply sem_annotated_instant_sem_clocked_instant' in Hexp; eauto.
+      unfold fby, reset.
+      destruct (ls n); [reflexivity|].
+      cases; split; intros Eq; inv Eq.
 
     - (* nodes *)
       intros * Find' Hbk' Hins' Houts' Hvars'.
       rewrite Find' in Find; rewrite <-Hbk' in Hbk; inv Find.
       intro m.
       apply Forall_forall; unfold idsnd.
-      intros (x, xck) Hxin.
-      apply In_idsnd_exists in Hxin as (xty & Hxin). assert (Hxin' := Hxin).
-      apply in_map with (f:=fst), node_output_defined_in_eqs in Hxin.
-      apply Is_defined_in_In in Hxin as (eq & Heqin & Hxeq).
+      intros (x, xck) Hxin. simpl_In. split; auto.
+      apply in_map with (f:=fst) in Hin as Hin'.
+      apply node_output_defined_in_eqs, Is_defined_in_In in Hin' as (eq & Heqin & Hxeq).
       eapply Forall_forall in IH; eauto.
         (* as (Hsem & IH). *)
       destruct G; apply wc_find_node with (1:=WCG) in Find'
         as (G'' & G' & HG & (WCi & WCo & WCv & WCeqs)).
       eapply Forall_forall in WCeqs; eauto.
-      assert (NoDupMembers (idsnd (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
-        as Hnd by apply NoDupMembers_idsnd, n_nodup.
+      assert (NoDupMembers (map (fun '(x, (_, ck)) => (x, (ck, false))) (n_in n ++ n_out n)
+                              ++ map (fun '(x, (_, ck, islast)) => (x, (ck, islast))) (n_vars n))) as Hnd.
+      { rewrite fst_NoDupMembers. simpl_app.
+        erewrite 3 map_map, Permutation.Permutation_app_comm with (l':=map _ (n_vars _)),
+            map_ext with (l:=n_in _), map_ext with (l:=n_vars _), map_ext with (l:=n_out _).
+        apply n_nodup.
+        all:intros; destruct_conjs; auto. }
       subst.
-      apply IH with (x:=x) (ck:=xck) in Hnd;
-        try (apply In_idsnd_exists; exists xty);
+      apply IH with (x:=x) (ck:=c0) (islast:=false) in Hnd;
         eauto using wc_equation_global_app,
                     Ordered_nodes_append, wc_equation_global_cons
           with datatypes.
+      2:{ rewrite map_app, 2 in_app_iff. left; right. solve_In. }
       specialize (Hins' m); specialize (Houts' m);
         specialize (Hins m); specialize (Houts m).
       simpl in *.
@@ -184,23 +178,46 @@ Module Type NLCLOCKINGSEMANTICS
       assert (Houts2:=Houts).
       apply Forall2_app with (1:=Hins) in Houts2.
       apply Forall2_Forall2 with (1:=Houts) in Houts'.
-      apply Forall2_in_left with (2:=Hxin') in Houts' as (s & Hsin & Hvs & Hvs').
+      apply Forall2_in_left with (2:=Hin) in Houts' as (s & Hsin & Hvs & Hvs').
       destruct s.
       + split; intuition; eauto; try by_sem_det.
         * eapply Hnd in Hvs.
-          eapply clock_vars_to_sem_clock_instant with (Hn' := H m) in H1; eauto; try by_sem_det.
+          eapply clock_vars_to_sem_clock_instant with (Hn' := var_env (H m)) in H1; eauto; try by_sem_det.
           eapply in_app; eauto.
+        * exfalso. destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
         * eapply clock_vars_to_sem_clock_instant; eauto.
           -- eapply in_app; eauto.
           -- apply Hnd; auto.
       + split; intuition; eauto; try by_sem_det;
-          assert (exists c, sem_var_instant (H m) x (present c)) as Hvs'' by eauto.
+          assert (exists c, sem_var_instant (H m) (Var x) (present c)) as Hvs'' by eauto.
         * eapply clock_vars_to_sem_clock_instant; eauto.
           -- eapply in_app; eauto.
           -- apply Hnd; auto.
         * eapply Hnd in Hvs''.
-          eapply clock_vars_to_sem_clock_instant with (Hn' := H0 m) in Hvs''; eauto; try by_sem_det.
+          eapply clock_vars_to_sem_clock_instant with (Hn' := var_env (H0 m)) in Hvs''; eauto; try by_sem_det.
           eapply in_app; eauto.
+        * exfalso. destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
+  Qed.
+
+  Lemma sem_clocked_last_eq:
+    forall G bk H vars x ck eq,
+      NoDupMembers vars ->
+      sem_equation G bk H eq ->
+      wc_equation G vars eq ->
+      Is_defined_in_eq (Last x) eq ->
+      In (x, (ck, true)) vars ->
+      sem_clocked_var bk H (Last x) ck.
+  Proof.
+    destruct eq; intros * ND Sem Wc Def InV;
+      inversion Sem as [| | |?????????? Var VarCk _ _ Last]; inv Wc; inv Def.
+    eapply NoDupMembers_det in InV; eauto; inv InV.
+    intros k. specialize (Var k). specialize (VarCk k) as (CkPres&CkAbs). specialize (Last k).
+    unfold reset, fby in Last.
+    destruct (xs k); (split; [rewrite CkPres|rewrite CkAbs]).
+    - split; intros (?&?); exfalso; by_sem_det.
+    - split; auto.
+    - split; eauto. cases; eauto.
+    - split; intros; exfalso; try by_sem_det. cases; by_sem_det.
   Qed.
 
   Corollary sem_clocked_var_eqs:
@@ -211,19 +228,25 @@ Module Type NLCLOCKINGSEMANTICS
       Forall (sem_equation G bk H) eqs ->
       Forall (wc_equation G (inputs ++ vars)) eqs ->
       Permutation.Permutation (vars_defined eqs) (map fst vars) ->
-      forall x xck,
-        In (x, xck) vars ->
-        sem_clocked_var bk H x xck.
+      Permutation.Permutation (lasts_defined eqs) (map fst (filter (fun '(_, (_, islast)) => islast) vars)) ->
+      forall x xck islast,
+        In (x, (xck, islast)) vars ->
+        sem_clocked_var bk H (Var x) xck /\ if islast then sem_clocked_var bk H (Last x) xck else True.
   Proof.
-    intros G bk H inputs vars eqs OG WCG Hndup Hsem Hwc Hdef x xck Hin.
-    assert (In x (vars_defined eqs)) as Hxin
-        by (now rewrite Hdef; apply in_map with (f:=fst) in Hin).
-    apply Is_defined_in_vars_defined, Is_defined_in_In in Hxin
-      as (eq & Hieq & Hdeq).
-    eapply Forall_forall in Hsem; eauto.
-    eapply Forall_forall in Hwc; eauto.
-    eapply sem_clocked_var_eq; eauto.
-    rewrite in_app; auto.
+    intros * OG WCG Hndup Hsem Hwc Hdef Hlast * Hin.
+    split; [|cases; auto].
+    - assert (In x (vars_defined eqs)) as Hxin.
+      { rewrite Hdef. solve_In. }
+      apply Is_defined_in_vars_defined, Is_defined_in_In in Hxin
+          as (eq & Hieq & Hdeq).
+      simpl_Forall.
+      eapply sem_clocked_var_eq; eauto using in_or_app.
+    - assert (In x (lasts_defined eqs)) as Hxin.
+      { rewrite Hlast. solve_In. }
+      apply Is_last_in_lasts_defined, Exists_exists in Hxin as (eq & Hieq & Hdeq).
+      simpl_Forall.
+      eapply sem_clocked_last_eq; eauto using in_or_app.
+      inv Hdeq. constructor.
   Qed.
 
 End NLCLOCKINGSEMANTICS.

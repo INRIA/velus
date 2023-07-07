@@ -39,6 +39,7 @@ sig
     | Econst of cconst
     | Eenum of enumtag * typ
     | Evar of ident * typ
+    | Elast of ident * typ
     | Ewhen of exp * (ident * typ) * enumtag
     | Eunop of unop * exp * typ
     | Ebinop of binop * exp * exp * typ
@@ -85,6 +86,7 @@ struct
     | CE.Econst _ -> (16, NA)
     | CE.Eenum _  -> (16, NA)
     | CE.Evar _   -> (16, NA)
+    | CE.Elast _  -> (16, NA)
     | CE.Ewhen _  -> (12, LtoR) (* precedence of +/- *)
     | CE.Eunop  (op, _, _)    -> PrintOps.prec_unop op
     | CE.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
@@ -115,6 +117,9 @@ struct
         PrintOps.print_enumtag p (c, ty)
       | CE.Evar (id, _) ->
         print_ident p id
+      | CE.Elast (id, _) ->
+        fprintf p "last %a"
+          print_ident id
       | CE.Ewhen (e, (x, tx), c) ->
         fprintf p "%a when %a(%a)"
           (exp prec') e

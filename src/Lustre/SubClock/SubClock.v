@@ -23,10 +23,16 @@ Module Type SUBCLOCK
 
   Section subclock.
     Variable base: clock.
-    Variable sub : Env.t ident.
+    Variable sub subl : Env.t ident.
 
     Definition rename_var (x : ident) :=
       or_default x (Env.find x sub).
+
+    Definition rename_last (x : ident) :=
+      match (Env.find x subl) with
+      | Some y => Evar y
+      | None => Elast x
+      end.
 
     Fixpoint subclock_clock (ck : clock) :=
       match ck with
@@ -51,7 +57,7 @@ Module Type SUBCLOCK
       | Econst c => add_whens e (Tprimitive (ctype_cconst c)) base
       | Eenum _ ty => add_whens e ty base
       | Evar x ann => Evar (rename_var x) (subclock_ann ann)
-      | Elast x ann => Elast x (subclock_ann ann)
+      | Elast x ann => rename_last x (subclock_ann ann)
       | Eunop op e1 ann => Eunop op (subclock_exp e1) (subclock_ann ann)
       | Ebinop op e1 e2 ann => Ebinop op (subclock_exp e1) (subclock_exp e2) (subclock_ann ann)
       | Eextcall f es (tyout, ck) => Eextcall f (map subclock_exp es) (tyout, subclock_clock ck)
@@ -87,80 +93,10 @@ Module Type SUBCLOCK
 
   End subclock.
 
-  Section subclock_clockof.
-
-    Variable bck : clock.
-    Variable sub : Env.t ident.
-
-    Lemma add_whens_clockof : forall e ty ck,
-        clockof e = [Cbase] ->
-        clockof (add_whens e ty ck) = [ck].
-    Proof.
-      intros * Hck.
-      destruct ck as [|?? (?&?)]; simpl in *; auto.
-    Qed.
-
-    Lemma add_whens_nclockof : forall e ty ck,
-        nclockof e = [(Cbase, None)] ->
-        nclockof (add_whens e ty ck) = [(ck, None)].
-    Proof.
-      intros * Hck.
-      destruct ck as [|?? (?&?)]; simpl in *; auto.
-    Qed.
-
-    Lemma subclock_exp_nclockof : forall e,
-        nclockof (subclock_exp bck sub e) = map (subclock_nclock bck sub) (nclockof e).
-    Proof.
-      destruct e; destruct_conjs; simpl in *; auto.
-      - (* const *)
-        apply add_whens_nclockof; auto.
-      - (* enum *)
-        apply add_whens_nclockof; auto.
-      - (* fby *)
-        rewrite 2 map_map; auto.
-      - (* arrow *)
-        rewrite 2 map_map; auto.
-      - (* when *)
-        rewrite map_map; auto.
-      - (* merge *)
-        rewrite map_map; auto.
-      - (* case *)
-        rewrite map_map; auto.
-      - (* app *)
-        rewrite 2 map_map; auto.
-    Qed.
-
-    Corollary subclock_exp_nclocksof : forall es,
-        nclocksof (map (subclock_exp bck sub) es) = map (subclock_nclock bck sub) (nclocksof es).
-    Proof.
-      intros es.
-      unfold nclocksof. rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-      f_equal.
-      eapply map_ext; intros. apply subclock_exp_nclockof.
-    Qed.
-
-    Corollary subclock_exp_clockof : forall e,
-        clockof (subclock_exp bck sub e) = map (subclock_clock bck sub) (clockof e).
-    Proof.
-      intros.
-      rewrite 2 clockof_nclockof, subclock_exp_nclockof, 2 map_map; auto.
-    Qed.
-
-    Corollary subclock_exp_clocksof : forall es,
-        clocksof (map (subclock_exp bck sub) es) = map (subclock_clock bck sub) (clocksof es).
-    Proof.
-      intros es.
-      unfold clocksof. rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-      f_equal.
-      eapply map_ext; intros. apply subclock_exp_clockof.
-    Qed.
-
-  End subclock_clockof.
-
   Section subclock_typeof.
 
     Variable bck : clock.
-    Variable sub : Env.t ident.
+    Variable sub subl : Env.t ident.
 
     Lemma add_whens_typeof : forall e ty ck,
         typeof e = [ty] ->
@@ -171,23 +107,19 @@ Module Type SUBCLOCK
     Qed.
 
     Lemma subclock_exp_typeof : forall e,
-        typeof (subclock_exp bck sub e) = typeof e.
+        typeof (subclock_exp bck sub subl e) = typeof e.
     Proof.
-      destruct e; destruct_conjs; simpl in *; auto.
+      destruct e; destruct_conjs; simpl in *; unfold rename_last; rewrite ?map_map; auto.
       - (* const *)
         apply add_whens_typeof; auto.
       - (* enum *)
         apply add_whens_typeof; auto.
-      - (* fby *)
-        rewrite map_map; auto.
-      - (* arrow *)
-        rewrite map_map; auto.
-      - (* app *)
-        rewrite map_map; auto.
+      - (* last *)
+        cases; auto.
     Qed.
 
     Corollary subclock_exp_typesof : forall es,
-        typesof (map (subclock_exp bck sub) es) = typesof es.
+        typesof (map (subclock_exp bck sub subl) es) = typesof es.
     Proof.
       intros es.
       unfold typesof . rewrite 2 flat_map_concat_map, map_map.
@@ -195,6 +127,43 @@ Module Type SUBCLOCK
       eapply map_ext; intros. apply subclock_exp_typeof.
     Qed.
   End subclock_typeof.
+
+  Section subclock_clockof.
+
+    Variable bck : clock.
+    Variable sub subl : Env.t ident.
+
+    Lemma add_whens_clockof : forall e ty ck,
+        clockof e = [Cbase] ->
+        clockof (add_whens e ty ck) = [ck].
+    Proof.
+      intros * Hck.
+      destruct ck as [|?? (?&?)]; simpl in *; auto.
+    Qed.
+
+    Lemma subclock_exp_clockof : forall e,
+        clockof (subclock_exp bck sub subl e) = map (subclock_clock bck sub) (clockof e).
+    Proof.
+      destruct e; intros *; destruct_conjs; simpl in *; unfold rename_last; rewrite ? map_map; auto.
+      - (* const *)
+        apply add_whens_clockof; auto.
+      - (* enum *)
+        apply add_whens_clockof; auto.
+      - (* last *)
+        cases_eqn Eq; simpl; auto.
+    Qed.
+
+    Corollary subclock_exp_clocksof : forall es,
+        clocksof (map (subclock_exp bck sub subl) es) = map (subclock_clock bck sub) (clocksof es).
+    Proof.
+      intros es.
+      unfold clocksof. rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
+      f_equal.
+      eapply map_ext; intros.
+      now apply subclock_exp_clockof.
+    Qed.
+
+  End subclock_clockof.
 
   Section rename_empty.
 
@@ -212,6 +181,17 @@ Module Type SUBCLOCK
     Qed.
 
   End rename_empty.
+
+  Lemma rename_var_IsLast sub Γ Γ' : forall x,
+      (forall x y, Env.find x sub = Some y -> IsLast Γ x -> IsLast Γ' y) ->
+      (forall x, Env.find x sub = None -> IsLast Γ x -> IsLast Γ' x) ->
+      IsLast Γ x ->
+      IsLast Γ' (rename_var sub x).
+  Proof.
+    unfold rename_var.
+    intros * Sub NSub In.
+    destruct (Env.find _ _) eqn:Hfind; simpl in *; eauto.
+  Qed.
 
 End SUBCLOCK.
 

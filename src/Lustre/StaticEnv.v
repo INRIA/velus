@@ -516,7 +516,41 @@ Module Type STATICENV
     now subst.
   Qed.
 
+  Lemma HasType_IsLast_app : forall Γ1 Γ2 x ck,
+      NoDupMembers (Γ1 ++ Γ2) ->
+      HasType (Γ1 ++ Γ2) x ck ->
+      IsLast (Γ1 ++ Γ2) x ->
+      (HasType Γ1 x ck /\ IsLast Γ1 x) \/ (HasType Γ2 x ck /\ IsLast Γ2 x).
+  Proof.
+    intros * ND Ck L.
+    apply HasType_app in Ck as [Ck|Ck]; apply IsLast_app in L as [L|L]; auto.
+    1,2:exfalso; inv Ck; inv L.
+    1,2:eapply NoDupMembers_app_InMembers in ND; eauto using In_InMembers.
+  Qed.
+
+  Lemma HasClock_IsLast_app : forall Γ1 Γ2 x ck,
+      NoDupMembers (Γ1 ++ Γ2) ->
+      HasClock (Γ1 ++ Γ2) x ck ->
+      IsLast (Γ1 ++ Γ2) x ->
+      (HasClock Γ1 x ck /\ IsLast Γ1 x) \/ (HasClock Γ2 x ck /\ IsLast Γ2 x).
+  Proof.
+    intros * ND Ck L.
+    apply HasClock_app in Ck as [Ck|Ck]; apply IsLast_app in L as [L|L]; auto.
+    1,2:exfalso; inv Ck; inv L.
+    1,2:eapply NoDupMembers_app_InMembers in ND; eauto using In_InMembers.
+  Qed.
+
   Global Hint Rewrite map_fst_senv_of_ins : list.
+
+  Fact HasClock_idck_incl : forall Γ1 Γ2,
+      (forall x ck, HasClock Γ1 x ck -> HasClock Γ2 x ck) ->
+      incl (idck Γ1) (idck Γ2).
+  Proof.
+    intros * InclCk ? In.
+    unfold idck in *. simpl_In.
+    assert (HasClock Γ2 i0 a0.(clo)) as Ck by eauto with senv.
+    inv Ck. solve_In. congruence.
+  Qed.
 
 End STATICENV.
 

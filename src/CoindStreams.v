@@ -1190,6 +1190,53 @@ Module Type COINDSTREAMS
   CoFixpoint clocks_of (ss: list (Stream svalue)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ⋅ clocks_of (List.map (@tl svalue) ss).
 
+  (** *** constant value *)
+
+  CoFixpoint const_val (b : Stream bool) (v : value) : Stream svalue :=
+    (if Streams.hd b then present v else absent) ⋅ (const_val (Streams.tl b) v).
+
+  Fact const_val_Cons : forall b bs v,
+      const_val (b ⋅ bs) v =
+      (if b then present v else absent) ⋅ (const_val bs v).
+  Proof.
+    intros b bs v.
+    rewrite unfold_Stream at 1; reflexivity.
+  Qed.
+
+  Corollary const_val_nth : forall n bs c,
+      (const_val bs c) # n = if bs # n then present c else absent.
+  Proof.
+    induction n; intros; destruct bs; rewrite const_val_Cons.
+    - repeat rewrite Str_nth_0; auto.
+    - repeat rewrite Str_nth_S; auto.
+  Qed.
+
+  Fact const_val_const : forall b c,
+      const b c ≡ const_val b (Vscalar (sem_cconst c)).
+  Proof.
+    cofix const_val_const.
+    intros [b0 b] c; simpl.
+    constructor; simpl; auto.
+  Qed.
+
+  Fact const_val_enum : forall b c,
+      enum b c ≡ const_val b (Venum c).
+  Proof.
+    cofix const_val_const.
+    intros [b0 b] c; simpl.
+    constructor; simpl; auto.
+  Qed.
+
+  Add Parametric Morphism : const_val
+      with signature @EqSt _ ==> eq ==> @EqSt _
+        as const_val_morph.
+  Proof.
+    cofix CoFix.
+    intros ?? Heq ?.
+    inv Heq. constructor; simpl; eauto.
+    rewrite H. reflexivity.
+  Qed.
+
   (** *** bools_of : extract boolean from an svalue stream *)
 
   CoInductive bools_of : Stream svalue -> Stream bool -> Prop :=

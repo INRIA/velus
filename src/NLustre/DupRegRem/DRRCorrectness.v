@@ -8,6 +8,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CESemantics.
@@ -41,8 +42,9 @@ Module Type DRRCORRECTNESS
     inv e. clear - Hin. revert Hin. generalize (find_duplicates eqs); intros.
     unfold subst_and_filter_equations, Is_node_in in *.
     rewrite Exists_map in Hin.
-    induction eqs as [|[| |]]; simpl in *; auto.
+    induction eqs as [|[| | |]]; simpl in *; auto.
     - inv Hin.
+    - inv Hin; auto. inv H0.
     - inv Hin; auto. inv H0.
     - inv Hin; auto.
       inv H0; auto. left. constructor.
@@ -70,54 +72,68 @@ Module Type DRRCORRECTNESS
 
     Hypothesis Hsub : forall x y,
         Env.find x sub = Some y ->
-        R x = R y.
+        R (Var x) = R (Var y).
 
-    Lemma subst_sem_var_instant : forall x v,
-        sem_var_instant R x v <->
-        sem_var_instant R (rename_in_var sub x) v.
+    Lemma subst_sem_var_instant'' : forall x v,
+        sem_var_instant (var_env R) x v <->
+        sem_var_instant (var_env R) (rename_in_var sub x) v.
     Proof.
       intros *.
-      unfold rename_in_var, sem_var_instant.
+      unfold rename_in_var, var_env, sem_var_instant in *.
       destruct (Env.find x sub) eqn:Hfind; try reflexivity.
-      apply Hsub in Hfind. now rewrite Hfind.
+      apply Hsub in Hfind. now rewrite <-Hfind.
     Qed.
+
+    Lemma subst_sem_var_instant' : forall x v,
+        sem_var_instant R (Var x) v <->
+        sem_var_instant R (Var (rename_in_var sub x)) v.
+    Proof.
+      intros *.
+      unfold rename_in_var, sem_var_instant in *.
+      destruct (Env.find x sub) eqn:Hfind; try reflexivity.
+      apply Hsub in Hfind. now rewrite <-Hfind.
+    Qed.
+
+    Corollary subst_sem_var_instant : forall x v,
+        sem_var_instant R (Var x) v ->
+        sem_var_instant R (Var (rename_in_var sub x)) v.
+    Proof.
+      intros. rewrite <-subst_sem_var_instant'; auto.
+    Qed.
+
     Local Hint Resolve subst_sem_var_instant : nlsem.
 
     Lemma subst_sem_clock_instant : forall ck v,
-        sem_clock_instant base R ck v <->
-        sem_clock_instant base R (rename_in_clock sub ck) v.
+        sem_clock_instant base (var_env R) ck v <->
+        sem_clock_instant base (var_env R) (rename_in_clock sub ck) v.
     Proof.
-      split; revert v.
-      1,2:induction ck; intros * Hsem; simpl in *; inv Hsem.
-      1,5:constructor; auto.
-      1,4:eapply Son; eauto.
-      3,5:eapply Son_abs1; eauto.
-      5,6:eapply Son_abs2; eauto.
-      1,3,5:rewrite <-subst_sem_var_instant; auto.
-      1-3:apply subst_sem_var_instant; auto.
+      induction ck; intros; [reflexivity|simpl].
+      split; (intros Hsem; inv Hsem; [constructor|constructor|eapply Son_abs2]); eauto.
+      all:try (rewrite IHck|| rewrite <-IHck); eauto.
+      all:(rewrite <-subst_sem_var_instant''||rewrite subst_sem_var_instant''); eauto.
     Qed.
     Local Hint Resolve subst_sem_clock_instant : nlsem.
 
     Lemma subst_sem_clocked_var_instant : forall x ck,
-        sem_clocked_var_instant base R x ck ->
-        sem_clocked_var_instant base R (rename_in_var sub x) (rename_in_clock sub ck).
+        sem_clocked_var_instant base R (Var x) ck ->
+        sem_clocked_var_instant base R (Var (rename_in_var sub x)) (rename_in_clock sub ck).
     Proof.
       intros * Hsem; inv Hsem.
       rewrite subst_sem_clock_instant in *.
-      rewrite subst_sem_var_instant in *. setoid_rewrite subst_sem_var_instant in H.
+      rewrite subst_sem_var_instant' in *. setoid_rewrite subst_sem_var_instant' in H.
       constructor; auto.
     Qed.
 
-    Corollary subst_sem_clocked_vars_instant : forall xcks,
-        sem_clocked_vars_instant base R xcks ->
-        sem_clocked_vars_instant base R (rename_in_reset sub xcks).
-    Proof.
-      unfold rename_in_reset, sem_clocked_vars_instant.
-      intros * Hsem.
-      rewrite Forall_map.
-      eapply Forall_impl; [|eauto]; intros (?&?) ?.
-      eapply subst_sem_clocked_var_instant; eauto.
-    Qed.
+    (* Corollary subst_sem_clocked_vars_instant : forall xcks, *)
+    (*     sem_clocked_vars_instant base R xcks -> *)
+    (*     sem_clocked_vars_instant base R (rename_in_reset sub xcks). *)
+    (* Proof. *)
+    (*   unfold rename_in_reset, sem_clocked_vars_instant. *)
+    (*   intros * Hsem. *)
+    (*   rewrite Forall_map. *)
+    (*   eapply Forall_impl; [|eauto]; intros (?&?) ?. *)
+    (*   eapply subst_sem_clocked_var_instant; eauto. *)
+    (* Qed. *)
 
     Lemma subst_sem_exp_instant : forall e v,
         sem_exp_instant base R e v ->
@@ -125,15 +141,12 @@ Module Type DRRCORRECTNESS
     Proof.
       induction e; intros * Hsem; simpl; auto.
       - (* var *)
-        inv Hsem. constructor. rewrite <-subst_sem_var_instant; auto.
+        inv Hsem. auto with nlsem.
       - (* when *)
         inv Hsem.
-        + apply Swhen_eq; auto.
-          rewrite <-subst_sem_var_instant; auto.
-        + eapply Swhen_abs1; eauto.
-          rewrite <-subst_sem_var_instant; auto.
-        + eapply Swhen_abs; eauto.
-          rewrite <-subst_sem_var_instant; auto.
+        + apply Swhen_eq; auto with nlsem.
+        + eapply Swhen_abs1; eauto with nlsem.
+        + eapply Swhen_abs; eauto with nlsem.
       - (* unop *)
         inv Hsem; econstructor; eauto.
         rewrite rename_in_exp_typeof; auto.
@@ -168,10 +181,8 @@ Module Type DRRCORRECTNESS
       induction e using cexp_ind2'; intros * Hsem; simpl; auto.
       - (* merge *)
         destruct x; simpl.
-        inv Hsem; econstructor.
-        2:rewrite map_app; simpl; auto.
-        1-6:eauto.
-        1,4:rewrite <-subst_sem_var_instant; auto.
+        inv Hsem; econstructor. 1,6:eauto with nlsem.
+        1:rewrite map_app; simpl; auto.
         + now rewrite map_length.
         + apply Forall_app in H as (_&Hf). inv Hf; auto.
         + rewrite <-map_app, Forall_map.
@@ -182,12 +193,10 @@ Module Type DRRCORRECTNESS
           eapply Forall_impl_In; [|eapply H6]; intros. eapply Forall_forall in H; eauto.
       - (* case *)
         inv Hsem; econstructor; eauto with nlsem.
-        + rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros.
-          eapply Forall_forall in H; eauto.
+        + simpl_Forall.
           destruct a; simpl in *; auto.
-        + rewrite Forall_map. eapply Forall_impl_In; [|eauto]; intros.
-          eapply Forall_forall in H; eauto.
-          destruct a; simpl in *; eauto.
+        + simpl_Forall.
+          destruct x; simpl in *; eauto.
       - (* eexp *)
         inv Hsem. constructor; auto with nlsem.
     Qed.
@@ -222,22 +231,22 @@ Module Type DRRCORRECTNESS
 
     Hypothesis Hsub : forall x y,
         Env.find x sub = Some y ->
-        forall n, (H n) x = (H n) y.
+        forall n, (H n) (Var x) = (H n) (Var y).
 
     Lemma subst_sem_var : forall x vs,
-        sem_var H x vs ->
-        sem_var H (rename_in_var sub x) vs.
+        sem_var H (Var x) vs ->
+        sem_var H (Var (rename_in_var sub x)) vs.
     Proof.
       intros * Hsem ?.
-      rewrite <-subst_sem_var_instant; eauto.
+      apply subst_sem_var_instant; auto.
     Qed.
 
     Lemma subst_sem_clock : forall ck vs,
-        sem_clock base H ck vs ->
-        sem_clock base H (rename_in_clock sub ck) vs.
+        sem_clock base (var_history H) ck vs ->
+        sem_clock base (var_history H) (rename_in_clock sub ck) vs.
     Proof.
       intros * Hsem ?.
-      rewrite <-subst_sem_clock_instant; eauto.
+      apply subst_sem_clock_instant; eauto.
     Qed.
 
     Lemma subst_sem_equation : forall equ,
@@ -251,16 +260,18 @@ Module Type DRRCORRECTNESS
       - (* app *)
         econstructor; eauto using subst_sem_clock.
         + intros ?; eapply subst_sem_exps_instant; eauto.
-        + rewrite Forall2_map_1 in *.
-          unfold rename_in_reset. rewrite Forall2_map_1.
-          eapply Forall2_impl_In; [|eauto]; intros (?&?) ? _ _ ?; eauto using subst_sem_var.
+        + unfold rename_in_reset. simpl_Forall; eauto using subst_sem_var.
       - (* fby *)
         econstructor; eauto.
         + intros ?; eapply subst_sem_aexp_instant; eauto.
-        + rewrite Forall2_map_1 in *.
-          unfold rename_in_reset. rewrite Forall2_map_1.
-          eapply Forall2_impl_In; [|eauto]; intros (?&?) ? _ _ ?; eauto using subst_sem_var.
-        + intros ?. eapply subst_sem_clocked_vars_instant; eauto.
+        + unfold rename_in_reset. simpl_Forall; eauto using subst_sem_var.
+        (* + intros ?. eapply subst_sem_clocked_vars_instant; eauto. *)
+      - (* last *)
+        econstructor; eauto.
+        + intros ?. specialize (H2 n). inv H2.
+          rewrite subst_sem_clock_instant in *; eauto.
+          constructor; eauto.
+        + unfold rename_in_reset. simpl_Forall; eauto using subst_sem_var.
     Qed.
 
   End rename.
@@ -293,8 +304,8 @@ Module Type DRRCORRECTNESS
     Lemma ps_equal_Forall2_bools :
       forall H xs ys vs vs' rs rs',
         PS.Equal (PSP.of_list xs) (PSP.of_list ys) ->
-        Forall2 (sem_var H) xs vs ->
-        Forall2 (sem_var H) ys vs' ->
+        Forall2 (fun x => sem_var H (Var x)) xs vs ->
+        Forall2 (fun x => sem_var H (Var x)) ys vs' ->
         bools_ofs vs rs ->
         bools_ofs vs' rs' ->
         rs = rs'.
@@ -319,14 +330,15 @@ Module Type DRRCORRECTNESS
         PS.Equal (PSP.of_list (map fst xr1)) (PSP.of_list (map fst xr2)) ->
         sem_equation G1 base H (EqFby x ck c0 e xr1) ->
         sem_equation G1 base H (EqFby y ck c0 e xr2) ->
-        forall n, (H n) x = (H n) y.
+        forall n, (H n) (Var x) = (H n) (Var y).
     Proof.
       intros * Heq Hsem1 Hsem2.
       inv Hsem1. inv Hsem2.
-      eapply sem_aexp_det in H6; eauto; subst.
-      eapply ps_equal_Forall2_bools in H17; eauto; subst.
-      intros n. specialize (H9 n). specialize (H14 n).
-      rewrite H9, H14. reflexivity.
+      eapply sem_aexp_det in H8; eauto; subst.
+      eapply ps_equal_Forall2_bools with (vs:=ys) in Heq; eauto.
+      2,3:simpl_Forall; eauto. subst.
+      intros n. specialize (H9 n). specialize (H13 n).
+      rewrite H9, H13. reflexivity.
     Qed.
 
     Lemma remove_dup_regs_eqs_sem : forall vars eqs,

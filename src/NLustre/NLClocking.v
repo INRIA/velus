@@ -3,6 +3,7 @@ From Velus Require Import Common.
 From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.Memories.
@@ -35,40 +36,46 @@ Module Type NLCLOCKING
        (Import IsD   : ISDEFINED  Ids Op OpAux Cks CESyn Syn Mem)
        (Import CEClo : CECLOCKING Ids Op OpAux Cks CESyn).
 
-  Inductive wc_equation (G: global) (Ω: list (ident * clock)): equation -> Prop :=
+  Inductive wc_equation (G: global) (Γ: list (ident * (clock * bool))): equation -> Prop :=
   | CEqDef:
-      forall x ck ce,
-        In (x, ck) Ω ->
-        wc_rhs Ω ce ck ->
-        wc_equation G Ω (EqDef x ck ce)
+      forall x ck islast ce,
+        In (x, (ck, islast)) Γ ->
+        wc_rhs Γ ce ck ->
+        wc_equation G Γ (EqDef x ck ce)
+  | CEqLast:
+      forall x ty ck c0 xrs,
+        In (x, (ck, true)) Γ ->
+        Forall (fun '(x, ck) => exists islast, In (x, (ck, islast)) Γ) xrs ->
+        wc_equation G Γ (EqLast x ty ck c0 xrs)
   | CEqApp:
       forall xs ck f les xrs n sub,
         find_node f G = Some n ->
         Forall2 (fun '(x, (_, xck)) le =>
                    SameVar (sub x) le
-                   /\ exists lck, wc_exp Ω le lck
+                   /\ exists lck, wc_exp Γ le lck
                             /\ instck ck sub xck = Some lck)
                 n.(n_in) les ->
         Forall2 (fun '(y, (_, yck)) x =>
                    sub y = Some x
-                   /\ exists xck, In (x, xck) Ω
+                   /\ exists xck islast, In (x, (xck, islast)) Γ
                             /\ instck ck sub yck = Some xck)
                 n.(n_out) xs ->
-        Forall (fun xr => In xr Ω) xrs ->
-        wc_equation G Ω (EqApp xs ck f les xrs)
+        Forall (fun '(x, ck) => exists islast, In (x, (ck, islast)) Γ) xrs ->
+        wc_equation G Γ (EqApp xs ck f les xrs)
   | CEqFby:
       forall x ck v0 le xrs,
-        In (x, ck) Ω ->
-        wc_exp Ω le ck ->
-        Forall (fun xr => In xr Ω) xrs ->
-        wc_equation G Ω (EqFby x ck v0 le xrs).
+        In (x, (ck, false)) Γ ->
+        wc_exp Γ le ck ->
+        Forall (fun '(x, ck) => exists islast, In (x, (ck, islast)) Γ) xrs ->
+        wc_equation G Γ (EqFby x ck v0 le xrs).
 
   Definition wc_node (G: global) (n: node) : Prop :=
     wc_env (idsnd (n.(n_in))) /\
     wc_env (idsnd (n.(n_in) ++ n.(n_out))) /\
-    wc_env (idsnd (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) /\
-    Forall (wc_equation G (idsnd (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
-           n.(n_eqs).
+    wc_env (idsnd (n.(n_in) ++ idfst n.(n_vars) ++ n.(n_out))) /\
+    Forall (wc_equation G (map (fun '(x, (_, ck)) => (x, (ck, false))) (n.(n_in) ++ n.(n_out))
+                                ++ map (fun '(x, (_, ck, islast)) => (x, (ck, islast))) n.(n_vars)))
+              n.(n_eqs).
 
   Definition wc_global (G: global) :=
     Forall' (fun ns => wc_node (Global G.(types) G.(externs) ns)) G.(nodes).
@@ -76,6 +83,8 @@ Module Type NLCLOCKING
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
       Has_clock_eq ck (EqDef x ck ce)
+  | HcEqLast: forall x ty ck c0 r,
+      Has_clock_eq ck (EqLast x ty ck c0 r)
   | HcEqApp: forall x f ck les r,
       Has_clock_eq ck (EqApp x ck f les r)
   | HcEqFby: forall x v0 ck le r,
@@ -86,36 +95,14 @@ Module Type NLCLOCKING
   Global Hint Resolve Forall_nil : datatypes.
 
   Global Instance wc_equation_Proper:
-    Proper (@eq global ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
+    Proper (@eq global ==> @Permutation _ ==> @eq equation ==> iff)
            wc_equation.
   Proof.
-    intros G1 G2 Hg env1 env2 Henv eq1 eq2 Heq.
-    rewrite Heq, Hg; clear Heq Hg.
-    split; intro WTeq.
-    - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
-      + econstructor; eauto.
-        * eapply Forall2_impl_In; eauto.
-          intros (?&(?&?)) ??? (?&?&?); simpl.
-          rewrite Henv in *; eauto.
-        * eapply Forall2_impl_In; eauto.
-          intros (?&(?&?)) ??? (?&?&?); simpl.
-          rewrite Henv in *; eauto.
-        * now setoid_rewrite <-Henv.
-      + econstructor; eauto.
-        eapply Forall_impl; [|eauto].
-        intros. rewrite <-Henv; eauto.
-    - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
-      + econstructor; eauto.
-        * eapply Forall2_impl_In; eauto.
-          intros (?&(?&?)) ??? (?&?&?); simpl.
-          rewrite <-Henv in *; eauto.
-        * eapply Forall2_impl_In; eauto.
-          intros (?&(?&?)) ??? (?&?&?); simpl.
-          rewrite <-Henv in *; eauto.
-        * now setoid_rewrite Henv.
-      + econstructor; eauto.
-        eapply Forall_impl; [|eauto].
-        intros. rewrite Henv; eauto.
+    intros G1 G2 Hg env1 env2 Henv eq1 eq2 Heq; subst.
+    split; intro WTeq; inv WTeq; econstructor; eauto;
+      simpl_Forall; destruct_conjs; repeat esplit; eauto.
+    all:try rewrite Henv; eauto.
+    all:try rewrite <-Henv; eauto.
   Qed.
 
   Lemma wc_global_app_weaken:
@@ -179,83 +166,64 @@ Module Type NLCLOCKING
 
     (** We work under a (valid) clocking environment *)
     Variable G : global.
-    Variable Ω : list (ident * clock).
-    Variable Hnd : NoDupMembers Ω.
-    Variable Hwc : wc_env Ω.
+    Variable Γ : list (ident * (clock * bool)).
+    Variable Hnd : NoDupMembers Γ.
+    Variable Hwc : wc_env (idfst Γ).
 
     Lemma wc_equation_not_Is_free_in_clock:
       forall eq x ck,
-        wc_equation G Ω eq
-        -> Is_defined_in_eq x eq
+        wc_equation G Γ eq
+        -> Is_defined_in_eq (Var x) eq
         -> Has_clock_eq ck eq
         -> ~Is_free_in_clock x ck.
     Proof.
       intros eq x' ck' Hwce Hdef Hhasck Hfree.
-      inversion Hwce as [x ck e Hcv Hexp Heq
-                        |xs ck f e r n sub Hfind Hisub Hosub Heq
-                        |x ck v' e r Hcv Hexp Hr].
-      - subst eq. inv Hdef. inv Hhasck.
-        pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
-        apply Is_free_in_clock_self_or_parent in Hfree.
-        destruct Hfree as (ck' & b & [Hck|Hck]).
-        + subst ck.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          pose proof (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) as Hloop.
-          apply clock_no_loops with (1:=Hloop).
-        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) in *.
-          apply clock_parent_parent' in Hck.
-          apply clock_parent_not_refl with (1:=Hck).
-      - subst eq. rename x' into x. inv Hdef. inv Hhasck.
+      assert (NoDupMembers (idfst Γ)) as ND' by (now apply NoDupMembers_idfst).
+      inversion Hwce
+        as [x ck islast e Hcv Hexp Heq|
+           |xs ck f e r n sub Hfind Hisub Hosub Heq
+           |x ck v' e r Hcv Hexp Hr]; subst;
+        inv Hdef; inv Hhasck.
+      - (* Def *)
+        eapply wc_env_var in Hwc as Hclock; [|solve_In].
+        eapply Is_free_in_clock_parent in Hfree as Hpar; eauto. 2:solve_In.
+        eapply clock_parent_not_refl; eauto.
+      - (* App *)
+        rename x' into x.
         match goal with H:List.In x xs |- _ => rename H into Hin end.
         destruct (Forall2_in_right _ _ _ _ Hosub Hin)
-          as ((?&?&?) & Ho & (Hxeq & xck & Hxck & Hxi)).
-        pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
+          as ((?&?&?) & Ho & (Hxeq & xck & ? & Hxck & Hxi)).
+        eapply wc_env_var in Hwc as Hclock; [|solve_In].
         apply Is_free_in_clock_self_or_parent in Hfree.
         apply instck_parent in Hxi.
-        destruct Hxi as [Hxi|Hxi]; destruct Hfree as (ck' & b & [Hck|Hck]).
-        + subst ck xck.
+        destruct Hxi as [Hxi|Hxi]; destruct Hfree as (ck' & b & [Hck|Hck]); subst.
+        + apply wc_clock_sub with (1:=Hwc) in Hclock.
+          eapply clock_no_loops, NoDupMembers_det; eauto. clear Hclock; solve_In.
+        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
           apply wc_clock_sub with (1:=Hwc) in Hclock.
-          pose proof (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) as Hloop.
-          apply clock_no_loops with (1:=Hloop).
-        + subst ck.
-          apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_parent' in Hck.
+          eapply NoDupMembers_det in Hclock; auto. 2:clear Hclock; solve_In.
+          subst. apply clock_parent_parent' in Hck.
           apply clock_parent_not_refl with (1:=Hck).
-        + subst ck.
-          apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
+        + apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
           apply clock_parent_parent' in Hxi.
           apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_not_refl with (1:=Hxi).
+          eapply NoDupMembers_det in Hclock; auto. 2:clear Hclock; solve_In.
+          subst. apply clock_parent_not_refl with (1:=Hxi).
         + apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
           apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
           apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_parent' in Hck.
+          eapply NoDupMembers_det in Hclock; auto. 2:clear Hclock; solve_In.
+          subst. apply clock_parent_parent' in Hck.
           apply clock_parent_trans with (1:=Hck) in Hxi.
           apply clock_parent_not_refl with (1:=Hxi).
-      - subst eq. inv Hdef. inv Hhasck.
-        pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
-        apply Is_free_in_clock_self_or_parent in Hfree.
-        destruct Hfree as (ck' & b & [Hck|Hck]).
-        + subst ck.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          pose proof (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) as Hloop.
-          apply clock_no_loops with (1:=Hloop).
-        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) in *.
-          apply clock_parent_parent' in Hck.
-          apply clock_parent_not_refl with (1:=Hck).
+      - eapply wc_env_var in Hwc as Hclock; [|solve_In].
+        eapply Is_free_in_clock_parent in Hfree as Hpar; eauto. 2:solve_In.
+        eapply clock_parent_not_refl; eauto.
     Qed.
 
     Corollary wc_EqDef_not_Is_free_in_clock:
       forall x ce ck,
-        wc_equation G Ω (EqDef x ck ce)
+        wc_equation G Γ (EqDef x ck ce)
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x ce ck Hwce Hwt.
@@ -264,7 +232,7 @@ Module Type NLCLOCKING
 
     Corollary wc_EqApp_not_Is_free_in_clock:
       forall xs f le r ck,
-        wc_equation G Ω (EqApp xs ck f le r)
+        wc_equation G Γ (EqApp xs ck f le r)
         -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
     Proof.
       intros x f le ck Hwce Hwt y Hinx.
@@ -273,7 +241,7 @@ Module Type NLCLOCKING
 
     Corollary wc_EqFby_not_Is_free_in_clock:
       forall x v0 le ck r,
-        wc_equation G Ω (EqFby x ck v0 le r)
+        wc_equation G Γ (EqFby x ck v0 le r)
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x v0 le ck Hwce Hwt.
@@ -289,7 +257,7 @@ Module Type NLCLOCKING
   Proof.
     intros * Heq Hwc.
     destruct Heq as (Henums&Hexterns&Heq).
-    inv Hwc; try constructor; eauto; try congruence.
+    inv Hwc. 1,2,4:econstructor; eauto; try congruence.
     specialize (Heq f). rewrite H in Heq. inv Heq.
     destruct H5 as (?&?&?).
     symmetry in H4. eapply CEqApp with (sub:=sub); eauto; try congruence.
@@ -297,55 +265,15 @@ Module Type NLCLOCKING
 
   Section incl.
     Variable (G : global).
-    Variable (vars vars' : list (ident * clock)).
-    Hypothesis Hincl : incl vars vars'.
-
-    Fact wc_clock_incl : forall ck,
-      wc_clock vars ck ->
-      wc_clock vars' ck.
-    Proof.
-      intros * Hwc.
-      induction Hwc.
-      - constructor.
-      - constructor; auto.
-    Qed.
-    Local Hint Resolve wc_clock_incl : nlclocking.
-
-    Lemma wc_exp_incl : forall e ck,
-        wc_exp vars e ck ->
-        wc_exp vars' e ck.
-    Proof.
-      induction e; intros * Hwc; inv Hwc; econstructor; eauto.
-    Qed.
-    Local Hint Resolve wc_exp_incl : nlclocking.
-
-    Lemma wc_cexp_incl : forall e ck,
-        wc_cexp vars e ck ->
-        wc_cexp vars' e ck.
-    Proof.
-      induction e using cexp_ind2'; intros * Hwc; inv Hwc; econstructor; eauto with nlclocking.
-      - eapply Forall2_impl_In; [|eapply H6]; intros.
-        eapply Forall_forall in H; eauto.
-      - intros. eapply Forall_forall in H; eauto with nlclocking.
-        simpl in *; eauto.
-    Qed.
-    Local Hint Resolve wc_cexp_incl : nlclocking.
-
-    Lemma wc_rhs_incl : forall e ck,
-        wc_rhs vars e ck ->
-        wc_rhs vars' e ck.
-    Proof.
-      intros * Hwc; inv Hwc; econstructor; simpl_Forall; eauto with nlclocking.
-    Qed.
-    Local Hint Resolve wc_rhs_incl : nlclocking.
+    Variable (Γ Γ' : list (ident * (clock * bool))).
+    Hypothesis Hincl : incl Γ Γ'.
 
     Lemma wc_equation_incl : forall equ,
-        wc_equation G vars equ ->
-        wc_equation G vars' equ.
+        wc_equation G Γ equ ->
+        wc_equation G Γ' equ.
     Proof.
-      intros [| |] Hwc; inv Hwc; econstructor; simpl_Forall; eauto with nlclocking.
-      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
-      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
+      intros * Hwc; inv Hwc; econstructor; simpl_Forall; eauto with nlclocking.
+      1,2:simpl_Forall; destruct_conjs; eauto 6 with nlclocking.
     Qed.
 
   End incl.

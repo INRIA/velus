@@ -321,41 +321,41 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (** Restrictions of FEnvironments *)
   Section HistoryRestriction.
 
-    Definition env := @FEnv.t ident svalue.
-    Definition history' := @FEnv.t ident (stream svalue).
+    Definition env {A} := @FEnv.t A svalue.
+    Definition history' {A} := @FEnv.t A (stream svalue).
 
-    Definition restr_hist (H : history') (n: nat): env :=
+    Definition restr_hist {A} (H : @history' A) (n: nat): env :=
       FEnv.map (fun xs => xs n) H.
 
     Hint Unfold restr_hist : fenv.
 
-    Lemma FEnv_find_restr_hist:
-      forall H x i,
+    Lemma FEnv_find_restr_hist {A}:
+      forall (H: @history' A) x i,
         (restr_hist H i) x = option_map (fun xs => xs i) (H x).
     Proof.
       unfold restr_hist. reflexivity.
     Qed.
 
-    Lemma FEnv_add_restr_hist:
-      forall H x s i,
+    Lemma FEnv_add_restr_hist {A} `{FEnv.fenv_key A}:
+      forall (H: @history' A) x s i,
         FEnv.Equiv eq (restr_hist (FEnv.add x s H) i) (FEnv.add x (s i) (restr_hist H i)).
     Proof.
-      intros H x s i x'. simpl_fenv.
-      destruct (ident_eq_dec x' x).
+      intros Hi x s i x'. simpl_fenv. destruct H.
+      destruct (fenv_key_eqdec x' x). inv e.
       - subst. now setoid_rewrite FEnv.gss.
       - now setoid_rewrite FEnv.gso.
     Qed.
 
-    Lemma FEnv_In_restr_hist:
-      forall H x i,
+    Lemma FEnv_In_restr_hist {A} `{FEnv.fenv_key A}:
+      forall (H: @history' A) x i,
         FEnv.In x H <-> FEnv.In x (restr_hist H i).
     Proof.
       intros. unfold restr_hist.
       now rewrite FEnv.map_in_iff.
     Qed.
 
-    Lemma FEnv_dom_restr_hist:
-      forall H xs i,
+    Lemma FEnv_dom_restr_hist {A} `{FEnv.fenv_key A}:
+      forall (H: @history' A) xs i,
         FEnv.dom H xs <-> FEnv.dom (restr_hist H i) xs.
     Proof.
       split; intros HH x; specialize (HH x);
@@ -376,13 +376,13 @@ environment.
 
      *)
 
-    Definition history := stream env.
+    Definition history {A} := stream (@env A).
+
+    Definition sem_var_instant {A} (R: @env A) x (v: svalue) : Prop :=
+      R x = Some v.
 
     Variable base: bool.
-    Variable R: env.
-
-    Definition sem_var_instant (x: ident) (v: svalue) : Prop :=
-      R x = Some v.
+    Variable R: @env ident.
 
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
@@ -390,17 +390,17 @@ environment.
     | Son:
         forall ck x t b,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Venum b)) ->
+          sem_var_instant R x (present (Venum b)) ->
           sem_clock_instant (Con ck x (t, b)) true
     | Son_abs1:
         forall ck x c,
           sem_clock_instant ck false ->
-          sem_var_instant x absent ->
+          sem_var_instant R x absent ->
           sem_clock_instant (Con ck x c) false
     | Son_abs2:
         forall ck x t b b',
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Venum b')) ->
+          sem_var_instant R x (present (Venum b')) ->
           b <> b' ->
           sem_clock_instant (Con ck x (t, b)) false.
 
@@ -408,7 +408,7 @@ environment.
 
   Global Hint Constructors sem_clock_instant : indexedstreams.
 
-  Add Parametric Morphism : sem_var_instant
+  Add Parametric Morphism {A} : (@sem_var_instant A)
       with signature FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
         as sem_var_instant_morph.
   Proof.
@@ -443,20 +443,19 @@ environment.
   Section LiftSemantics.
 
     Variable bk : stream bool.
-    Variable H : history.
 
-    Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
+    Definition lift {K A B} (H: @history K) (sem: bool -> env -> A -> B -> Prop)
                x (ys: stream B): Prop :=
       forall n, sem (bk n) (H n) x (ys n).
 
-    Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
+    Definition lift' {K A B} (H: @history K) (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
       forall n, sem (H n) x (ys n).
 
-    Definition sem_var (x: ident) (xs: stream svalue): Prop :=
-      lift' sem_var_instant x xs.
+    Definition sem_var {K} (H: @history K) x (xs: stream svalue): Prop :=
+      lift' H sem_var_instant x xs.
 
-    Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
-      lift sem_clock_instant ck xs.
+    Definition sem_clock H (ck: clock) (xs: stream bool): Prop :=
+      lift H sem_clock_instant ck xs.
 
   End LiftSemantics.
 
@@ -469,9 +468,8 @@ environment.
   Section InstantDeterminism.
 
     Variable base: bool.
-    Variable R: env.
 
-    Lemma sem_var_instant_det:
+    Lemma sem_var_instant_det {K} (R: @env K):
       forall x v1 v2,
         sem_var_instant R x v1
         -> sem_var_instant R x v2
@@ -480,7 +478,7 @@ environment.
       congruence.
     Qed.
 
-    Lemma sem_clock_instant_det:
+    Lemma sem_clock_instant_det R:
       forall ck v1 v2,
         sem_clock_instant base R ck v1
         -> sem_clock_instant base R ck v2
@@ -504,10 +502,9 @@ environment.
   Section LiftDeterminism.
 
     Variable bk : stream bool.
-    Variable H : history.
 
     Lemma lift_det:
-      forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
+      forall {K A B} (H: @history K) (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
         x (xs1 xs2 : stream B),
         (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
         lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
@@ -518,7 +515,7 @@ environment.
     Qed.
 
     Lemma lift'_det:
-      forall {A B} (P: env -> A -> B -> Prop)
+      forall {K A B} (H: @history K) (P: env -> A -> B -> Prop)
         x (xs1 xs2 : stream B),
         (forall R v1 v2, P R x v1 -> P R x v2 -> v1 = v2) ->
         lift' H P x xs1 -> lift' H P x xs2 -> xs1 = xs2.
@@ -536,14 +533,14 @@ environment.
       intros; eapply lift'_det; try eassumption;
       compute; intros; eapply sem_det; eauto.
 
-    Lemma sem_var_det:
+    Lemma sem_var_det {K} (H: @history K):
       forall x xs1 xs2,
         sem_var H x xs1 -> sem_var H x xs2 -> xs1 = xs2.
     Proof.
-      apply_lift' sem_var_instant_det.
+      apply_lift' (@sem_var_instant_det K).
     Qed.
 
-    Lemma sem_clock_det:
+    Lemma sem_clock_det H:
       forall ck bs1 bs2,
         sem_clock bk H ck bs1 -> sem_clock bk H ck bs2 -> bs1 = bs2.
     Proof.
@@ -586,45 +583,44 @@ environment.
   Section InstantInterpreter.
 
     Variable base : bool.
-    Variable R: env.
 
-    Definition interp_var_instant (x: ident): svalue :=
+    Definition interp_var_instant {K} (R: @env K) x: svalue :=
       match R x with
       | Some v => v
       | None => absent
       end.
 
-    Lemma interp_var_instant_complete:
+    Lemma interp_var_instant_complete {K} (R: @env K):
       forall x v,
         sem_var_instant R x v ->
-        v = interp_var_instant x.
+        v = interp_var_instant R x.
     Proof.
       unfold interp_var_instant; now intros * ->.
     Qed.
 
-    Fixpoint interp_clock_instant (c: clock): bool :=
+    Fixpoint interp_clock_instant R (c: clock): bool :=
       match c with
       | Cbase =>
         base
       | Con c x (t, b) =>
-        let cb := interp_clock_instant c in
-        andb cb (interp_var_instant x ==b present (Venum b))
+        let cb := interp_clock_instant R c in
+        andb cb (interp_var_instant R x ==b present (Venum b))
       end.
 
     Ltac rw_exp_helper :=
       repeat match goal with
-             | _: sem_var_instant R ?x ?v |- context[interp_var_instant ?x] =>
-               erewrite <-(interp_var_instant_complete x v); eauto; simpl
+             | _: sem_var_instant ?R ?x ?v |- context[interp_var_instant ?R ?x] =>
+               erewrite <-(interp_var_instant_complete R x v); eauto; simpl
              | H: sem_unop ?op ?c ?t = _ |- context[sem_unop ?op ?c ?t] =>
                rewrite H
              | H: sem_binop ?op ?c1 ?t1 ?c2 ?t2 = _ |- context[sem_binop ?op ?c1 ?t1 ?c2 ?t2] =>
                rewrite H
           end.
 
-    Lemma interp_clock_instant_complete:
+    Lemma interp_clock_instant_complete R:
       forall c b,
         sem_clock_instant base R c b ->
-        b = interp_clock_instant c.
+        b = interp_clock_instant R c.
     Proof.
       induction 1; auto; simpl; rw_exp_helper;
         rewrite <-IHsem_clock_instant; simpl; auto.
@@ -641,53 +637,52 @@ environment.
   Section LiftInterpreter.
 
     Variable bk : stream bool.
-    Variable H: history.
 
-    Definition lift_interp {A B} (interp: bool -> env -> A -> B) x: stream B :=
+    Definition lift_interp {K A B} (H: @history K) (interp: bool -> env -> A -> B) x: stream B :=
       fun n => interp (bk n) (H n) x.
 
-    Definition lift_interp' {A B} (interp: env -> A -> B) x: stream B :=
+    Definition lift_interp' {K A B} (H: @history K) (interp: env -> A -> B) x: stream B :=
       fun n => interp (H n) x.
 
-    Definition interp_clock (ck: clock): stream bool :=
-      lift_interp interp_clock_instant ck.
+    Definition interp_clock H (ck: clock): stream bool :=
+      lift_interp H interp_clock_instant ck.
 
-    Definition interp_var (x: ident): stream svalue :=
-      lift_interp' interp_var_instant x.
+    Definition interp_var {K} (H: @history K) x: stream svalue :=
+      lift_interp' H interp_var_instant x.
 
-    Lemma lift_complete:
+    Lemma lift_complete {K} (H: @history K):
       forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
         (forall b R x v, sem b R x v -> v = interp b R x) ->
         lift bk H sem x xs ->
-        xs ≈ lift_interp interp x.
+        xs ≈ lift_interp H interp x.
     Proof.
       intros * Instant Sem n.
       specialize (Sem n); unfold lift_interp; auto.
     Qed.
 
-    Lemma lift'_complete:
+    Lemma lift'_complete {K} (H: @history K):
       forall {A B} (sem: env -> A -> B -> Prop) interp x xs,
         (forall R x v, sem R x v -> v = interp R x) ->
         lift' H sem x xs ->
-        xs ≈ lift_interp' interp x.
+        xs ≈ lift_interp' H interp x.
     Proof.
       intros * Instant Sem n.
       specialize (Sem n); unfold lift_interp'; auto.
     Qed.
 
-    Corollary interp_clock_complete:
+    Corollary interp_clock_complete H:
       forall ck bs,
         sem_clock bk H ck bs ->
-        bs ≈ interp_clock ck.
+        bs ≈ interp_clock H ck.
     Proof.
       intros; eapply lift_complete; eauto;
         apply interp_clock_instant_complete.
     Qed.
 
-    Corollary interp_var_complete:
+    Corollary interp_var_complete {K} (H: @history K):
       forall x vs,
         sem_var H x vs ->
-        vs ≈ interp_var x.
+        vs ≈ interp_var H x.
     Proof.
       intros; eapply lift'_complete; eauto;
         apply interp_var_instant_complete.

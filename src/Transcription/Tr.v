@@ -37,6 +37,7 @@ Module Type TR
     | L.Econst c                 => OK (CE.Econst c)
     | L.Eenum k ty               => OK (CE.Eenum k ty)
     | L.Evar x (ty, ck)          => OK (CE.Evar x ty)
+    | L.Elast x (ty, ck)         => OK (CE.Elast x ty)
     | L.Eunop op e (ty, ck)      => do le <- to_lexp e;
                                     OK (CE.Eunop op le ty)
     | L.Ebinop op e1 e2 (ty, ck) => do le1 <- to_lexp e1;
@@ -44,7 +45,6 @@ Module Type TR
                                     OK (CE.Ebinop op le1 le2 ty)
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                    OK (CE.Ewhen le x b)
-    | L.Elast _ _
     | L.Eextcall _ _ _
     | L.Efby _ _ _
     | L.Earrow _ _ _
@@ -111,6 +111,7 @@ Module Type TR
     | L.Econst _
     | L.Eenum _ _
     | L.Evar _ _
+    | L.Elast _ _
     | L.Eunop _ _ _
     | L.Ebinop _ _ _ _
     | L.Ewhen _ _ _ _                 => do le <- to_lexp e;
@@ -147,7 +148,6 @@ Module Type TR
       | _ => Error (msg "type error : expected enumerated type for condition")
       end
 
-    | L.Elast _ _
     | L.Eextcall _ _ _
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
@@ -188,10 +188,16 @@ Module Type TR
       clock_of_suffix sfx Cbase
     end.
 
-  Definition find_clock (env : Env.t (type * clock)) (x : ident) : res clock :=
+  (* Definition find_clock (env : Env.t (type * clock)) (x : ident) : res clock := *)
+  (*   match Env.find x env with *)
+  (*   | None => Error (msg "find_clock failed unexpectedly") *)
+  (*   | Some (ty, ck) => OK ck *)
+  (*   end. *)
+
+  Definition find_clock (env : Env.t clock) (x : ident) : res clock :=
     match Env.find x env with
     | None => Error (msg "find_clock failed unexpectedly")
-    | Some (ty, ck) => OK ck
+    | Some ck => OK ck
     end.
 
   Fixpoint to_constant (e : L.exp) : res const :=
@@ -208,7 +214,7 @@ Module Type TR
                 | _ => None
                 end) es.
 
-  Definition to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
+  Definition to_equation (env : Env.t clock) (envo : ident -> res unit)
                          (xr : list (ident * clock)) (eq : L.equation) : res NL.equation :=
     let (xs, es) := eq in
     match es with
@@ -249,41 +255,55 @@ Module Type TR
     | _ => Error (msg "equation not normalized")
     end.
 
-  Fixpoint block_to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
+  Fixpoint block_to_equation (env : Env.t clock) (envo : ident -> res unit)
            (xr : list (ident * clock)) (d : L.block) : res NL.equation :=
     match d with
     | L.Beq eq =>
       to_equation env envo xr eq
+    | L.Blast x e =>
+        let ty := List.hd (OpAux.bool_velus_type) (L.typeof e) in
+        do ck <- find_clock env x;
+        do c <- to_constant e;
+        OK (NL.EqLast x ty ck c xr)
     | L.Breset [block] (L.Evar x (_, ck)) =>
       block_to_equation env envo ((x, ck)::xr) block
     | _ => Error (msg "block not normalized")
     end.
 
   Lemma find_clock_in_env :
-    forall x env ty ck,
-      Env.find x env = Some (ty, ck) ->
+    forall x env ck,
+      Env.find x env = Some ck ->
       find_clock env x = OK ck.
   Proof.
     intros * H. unfold find_clock. now rewrite H.
   Qed.
 
-  Lemma find_clock_out {PSyn prefs} : forall (n : @L.node PSyn prefs) x ty ck,
-      In (x, (ty, ck)) (map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) (L.n_out n)) ->
-      find_clock (Env.adds' (idfst (L.n_in n)) (Env.from_list (map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) (L.n_out n)))) x = OK ck.
+  (* Lemma find_clock_out {PSyn prefs} : forall (n : @L.node PSyn prefs) x ty ck, *)
+  (*     In (x, (ty, ck)) (map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) (L.n_out n)) -> *)
+  (*     find_clock (Env.adds' (idfst (L.n_in n)) (Env.from_list (map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) (L.n_out n)))) x = OK ck. *)
+  (* Proof. *)
+  (*   intros * Hin. *)
+  (*   unfold Env.from_list. eapply find_clock_in_env. *)
+  (*   apply In_InMembers in Hin as Hinm. *)
+  (*   pose proof (L.n_nodup n) as (Hnodup&_). *)
+  (*   rewrite Env.gsso'. apply Env.In_find_adds'; eauto. *)
+  (*   - erewrite fst_NoDupMembers, map_map, map_ext; eauto using NoDup_app_r. intros; destruct_conjs; auto. *)
+  (*   - rewrite InMembers_idfst, fst_InMembers. intros ?. eapply NoDup_app_In; eauto. *)
+  (*     solve_In. *)
+  (* Qed. *)
+
+  Lemma to_eq_vars_defined eq eq' :
+    forall env envo xr,
+      to_equation env envo xr eq = OK eq' -> NL.var_defined eq' = fst eq.
   Proof.
-    intros * Hin.
-    unfold Env.from_list. eapply find_clock_in_env.
-    apply In_InMembers in Hin as Hinm.
-    pose proof (L.n_nodup n) as (Hnodup&_).
-    rewrite Env.gsso'. apply Env.In_find_adds'; eauto.
-    - erewrite fst_NoDupMembers, map_map, map_ext; eauto using NoDup_app_r. intros; destruct_conjs; auto.
-    - rewrite InMembers_idfst, fst_InMembers. intros ?. eapply NoDup_app_In; eauto.
-      solve_In.
+    intros * Htoeq.
+    unfold to_equation in Htoeq.
+    cases; monadInv Htoeq; inv EQ; simpl; auto.
   Qed.
 
-  Lemma ok_fst_defined eq eq' :
+  Lemma to_eq_lasts_defined eq eq' :
     forall env envo xr,
-      to_equation env envo xr eq = OK eq' -> fst eq = NL.var_defined eq'.
+      to_equation env envo xr eq = OK eq' -> NL.last_defined eq' = [].
   Proof.
     intros * Htoeq.
     unfold to_equation in Htoeq.
@@ -328,7 +348,7 @@ Module Type TR
   Definition mmap_block_to_equation {PSyn prefs} env envo (n: @L.node PSyn prefs) :
     res { neqs | match n.(L.n_block) with
                  | L.Blocal (L.Scope locs blks) =>
-                   do neqs <- mmap (block_to_equation (Env.adds' (idfst (idfst locs)) env) envo []) blks;
+                   do neqs <- mmap (block_to_equation (Env.adds' (idsnd (idfst (idfst locs))) env) envo []) blks;
                    OK (locs, neqs)
                  | _ => Error (msg "node not normalized")
                  end = OK neqs }.
@@ -336,7 +356,7 @@ Module Type TR
     destruct (L.n_block n); simpl.
     1-5:right; exact (msg "node not normalized").
     destruct s as [? l0].
-    destruct (mmap (block_to_equation (Env.adds' (idfst (idfst l)) env) envo []) l0).
+    destruct (mmap (block_to_equation (Env.adds' (idsnd (idfst (idfst l))) env) envo []) l0).
     left. simpl. eauto.
     right. auto.
   Defined.
@@ -350,11 +370,11 @@ Module Type TR
   Qed.
 
   Unset Program Cases.
-  Program Definition to_node (n : @L.node L.nolocal norm2_prefs) : res NL.node :=
+  Program Definition to_node (n : @L.node L.normalized fby_prefs) : res NL.node :=
     let ins := idfst n.(L.n_in) in
     let outs := idfst (idfst n.(L.n_out)) in
-    let envo := Env.from_list outs in
-    let env := Env.adds' ins envo in
+    let envo := Env.from_list (idsnd outs) in
+    let env := Env.adds' (idsnd ins) envo in
     let is_not_out :=
         fun x => if Env.mem x envo
               then Error (msg "output variable defined as a fby")
@@ -365,7 +385,7 @@ Module Type TR
           NL.n_name     := n.(L.n_name);
           NL.n_in       := ins;
           NL.n_out      := outs;
-          NL.n_vars     := idfst (idfst (fst res));
+          NL.n_vars     := map (fun xtc => (fst xtc, (fst (fst (fst (snd xtc))), snd (fst (fst (snd xtc))), isSome (snd (snd xtc))))) (fst res);
           NL.n_eqs      := snd res;
 
           NL.n_ingt0    := L.n_ingt0 n;
@@ -382,28 +402,113 @@ Module Type TR
   Next Obligation. now rewrite 2 length_idfst. Qed.
   (* NL.n_defd obligation *)
   Next Obligation.
-    rewrite <-idfst_app, map_fst_idfst.
+    rewrite map_map, ? map_fst_idfst; simpl.
     clear H. rename l into vars. rename l0 into neqs.
     pose proof (L.n_nodup n) as (_&Hnd).
-    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (vd&Hvars&Hperm)].
-    cases. rename l0 into blks.
-    monadInv1 P. inv Hvars. inv H0. destruct H3 as (xs0&Hvd&Hperm'). inv Syn2.
+    pose proof (L.n_syn n) as Hsyn. inversion Hsyn as [??? _ Syn2 (vd&Hvars&Hperm)]; subst; clear Hsyn; rewrite <-H0 in *.
+    monadInv1 P. inv Hvars. inv H1. destruct H4 as (xs0&Hvd&Hperm').
     assert (NL.vars_defined neqs = concat xs0).
-    { revert neqs EQ. clear - H2 Hvd. induction Hvd; inv H2; simpl.
+    { revert neqs EQ. clear - Syn2 Hvd. induction Hvd; inv Syn2; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
         apply IHHvd in EQ1; auto. simpl.
         f_equal; auto.
-        clear - H H3 EQ.
+        clear - H H2 EQ.
         revert EQ y H. generalize (@nil (ident * clock)) as xr.
-        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H3; inv Hvd; try congruence.
-        + apply ok_fst_defined in EQ; auto.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H2; inv Hvd; try congruence.
+        + apply to_eq_vars_defined in EQ; auto.
+        + monadInv EQ. reflexivity.
         + cases; simpl.
           simpl_Forall. rewrite app_nil_r.
-          eapply H2; eauto.
+          eapply H3; eauto.
     }
-    simpl. rewrite H.
-    erewrite Hperm', map_app, Hperm, Permutation_app_comm, 2 map_fst_idfst. reflexivity.
+    rewrite H, Hperm', Hperm, Permutation_app_comm. reflexivity.
+  Qed.
+
+  (* NL.n_lastd obligation *)
+  Next Obligation.
+    clear H. rename l into vars. rename l0 into neqs.
+    pose proof (L.n_nodup n) as (_&Hnd).
+    pose proof (L.n_lastd n) as (?&Last&Perm).
+    pose proof (L.n_syn n) as Hsyn. inversion Hsyn as [??? Syn1 Syn2 (vd&Hvars&Hperm)]; subst; clear Hsyn; rewrite <-H0 in *.
+    monadInv1 P. inv Last. inv H1. destruct H4 as (xs0&Hvd&Hperm').
+    assert (NL.lasts_defined neqs = concat xs0).
+    { revert neqs EQ. clear - Syn2 Hvd. induction Hvd; inv Syn2; simpl.
+      - intros neqs Htr. inv Htr. auto.
+      - intros neqs Htoeq. monadInv Htoeq.
+        apply IHHvd in EQ1; auto. simpl.
+        f_equal; auto.
+        clear - H H2 EQ.
+        revert EQ y H. generalize (@nil (ident * clock)) as xr.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H2; inv Hvd; try congruence.
+        + apply to_eq_lasts_defined in EQ; auto.
+        + monadInv EQ. reflexivity.
+        + cases; simpl.
+          simpl_Forall. rewrite app_nil_r.
+          eapply H3; eauto.
+    }
+    simpl. rewrite H, Hperm', Perm, Permutation_app_comm.
+    unfold L.lasts_of_decls. rewrite map_filter_nil with (xs:=L.n_out n), app_nil_r.
+    2:{ simpl_Forall. unfold L.decl in *. destruct_conjs. subst; auto. }
+    clear - vars. induction vars as [|(?&((?&?)&?)&[])]; simpl; auto.
+  Qed.
+
+  Next Obligation.
+    simpl_In. destruct o; simpl in *; [|congruence].
+    assert (In x (NL.vars_defined l0)) as In1.
+    { pose proof (to_node_obligation_3 n) as Def. simpl in *.
+      rewrite P in Def.
+      assert ({neqs : list L.decl * list NL.equation | OK (l, l0) = OK neqs}) as I.
+      { econstructor. reflexivity. }
+      specialize (Def I _ eq_refl). simpl in *. clear I.
+      rewrite Def. apply in_app_iff. left. solve_In. }
+    pose proof (L.n_syn n) as Hsyn. inversion Hsyn as [??? _ Syn2 (vd&Hvars&Hperm)]; subst; clear Hsyn; rewrite <-H1 in *.
+    rewrite <-NL.is_filtered_vars_defined, NL.def_cexp_rhs in In1.
+    monadInv P. apply mmap_inversion in EQ.
+    rewrite ? in_app_iff in In1. destruct In1 as [[In1|In1]|[In1|In1]]; auto.
+    all:exfalso.
+    - clear - Syn2 In1 Hin EQ.
+      induction EQ; inv Syn2; simpl in *. inv In1.
+      cases_eqn Eq; simpl in *; auto. apply in_app_iff in In1 as [In1|In1]; auto.
+      clear IHEQ EQ. revert b1 H Eq In1. generalize (@nil (ident * clock)) as xrs.
+      take (L.normalized_block _ _ _) and induction it; intros; simpl in *.
+      + inv H; simpl in *; try monadInv H0.
+        * cases; try monadInv EQ0; simpl in *; try congruence.
+        * simpl in *. congruence.
+        * cases. monadInv H0. simpl in *. destruct In1 as [In1|In1]; inv In1.
+          eapply H2. unfold L.lasts_of_decls. solve_In.
+        * cases; monadInv H0; simpl in *; try congruence.
+          inv H1. inv H.
+      + monadInv H0. simpl in *. inv In1.
+      + destruct ann. eapply IHit in H; eauto.
+    - clear - Syn2 In1 Hin EQ.
+      induction EQ; inv Syn2; simpl in *. inv In1.
+      cases_eqn Eq; simpl in *; auto. apply in_app_iff in In1 as [In1|In1]; auto.
+      clear IHEQ EQ. revert b1 H Eq In1. generalize (@nil (ident * clock)) as xrs.
+      take (L.normalized_block _ _ _) and induction it; intros; simpl in *.
+      + inv H; simpl in *; try monadInv H0.
+        * cases; try monadInv EQ0; simpl in *.
+          simpl_Forall. eapply H4. unfold L.lasts_of_decls. solve_In.
+        * simpl in *. congruence.
+        * cases. monadInv H0. simpl in *. congruence.
+        * cases; monadInv H0; simpl in *; try congruence.
+          inv H1. inv H.
+      + monadInv H0. simpl in *. inv In1.
+      + destruct ann. eapply IHit in H; eauto.
+    - clear - Syn2 In1 Hin EQ.
+      induction EQ; inv Syn2; simpl in *. inv In1.
+      cases_eqn Eq; simpl in *; auto. apply in_app_iff in In1 as [In1|In1]; auto.
+      clear IHEQ EQ. revert b1 H Eq In1. generalize (@nil (ident * clock)) as xrs.
+      take (L.normalized_block _ _ _) and induction it; intros; simpl in *.
+      + inv H; simpl in *; try monadInv H0.
+        * cases; try monadInv EQ0; simpl in *; congruence.
+        * simpl in *. destruct In1 as [In1|In1]; inv In1.
+          apply H5. unfold L.lasts_of_decls. solve_In.
+        * cases. monadInv H0. simpl in *. congruence.
+        * cases; monadInv H0; simpl in *; try congruence.
+          inv H1. inv H.
+      + monadInv H0. simpl in *. inv In1.
+      + destruct ann. eapply IHit in H; eauto.
   Qed.
 
   (* NL.n_vout obligation *)
@@ -424,11 +529,12 @@ Module Type TR
         cases_eqn E; monadInv1 Htoeq; inv Heqb.
         simpl in H. destruct H; auto. subst. inv EQ.
         apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
-        rewrite in_map_iff in Hin.
-        destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
+        simpl_In.
         eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
+        2:{ solve_In. }
         destruct n. simpl. pose proof n_nodup as (Hnodup&_).
-        rewrite 2 NoDupMembers_idfst, fst_NoDupMembers; eauto using NoDup_app_r.
+        rewrite NoDupMembers_idsnd, ? NoDupMembers_idfst, fst_NoDupMembers; eauto using NoDup_app_r.
+      + monadInv Htoeq. simpl in *. congruence.
       + cases. apply Forall_singl in H0.
         eapply H0; eauto.
     - eapply IHEQ; eauto.
@@ -439,13 +545,11 @@ Module Type TR
     pose proof (L.n_nodup n) as (Hndup1&Hndup2).
     cases. rename l3 into blks. monadInv P.
     inv Hndup2. repeat L.inv_scope.
-    rewrite (Permutation_app_comm (idfst (idfst vars))), app_assoc.
-    apply NoDupMembers_app; eauto.
-    - erewrite fst_NoDupMembers, map_app, 3 map_fst_idfst; eauto.
-    - rewrite 2 NoDupMembers_idfst; auto.
-    - intros ? Hinm1 Hinm2. rewrite 2 InMembers_idfst in Hinm2.
-      erewrite fst_InMembers, map_app, 3 map_fst_idfst in Hinm1.
-      eapply H5; eauto.
+    rewrite ? map_fst_idfst, map_map. simpl.
+    rewrite (Permutation_app_comm (map _ vars)), app_assoc.
+    apply NoDup_app'; eauto.
+    - now apply fst_NoDupMembers.
+    - simpl_Forall. intros In. apply fst_InMembers in In. eapply H5; eauto.
   Qed.
 
   (* NL.n_good obligation *)
@@ -454,15 +558,16 @@ Module Type TR
     pose proof (L.n_good n) as (Hgood1&Hgood2&Hat).
     split; auto.
     cases. monadInv P.
-    rewrite (Permutation_app_comm (idfst (idfst vars))), app_assoc, 2 map_app, 5 map_fst_idfst.
+    rewrite ? map_fst_idfst, map_map. simpl.
+    rewrite (Permutation_app_comm (map _ vars)), app_assoc.
     inv Hgood2. L.inv_scope.
     apply Forall_app; split; simpl_Forall.
     1,2:(take (AtomOrGensym _ _) and inversion_clear it as [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
          exists pref; eauto;
-         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs in Hpref;
+         unfold fby_prefs, last_prefs, norm1_prefs, local_prefs, switch_prefs, auto_prefs, elab_prefs in Hpref;
          repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
-         destruct Hpref as [|[|[|[|[|[|]]]]]]; subst; split; eauto 10).
+         repeat (take (_ \/ _) and destruct it; eauto 11)).
   Qed.
 
   Definition to_global (G : L.global) :=
@@ -476,10 +581,10 @@ Module Type TR
       let Hmmap := fresh "Hmmap" in
       unfold to_node in H;
       destruct(mmap_block_to_equation
-                 (Env.adds' (idfst (L.n_in n))
-                            (Env.from_list (idfst (idfst n.(L.n_out)))))
+                 (Env.adds' (idsnd (idfst (L.n_in n)))
+                            (Env.from_list (idsnd (idfst (idfst n.(L.n_out))))))
             (fun x : Env.key =>
-             if Env.mem x (Env.from_list (idfst (idfst n.(L.n_out))))
+             if Env.mem x (Env.from_list (idsnd (idfst (idfst n.(L.n_out)))))
              then Error (msg "output variable defined as a fby")
              else OK tt) n)
       as [ Hs | Hs ];
@@ -561,110 +666,113 @@ Module Type TR
 
   Section Envs_eq.
 
-    Definition envs_eq (env : Env.t (type * clock))
-               (cenv : list (ident * clock)) :=
-      forall (x : ident) (ck : clock),
-        In (x,ck) cenv <-> exists ty, Env.find x env = Some (ty,ck).
+    Definition envs_eq (env : Env.t clock) (cenv : Senv.static_env) :=
+      forall x ck,
+        Senv.HasClock cenv x ck <-> Env.find x env = Some ck.
 
     Lemma envs_eq_find :
       forall env cenv x ck,
         envs_eq env cenv ->
-        In (x, ck) cenv ->
+        Senv.HasClock cenv x ck ->
         find_clock env x = OK ck.
     Proof.
       unfold find_clock, envs_eq. intros * Heq Hin.
-      rewrite Heq in Hin. destruct Hin as [? Hfind].
-      now rewrite Hfind.
+      rewrite Heq in Hin. now rewrite Hin.
     Qed.
 
     Lemma envs_eq_find' :
       forall env cenv x ck,
         envs_eq env cenv ->
         find_clock env x = OK ck ->
-        In (x, ck) cenv.
+        Senv.HasClock cenv x ck.
     Proof.
       unfold find_clock, envs_eq. intros * Heq Hfind.
-      rewrite Heq.
-      destruct Env.find.
-      - destruct p. inv Hfind. eexists; eauto.
-      - inv Hfind.
+      destruct Env.find as [|] eqn:Eq; inv Hfind; auto.
+      apply Heq in Eq; eauto.
     Qed.
 
     Lemma envs_eq_app_comm :
-      forall env (xs ys : list (ident * (type * clock))),
-        envs_eq env (idsnd (xs ++ ys))
-        <-> envs_eq env (idsnd (ys ++ xs)).
+      forall env (xs ys : Senv.static_env),
+        envs_eq env (xs ++ ys)
+        <-> envs_eq env (ys ++ xs).
     Proof.
-      split; unfold envs_eq; intros Heq x ck; split; intro Hin;
-        try (rewrite idsnd_app in Hin;
-             apply in_app_comm in Hin; apply Heq; now rewrite idsnd_app);
-        try (rewrite idsnd_app; rewrite in_app_comm; rewrite <- idsnd_app;
-             now apply Heq).
+      split; unfold envs_eq; intros Heq *.
+      all:rewrite Permutation_app_comm; auto.
     Qed.
 
     Lemma env_eq_env_from_list:
       forall xs,
         NoDupMembers xs ->
-        envs_eq (Env.from_list xs) (idsnd xs).
+        envs_eq (Env.from_list (Senv.idck xs)) xs.
     Proof.
       intros xs Hnodup x ck. split.
-      - unfold idsnd. rewrite in_map_iff.
-        intro Hxs. destruct Hxs as (y & Hx & Hin). inv Hx.
-        exists (fst (snd y)).
+      - intro Hxs.
         apply Env.In_find_adds'; auto.
-        destruct y as [? [? ?]]. auto.
-      - intro Hfind. destruct Hfind as [ty Hfind].
-        apply Env.from_list_find_In in Hfind.
-        unfold idsnd. rewrite in_map_iff. exists (x,(ty,ck)). simpl. tauto.
+        1,2:unfold Senv.idck.
+        + apply NoDupMembers_map; auto.
+        + inv Hxs. solve_In.
+      - intro Hfind.
+        apply Env.from_list_find_In in Hfind; auto.
+        simpl_In. econstructor; eauto.
     Qed.
 
     Lemma env_eq_env_adds':
       forall s xs ys,
         NoDupMembers (xs ++ ys) ->
-        envs_eq s (idsnd ys) ->
-        envs_eq (Env.adds' xs s) (idsnd (xs ++ ys)).
+        envs_eq s ys ->
+        envs_eq (Env.adds' (Senv.idck xs) s) (xs ++ ys).
     Proof.
-      intros s xs ys Hnodup Heq x ck. split.
-      - rewrite idsnd_app. rewrite in_app_iff. destruct 1 as [Hin | Hin].
-        unfold idsnd in Hin. rewrite in_map_iff in Hin.
-        destruct Hin as (y & Hx & Hin). inv Hx. exists (fst (snd y)).
-        apply Env.In_find_adds'; auto.
-        now apply NoDupMembers_app_l in Hnodup.
-        destruct y as (? & ? & ?). now simpl.
-        assert (Hin' := Hin).
-        apply Heq in Hin. destruct Hin as [ty Hin].
-        exists ty. rewrite <- Hin. apply Env.gsso'.
-        apply In_InMembers in Hin'. rewrite InMembers_idsnd in Hin'.
-        eapply NoDupMembers_app_InMembers; eauto.
-        now rewrite Permutation_app_comm.
-      - destruct 1 as [ty Hfind].
-        apply Env.find_env_from_list' in Hfind.
-        destruct Hfind as [Hin | [Hin Hfind]];
-          rewrite idsnd_app; apply in_app_iff.
-        left. rewrite In_idsnd_exists. eauto.
-        right. unfold envs_eq in Heq. rewrite Heq. eauto.
+      intros * Hnodup Heq *. split.
+      - rewrite Senv.HasClock_app. intros [Hin | Hin].
+        + apply Env.In_find_adds'; eauto using NoDupMembers_map, NoDupMembers_app_l.
+          inv Hin. solve_In.
+        + assert (Hin' := Hin). apply Heq in Hin.
+          rewrite Env.gsso'; auto.
+          inv Hin'. intros In1. simpl_In.
+          eapply NoDupMembers_app_InMembers; eauto using In_InMembers.
+      - intros Hfind.
+        apply Env.find_env_from_list' in Hfind as [Hin| [Hin Hfind]]; apply Senv.HasClock_app; [left|right].
+        + simpl_In. econstructor; eauto.
+        + apply Heq in Hfind; auto.
+    Qed.
+
+    Lemma envs_eq_inout {PSyn prefs} (n : @L.node PSyn prefs) :
+      envs_eq
+        (Env.adds' (idsnd (idfst (L.n_in n)))
+           (Env.from_list (idsnd (idfst (idfst (L.n_out n))))))
+        (Senv.senv_of_ins (L.n_in n) ++ Senv.senv_of_decls (L.n_out n)).
+    Proof.
+      assert (NoDupMembers (Senv.senv_of_decls (L.n_out n))) as ND1.
+      { eapply NoDupMembers_app_r, L.node_NoDupMembers. }
+      apply env_eq_env_from_list in ND1 as Env1.
+      eapply env_eq_env_adds' in Env1; eauto using L.node_NoDupMembers.
+      unfold Senv.idck, Senv.senv_of_decls, Senv.senv_of_ins, idfst, idsnd in *. rewrite ? map_map in *.
+      erewrite map_ext with (l:=L.n_in _), map_ext with (l:=L.n_out _) in Env1; eauto.
+      all:unfold L.decl; intros; destruct_conjs; auto.
     Qed.
 
     Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs blks :
       L.n_block n = L.Blocal (L.Scope locs blks) ->
       envs_eq
-        (Env.adds' (idfst (idfst locs))
-                   (Env.adds' (idfst (L.n_in n))
-                              (Env.from_list (idfst (idfst (L.n_out n))))))
-        (idsnd (idfst (L.n_in n) ++ idfst (idfst locs) ++ idfst (idfst (L.n_out n)))).
+        (Env.adds' (idsnd (idfst (idfst locs)))
+                   (Env.adds' (idsnd (idfst (L.n_in n)))
+                              (Env.from_list (idsnd (idfst (idfst (L.n_out n)))))))
+        (Senv.senv_of_ins (L.n_in n) ++ Senv.senv_of_decls (L.n_out n) ++ Senv.senv_of_decls locs).
     Proof.
       intros Hblk.
       pose proof (L.n_nodup n) as (Hnd1&Hnd2). rewrite Hblk in *; clear Hblk.
       inv Hnd2.
-      rewrite envs_eq_app_comm.
-      setoid_rewrite <-app_assoc.
-      apply env_eq_env_adds'.
-      2:rewrite envs_eq_app_comm; apply env_eq_env_adds', env_eq_env_from_list.
-      1-3:rewrite fst_NoDupMembers; repeat rewrite map_app; repeat rewrite map_fst_idfst; eauto using NoDup_app_r.
-      rewrite (Permutation_app_comm (map fst (L.n_out _))). L.inv_scope.
-      apply NoDup_app'; eauto using NoDup_app_r.
-      - now apply fst_NoDupMembers.
-      - simpl_Forall. eapply H5; eauto using In_InMembers.
+      rewrite app_assoc. apply envs_eq_app_comm.
+      pose proof (envs_eq_inout n) as Env1.
+      eapply env_eq_env_adds' with (xs:=Senv.senv_of_decls locs) in Env1.
+      2:{ inv H1.
+          apply NoDupMembers_app; auto using L.node_NoDupMembers.
+          - apply Senv.NoDupMembers_senv_of_decls; auto.
+          - intros * In1 In2. simpl_In. eapply H5; eauto using In_InMembers.
+            rewrite in_app_iff in *. destruct Hin; [left|right]; solve_In. }
+      unfold Senv.idck, Senv.senv_of_decls, Senv.senv_of_ins, idfst, idsnd in *. rewrite ? map_map in *.
+      erewrite map_ext with (l:=locs) in Env1; eauto.
+      all:unfold L.decl; intros; destruct_conjs; auto.
     Qed.
 
   End Envs_eq.

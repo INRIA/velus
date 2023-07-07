@@ -31,23 +31,24 @@ Module Type EITYPING
       NoDupMembers Γ ->
       Forall (wt_equation G Γ) eqs ->
       Forall (fun '(x, e) => wt_cexp G.(types) Γ e
-                          /\ forall ty, In (x, ty) Γ -> typeofc e = ty) (inlinable vars eqs).
+                          /\ forall ty islast, In (x, (ty, islast)) Γ -> typeofc e = ty) (inlinable vars eqs).
   Proof.
     intros * Nd Wt.
     unfold inlinable. simpl_Forall. simpl_In. simpl_Forall.
     clear Hf. cases. inv Hf0.
     inv Wt. take (wt_rhs _ _ _ _) and inv it. simpl in *. split; auto.
-    intros * Hin; eauto using NoDupMembers_det.
+    intros * Hin.
+    eapply NoDupMembers_det in H2; eauto. now inv H2.
   Qed.
 
   Section inline_typeof.
-    Variable (G : global) (Γ : list (ident * type)).
+    Variable (G : global) (Γ : list (ident * (type * bool))).
     Variable (x : ident).
 
     Section inline_exp.
       Variable (xe : exp).
 
-      Hypothesis Wt2 : forall ty, In (x, ty) Γ -> typeof xe = ty.
+      Hypothesis Wt2 : forall ty islast, In (x, (ty, islast)) Γ -> typeof xe = ty.
 
       Lemma inline_in_exp_typeof : forall e,
           wt_exp G.(types) Γ e ->
@@ -63,7 +64,7 @@ Module Type EITYPING
     Section inline_cexp.
       Variable (xe : cexp).
 
-      Hypothesis Wt2 : forall ty, In (x, ty) Γ -> typeofc xe = ty.
+      Hypothesis Wt2 : forall ty islast, In (x, (ty, islast)) Γ -> typeofc xe = ty.
 
       Lemma try_inline_in_exp_typeof : forall e,
           wt_exp G.(types) Γ e ->
@@ -88,22 +89,22 @@ Module Type EITYPING
   End inline_typeof.
 
   Section inline.
-    Variable (G : global) (Γ : list (ident * type)).
+    Variable (G : global) (Γ : list (ident * (type * bool))).
     Variable (x : ident).
 
     Section inline_exp.
       Variable (xe : exp).
 
       Hypothesis Wt1 : wt_exp G.(types) Γ xe.
-      Hypothesis Wt2 : forall ty, In (x, ty) Γ -> typeof xe = ty.
+      Hypothesis Wt2 : forall ty islast, In (x, (ty, islast)) Γ -> typeof xe = ty.
 
       Lemma inline_in_exp_wt : forall e,
           wt_exp G.(types) Γ e ->
           wt_exp G.(types) Γ (inline_in_exp x xe e).
       Proof.
         induction e; simpl; auto; intros * Wt; inv Wt.
-        - cases; auto with nltyping.
-        - auto with nltyping.
+        - cases; eauto with nltyping.
+        - eauto with nltyping.
         - constructor; auto.
           erewrite inline_in_exp_typeof; eauto.
         - constructor; auto.
@@ -115,7 +116,7 @@ Module Type EITYPING
       Variable (xe : cexp).
 
       Hypothesis Wt1 : wt_cexp G.(types) Γ xe.
-      Hypothesis Wt2 : forall ty, In (x, ty) Γ -> typeofc xe = ty.
+      Hypothesis Wt2 : forall ty islast, In (x, (ty, islast)) Γ -> typeofc xe = ty.
 
       Lemma try_inline_in_exp_wt : forall e,
           wt_exp G.(types) Γ e ->
@@ -131,7 +132,7 @@ Module Type EITYPING
           wt_cexp G.(types) Γ (inline_in_cexp x xe ce).
       Proof.
         induction ce using cexp_ind2'; intros * Wt; inv Wt; simpl; auto.
-        - constructor; auto; simpl_Forall; auto.
+        - econstructor; eauto; simpl_Forall; auto.
           + now rewrite map_length.
           + erewrite inline_in_cexp_typeofc; eauto.
         - econstructor; eauto using try_inline_in_exp_wt.
@@ -164,7 +165,13 @@ Module Type EITYPING
     intros * (Wt1&Wt2).
     split; auto. simpl.
     unfold inline_all_possible.
-    eapply inlinable_wt with (vars:=idsnd (n_vars n)) in Wt1 as Wt3; [|apply NoDupMembers_idfst, n_nodup].
+    eapply inlinable_wt with (vars:=idck (n_vars n)) in Wt1 as Wt3.
+    2:{ erewrite fst_NoDupMembers, map_app, 2 map_map, map_app, <-app_assoc,
+          Permutation.Permutation_app_comm with (l':=map _ (n_vars _)),
+          map_ext with (l:=n_in _), map_ext with (l:=n_out _), map_ext with (l:=n_vars _).
+        apply n_nodup.
+        all:intros; destruct_conjs; auto.
+    }
     rewrite Forall_rev in Wt3. rewrite <-fold_left_rev_right.
     induction Wt3 as [|(?&?)]; simpl.
     - simpl_Forall; eauto using global_iface_eq_wt_eq, exp_inlining_iface_eq.

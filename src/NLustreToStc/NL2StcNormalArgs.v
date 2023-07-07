@@ -27,15 +27,15 @@ Module Type NL2STCNORMALARGS
        (Import Trans : TRANSLATION     Ids Op OpAux        Cks              CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma translate_eqn_normal_args:
-    forall G eq,
+    forall G env eq,
       Norm.normal_args_eq G eq ->
-      Forall (normal_args_tc (translate G)) (translate_eqn eq).
+      Forall (normal_args_tc (translate G)) (translate_eqn env eq).
   Proof.
-    induction 1 as [|?????? Find|]; simpl; eauto using Forall_cons, normal_args_tc.
+    induction 1 as [| |?????? Find|]; simpl; cases.
+    all:try constructor; simpl_Forall; eauto with stcsyn.
     apply option_map_inv in Find as ((?&?)& Find &?); simpl in *; subst.
     apply find_unit_transform_units_forward in Find.
-    1,2:cases; constructor; eauto using normal_args_tc.
-    1,2:rewrite Forall_map; eapply Forall_forall; intros; eauto using normal_args_tc.
+    econstructor; eauto. simpl_Forall; auto.
   Qed.
 
   Lemma translate_node_normal_args:
@@ -43,10 +43,10 @@ Module Type NL2STCNORMALARGS
       normal_args_node G n ->
       normal_args_system (translate G) (translate_node n).
   Proof.
-    unfold normal_args_node, normal_args_system.
-    simpl; unfold translate_eqns; induction 1; simpl; auto.
-    apply Forall_app; split; auto.
-    apply translate_eqn_normal_args; auto.
+    intros.
+    unfold normal_args_node, normal_args_system in *. simpl in *.
+    simpl_Forall. unfold translate_eqns in *. simpl_In. simpl_Forall.
+    eapply translate_eqn_normal_args, Forall_forall in H; eauto.
   Qed.
 
   Lemma translate_normal_args:

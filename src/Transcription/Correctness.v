@@ -12,8 +12,6 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics Lustre.LClockedSemantics.
-From Velus Require Import Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.Normalization.Correctness.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLCoindSemantics.
 
@@ -62,7 +60,6 @@ Module Type CORRECTNESS
        (Import Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS          : LSEMANTICS       Ids Op OpAux Cks Senv L Lord       Str)
        (Import LCS  : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv L LC Lord Str LS)
-       (LN          : NORMALIZATION    Ids Op OpAux Cks Senv L)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
   Lemma sem_lexp_step {PSyn prefs} :
@@ -76,6 +73,9 @@ Module Type CORRECTNESS
       simpl in *. constructor; auto.
     - inv Hsem; simpl. inv H6.
       simpl in *. constructor; auto.
+    - inv Hsem. destruct a. monadInv H1. inv H7; destruct xs'.
+      econstructor. econstructor.
+      eapply env_maps_tl; eauto. inv H2; simpl in *. assumption.
     - inv Hsem. destruct a. monadInv H1. inv H7; destruct xs'.
       econstructor. econstructor.
       eapply env_maps_tl; eauto. inv H2; simpl in *. assumption.
@@ -166,6 +166,7 @@ Module Type CORRECTNESS
     - now simpl.
     - now simpl.
     - destruct a. inv H0. now simpl.
+    - destruct a. inv H0. now simpl.
     - destruct a. simpl. monadInv H0. now simpl.
     - destruct a. monadInv H0. now simpl.
     - cases. inv H. simpl. inv Hwt. inv H10. inv H5. simpl in *. monadInv H1.
@@ -178,13 +179,13 @@ Module Type CORRECTNESS
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
       LCS.sem_exp_ck G H b e [s] ->
-      NLSC.sem_exp (LS.var_history H) b e' s.
+      NLSC.sem_exp H b e' s.
   Proof.
     induction e using L.exp_ind2; intros * Hwt Htr Hsem; inv Htr.
     - inv Hsem. now econstructor.
     - inv Hsem. now constructor.
-    - destruct a. inv Hsem. inv H1. econstructor.
-      now apply LS.sem_var_history.
+    - destruct a. inv Hsem. inv H1. econstructor. eauto.
+    - destruct a. inv Hsem. inv H1. econstructor. eauto.
     - destruct a. inv Hsem. monadInv H1. inv Hwt. econstructor; eauto.
       eapply ty_lexp in EQ; eauto. rewrite H9 in EQ. now inv EQ.
     - destruct a. inv Hsem. monadInv H1. inv Hwt. econstructor; eauto.
@@ -192,7 +193,7 @@ Module Type CORRECTNESS
       rewrite H11 in EQ. inv EQ. rewrite H12 in EQ1. now inv EQ1.
     - cases. monadInv H2. inv Hsem. inv H0. clear H4. inv Hwt.
       simpl_Forall; try rewrite app_nil_r in *; subst.
-      econstructor; eauto. now apply LS.sem_var_history.
+      econstructor; eauto.
   Qed.
 
   Lemma sem_lexp_single {PSyn prefs} :
@@ -213,7 +214,7 @@ Module Type CORRECTNESS
       mmap to_lexp es = OK les ->
       Forall (LT.wt_exp G tenv) es ->
       Forall2 (LCS.sem_exp_ck G H b) es ss ->
-      Forall2 (NLSC.sem_exp (LS.var_history H) b) les (concat ss).
+      Forall2 (NLSC.sem_exp H b) les (concat ss).
   Proof.
     intros * Hmmap Hwt Hsem. revert dependent les.
     induction Hsem; intros. inv Hmmap. simpl. auto.
@@ -231,7 +232,7 @@ Module Type CORRECTNESS
                           LT.wt_exp G env0 e ->
                           to_cexp e = OK e' ->
                           LCS.sem_exp_ck G H b e [s] ->
-                          NLSC.sem_cexp (LS.var_history H) b e' s)
+                          NLSC.sem_cexp H b e' s)
                      (snd es)) es ->
     Forall (fun es => Forall (LT.wt_exp G env0) (snd es)) es ->
     LS.Forall2Brs (LCS.sem_exp_ck G H b) es [vs] ->
@@ -242,7 +243,7 @@ Module Type CORRECTNESS
          | (i, [e]) => do ce <- to_cexp e; OK (i, ce)
          | (i, e :: _ :: _) => Error (msg "control expression not normalized")
          end) es = OK es' ->
-    Forall2 (NLSC.sem_cexp (LS.var_history H) b) (map snd es') (map snd vs).
+    Forall2 (NLSC.sem_cexp H b) (map snd es') (map snd vs).
   Proof.
     induction es; intros * Hf Hwt Hsem Hmmap;
       inv Hf; inv Hwt; inv Hsem; simpl in *; monadInv Hmmap.
@@ -493,7 +494,7 @@ Module Type CORRECTNESS
       LT.wt_exp G env e ->
       to_cexp e = OK e' ->
       LCS.sem_exp_ck G H b e [s] ->
-      NLSC.sem_cexp (LS.var_history H) b e' s.
+      NLSC.sem_cexp H b e' s.
   Proof.
     induction e using L.exp_ind2; intros * Hwt Htr Hsem;
       (now inv Htr) || (unfold to_cexp in Htr;
@@ -510,7 +511,6 @@ Module Type CORRECTNESS
       2:eapply BranchesSort.Permuted_sort.
       2:congruence.
       econstructor; eauto.
-      + eapply LS.sem_var_history; eauto.
       + eapply Forall2_map_1, Forall2_map_2; eauto.
       + replace (seq 0 (Datatypes.length (map snd s'))) with (map fst s').
         2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
@@ -587,12 +587,11 @@ Module Type CORRECTNESS
     - econstructor; eauto. unfold_St b. inv H4. simpl in *. eauto.
     - econstructor; eauto. unfold_St b. inv H6. simpl in *. eauto.
     - econstructor. eapply sem_var_step_nl; eauto.
+    - econstructor. eapply sem_var_step_nl; eauto.
     - inv H9; econstructor; eauto. all:eapply sem_var_step_nl; eauto.
     - inv H8; econstructor; eauto. all:eapply sem_var_step_nl; eauto.
     - inv H10; econstructor; eauto. all:eapply sem_var_step_nl; eauto.
   Qed.
-
-  Module NCor := CorrectnessFun Ids Op OpAux Cks Str Senv L LT LC Lord LS LCS LN.
 
   Lemma reset_or_not_reset : forall n r,
       (forall m, m <= n -> r # m = false) \/
@@ -612,7 +611,7 @@ Module Type CORRECTNESS
   Lemma fby1_reset1_fby:
     forall n r x0 v0 x y,
       (forall m, m <= n -> r # m = false) ->
-      LS.fby1 v0 (NCor.const_val (abstract_clock (mask' absent 0 0 r x)) x0) (mask' absent 0 0 r x) (mask' absent 0 0 r y) ->
+      LS.fby1 v0 (const_val (abstract_clock (mask' absent 0 0 r x)) x0) (mask' absent 0 0 r x) (mask' absent 0 0 r y) ->
       y # n = (NLSC.reset1 x0 (sfby v0 x) r false) # n.
   Proof.
     induction n;
@@ -622,19 +621,19 @@ Module Type CORRECTNESS
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
-    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       inv Hfby; auto.
-    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       inv Hfby; auto.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
-    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - rewrite 2 mask'_Cons, ac_Cons, const_val_Cons in Hfby.
       inv Hfby; auto.
       eapply IHn in H3; eauto.
       intros ? Hle'. specialize (Hle (S m)). rewrite Str_nth_S_tl in Hle. eapply Hle; lia.
-    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - rewrite 2 mask'_Cons, ac_Cons, const_val_Cons in Hfby.
       inv Hfby; auto.
       eapply IHn in H1; eauto.
       intros ? Hle'. specialize (Hle (S m)). rewrite Str_nth_S_tl in Hle. eapply Hle; lia.
@@ -661,29 +660,29 @@ Module Type CORRECTNESS
 
   Corollary fby_reset_fby:
     forall r x0 x y,
-      (forall k, LS.fby (NCor.const_val (abstract_clock (maskv k r x)) x0) (maskv k r x) (maskv k r y)) ->
+      (forall k, LS.fby (const_val (abstract_clock (maskv k r x)) x0) (maskv k r x) (maskv k r y)) ->
       y ≡ NLSC.reset x0 (sfby x0 x) r.
   Proof.
     intros * Hfby.
     eapply ntheq_eqst. intros n.
     assert (forall k, (count r) # n <= k ->
-                 LS.fby (NCor.const_val (abstract_clock (mask' absent k 0 r x)) x0) (mask' absent k 0 r x) (mask' absent k 0 r y)) as Hfby'.
+                 LS.fby (const_val (abstract_clock (mask' absent k 0 r x)) x0) (mask' absent k 0 r x) (mask' absent k 0 r y)) as Hfby'.
     { intros. apply Hfby. } clear Hfby. rename Hfby' into Hfby.
 
     revert x0 x y r Hfby.
     induction n;
       intros; unfold_Stv r; unfold_Stv x; destruct y;
         repeat rewrite Str_nth_0_hd; repeat rewrite Str_nth_S_tl; simpl in *.
-    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
     - rewrite NLSC.reset1_fby.
@@ -691,13 +690,13 @@ Module Type CORRECTNESS
       specialize (Hfby (S k)).
       rewrite Str_nth_S_tl in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
       specialize (Hfby (le_n_S _ _ Hc)).
-      destruct k; rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, 2 mask'_S in Hfby; inv Hfby; eauto.
+      destruct k; rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, 2 mask'_S in Hfby; inv Hfby; eauto.
     - (* 2 possibilities : *)
     (*      + there is no reset before n, in which case the sequence behaves as fby1 until n *)
     (*      + there is a reset before n, in which case we can use the induction hypothesis *)
     (*    *)
       destruct (reset_or_not_reset n r).
-      + specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl, 2 mask'_S in Hfby.
+      + specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons, Nat.eqb_refl, 2 mask'_S in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
         rewrite (proj1 (count_0 _ _)) in Hfby; auto. specialize (Hfby (Nat.le_refl _)).
         inv Hfby.
@@ -708,17 +707,17 @@ Module Type CORRECTNESS
         specialize (Hfby (S k)).
         rewrite Str_nth_S_tl, 2 mask'_Cons, 2 mask'_S in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
         specialize (Hfby (le_n_S _ _ Hle)).
-        destruct k; rewrite ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; eauto.
+        destruct k; rewrite ac_Cons, const_val_Cons in Hfby; inv Hfby; eauto.
         inv Hgt.
     - eapply IHn; auto. intros [|k] Hle.
-      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. specialize (Hfby Hle).
         inv Hfby; auto.
       + specialize (Hfby (S k)).
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. specialize (Hfby Hle).
-        destruct k; rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; auto.
+        destruct k; rewrite 2 mask'_Cons, ac_Cons, const_val_Cons in Hfby; inv Hfby; auto.
     - destruct (reset_or_not_reset n r).
-      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, const_val_Cons in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby.
         rewrite (proj1 (count_0 _ _)) in Hfby; auto. specialize (Hfby (Nat.le_refl _)).
         inv Hfby.
@@ -728,7 +727,7 @@ Module Type CORRECTNESS
         assert (k > 0) as Hgt by (eapply count_not_0 in H; lia).
         specialize (Hfby k).
         rewrite Str_nth_S_tl, 2 mask'_Cons in Hfby; simpl in Hfby. specialize (Hfby Hle).
-        destruct k as [|[|]]; rewrite ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; eauto.
+        destruct k as [|[|]]; rewrite ac_Cons, const_val_Cons in Hfby; inv Hfby; eauto.
         inv Hgt.
   Qed.
 
@@ -779,8 +778,8 @@ Module Type CORRECTNESS
     sem_clock H bs ck bs' ->
     sem_clock H bs (Con ck x (ty, k)) bs'' ->
     when k xs s ys ->
-    xs ≡ (NCor.const_val bs' c) ->
-    ys ≡ (NCor.const_val bs'' c).
+    xs ≡ (const_val bs' c) ->
+    ys ≡ (const_val bs'' c).
   Proof.
     intros * Hvar Hck1 Hck2 Hwhen Hcs.
     apply LCS.CIStr.CIStr.sem_var_impl in Hvar.
@@ -790,7 +789,7 @@ Module Type CORRECTNESS
     specialize (Hvar n). specialize (Hck1 n). specialize (Hck2 n). specialize (Hwhen n).
     apply eqst_ntheq with (n:=n) in Hcs.
     repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hck1, Hck2. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
-    rewrite NCor.const_val_nth in *.
+    rewrite const_val_nth in *.
     destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]];
       rewrite Hx, Hv, Hy in *; auto; inv Hck2; auto. 1,2,4,5:exfalso.
     1-5:eapply IStr.sem_var_instant_det in Hvar; [|eauto]; inv Hvar.
@@ -805,16 +804,16 @@ Module Type CORRECTNESS
       to_constant e = OK c ->
       LCS.sem_exp_ck G H b e [cs] ->
       sem_clock (LS.var_history H) b ck b' ->
-      cs ≡ (NCor.const_val b' (sem_const c)).
+      cs ≡ (const_val b' (sem_const c)).
   Proof.
     induction e using L.exp_ind2;
       intros * Hck Hwc Hconst Hsem Hsck; simpl in *; inv Hconst.
     - (* constant *) inv Hck.
       inv Hsem. inv Hsck. simpl.
-      rewrite <-NCor.const_val_const, <-H1; auto.
+      rewrite <-const_val_const, <-H1; auto.
     - (* enum *) inv Hck.
       inv Hsem. inv Hsck. simpl.
-      rewrite <-NCor.const_val_enum, <-H1; auto.
+      rewrite <-const_val_enum, <-H1; auto.
     - (* when *)
       do 2 (destruct es; try congruence).
       apply Forall_singl in H0.
@@ -842,7 +841,7 @@ Module Type CORRECTNESS
 
   Lemma sem_rhs_arhs : forall H b ck e s,
       NLSC.sem_rhs H b e s ->
-      sem_clock H b ck (abstract_clock s) ->
+      sem_clock (LS.var_history H) b ck (abstract_clock s) ->
       NLSC.sem_arhs H b ck e s.
   Proof.
     intros * Hsem Hsck.
@@ -863,7 +862,7 @@ Module Type CORRECTNESS
       to_cexp e = OK e' ->
       LCS.sem_exp_ck G H b e [s] ->
       sem_clock (LS.var_history H) b ck (abstract_clock s) ->
-      NLSC.sem_arhs (LS.var_history H) b ck (Ecexp e') s.
+      NLSC.sem_arhs H b ck (Ecexp e') s.
   Proof.
     intros * Hwt Hto Hsem Hsck.
     apply sem_rhs_arhs; auto.
@@ -874,7 +873,7 @@ Module Type CORRECTNESS
   Lemma sem_lexp_laexp :
     forall H b e s ck,
       NLSC.sem_exp H b e s ->
-      sem_clock H b ck (abstract_clock s) ->
+      sem_clock (LS.var_history H) b ck (abstract_clock s) ->
       NLSC.sem_aexp H b ck e s.
   Proof.
     cofix Cofix. intros * Hsem Hsc.
@@ -960,26 +959,25 @@ Module Type CORRECTNESS
     forall (G: @L.global PSyn prefs) P cenv x e ck e' r H b,
       LC.wc_global G ->
       LCS.sc_vars cenv H b ->
-      LN.Unnesting.normalized_cexp e ->
+      L.normalized_cexp e ->
       LT.wt_exp G cenv e ->
       LC.wc_exp G cenv e ->
       L.clockof e = [ck] ->
       to_cexp e = OK e' ->
       (forall k, LCS.sem_equation_ck G (mask_hist k r H) (maskb k r b) ([x], [e])) ->
-      NLSC.sem_equation P (LS.var_history H) b (NL.EqDef x ck (Ecexp e')).
+      NLSC.sem_equation P H b (NL.EqDef x ck (Ecexp e')).
   Proof.
     intros * HwcG Hinv Hnormed Hwt Hwc Hck Hto Hsem.
     assert (exists v, sem_var H (Var x) v) as (v&Hvar).
     { specialize (Hsem 0). inv Hsem. simpl_Foralls.
       simpl in *; rewrite app_nil_r in *; subst.
       eapply sem_var_mask_inv in H3 as (?&Hv&?); eauto. }
-    econstructor; eauto. 2:eapply LS.sem_var_history; eauto.
+    econstructor; eauto.
     eapply sem_arhs_mask with (r:=r).
     intros k. specialize (Hsem k). inv Hsem. simpl_Foralls.
     simpl in *; rewrite app_nil_r in *; subst.
     eapply sem_var_mask_inv in H3 as (?&Hvar'&Heq).
     eapply sem_var_det in Hvar; eauto. rewrite Heq, Hvar in H6.
-    rewrite <-LS.var_history_mask.
     eapply sem_exp_arhs; eauto.
     eapply sc_exp in H6; eauto.
     2:eapply LCS.sc_vars_mask; eauto.
@@ -1000,6 +998,8 @@ Module Type CORRECTNESS
       rewrite maskv_nth, 2 enum_nth', maskb_nth.
       destruct (_ =? _); simpl; auto.
     - (* var *)
+      eapply sem_var_mask_inv in H6 as (?&?&?); eauto.
+    - (* last *)
       eapply sem_var_mask_inv in H6 as (?&?&?); eauto.
     - (* when *)
       eapply IHe in H6 as (?&Heq). rewrite Heq in H9.
@@ -1027,7 +1027,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_normalized_lexp_mask_inv {PSyn prefs}: forall (G: @L.global PSyn prefs) r k H b e v,
-      LN.Unnesting.normalized_lexp e ->
+      L.normalized_lexp e ->
       LCS.sem_exp_ck G (mask_hist k r H) (maskb k r b) e v ->
       exists v', EqSts v [maskv k r v'].
   Proof.
@@ -1042,6 +1042,9 @@ Module Type CORRECTNESS
       rewrite maskv_nth, 2 enum_nth', maskb_nth.
       destruct (_ =? _); simpl; auto.
     - (* var *)
+      eapply sem_var_mask_inv in H6 as (?&?&?); eauto.
+      do 2 econstructor; eauto.
+    - (* last *)
       eapply sem_var_mask_inv in H6 as (?&?&?); eauto.
       do 2 econstructor; eauto.
     - (* unop *)
@@ -1084,7 +1087,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_normalized_lexp_det {PSyn prefs} : forall (G: @L.global PSyn prefs) H b e vs1 vs2,
-      LN.Unnesting.normalized_lexp e ->
+      L.normalized_lexp e ->
       LCS.sem_exp_ck G H b e vs1 ->
       LCS.sem_exp_ck G H b e vs2 ->
       EqSts vs1 vs2.
@@ -1096,6 +1099,9 @@ Module Type CORRECTNESS
     - (* enum *)
       rewrite H6, H7. reflexivity.
     - (* var *)
+      eapply sem_var_det in H6; eauto.
+      rewrite H6. reflexivity.
+    - (* last *)
       eapply sem_var_det in H6; eauto.
       rewrite H6. reflexivity.
     - (* unop *)
@@ -1282,12 +1288,12 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_toeq {PSyn prefs} :
-    forall cenv out (G: @L.global PSyn prefs) H P env envo xr rs r eq eq' b,
-      LN.NormFby.normalized_equation G out eq ->
+    forall cenv outs lasts (G: @L.global PSyn prefs) H P env envo xr rs r eq eq' b,
+      L.normalized_equation outs lasts eq ->
       LT.wt_equation G cenv eq ->
       LC.wc_equation G cenv eq ->
       LC.wc_global G ->
-      envs_eq env (idck cenv) ->
+      envs_eq env cenv ->
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
@@ -1297,18 +1303,18 @@ Module Type CORRECTNESS
       Forall2 (sem_var H) (map (fun '(x, _) => Var x) xr) rs ->
       bools_ofs rs r ->
       (forall k, LCS.sem_equation_ck G (mask_hist k r H) (maskb k r b) eq) ->
-      NLSC.sem_equation P (LS.var_history H) b eq'.
+      NLSC.sem_equation P H b eq'.
   Proof.
-    intros ?????????? [xs [|e []]] eq' b Hnormed Hwt Hwc Hwcg
+    intros ??????????? [xs [|e []]] eq' b Hnormed Hwt Hwc Hwcg
            Henvs Hsemnode Hvar Hxr Htoeq Hsxr Hbools Hsem; try now (inv Htoeq; cases).
     destruct Hwt as (Hwt1&Hwt2).
-    destruct e.
-    1-6,10-12:(inv Hwc; inv Hnormed; simpl in *; simpl_Foralls;
-              simpl in *; try rewrite app_nil_r in *; subst).
-    1-9:(monadInv Htoeq;
-         eapply sem_toeq_normalized in Hsem; eauto;
-         simpl; erewrite envs_eq_find in EQ; eauto; inv EQ; eauto;
-         inv H7; solve_In; congruence).
+    destruct e; destruct_conjs.
+    all:try (inv Hwc; inv Hnormed; simpl in *; simpl_Foralls;
+             simpl in *; try rewrite app_nil_r in *; subst;
+             monadInv Htoeq;
+             eapply sem_toeq_normalized in Hsem; eauto;
+             simpl; erewrite envs_eq_find in EQ; eauto; inv EQ; eauto;
+             inv H7; solve_In; congruence).
     - (* extcall *)
       simpl_Forall. inv Hwc; simpl_Forall.
       monadInv Htoeq.
@@ -1316,7 +1322,7 @@ Module Type CORRECTNESS
       { specialize (Hsem 0). inv Hsem. simpl_Forall.
         simpl in *; rewrite app_nil_r in *; subst.
         eapply sem_var_mask_inv in H5 as (?&?&?); eauto. }
-      econstructor; eauto. 2:eapply LS.sem_var_history; eauto.
+      econstructor; eauto.
       eapply sem_arhs_mask with (r:=r). intros k. specialize (Hsem k). inv Hsem. simpl_Foralls.
       simpl in *; rewrite app_nil_r in *; subst.
       eapply sem_var_mask_inv in H5 as (?&Hvar2&Heq).
@@ -1340,11 +1346,11 @@ Module Type CORRECTNESS
       assert (exists y, sem_var H (Var i) y) as (y&Hv).
       { assert (Hsem':=Hsem). specialize (Hsem' 0). inv Hsem'. inv H6; inv H4.
         eapply sem_var_mask_inv in H3 as (?&?&?); eauto. }
-      assert (exists v, forall k, NLSC.sem_aexp (LS.var_history (mask_hist k r H)) (maskb k r b) ck x2 (maskv k r v)
-                        /\ LS.fby (NCor.const_val (abstract_clock (maskv k r v)) (sem_const x0))
+      assert (exists v, forall k, NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck x2 (maskv k r v)
+                        /\ LS.fby (const_val (abstract_clock (maskv k r v)) (sem_const x0))
                                  (maskv k r v) (maskv k r y)) as (v&Hsel).
-      { eapply consolidate_mask with (P:=fun k v => NLSC.sem_aexp (LS.var_history (mask_hist k r H)) (maskb k r b) ck x2 v
-                                       /\ LS.fby (NCor.const_val (abstract_clock v) (sem_const x0))
+      { eapply consolidate_mask with (P:=fun k v => NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck x2 v
+                                       /\ LS.fby (const_val (abstract_clock v) (sem_const x0))
                                                 v (maskv k r y)).
         { intros ?????? (?&?); subst; split.
           - eapply NLSC.sem_aexp_morph; eauto; reflexivity.
@@ -1356,10 +1362,9 @@ Module Type CORRECTNESS
         inv H24; inv H21.
         eapply sem_exp_lexp in EQ2; eauto.
         assert (y2 = ck); subst.
-        { erewrite envs_eq_find in EQ0; eauto. inv EQ0; eauto.
-          inv H16; solve_In; congruence. }
+        { erewrite envs_eq_find in EQ0; eauto. inv EQ0; eauto. }
         assert (sem_clock (LS.var_history (mask_hist k r H)) (maskb k r b) ck (abstract_clock y1)) as Hck.
-        { inv Hnormed. 2:{ inv H3; inv H0. }
+        { inv Hnormed. 2:{ inv H1; inv H0. }
           eapply sc_exp in H6; eauto using LCS.sc_vars_mask.
           simpl in *. simpl_Foralls. congruence.
         }
@@ -1374,20 +1379,12 @@ Module Type CORRECTNESS
       }
       econstructor; eauto.
       + eapply sem_aexp_mask; eauto. intros. eapply Hsel; eauto.
-      + simpl_Forall. eapply LS.sem_var_history; eauto.
-      + eapply Forall_forall. intros (?&?) Hin. simpl_Forall. simpl_In.
-        eapply Forall2_ignore2 in Hsxr; simpl_Forall.
-        take (sem_var _ _ _) and (eapply LS.sem_var_history in it as Var').
-        eapply Hvar in it as Hck; [|eauto with senv].
-        econstructor; intros ? Hsemv'; eauto.
-        eapply sem_var_det in Var'; eauto.
-        do 2 esplit; eauto. rewrite <-Var'. apply ac_aligned.
-      + erewrite <-fby_reset_fby; eauto. eapply LS.sem_var_history; eauto.
+      + simpl_Forall. eauto.
+      + erewrite <-fby_reset_fby; eauto.
         intros k. eapply Hsel; eauto.
-    - (* EArrow *) inv Hnormed. inv H2. inv H0.
     - (* Eapp *)
-      assert (Forall LN.Unnesting.normalized_lexp l) as Hnormed'.
-      { clear - Hnormed. inv Hnormed; eauto. inv H1; inv H. }
+      assert (Forall L.normalized_lexp l) as Hnormed'.
+      { clear - Hnormed. inv Hnormed; eauto. inv H0; inv H. }
       simpl in Htoeq.
       destruct (vars_of l0) eqn:Vars. eapply vars_of_spec in Vars.
       1,2:cases; monadInv Htoeq.
@@ -1420,7 +1417,7 @@ Module Type CORRECTNESS
         inv H2. eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H11].
         eapply Forall2_ignore1, Forall_forall in Vars as (?&?&?&?&Hs&Hx); eauto.
         destruct Hx as (?&?); subst. inv Hs.
-        eapply sem_var_mask_inv in H7 as (?&?&?); eauto.
+        eapply sem_var_mask_inv in H10 as (?&?&?); eauto.
       }
       assert (exists sr', Forall2 bools_of vr' sr') as (sr'&Hbools2).
       { clear - Vars Hsem Hvr.
@@ -1437,7 +1434,9 @@ Module Type CORRECTNESS
         destruct Hx as (?&?); subst. inv Hs.
         eapply sem_var_mask with (r:=r) (k:=k) in Hvar.
         eapply sem_var_det in Hvar; eauto.
-        destruct H12 as (?&Hbools&_). eapply Forall2_ignore2, Forall_forall in Hbools as (?&?&Hbools); eauto.
+        destruct H12 as (?&Hbools&_).
+        assert (In s (concat rs)). { apply incl_concat in H0; apply H0; simpl; auto. }
+        eapply Forall2_ignore2, Forall_forall in Hbools as (?&?&Hbools); eauto.
         rewrite Hvar in Hbools.
         assert (Hbm:=Hbools). eapply bools_of_mask_inv in Hbm as (v&Heq).
         rewrite Heq in Hbools; eauto.
@@ -1475,8 +1474,8 @@ Module Type CORRECTNESS
         { apply LC.WellInstantiated_parent in WIi.
           rewrite L.clocksof_nclocksof, Forall_map.
           eapply Forall_impl; eauto. now simpl. }
-      + rewrite map_app. apply Forall2_app with (l1':=rs) (l2':=vr'); eauto.
-        1,2:simpl_Forall; apply LS.sem_var_history; auto.
+      + apply Forall2_app with (l1':=rs) (l2':=vr'); eauto.
+        1,2:simpl_Forall; auto.
       + do 2 econstructor. apply Forall2_app; eauto.
         now rewrite disj_str_app, disj_str_comm.
       + intros k.
@@ -1486,16 +1485,31 @@ Module Type CORRECTNESS
         assert (bs ≡ (maskb k1 r (disj_str sr'))) as Hbs.
         { eapply bools_ofs_det; eauto.
           econstructor; split. 2:rewrite disj_str_maskb; reflexivity.
-          assert (EqSts rs0 (map (maskv k1 r) vr')) as Heq.
+          assert (EqSts (concat rs0) (map (maskv k1 r) vr')) as Heq.
           2:{ clear -Hbools2 Heq. unfold EqSts in *. rewrite Forall2_map_2 in Heq. rewrite Forall2_map_2.
               eapply Forall2_trans_ex in Hbools2; [|eapply Heq].
               eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (?&?&Heq'&?).
               rewrite Heq'; auto. eapply bools_of_mask; eauto. }
+          apply LC.wc_equation_wl_equation in Hwc as Hwl.
+          inv Hwl; simpl_Forall; take (L.wl_exp _ _) and inv it.
+          assert (exists r, rs0 = map (fun x => [x]) r) as (r' & Hr); subst.
+          { clear - H8 H11 H12.
+            apply Forall2_ignore1 in H12.
+            induction rs0; intros. exists []; auto.
+            simpl_Forall.
+            edestruct IHrs0 as (?&?); subst; auto.
+            eapply sem_exp_ck_numstreams in H1 as Num; eauto with lclocking.
+            rewrite H11 in *.
+            singleton_length.
+            eexists (_::_); simpl; f_equal; eauto.
+          }
           clear - Hvr Hbools2 H12 Vars.
           eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H12].
           unfold EqSts in *.
-          rewrite Forall2_map_1 in Hvr. rewrite Forall2_map_2. unfold EqSts.
+          rewrite Forall2_map_2. unfold EqSts.
           eapply Forall2_trans_ex in Hvr; [|eapply Vars]. clear - Hvr.
+          rewrite concat_map_singl1 in *.
+          apply Forall2_map_1 in Hvr.
           eapply Forall2_impl_In; [|eauto]. intros ?? _ _ ((?&?)&_&(?&_&?&(?&?))&?); subst.
           inv H0. eapply sem_var_mask in H2.
           eapply sem_var_det in H2; eauto.
@@ -1525,16 +1539,16 @@ Module Type CORRECTNESS
           rewrite Forall2_map_2 in *. rewrite Forall2_map_1.
           eapply Forall2_impl_In; [|eauto]; intros ?? _ _ Heq'; simpl in Heq'.
           rewrite Hmask, Heq', Hbs, Hdisj. reflexivity.
-      + simpl_Forall. now apply LS.sem_var_history.
+      + simpl_Forall. auto.
   Qed.
 
   Lemma sem_blocktoeq {PSyn prefs} :
-    forall cenv out (G: @L.global PSyn prefs) H P env envo bck xr rs r eqs' b,
-      LN.NormFby.normalized_block G out bck ->
+    forall cenv outs lasts (G: @L.global PSyn prefs) H P env envo bck xr rs r eqs' b,
+      L.normalized_block outs lasts bck ->
       LT.wt_block G cenv bck ->
       LC.wc_block G cenv bck ->
       LC.wc_global G ->
-      envs_eq env (idck cenv) ->
+      envs_eq env cenv ->
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
@@ -1544,7 +1558,7 @@ Module Type CORRECTNESS
       Forall2 (sem_var H) (map (fun '(x, _) => Var x) xr) rs ->
       bools_ofs rs r ->
       (forall k, LCS.sem_block_ck G (mask_hist k r H) (maskb k r b) bck) ->
-      NLSC.sem_equation P (LS.var_history H) b eqs'.
+      NLSC.sem_equation P H b eqs'.
   Proof.
     induction bck using L.block_ind2;
       intros * Hnormed Hwt Hwc HwcG Henvs Hsemnode Hinv Hxr Heqs Hsxr Hbools Hsem;
@@ -1552,6 +1566,40 @@ Module Type CORRECTNESS
     - (* eq *)
       eapply sem_toeq in Heqs; eauto.
       intros k. specialize (Hsem k). inv Hsem; eauto.
+    - (* last *)
+      assert (exists vr, sem_var H (Var x) vr) as (vr&Hx).
+      { assert (Hsem0 := Hsem 0). inv Hsem0. inv H11.
+        eapply sem_var_mask_inv in H13 as (?&?&?); eauto. }
+      assert (exists lr, sem_var H (Last x) lr) as (lr&Hl).
+      { assert (Hsem0 := Hsem 0). inv Hsem0. inv H11.
+        eapply sem_var_mask_inv in H17 as (?&?&?); eauto. }
+
+      monadInv Heqs.
+      econstructor; eauto.
+      + erewrite envs_eq_find in EQ; eauto. inv EQ.
+        assert (sem_clock (LS.var_history H) b x0 (abstract_clock vr)) as Hck.
+        { eapply sem_clock_unmask. intros k.
+          specialize (Hsem k). inversion_clear Hsem as [|??????? He Hvx Hf Hvl| | | | |].
+          eapply sem_var_det in Hvx; [|eapply sem_var_mask; eauto]. rewrite <-Hvx in Hf.
+          eapply sem_var_det in Hvl; [|eapply sem_var_mask; eauto]. rewrite <-Hvl in Hf.
+          eapply sc_exp in He; eauto using sc_vars_mask. rewrite H11 in He.
+          simpl_Forall. erewrite <-ac_mask, LS.ac_fby2, <-LS.ac_fby1; eauto. }
+        split; intros * Hv.
+        * eapply sem_var_det in Hx; eauto. do 2 esplit; eauto.
+          rewrite Hx. apply ac_aligned.
+        * eapply sem_clock_det in Hck; eauto.
+      + simpl_Forall. auto.
+      + rewrite <-fby_reset_fby; eauto.
+        intros k.
+        specialize (Hsem k). inversion_clear Hsem as [|??????? He Hvx Hf Hvl| | | | |].
+        eapply sem_var_det in Hvx; [|eapply sem_var_mask; eauto]. rewrite Hvx.
+        eapply sem_var_det in Hvl; [|eapply sem_var_mask; eauto]. rewrite Hvl.
+        assert (sem_clock (LS.var_history (mask_hist k r H)) (maskb k r b) ck (abstract_clock vs0)) as Hsce.
+        { eapply sc_exp in He; eauto using sc_vars_mask. rewrite H11 in He.
+          simpl_Forall. auto. }
+        eapply to_constant_sem in He; eauto.
+        erewrite LS.ac_fby2, <-LS.ac_fby1, <-He; eauto.
+
     - (* reset *)
       simpl_Foralls.
       assert (exists vr, sem_var H (Var x) vr) as (vr&Hx).
@@ -1588,19 +1636,19 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_blockstoeqs {PSyn prefs} :
-    forall cenv out (G: @L.global PSyn prefs) H P env envo bcks eqs' b,
-      Forall (LN.NormFby.normalized_block G out) bcks ->
+    forall cenv outs lasts (G: @L.global PSyn prefs) H P env envo bcks eqs' b,
+      Forall (L.normalized_block outs lasts) bcks ->
       Forall (LT.wt_block G cenv) bcks ->
       Forall (LC.wc_block G cenv) bcks ->
       LC.wc_global G ->
-      envs_eq env (idck cenv) ->
+      envs_eq env cenv ->
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
       LCS.sc_vars cenv H b ->
       mmap (block_to_equation env envo []) bcks = OK eqs' ->
       Forall (LCS.sem_block_ck G H b) bcks ->
-      Forall (NLSC.sem_equation P (LS.var_history H) b) eqs'.
+      Forall (NLSC.sem_equation P H b) eqs'.
   Proof.
     induction bcks; intros * Hnormed Hwt Hwc HwcG Henvs Hsemnode Hinv Heqs Hsem;
       inv Hnormed; inv Hwt; inv Hwc; inv Hsem; simpl in *; monadInv Heqs; auto.
@@ -1620,15 +1668,15 @@ Module Type CORRECTNESS
     forall (n: @L.node PSyn prefs) H ins,
       Forall2 (fun x => sem_var H (Var x)) (L.idents (L.n_in n)) ins ->
       LCS.sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) H (clocks_of ins) ->
-      NLSC.sem_clocked_vars (LS.var_history H) (clocks_of ins) (Common.idsnd (Common.idfst (L.n_in n))).
+      NLSC.sem_clocked_vars H (clocks_of ins) (map (fun '(x1, (_, ck)) => (x1, (ck, false))) (idfst (L.n_in n))).
   Proof.
     intros * Hvs (Hsc&_).
     unfold NLSC.sem_clocked_vars. simpl_Forall. simpl_In.
     apply Forall2_ignore2 in Hvs. unfold L.idents in *. simpl_Forall.
+    split; auto.
     econstructor; solve_In; eauto with datatypes.
-    2:intros; setoid_rewrite LS.sem_var_history; eauto.
     intros * Hvar.
-    eapply LS.sem_var_history, Hsc in Hvar; [|econstructor; solve_In; eauto with datatypes; auto].
+    eapply Hsc in Hvar; [|econstructor; solve_In; eauto with datatypes; auto].
     2:apply in_app_iff, or_introl; solve_In.
     do 2 esplit; eauto. apply ac_aligned.
   Qed.
@@ -1637,7 +1685,6 @@ Module Type CORRECTNESS
 
   Theorem sem_l_nl :
     forall G P f ins outs,
-      LN.NormFby.normalized_global G ->
       Lord.Ordered_nodes G ->
       LT.wt_global G ->
       LC.wc_global G ->
@@ -1646,20 +1693,19 @@ Module Type CORRECTNESS
       NLSC.sem_node P f ins outs.
   Proof.
     intros [].
-    induction nodes as [|nd]. now inversion 6.
-    intros * Hnormed Hord Hwt Hwc Htr Hsem.
+    induction nodes as [|nd]. now inversion 5.
+    intros * Hord Hwt Hwc Htr Hsem.
     destruct Hwt as (Hbool&Hwt).
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [? ? ? ? ? Hfind Hins Houts ? Sblk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
-    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
+    pose proof (L.n_syn n) as Syn. inversion Syn as [??? Syn1 Syn2 _]; clear Syn; subst. rename H1 into Hblk.
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
     - rewrite L.find_node_now in Hfind; eauto. inv Hfind.
       assert (~Lord.Is_node_in_block (L.n_name n) (L.n_block n)) as Blk.
-      { inv Hord. destruct H10 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+      { inv Hord. destruct H8 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
       eapply LCS.sem_block_ck_cons1 in Blk; eauto. clear Sblk.
 
       assert (Htr':=Htr). monadInv Htr'; simpl in *; monadInv EQ.
@@ -1673,7 +1719,7 @@ Module Type CORRECTNESS
       take (LT.wt_node _ _) and inversion_clear it as [?? Hwt1 Hwt2 Hwt3 Hwt4]; subst Γ.
       take (LC.wc_node _ _) and inversion_clear it as [? Hwc1 Hwc2 Hwc3].
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv H8. inv Blk. inv H10.
+      rewrite <- Hblk in *. inv Hnd2. inv H6. inv Blk. inv H8.
       assert (H ⊑ H + Hi') as Href.
       { eapply LS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
         intros. rewrite IsVar_fst, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls; eauto. }
@@ -1683,20 +1729,18 @@ Module Type CORRECTNESS
           eapply LS.sem_clock_refines, Hsc1; eauto using LS.var_history_refines.
           inv Hck; simpl_In.
           apply sem_var_union in Hv as [Hv|Hv]; auto.
-          exfalso. apply LS.sem_var_In, H8, IsVar_senv_of_decls in Hv.
-          eapply H12; eauto. rewrite <-map_fst_senv_of_ins, <-map_fst_senv_of_decls, <-map_app. solve_In.
+          exfalso. apply LS.sem_var_In, H6, IsVar_senv_of_decls in Hv.
+          eapply H10; eauto. rewrite <-map_fst_senv_of_ins, <-map_fst_senv_of_decls, <-map_app. solve_In.
         - intros * _ Hl. exfalso.
           eapply NoLast_app; [|eauto]; split; eauto using senv_of_ins_NoLast.
-          clear - Hsyn1. intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
+          clear - Syn1. intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
       }
-      eapply NLSC.SNode with (H:=LS.var_history (H + Hi')); simpl.
+      eapply NLSC.SNode with (H:=(H + Hi')); simpl. auto.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
-      + erewrite <- to_node_in, map_fst_idfst; eauto.
-        eapply Forall2_impl_In; [|eauto]; intros.
-        eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
-      + erewrite <- to_node_out, 2 map_fst_idfst; eauto.
-        eapply Forall2_impl_In; [|eauto]; intros.
-        eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
+      + erewrite <- to_node_in; eauto. unfold idfst. simpl_Forall.
+        eapply LS.sem_var_refines; eauto.
+      + erewrite <- to_node_out; eauto. unfold idfst. simpl_Forall.
+        eapply LS.sem_var_refines; eauto.
       + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
         unfold L.idents. simpl_Forall; eauto using LS.sem_var_refines.
@@ -1706,17 +1750,14 @@ Module Type CORRECTNESS
             eapply ninin_l_nl; eauto. }
         tonodeInv EQ0; simpl in *.
         eapply sem_blockstoeqs with (cenv:=senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n) ++ _). 1-9:eauto.
-        5:{ clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto. }
-        * inv Hwt4. inv H10. subst Γ'. simpl_app. eauto.
-        * inv Hwc3. inv H10. subst Γ'. simpl_app. eauto.
-        * apply envs_eq_node in Hblk. clear - Hblk.
-          intros ??. specialize (Hblk x ck). rewrite <-Hblk.
-          rewrite (Permutation_app_comm (Common.idfst (Common.idfst locs))).
-          simpl_app. repeat rewrite in_app_iff.
-          clear - n. split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
+        6:{ clear Htr. rewrite <-Hblk in Hmmap. monadInv Hmmap; eauto. }
+        * inv Hwt4. inv H8. subst Γ'. simpl_app. eauto.
+        * inv Hwc3. inv H8. subst Γ'. simpl_app. eauto.
+        * eauto.
+        * symmetry in Hblk. apply envs_eq_node in Hblk. auto.
         * rewrite app_assoc. apply sc_vars_app; eauto.
           intros *. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls.
-          intros Hin1 Hin2. eapply H12; eauto. clear - Hin2. solve_In.
+          intros Hin1 Hin2. eapply H10; eauto. clear - Hin2. solve_In.
     - eapply LCS.sem_node_ck_cons1 in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.
@@ -1755,8 +1796,7 @@ Module CorrectnessFun
        (Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS   : LSEMANTICS       Ids Op OpAux Cks Senv L Lord       Str)
        (LCS  : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv L LC Lord Str LS)
-       (LN   : NORMALIZATION    Ids Op OpAux Cks Senv L)
        (NLSC : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord)
-<: CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS LN NLSC.
-  Include CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS LN NLSC.
+<: CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS NLSC.
+  Include CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS NLSC.
 End CorrectnessFun.

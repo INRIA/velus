@@ -36,7 +36,7 @@ Module Type COMPAUTO
     match ini with
     | [] => add_whens (Eenum oth ty) ty ck
     | (e, k)::ini =>
-        Ecase (subclock_exp ck (@Env.empty _) e)
+        Ecase (subclock_exp ck (@Env.empty _) (@Env.empty _) e)
               [(OpAux.true_tag, [add_whens (Eenum k ty) ty ck]);
               (OpAux.false_tag, [init_state_exp ty ck ini oth])]
               None ([ty], ck)
@@ -304,14 +304,14 @@ Module Type COMPAUTO
 
   (** NoDupLocals *)
 
-  Lemma auto_not_in_last_prefs :
-    ~PS.In auto last_prefs.
+  Lemma auto_not_in_elab_prefs :
+    ~PS.In auto elab_prefs.
   Proof.
-    unfold last_prefs, elab_prefs.
-    rewrite PSF.add_iff, PSF.singleton_iff.
+    unfold elab_prefs, elab_prefs.
+    rewrite PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
     repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
-    intros [contra|contra]; subst; rewrite contra in *; eauto with datatypes.
+    intros contra; subst; rewrite contra in *; eauto with datatypes.
   Qed.
 
   Lemma fresh_idents_NoDup : forall x1 x2 x3 x4 st st1 st2 st3 st4,
@@ -334,12 +334,12 @@ Module Type COMPAUTO
 
   Lemma auto_scope_NoDupScope {A} P_good P_nd f_auto : forall locs (blk: A) xs s' tys st st',
       auto_scope f_auto (Scope locs blk) st = ((s', tys), st') ->
-      Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
-      GoodLocalsScope P_good last_prefs (Scope locs blk) ->
+      Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
+      GoodLocalsScope P_good elab_prefs (Scope locs blk) ->
       NoDupScope P_nd xs (Scope locs blk) ->
       (forall xs blks' tys st st',
           f_auto blk st = ((blks', tys), st') ->
-          Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
+          Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
           P_good blk ->
           P_nd xs blk ->
           Forall (NoDupLocals xs) blks') ->
@@ -354,8 +354,8 @@ Module Type COMPAUTO
 
   Lemma auto_block_NoDupLocals : forall blk xs blk' tys st st',
       auto_block blk st = ((blk', tys), st') ->
-      Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
-      GoodLocals last_prefs blk ->
+      Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
+      GoodLocals elab_prefs blk ->
       NoDupLocals xs blk ->
       NoDupLocals xs blk'.
   Proof.
@@ -400,8 +400,8 @@ Module Type COMPAUTO
         * repeat apply Forall_cons; auto.
           all:right; eapply incl_map; eauto using fresh_ident_Inids.
           all:apply st_follows_incl; repeat (try reflexivity; etransitivity; eauto using fresh_ident_st_follows).
-        * eapply NoDupScope_incl' in H3; eauto using auto_not_in_last_prefs.
-          2:{ intros; simpl_Forall. eapply NoDupLocals_incl' in H14; eauto using auto_not_in_last_prefs. }
+        * eapply NoDupScope_incl' in H3; eauto using auto_not_in_elab_prefs.
+          2:{ intros; simpl_Forall. eapply NoDupLocals_incl' in H14; eauto using auto_not_in_elab_prefs. }
           intros * Hin. apply in_app_iff in Hin as [|]; auto.
           repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           repeat (take (In x15 _) and inv it; eauto).
@@ -415,7 +415,7 @@ Module Type COMPAUTO
         destruct Hat.
         * repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           destruct Heq as [|[|[|[|]]]]; subst; auto;
-            eapply contradict_AtomOrGensym; eauto using auto_not_in_last_prefs.
+            eapply contradict_AtomOrGensym; eauto using auto_not_in_elab_prefs.
         * destruct Heq as [|[|[|[|]]]]; auto; subst;
             repeat (take (fresh_ident _ = (x11, _)) and eapply fresh_ident_nIn in it; eauto 7 with fresh;
                     eapply it, incl_map; eauto;
@@ -440,8 +440,8 @@ Module Type COMPAUTO
         * repeat apply Forall_cons; auto.
           all:right; eapply incl_map; eauto using fresh_ident_Inids.
           all:apply st_follows_incl; repeat (try reflexivity; etransitivity; eauto using fresh_ident_st_follows).
-        * eapply NoDupScope_incl' in H3; eauto using auto_not_in_last_prefs.
-          2:{ intros; simpl_Forall. eapply NoDupLocals_incl' in H14; eauto using auto_not_in_last_prefs. }
+        * eapply NoDupScope_incl' in H3; eauto using auto_not_in_elab_prefs.
+          2:{ intros; simpl_Forall. eapply NoDupLocals_incl' in H14; eauto using auto_not_in_elab_prefs. }
           intros * Hin. apply in_app_iff in Hin as [|]; auto.
           repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           repeat (take (In _ _) and inv it; eauto).
@@ -455,7 +455,7 @@ Module Type COMPAUTO
         destruct Hat.
         * repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           destruct Heq as [|[|[|[|]]]]; subst; auto;
-            eapply contradict_AtomOrGensym; eauto using auto_not_in_last_prefs.
+            eapply contradict_AtomOrGensym; eauto using auto_not_in_elab_prefs.
         * destruct Heq as [|[|[|[|]]]]; auto; subst;
             repeat (take (fresh_ident _ = (x11, _)) and eapply fresh_ident_nIn in it; eauto 7 with fresh;
                     eapply it, incl_map; eauto;
@@ -474,7 +474,7 @@ Module Type COMPAUTO
   (** GoodLocals *)
 
   Lemma auto_block_GoodLocals : forall blk blk' tys st st',
-      GoodLocals last_prefs blk ->
+      GoodLocals elab_prefs blk ->
       auto_block blk st = ((blk', tys), st') ->
       GoodLocals auto_prefs blk'.
   Proof.
@@ -515,36 +515,37 @@ Module Type COMPAUTO
   (** No more automaton *)
 
   Lemma auto_block_noauto : forall blk blk' tys st st',
-      nolast_block blk ->
       auto_block blk st = ((blk', tys), st') ->
       noauto_block blk'.
   Proof.
-    induction blk using block_ind2; intros * Hnl Haut; try destruct type0;
-      inv Hnl; destruct_conjs; repeat inv_bind.
+    induction blk using block_ind2; intros * Haut; try destruct type0;
+      destruct_conjs; repeat inv_bind.
     - (* equation *)
+      constructor.
+    - (* last *)
       constructor.
     - (* reset *)
       constructor. auto_block_simpl_Forall.
     - (* switch *)
       constructor. auto_block_simpl_Forall.
-      inv H1. repeat inv_bind. constructor; auto. auto_block_simpl_Forall.
+      destruct b0. repeat inv_bind. constructor; auto. auto_block_simpl_Forall.
     - (* automaton (weak) *)
       repeat constructor. auto_block_simpl_Forall.
-      take (nolast_branch _ _) and inv it. take (nolast_scope _ _) and inv it. destruct blks as (?&[?(?&?)]). inv H1.
+      destruct b0 as (?&[?(?&?&?)]).
       repeat inv_bind. repeat constructor; auto.
       auto_block_simpl_Forall.
     - (* automaton (strong) *)
       repeat constructor.
       + simpl_Forall. destruct b as [?(?&[?(?&?)])]. repeat constructor.
       + auto_block_simpl_Forall.
-        take (nolast_branch _ _) and inv it. take (nolast_scope _ _) and inv it. destruct blks as (?&[?(?&?)]). inv H1.
+        destruct b0 as (?&[?(?&?&?)]).
         repeat inv_bind. repeat constructor; auto.
         auto_block_simpl_Forall.
     - (* local *)
-      inv H1. repeat constructor; auto. auto_block_simpl_Forall.
+      repeat constructor; auto. auto_block_simpl_Forall.
   Qed.
 
-  Program Definition auto_node (n: @node nolast last_prefs) : @node noauto auto_prefs * list type :=
+  Program Definition auto_node (n: @node complete elab_prefs) : @node noauto auto_prefs * list type :=
     let res := auto_block (n_block n) init_st in
     ({| n_name := n_name n;
         n_hasstate := n_hasstate n;
@@ -556,7 +557,7 @@ Module Type COMPAUTO
      |}, snd (fst res)).
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
-    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? _ _ (?&Vars&Perm)].
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Vars Perm].
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
     apply Permutation_map_inv in Perm as (?&?&Perm); subst.
@@ -587,12 +588,12 @@ Module Type COMPAUTO
   Qed.
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (?&Vars&Perm)].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [??? Vars Perm].
     constructor; eauto using auto_block_noauto.
     do 2 esplit; eauto using auto_block_VarsDefinedComp.
   Qed.
 
-  Definition auto_global (G : @global nolast last_prefs) : @global noauto auto_prefs :=
+  Definition auto_global (G : @global complete elab_prefs) : @global noauto auto_prefs :=
     let ndstys := map auto_node G.(nodes) in
     Global (G.(types)++flat_map snd ndstys) G.(externs) (map fst ndstys).
 

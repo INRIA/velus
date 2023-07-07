@@ -8,6 +8,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CEIsFree.
 From Velus Require Import NLustre.NLSyntax.
@@ -31,16 +32,52 @@ Module Type DCE
 
   (** *** Build a dependency graph *)
 
-  Definition free_graph (eqs : list equation) :=
+  Definition dep_graph := Env.t PS.t.
+
+  Definition depends_on (gr : dep_graph) (x y : ident) :=
+    exists s, Env.find x gr = Some s /\ PS.In y s.
+
+  Definition add_deps (x : ident) (deps : PS.t) (gr : dep_graph) : dep_graph :=
+    Env.add x (or_default_with deps (fun deps' => PS.union deps' deps) (Env.find x gr)) gr.
+    (* match Env.find x gr with *)
+    (* | Some deps' => Env.add x (PS.union deps' deps) gr *)
+    (* | None => Env.add x deps gr *)
+    (* end. *)
+
+  Lemma add_deps_spec : forall i deps gr x y,
+      depends_on (add_deps i deps gr) x y <-> (depends_on gr x y \/ x = i /\ PS.In y deps).
+  Proof.
+    intros. unfold add_deps, depends_on, or_default_with.
+    destruct (ident_eq_dec x i); subst.
+    - setoid_rewrite Env.gss.
+      split; [intros (?&Find&In)|intros [(?&Find&In)|(?&In)]]; subst.
+      + cases_eqn Eq; auto. inv Find.
+        apply PS.union_spec in In as [|]; eauto.
+      + rewrite Find; eauto using PSF.union_2.
+      + cases; eauto using PSF.union_3.
+    - setoid_rewrite Env.gso; auto.
+      split; [intros|intros [|(?&?)]]; auto. contradiction.
+  Qed.
+
+  Lemma add_deps_In : forall i deps gr x,
+      Env.In x (add_deps i deps gr) <-> (Env.In x gr \/ x = i).
+  Proof.
+    intros. unfold add_deps.
+    rewrite Env.Props.P.F.add_in_iff.
+    split; intros [|]; auto.
+  Qed.
+
+  Definition free_graph (eqs : list equation) : dep_graph :=
     fold_right (fun eq gr =>
-                  let defs := defined_eq PS.empty eq in
-                  let frees := free_in_equation eq PS.empty in
-                  let fdefs := PS.union defs frees in
-                  PS.fold (fun x => Env.add x fdefs) defs gr)
+                  let '(defs, defsl) := defined_eq (PS.empty, PS.empty) eq in
+                  let defs := PS.union defs defsl in
+                  let '(frees, freesl) := free_in_equation eq (PS.empty, PS.empty) in
+                  let fdefs := PS.union (PS.union frees freesl) defs in
+                  PS.fold (fun x => add_deps x fdefs) defs gr)
                (Env.empty _) eqs.
 
   Fact fold_In : forall defs (frees : PS.t) gr x,
-      Env.In x (PS.fold (fun x => Env.add x frees) defs gr) <->
+      Env.In x (PS.fold (fun x => add_deps x frees) defs gr) <->
       PS.In x defs \/ Env.In x gr.
   Proof.
     intros *.
@@ -48,101 +85,79 @@ Module Type DCE
     - intros * Hemp. split; auto.
       intros [Hin|]; subst; auto.
       apply Hemp in Hin as [].
-    - intros * Hin Hnin Hadd Hrec.
-      rewrite Env.Props.P.F.add_in_iff. split; intros [|]; subst.
-      + left. apply Hadd; auto.
-      + apply Hrec in H as [|]; auto.
-        left. apply Hadd; auto.
-      + apply Hadd in H as [|]; auto.
-        right. apply Hrec; auto.
-      + right. apply Hrec; auto.
+    - unfold PSP.Add.
+      intros * Hin Hnin Hadd Hrec.
+      rewrite add_deps_In, Hrec, Hadd.
+      split; intros [[|]|]; auto.
   Qed.
 
   Lemma free_graph_In : forall x eqs,
-      Env.In x (free_graph eqs) <-> Is_defined_in x eqs.
+      Env.In x (free_graph eqs) <-> Is_defined_in (Var x) eqs \/ Is_defined_in (Last x) eqs.
   Proof.
     unfold free_graph.
     split.
     - induction eqs; intros * Hin; simpl in *.
       + apply Env.Props.P.F.empty_in_iff in Hin; inv Hin.
-      + apply fold_In in Hin as [|].
-        * left. apply Is_defined_in_eqP, PSF.mem_iff; auto.
-        * right. apply IHeqs. auto.
-    - induction eqs; intros * Hin; simpl in *. inv Hin.
-      rewrite fold_In.
-      inv Hin; auto.
-      left. apply PSF.mem_iff, Is_defined_in_eqP; auto.
+      + cases_eqn Eq.
+        apply fold_In in Hin as [Hin|]; [apply PS.union_spec in Hin as [Hin|Hin]|].
+        * left; left. apply defined_eq_spec1. now rewrite Eq.
+        * right; left. apply defined_eq_spec2. now rewrite Eq.
+        * apply IHeqs in H as [|]; [left|right]; right; auto.
+    - induction eqs; intros * Hin; simpl in *.
+      + destruct Hin as [Hin|Hin]; inv Hin.
+      + cases_eqn Eq.
+        rewrite fold_In, PS.union_spec.
+        destruct Hin as [Hin|Hin]; inv Hin; auto; left.
+        * left. now rewrite defined_eq_spec1, Eq in H0.
+        * right. now rewrite defined_eq_spec2, Eq in H0.
   Qed.
 
-  Fact find_fold_spec : forall defs (frees : PS.t) gr x ps,
-      (forall x, PS.In x defs -> ~Env.In x gr) ->
-      Env.find x (PS.fold (fun x => Env.add x frees) defs gr) = Some ps <->
-      (PS.In x defs /\ ps = frees) \/ Env.find x gr = Some ps.
+  Fact find_fold_spec : forall defs (frees : PS.t) gr x y,
+      depends_on (PS.fold (fun x => add_deps x frees) defs gr) x y
+      <-> depends_on gr x y \/ (PS.In x defs /\ PS.In y frees).
   Proof.
-    intros * Hnd.
+    intros *.
     apply PSP.fold_rec.
     - intros * Hemp. split; auto.
-      intros [(?&?)|]; subst; auto.
+      intros [|(?&?)]; subst; auto.
       apply Hemp in H as [].
     - intros * Hin Hnin Hadd Hrec.
-      rewrite Env.gsspec. destruct (Env.Props.P.F.eq_dec x x0); subst; split.
-      + intros Heq. inv Heq. left. split; auto.
-        apply Hadd; auto.
-      + intros [(?&?)|Hfind]; subst; auto. exfalso.
-        eapply Hnd; eauto. econstructor; eauto.
-      + intros Hfind. apply Hrec in Hfind as [(?&?)|]; subst; auto.
-        left; split; auto.
-        apply Hadd; auto.
-      + intros [(Hin'&?)|Hfind]; subst; auto.
-        * apply Hrec. left; split; auto.
-          apply Hadd in Hin' as [|]; subst; auto. congruence.
-        * apply Hrec; auto.
+      unfold PSP.Add in *.
+      rewrite add_deps_spec, Hrec, Hadd.
+      split; [intros [[|(?&?)]|(?&?)]|intros [|([|]&?)]]; subst; auto.
   Qed.
 
   Lemma free_graph_spec : forall eqs,
-      NoDup (vars_defined eqs) ->
-      (forall x y, (exists ps, Env.find x (free_graph eqs) = Some ps /\ PS.In y ps) <->
-              Exists (fun eq => Is_defined_in_eq x eq /\ (Is_free_in_eq y eq \/ Is_defined_in_eq y eq)) eqs).
+      (forall x y, depends_on (free_graph eqs) x y <->
+              Exists (fun eq => (Is_defined_in_eq (Var x) eq \/ Is_defined_in_eq (Last x) eq)
+                             /\ (Is_free_in_eq (Var y) eq
+                                \/ Is_free_in_eq (Last y) eq
+                                \/ Is_defined_in_eq (Var y) eq
+                                \/ Is_defined_in_eq (Last y) eq)) eqs).
   Proof.
-    unfold free_graph.
-    intros * Hnd; split; revert eqs Hnd.
-    - induction eqs; intros * Hnd * (?&Hmaps&Hin); simpl in *; subst.
-      + apply Env.Props.P.F.empty_mapsto_iff in Hmaps. inv Hmaps.
-      + rewrite find_fold_spec in Hmaps.
-        2:{ clear - Hnd. intros ? Hin1 Hin2. rewrite free_graph_In in Hin2.
-            apply Is_defined_in_eqP, Is_defined_in_var_defined in Hin1.
-            apply Is_defined_in_vars_defined in Hin2.
-            eapply NoDup_app_In in Hnd; eauto. }
-        destruct Hmaps as [(Hdef&?)|]; subst.
-        * left. rewrite PSF.union_iff, free_in_equation_spec' in Hin.
-          apply Is_defined_in_eqP in Hdef. destruct Hin as [Hin|]; auto.
-          apply Is_defined_in_eqP in Hin; auto.
-        * right. apply IHeqs; eauto using NoDup_app_r.
-    - induction eqs; intros * Hnd * Hex; simpl in *. inv Hex.
-      assert (forall x, PS.In x (defined_eq PS.empty a) ->
-                   ~Env.In x
-                    (fold_right
-                       (fun eq gr =>
-                          PS.fold (fun x1 : positive => Env.add x1 (PS.union (defined_eq PS.empty eq) (free_in_equation eq PS.empty)))
-                                  (defined_eq PS.empty eq) gr) (Env.empty PS.t) eqs)) as Hnd'.
-      { clear - Hnd. intros ? Hin1 Hin2. rewrite free_graph_In in Hin2.
-        apply Is_defined_in_eqP, Is_defined_in_var_defined in Hin1.
-        apply Is_defined_in_vars_defined in Hin2.
-        eapply NoDup_app_In in Hnd; eauto. }
+    unfold free_graph; split.
+    - induction eqs; intros * * Dep; simpl in *; subst.
+      + destruct Dep as (?&Find&_). rewrite Env.gempty in Find. congruence.
+      + cases_eqn Eq.
+        apply find_fold_spec in Dep as [Dep|(In1&In2)]; auto.
+        left. rewrite PSF.union_iff in In1. rewrite 3 PSF.union_iff in In2.
+        rewrite 2 defined_eq_spec1, 2 defined_eq_spec2, <-free_in_equation_spec1', <-free_in_equation_spec2', Eq, Eq0.
+        split; auto. repeat take (_ \/ _) and destruct it; auto.
+    - induction eqs; intros * * Hex; simpl in *. inv Hex.
+      cases_eqn Eq.
       inv Hex.
-      + clear IHeqs. destruct H0 as (Hdef&Hfree).
-        exists (PS.union (defined_eq PS.empty a) (free_in_equation a PS.empty)). rewrite find_fold_spec; auto.
-        split; [left; split; auto; apply Is_defined_in_eqP; auto|].
-        rewrite PSF.union_iff, free_in_equation_spec'.
-        destruct Hfree; auto.
-        left. apply Is_defined_in_eqP; auto.
-      + apply IHeqs in H0 as (ps&?&?); eauto using NoDup_app_r.
-        exists ps. rewrite find_fold_spec; auto.
+      + clear IHeqs.
+        rewrite 2 defined_eq_spec1, 2 defined_eq_spec2, <-free_in_equation_spec1', <-free_in_equation_spec2', Eq, Eq0 in H0.
+        destruct H0 as (Def&Free).
+        rewrite find_fold_spec. right.
+        rewrite 4 PSF.union_iff. repeat take (_ \/ _) and destruct it; auto.
+      + apply IHeqs in H0; eauto.
+        rewrite find_fold_spec; auto.
   Qed.
 
-  (** *** Calculate the set of used variables *)
+  (** *** Calculate the set of unused variables *)
 
-  Section compute_used.
+  Section compute_unused.
 
     Variable (gr : Env.t PS.t) (* (n : nat) *).
 
@@ -245,16 +260,14 @@ Module Type DCE
         compute_unused whgs1 = wh2 ->
         PS.In x wh2 ->
         PS.In x (fst whgs1) /\
-        (forall y ps, PS.In y (fst whgs1) \/ PS.In y (snd whgs1) -> Env.find y gr = Some ps -> PS.In x ps -> PS.In y wh2). (* Hum *)
+        (forall y, PS.In y (fst whgs1) \/ PS.In y (snd whgs1) -> depends_on gr y x -> PS.In y wh2).
     Proof.
       intros * Hgr Hnd. revert wh2.
       functional induction (compute_unused whgs1); destruct whgs as (wh1&gs1); simpl in *.
       - intros * ? Hin; subst.
         split; auto.
-        intros ?? [|]; auto. exfalso.
+        intros ? [|]; auto. exfalso.
         apply PS.choose_spec2 in e. apply e in H; auto.
-        (* intros ?? Hfind Hin'. edestruct Hgr; [econstructor; eauto| |]; auto. *)
-        (* exfalso. apply CommonPS.PS.choose_spec2 in e. apply e in H; auto. *)
       - intros ? Hcomp Hin.
         assert (Env.In x0 gr) as (ps&Hfind).
         { apply Hgr. right; auto using PSF.choose_1. }
@@ -271,7 +284,7 @@ Module Type DCE
             - left. apply Hspec1; auto.
             - apply Hspec2 in Hin' as [(?&?)|(?&?)]; auto. }
         split. apply Hspec1; auto.
-        intros ?? Hin1 Hfind' Hin'.
+        intros ? Hin1 (?&Hfind'&Hin').
         destruct (ident_eq_dec x y); subst; auto.
         destruct (ident_eq_dec y x0); subst.
         { destruct Hin1 as [|Hin1]; try congruence.
@@ -285,36 +298,37 @@ Module Type DCE
             + left. apply Hspec1; repeat split; auto.
           - right. apply Hspec2; auto.
         }
+        eapply Hrec2; eauto. do 2 esplit; eauto.
     Qed.
 
-  End compute_used.
+  End compute_unused.
 
-  Definition dce_eqs (outs : PS.t) (vars : list (ident * (type * clock))) (eqs : list equation) :=
+  Definition dce_eqs (outs : PS.t) (vars : list (ident * (type * clock * bool))) (eqs : list equation) :=
     let gr := free_graph eqs in
     let unused := compute_unused gr (PSP.of_list (map fst vars), outs) in
     (List.filter (fun '(x, _) => negb (PS.mem x unused)) vars,
-     List.filter (fun eq => PS.for_all (fun x => negb (PS.mem x unused)) (defined_eq PS.empty eq)) eqs).
+     List.filter (fun eq => let '(defs, defsl) := defined_eq (PS.empty, PS.empty) eq in
+                         PS.for_all (fun x => negb (PS.mem x unused)) (PS.union defs defsl)) eqs).
 
-  Lemma dce_eqs_defined : forall outs vars eqs vars' eqs',
-      NoDup (vars_defined eqs) ->
+  Lemma dce_eqs_vars_defined : forall outs vars eqs vars' eqs',
       (forall x, InMembers x vars -> ~PS.In x outs) ->
-      (forall x, Is_defined_in x eqs <-> InMembers x vars \/ PS.In x outs) ->
+      (forall x, Is_defined_in (Var x) eqs <-> InMembers x vars \/ PS.In x outs) ->
       dce_eqs outs vars eqs = (vars', eqs') ->
-      (forall x, Is_defined_in x eqs' <-> InMembers x vars' \/ PS.In x outs).
+      (forall x, Is_defined_in (Var x) eqs' <-> InMembers x vars' \/ PS.In x outs).
   Proof.
     unfold dce_eqs.
-    intros * Hvd Hnd Hdef Hdce. inv Hdce.
+    intros * Hnd Hdef Hdce. inv Hdce.
     unfold Is_defined_in in *.
     intros x. rewrite filter_InMembers, Exists_exists. setoid_rewrite filter_In.
     setoid_rewrite Exists_exists in Hdef.
     split.
-    - intros (?&(Hineqs&Hf)&Hisdef).
+    - intros (?&(Hineqs&Hf)&Hisdef). cases_eqn Eq.
       edestruct Hdef as ([Hin|]&_); eauto.
       apply InMembers_In in Hin as (?&Hin).
       left. repeat esplit; eauto.
       apply PS.for_all_spec in Hf. 2:{ intros ?? Heq; inv Heq; auto. }
-      apply Is_defined_in_eqP, Hf in Hisdef.
-      auto.
+      rewrite defined_eq_spec1, Eq in Hisdef.
+      apply Hf, PS.union_spec; auto.
     - intros Hin.
       assert (~PS.In x (compute_unused (free_graph eqs) (PSP.of_list (map fst vars), outs))) as Hnin.
       { intro Hin2.
@@ -326,64 +340,131 @@ Module Type DCE
             contradiction.
           + eapply Hnd; eauto.
         - intros ? Hin1.
-          apply free_graph_In. apply Exists_exists, Hdef.
+          apply free_graph_In. left. apply Exists_exists, Hdef.
           destruct Hin1; auto. left. apply In_of_list_InMembers; auto.
         - intros ??. apply Hnd, In_of_list_InMembers; auto.
       }
-      edestruct Hdef as (_&(?&?&?)).
+      edestruct Hdef as (_&(?&?&Def)).
       + destruct Hin as [((?&?)&?&?)|]; eauto using In_InMembers.
-      + repeat esplit; eauto.
-        eapply PS.for_all_spec. intros ?? Heq; inv Heq; auto.
-        intros ? Hisdef. apply Is_defined_in_eqP in Hisdef.
+      + repeat esplit; eauto. cases_eqn Eq.
+        eapply PS.for_all_spec. 1:{ intros ?? Heq; inv Heq; auto. }
+        intros ? Hisdef. rewrite defined_eq_spec1, Eq in Def.
         apply Bool.negb_true_iff, PSP.FM.not_mem_iff.
         intros Hin'.
         assert (Hcomp:=Hin'). eapply compute_unused_stable in Hcomp. 4:reflexivity. 1-3:simpl in *.
         * destruct Hcomp as (Hin1&Hin2).
-          assert (exists ps, Env.find x (free_graph eqs) = Some ps /\ PS.In x1 ps) as (?&?&?).
+          assert (depends_on (free_graph eqs) x x1) as Dep.
           { eapply free_graph_spec; eauto.
-            eapply Exists_exists; eauto.
+            solve_Exists. rewrite 2 defined_eq_spec1, 2 defined_eq_spec2, Eq.
+            apply PS.union_spec in Hisdef as [|]; auto.
           }
           eapply Hnin in Hin2; eauto.
-          rewrite In_of_list_InMembers. eapply Hdef; eauto.
+          rewrite In_of_list_InMembers. eapply Hdef. do 2 esplit; eauto.
+          rewrite defined_eq_spec1, Eq; auto.
         * intros ? Hin1.
-          apply free_graph_In. apply Exists_exists, Hdef.
+          apply free_graph_In. left. apply Exists_exists, Hdef.
           destruct Hin1; auto. left. apply In_of_list_InMembers; auto.
         * intros ??. apply Hnd, In_of_list_InMembers; auto.
   Qed.
 
-  Lemma dce_eqs_stable : forall (ins vars outs : list (ident * (type * clock))) eqs vars' eqs',
-      NoDup (vars_defined eqs) ->
-      (forall x, InMembers x vars -> ~InMembers x outs) ->
-      (forall x, InMembers x (vars ++ outs) <-> Is_defined_in x eqs) ->
-      Forall (fun eq => exists x, Is_defined_in_eq x eq) eqs ->
-      (forall x, Exists (fun eq => Is_defined_in_eq x eq \/ Is_free_in_eq x eq) eqs -> InMembers x (ins ++ vars ++ outs)) ->
-      dce_eqs (PSP.of_list (map fst outs)) vars eqs = (vars', eqs') ->
-      (forall x, Exists (fun eq => Is_defined_in_eq x eq \/ Is_free_in_eq x eq) eqs' -> InMembers x (ins ++ vars' ++ outs)).
+  Lemma dce_eqs_lasts_defined : forall outs vars eqs vars' eqs',
+      (forall x, InMembers x vars -> ~PS.In x outs) ->
+      (forall x, Is_defined_in (Var x) eqs <-> InMembers x vars \/ PS.In x outs) ->
+      (forall x, Is_defined_in (Last x) eqs <-> exists ty ck, In (x, (ty, ck, true)) vars) ->
+      dce_eqs outs vars eqs = (vars', eqs') ->
+      (forall x, Is_defined_in (Last x) eqs' <-> exists ty ck, In (x, (ty, ck, true)) vars').
   Proof.
     unfold dce_eqs.
-    intros * Hnd1 Hnd2 Hdef Hvd Hex1 Hdce * Hex. inv Hdce.
-    apply Exists_exists in Hex as (?&Hin&Hex). apply filter_In in Hin as (Hin&Hf).
+    intros * Hnd Vars Lasts Hdce. inv Hdce.
+    unfold Is_defined_in in *.
+    intros x. rewrite Exists_exists. setoid_rewrite filter_In.
+    setoid_rewrite Exists_exists in Lasts.
+    split.
+    - intros (?&(Hineqs&Hf)&Hisdef). cases_eqn Eq.
+      edestruct Lasts as ((?&?&In)&_); eauto.
+      repeat esplit; eauto.
+      apply PS.for_all_spec in Hf. 2:{ intros ?? Heq; inv Heq; auto. }
+      rewrite defined_eq_spec2, Eq in Hisdef.
+      apply Hf, PS.union_spec; auto.
+    - intros Hin.
+      assert (~PS.In x (compute_unused (free_graph eqs) (PSP.of_list (map fst vars), outs))) as Hnin.
+      { intro Hin2.
+        assert (Hcomp:=Hin2). eapply compute_unused_stable in Hcomp. 4:reflexivity. 1-3:simpl in *.
+        - destruct Hcomp as (Hin1&_).
+          apply In_of_list_InMembers in Hin1.
+          destruct Hin as (?&?&_&Hneg).
+          apply Bool.negb_true_iff, PSP.FM.not_mem_iff in Hneg.
+          contradiction.
+        - intros ? Hin1.
+          apply free_graph_In. left. apply Vars.
+          destruct Hin1; auto. left. apply In_of_list_InMembers; auto.
+        - intros ??. apply Hnd, In_of_list_InMembers; auto.
+      }
+      edestruct Lasts as (_&(?&?&Def)).
+      + destruct Hin as (?&?&?&?); eauto using In_InMembers.
+      + repeat esplit; eauto. cases_eqn Eq.
+        eapply PS.for_all_spec. 1:{ intros ?? Heq; inv Heq; auto. }
+        intros ? Hisdef. rewrite defined_eq_spec2, Eq in Def.
+        apply Bool.negb_true_iff, PSP.FM.not_mem_iff.
+        intros Hin'.
+        assert (Hcomp:=Hin'). eapply compute_unused_stable in Hcomp. 4:reflexivity. 1-3:simpl in *.
+        * destruct Hcomp as (Hin1&Hin2).
+          assert (depends_on (free_graph eqs) x x1) as Dep.
+          { eapply free_graph_spec; eauto.
+            solve_Exists. rewrite 2 defined_eq_spec1, 2 defined_eq_spec2, Eq.
+            apply PS.union_spec in Hisdef as [|]; auto.
+          }
+          eapply Hnin in Hin2; eauto.
+          rewrite In_of_list_InMembers. left. edestruct Lasts as ((?&?&L)&_); eauto. 2:solve_In.
+          do 2 esplit; eauto. rewrite defined_eq_spec2, Eq; auto.
+        * intros ? Hin1.
+          apply free_graph_In. left. apply Vars.
+          destruct Hin1; auto. left. apply In_of_list_InMembers; auto.
+        * intros ??. apply Hnd, In_of_list_InMembers; auto.
+  Qed.
+
+  Lemma dce_eqs_stable : forall (ins vars outs : list (ident * (type * clock * bool))) eqs vars' eqs',
+      (forall x, InMembers x vars -> ~InMembers x outs) ->
+      (forall x, InMembers x (vars ++ outs) <-> Is_defined_in (Var x) eqs) ->
+      (forall x, Is_defined_in (Last x) eqs -> InMembers x vars) ->
+      Forall (fun eq => exists x, Is_defined_in_eq x eq) eqs ->
+      (forall x, Exists (fun eq => (Is_defined_in_eq x eq \/ Is_free_in_eq x eq)) eqs ->
+            InMembers (var_last_ident x) (ins ++ vars ++ outs)) ->
+      dce_eqs (PSP.of_list (map fst outs)) vars eqs = (vars', eqs') ->
+      (forall x, Exists (fun eq => (Is_defined_in_eq x eq \/ Is_free_in_eq x eq)) eqs' ->
+            InMembers (var_last_ident x) (ins ++ vars' ++ outs)).
+  Proof.
+    unfold dce_eqs.
+    intros * Hnd2 Vars Lasts Hvd Hex1 Hdce * Hex. inv Hdce.
+    repeat rewrite InMembers_app.
+    apply Exists_exists in Hex as (?&Hin&Hex). simpl_In.
+    cases_eqn Eq.
     apply PS.for_all_spec in Hf. 2:{ intros ?? Heq; inv Heq; auto. }
     specialize (Hex1 x). rewrite Exists_exists in Hex1.
-    repeat rewrite InMembers_app in *. destruct Hex1 as [|[Hin'|]]; eauto.
-    right; left.
-    eapply InMembers_In in Hin' as (?&Hin').
-    eapply filter_InMembers. repeat esplit; eauto.
+    rewrite 2 InMembers_app, 3 fst_InMembers in Hex1. destruct Hex1 as [|[Hin'|]]; eauto.
+    right; left. solve_In.
     destruct Hex as [Hex|Hex].
-    - apply Is_defined_in_eqP, Hf in Hex; auto.
+    - apply Hf, PS.union_spec.
+      destruct x; subst; rewrite ?defined_eq_spec1, ?defined_eq_spec2, Eq in Hex; auto.
     - apply Bool.negb_true_iff, PSF.not_mem_iff.
       intros Hcomp.
       eapply compute_unused_stable in Hcomp as (Hcomp1&Hcomp2). 4:reflexivity. 1-3:simpl in *.
       + eapply Forall_forall in Hvd as (y&Hvd); eauto.
-        assert (exists ps : PS.t, Env.find y (free_graph eqs) = Some ps /\ PS.In x ps) as (?&Hfind&Hps).
+        assert (depends_on (free_graph eqs) (var_last_ident y) (var_last_ident x)) as Dep.
         { eapply free_graph_spec; eauto.
-          eapply Exists_exists; eauto.
-        }
-        assert (Hvd':=Hvd). apply Is_defined_in_eqP, Hf, Bool.negb_true_iff, PSF.not_mem_iff in Hvd.
-        eapply Hvd, Hcomp2; eauto. rewrite 2 In_of_list_InMembers; eauto using In_InMembers.
-        rewrite <-InMembers_app. eapply Hdef, Exists_exists; eauto.
+          solve_Exists. destruct x, y; subst; auto. }
+        assert (PS.In (var_last_ident y) (PS.union t t0)) as In.
+        { rewrite PS.union_spec.
+          destruct y; subst; rewrite ?defined_eq_spec1, ?defined_eq_spec2, Eq in Hvd; auto. }
+        eapply Hcomp2 in Dep; eauto.
+        2:{ rewrite 2 In_of_list_InMembers; eauto using In_InMembers.
+            destruct y; subst.
+            - rewrite <-InMembers_app. apply Vars, Exists_exists; eauto.
+            - left. apply Lasts, Exists_exists; eauto. }
+        rewrite PSF.mem_iff in Dep.
+        specialize (Hf (var_last_ident y) In). simpl in Hf. rewrite Dep in Hf. simpl in *. congruence.
       + intros ? Hin1.
-        apply free_graph_In. apply Hdef.
+        apply free_graph_In. left. apply Vars.
         rewrite 2 In_of_list_InMembers in Hin1.
         rewrite InMembers_app; auto.
       + intros ?. rewrite 2 In_of_list_InMembers; auto.
@@ -393,7 +474,7 @@ Module Type DCE
 
   Import Permutation.
 
-  Definition dce_eqs' (outs vars : list (ident * (type * clock))) eqs :
+  Definition dce_eqs' (outs: list (ident * (type * clock))) (vars: list (ident * (type * clock * bool))) eqs :
     { res | dce_eqs (PSP.of_list (map fst outs)) vars eqs = res }.
   Proof.
     econstructor. reflexivity.
@@ -420,41 +501,84 @@ Module Type DCE
     eapply Hnd, vars_defined_filter_In; eauto.
   Qed.
 
-  Fact dce_NoDupMembers_filter {A} : forall (ins vars outs : list (ident * A)) p,
-      NoDupMembers (ins ++ vars ++ outs) ->
-      NoDupMembers (ins ++ filter p vars ++ outs).
+  Fact lasts_defined_filter_In : forall p eqs x,
+      In x (lasts_defined (filter p eqs)) ->
+      In x (lasts_defined eqs).
   Proof.
-    intros * Hnd.
-    repeat apply NoDupMembers_app; eauto using NoDupMembers_filter, NoDupMembers_app_l, NoDupMembers_app_r.
-    - intros ? Hin1 Hin2. eapply filter_InMembers' in Hin1.
-      eapply NoDupMembers_app_r, NoDupMembers_app_InMembers in Hnd; eauto.
-    - intros ? Hin1 Hin2.
-      eapply NoDupMembers_app_InMembers in Hnd; eauto.
-      rewrite InMembers_app in Hin2, Hnd. apply not_or' in Hnd as (?&?).
-      destruct Hin2 as [Hin2|]; eauto using filter_InMembers'.
+    induction eqs; intros * Hin; simpl in *; auto.
+    destruct (p a); simpl in *; eauto with datatypes.
+    apply in_app_iff in Hin as [|]; eauto with datatypes.
   Qed.
 
-  Fact dce_vars_defined : forall eqs (vars outs : list (ident * (type * clock))) vars' eqs',
-      NoDupMembers (vars ++ outs) ->
-      Permutation (vars_defined eqs) (map fst (vars ++ outs)) ->
+  Corollary lasts_defined_filter_NoDup : forall p eqs,
+      NoDup (lasts_defined eqs) ->
+      NoDup (lasts_defined (filter p eqs)).
+  Proof.
+    induction eqs; intros * Hnd; simpl in *; auto.
+    destruct (p a); simpl; eauto using NoDup_app_r.
+    eapply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
+    eapply Forall_forall; intros ? Hin1 Hin2.
+    eapply NoDup_app_In in Hnd; eauto.
+    eapply Hnd, lasts_defined_filter_In; eauto.
+  Qed.
+
+  Fact dce_NoDupMembers_filter {A B} : forall (ins outs : list (ident * A)) (vars : list (ident * B)) p,
+      NoDup (map fst ins ++ map fst vars ++ map fst outs) ->
+      NoDup (map fst ins ++ map fst (filter p vars) ++ map fst outs).
+  Proof.
+    intros * Hnd.
+    repeat apply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
+    - apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers; eauto using NoDup_app_l, NoDup_app_r.
+    - simpl_Forall. simpl_In.
+      eapply NoDup_app_r, NoDup_app_In in Hnd; eauto. solve_In.
+    - simpl_Forall. simpl_In.
+      eapply NoDup_app_In in Hnd; [|solve_In].
+      contradict Hnd. rewrite in_app_iff in *. destruct Hnd; [left|right]; solve_In.
+  Qed.
+
+  Fact dce_vars_defined {A} : forall eqs vars (outs: list (ident * A)) vars' eqs',
+      NoDup (map fst vars ++ map fst outs) ->
+      Permutation (vars_defined eqs) (map fst vars ++ map fst outs) ->
       dce_eqs (PSP.of_list (map fst outs)) vars eqs = (vars', eqs') ->
-      Permutation (vars_defined eqs') (map fst (vars' ++ outs)).
+      Permutation (vars_defined eqs') (map fst vars' ++ map fst outs).
   Proof.
     intros * Hnd Hperm Hdce. inv Hdce.
     apply NoDup_Permutation.
-    - apply vars_defined_filter_NoDup. now rewrite Hperm, <-fst_NoDupMembers.
-    - apply fst_NoDupMembers.
-      apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, NoDupMembers_filter.
-      intros ? Hinm1 Hinm2.
-      eapply filter_InMembers' in Hinm1. eapply NoDupMembers_app_InMembers in Hnd; eauto.
-    - intros ?. rewrite <-Is_defined_in_vars_defined, dce_eqs_defined.
-      5:unfold dce_eqs; reflexivity.
-      + rewrite map_app, in_app_iff, In_of_list_InMembers, 2 fst_InMembers. reflexivity.
-      + now rewrite Hperm, <-fst_NoDupMembers.
-      + intros ? Hin1. rewrite In_of_list_InMembers.
-        eapply NoDupMembers_app_InMembers in Hnd; eauto.
-      + intros ?. rewrite In_of_list_InMembers, <-InMembers_app, fst_InMembers, <-Hperm.
+    - apply vars_defined_filter_NoDup. now rewrite Hperm.
+    - apply NoDup_app'; eauto using NoDup_app_r.
+      + apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers; eauto using NoDup_app_l.
+      + simpl_Forall. simpl_In.
+        eapply NoDup_app_In; eauto. solve_In.
+    - intros ?. rewrite <-Is_defined_in_vars_defined, dce_eqs_vars_defined.
+      4:unfold dce_eqs; reflexivity.
+      + rewrite in_app_iff, In_of_list_InMembers, 2 fst_InMembers. reflexivity.
+      + intros ? Hin1. rewrite In_of_list_InMembers, fst_InMembers.
+        eapply NoDup_app_In; eauto. solve_In.
+      + intros ?. rewrite In_of_list_InMembers, 2 fst_InMembers, <-in_app_iff, <-Hperm.
         apply Is_defined_in_vars_defined.
+  Qed.
+
+  Fact dce_lasts_defined {A} : forall eqs vars (outs: list (ident * A)) vars' eqs',
+      NoDup (map fst vars ++ map fst outs) ->
+      Permutation (vars_defined eqs) (map fst vars ++ map fst outs) ->
+      Permutation (lasts_defined eqs) (map fst (filter (fun '(_, (_, _, islast)) => islast) vars)) ->
+      dce_eqs (PSP.of_list (map fst outs)) vars eqs = (vars', eqs') ->
+      Permutation (lasts_defined eqs') (map fst (filter (fun '(_, (_, _, islast)) => islast) vars')).
+  Proof.
+    intros * Hnd Vars Lasts Hdce. inv Hdce.
+    apply NoDup_Permutation.
+    - apply lasts_defined_filter_NoDup. rewrite Lasts.
+      apply fst_NoDupMembers, NoDupMembers_filter, fst_NoDupMembers; eauto using NoDup_app_l.
+    - apply fst_NoDupMembers, NoDupMembers_filter, NoDupMembers_filter, fst_NoDupMembers; eauto using NoDup_app_l.
+    - intros ?. rewrite <-Is_defined_in_lasts_defined, dce_eqs_lasts_defined.
+      5:unfold dce_eqs; reflexivity.
+      + split; [intros (?&?&?)|intros; simpl_In; do 2 esplit]; solve_In; eauto.
+      + intros ? Hin1. rewrite In_of_list_InMembers, fst_InMembers.
+        eapply NoDup_app_In; eauto. solve_In.
+      + intros ?. rewrite In_of_list_InMembers, 2 fst_InMembers, <-in_app_iff, <-Vars.
+        apply Is_defined_in_vars_defined.
+      + intros ?. rewrite Is_defined_in_lasts_defined, Lasts.
+        split; [intros; simpl_In; do 2 esplit|intros (?&?&?)]; eauto; solve_In.
   Qed.
 
   Program Definition dce_node (n : node) : node :=
@@ -470,16 +594,28 @@ Module Type DCE
   Next Obligation.
     specialize (n_defd n) as Hdef.
     specialize (n_nodup n) as Hndup.
-    eapply dce_vars_defined; eauto using NoDupMembers_app_r.
+    eapply dce_vars_defined; eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    specialize (n_defd n) as Hdef.
+    specialize (n_lastd1 n) as Hlasts.
+    specialize (n_nodup n) as Hndup.
+    eapply dce_lasts_defined; eauto using NoDup_app_r.
+  Qed.
+  Next Obligation.
+    simpl_In.
+    apply n_lastd2 in Hin.
+    rewrite <-Is_defined_in_vars_defined in *. unfold Is_defined_in in *.
+    solve_Exists. solve_In.
+    destruct x0; simpl in *; try congruence. inv Hin.
+    apply PS.for_all_spec; [intros ?? Eq; now inv Eq|].
+    apply PS_For_all_union; [apply PS_For_all_add|]; auto using PS_For_all_empty.
   Qed.
   Next Obligation.
     intro contra.
     eapply n_vout; eauto.
     rewrite <-Is_defined_in_vars_defined in *. unfold Is_defined_in in *.
-    apply Exists_exists in contra as (?&Hin&Hdef).
-    apply Exists_exists. repeat esplit; eauto.
-    apply filter_In in Hin as (Hin&Hf1). apply filter_In in Hin as (Hin&_).
-    apply filter_In; eauto.
+    solve_Exists. solve_In.
   Qed.
   Next Obligation.
     specialize (n_nodup n) as Hnd.
@@ -487,11 +623,10 @@ Module Type DCE
   Qed.
   Next Obligation.
     specialize (n_good n) as Hgood.
-    repeat rewrite map_app, Forall_app in *.
+    repeat rewrite Forall_app in *.
     destruct Hgood as ((Hin&Hvar&Hout)&Hname).
     repeat (split; auto).
-    apply Forall_map. rewrite Forall_map in Hvar.
-    eapply Forall_incl; [|eapply incl_filter', incl_refl]. apply Hvar.
+    simpl_Forall. simpl_In. simpl_Forall. auto.
   Qed.
 
   Local Program Instance dce_node_transform_unit: TransformUnit node node :=

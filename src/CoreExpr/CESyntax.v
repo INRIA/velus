@@ -16,6 +16,7 @@ Module Type CESYNTAX
   | Econst : cconst -> exp
   | Eenum  : enumtag -> type -> exp
   | Evar   : ident -> type -> exp
+  | Elast  : ident -> type -> exp
   | Ewhen  : exp -> (ident * type) -> enumtag -> exp
   | Eunop  : unop -> exp -> type -> exp
   | Ebinop : binop -> exp -> exp -> type -> exp.
@@ -97,6 +98,7 @@ Module Type CESYNTAX
     | Econst c => Tprimitive (ctype_cconst c)
     | Eenum _ ty
     | Evar _ ty
+    | Elast _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e

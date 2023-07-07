@@ -45,14 +45,14 @@ Module Type NLCOINDTOINDEXED
 
   Corollary sem_vars_impl:
     forall H xs xss,
-      Forall2 (sem_var H) xs xss ->
+      Forall2 (fun x => sem_var H (Var x)) xs xss ->
       CESem.sem_vars (tr_history H) xs (tr_Streams xss).
   Proof.
     unfold CESem.sem_vars, IStr.lift'.
-    induction 1 as [|? ? ? ? Find];
-      simpl; intro; constructor; auto.
-    - apply sem_var_impl; auto.
-    - apply IHForall2.
+    intros * F ?. unfold CESem.sem_vars_instant, tr_Streams.
+    simpl_Forall.
+    apply sem_var_impl.
+    take (sem_var _ _ _) and inv it. econstructor; eauto.
   Qed.
   Global Hint Resolve sem_vars_impl : indexedstreams coindstreams.
 
@@ -73,6 +73,7 @@ Module Type NLCOINDTOINDEXED
       induction 1 as [? ? ? ? Hconst
                      |? ? ? ? ? Henum
                      |? ? ? ? ? Hvar
+                     |? ? ? ? ? Hlast
                      |? ? ? ? ? ? ? ? ? ? ? Hvar Hwhen
                      |? ? ? ? ? ? ? ? ? Hlift1
                      |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
@@ -81,6 +82,7 @@ Module Type NLCOINDTOINDEXED
       - rewrite enum_spec in Henum; rewrite Henum.
         destruct (tr_Stream b n)...
       - apply sem_var_impl in Hvar...
+      - apply sem_var_impl in Hlast...
       - specialize (IHsem_exp n).
         apply sem_var_impl in Hvar;
           unfold tr_Stream, IStr.sem_var, IStr.lift in Hvar.
@@ -118,18 +120,16 @@ Module Type NLCOINDTOINDEXED
     Lemma sem_aexp_index:
       forall n H b ck le es,
         CoInd.sem_aexp H b ck le es ->
-        (sem_clock_instant (tr_Stream b n)
-                                   (tr_history H n) ck false
+        (sem_clock_instant (tr_Stream b n) (CESem.var_env (tr_history H n)) ck false
          /\ CESem.sem_exp_instant
              (tr_Stream b n) (tr_history H n) le absent
          /\ tr_Stream es n = absent)
         \/
-        (exists e,
-            sem_clock_instant (tr_Stream b n)
-                                      (tr_history H n) ck true
-            /\ CESem.sem_exp_instant
-                (tr_Stream b n) (tr_history H n) le (present e)
-            /\ tr_Stream es n = present e).
+          (exists e,
+              sem_clock_instant (tr_Stream b n) (CESem.var_env (tr_history H n)) ck true
+              /\ CESem.sem_exp_instant
+                  (tr_Stream b n) (tr_history H n) le (present e)
+              /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
@@ -365,15 +365,13 @@ Module Type NLCOINDTOINDEXED
     Lemma sem_arhs_index:
       forall n H b ck le es,
         CoInd.sem_arhs H b ck le es ->
-        (sem_clock_instant (tr_Stream b n)
-                                   (tr_history H n) ck false
+        (sem_clock_instant (tr_Stream b n) (CESem.var_env (tr_history H n)) ck false
          /\ CESem.sem_rhs_instant
              (tr_Stream b n) (tr_history H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
-            sem_clock_instant (tr_Stream b n)
-                                      (tr_history H n) ck true
+            sem_clock_instant (tr_Stream b n) (CESem.var_env (tr_history H n)) ck true
             /\ CESem.sem_rhs_instant
                 (tr_Stream b n) (tr_history H n) le (present e)
             /\ tr_Stream es n = present e).
@@ -437,6 +435,7 @@ Module Type NLCOINDTOINDEXED
         rewrite existsb_map. eapply existsb_ext.
         intros ?. apply tr_Stream_nth.
     Qed.
+    Hint Resolve bools_ofs_impl : nlsem.
 
     (** ** Properties about [count] and [mask] *)
 
@@ -580,20 +579,20 @@ Module Type NLCOINDTOINDEXED
         assert (tr_Stream bs n = false) as <-; auto.
         rewrite <-Bool.not_true_iff_false, Spec; auto.
     Qed.
+    Hint Resolve sem_clocked_var_impl : nlsem.
 
     Lemma sem_clocked_vars_impl:
       forall H b xcs xss,
-        Forall2 (sem_var H) (List.map fst xcs) xss ->
+        Forall (fun '(_, (_, islast)) => islast = false) xcs ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xcs xss ->
         CoInd.sem_clocked_vars H b xcs ->
         CESem.sem_clocked_vars (tr_Stream b) (tr_history H) xcs.
     Proof.
-      intros * Vars Sem n.
-      apply Forall_forall; intros (x, ck) Hin; simpl.
-      pose proof Hin as Hin'.
-      apply in_map with (f := fst) in Hin.
-      eapply Forall2_in_left in Vars as (?&?&?); eauto.
+      intros * NoLast Vars Sem n.
+      unfold CESem.sem_clocked_vars, CESem.sem_clocked_vars_instant, CoInd.sem_clocked_vars in *.
+      apply Forall2_ignore2 in Vars. simpl_Forall. subst.
+      split; auto.
       eapply sem_clocked_var_impl; eauto.
-      eapply Forall_forall in Sem; eauto; auto.
     Qed.
     Hint Resolve sem_clocked_vars_impl : nlsem.
 
@@ -604,37 +603,38 @@ Module Type NLCOINDTOINDEXED
         CoInd.sem_node G f xss yss ->
         Indexed.sem_node G f (tr_Streams xss) (tr_Streams yss).
     Proof.
-      induction 1 as [|????????????? Vars Bools IH| |???????? Same Heqs IH]
+      induction 1 as [|????????????? Vars Bools IH| | |?????????? Same Heqs IH]
                        using CoInd.sem_node_mult with
           (P_equation := fun H b e =>
                            CoInd.sem_equation G H b e ->
                            Indexed.sem_equation G (tr_Stream b) (tr_history H) e);
-        eauto with nlsem indexedstreams.
+        subst; eauto with nlsem indexedstreams.
 
-      - econstructor; eauto with indexedstreams nlsem.
-        3:apply bools_ofs_impl; eauto.
+      - (* App *)
+        econstructor; eauto with indexedstreams nlsem.
         + intro; rewrite tr_clocks_of; auto.
           apply sem_clock_impl; auto.
-        + rewrite Forall2_map_2.
-          eapply Forall2_impl_In; [|eauto].
-          intros. eapply sem_var_impl; eauto.
+        + simpl_Forall. auto using sem_var_impl.
         + intro k; destruct (IH k).
           now rewrite <- 2 mask_impl.
 
-      - econstructor; auto; subst; eauto with nlsem.
-        3:apply bools_ofs_impl; eauto.
+      - (* Fby *)
+        econstructor; auto; subst; eauto with nlsem.
         + rewrite <-reset_fby_impl; auto with indexedstreams.
-        + rewrite Forall2_map_2.
-          eapply Forall2_impl_In; [|eauto].
-          intros. eapply sem_var_impl; eauto.
+        + simpl_Forall. auto using sem_var_impl.
 
-      - econstructor; eauto with indexedstreams.
+      - (* Last *)
+        econstructor; eauto with nlsem.
+        + simpl_Forall. auto using sem_var_impl.
+        + rewrite <-reset_fby_impl; auto using sem_var_impl.
+
+      - econstructor; eauto.
+        1,2:eapply sem_vars_impl; simpl_Forall; eauto.
         + intro; rewrite tr_clocks_of; auto.
-          eapply sem_clocked_vars_impl; auto.
-          rewrite map_fst_idsnd; eauto.
-        + apply Forall_forall; intros * Hin.
-          rewrite tr_clocks_of.
-          eapply Forall_forall in IH; eauto; eapply Forall_forall in Heqs; eauto.
+          eapply sem_clocked_vars_impl with (xss:=xss) in Same; auto.
+          1,2:simpl_Forall; eauto.
+        + simpl_Forall.
+          rewrite tr_clocks_of. eauto.
     Qed.
 
   End Global.

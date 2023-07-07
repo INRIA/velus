@@ -39,7 +39,7 @@ Module Type COINDTOINDEXED
     (** Translate an history from coinductive to indexed world.
         Every element of the history is translated.
      *)
-    Definition tr_history (H: CStr.history) : history :=
+    Definition tr_history {K} (H: @CStr.history K) : history :=
       fun n => FEnv.map (fun xs => tr_Stream xs n) H.
     Global Hint Unfold tr_history : fenv.
 
@@ -115,15 +115,15 @@ Module Type COINDTOINDEXED
     Qed.
 
     (** The counterpart of [tr_Stream_tl] for histories. *)
-    Lemma tr_history_tl:
-      forall n H,
+    Lemma tr_history_tl {K}:
+      forall n (H: @CStr.history K),
         FEnv.Equiv eq (tr_history H (S n)) (tr_history (history_tl H) n).
     Proof.
       intros * x. simpl_fenv.
       destruct (H x); simpl; reflexivity.
     Qed.
 
-    Fact tr_history_find_orel : forall H H' x x',
+    Fact tr_history_find_orel {K} : forall (H H': @CStr.history K) x x',
         orel (@EqSt _) (H x) (H' x') ->
         (forall n, orel (@eq _) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
@@ -133,7 +133,7 @@ Module Type COINDTOINDEXED
       rewrite H2; auto with datatypes.
     Qed.
 
-    Fact tr_history_find_orel_mask : forall H H' rs k x x',
+    Fact tr_history_find_orel_mask {K} : forall (H H': @CStr.history K) rs k x x',
         orel (fun v1 v2 => EqSt (CStr.maskv k rs v1) v2) (H x) (H' x') ->
         (forall n, orel (fun v1 v2 => (if (CStr.count rs) # n =? k then v1 else absent) = v2) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
@@ -144,7 +144,7 @@ Module Type COINDTOINDEXED
       rewrite <- H2, maskv_nth. reflexivity.
     Qed.
 
-    Fact tr_history_find_orel_unmask : forall H H' rs k x x',
+    Fact tr_history_find_orel_unmask {K} : forall (H H': @CStr.history K) rs k x x',
         orel (fun v1 v2 => EqSt v1 (CStr.maskv k rs v2)) (H x) (H' x') ->
         (forall n, orel (fun v1 v2 => (v1 = if (CStr.count rs) # n =? k then v2 else absent)) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
@@ -166,8 +166,8 @@ Module Type COINDTOINDEXED
 
     (** ** Variables *)
 
-    Lemma sem_var_impl:
-      forall H x xs,
+    Lemma sem_var_impl {K}:
+      forall (H: @CStr.history K) x xs,
       CStr.sem_var H x xs ->
       sem_var (tr_history H) x (tr_Stream xs).
     Proof.

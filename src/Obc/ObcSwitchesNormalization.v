@@ -433,87 +433,6 @@ Module Type OBCSWITCHESNORMALIZATION
 
   (** ** Switches normalization preserves [Can_write_in]. *)
 
-  Lemma Can_write_in_normalize_stmt:
-    forall s x ,
-      Can_write_in x s <-> Can_write_in x (normalize_stmt s).
-  Proof.
-    induction s using stmt_ind2; simpl; try reflexivity.
-    - split.
-      + inversion_clear 1.
-        take (Exists _ _) and apply Exists_exists in it as (os & Hin & CW).
-        take (Forall _ _) and eapply Forall_forall in it; eauto.
-        apply it in CW.
-        unfold normalize_switch.
-        destruct (has_default_branch (map (option_map normalize_stmt) ss)) eqn: E.
-        * constructor; apply Exists_exists.
-          eexists; split.
-          -- apply in_map; eauto.
-          -- destruct os; simpl in *; auto.
-        * eapply has_default_branch_false in E.
-          rewrite Forall_map in E; eapply Forall_forall in E; eauto.
-          pose proof (normalize_branches_spec (map (option_map normalize_stmt) ss)) as Eq.
-          destruct (normalize_branches (map (option_map normalize_stmt) ss)).
-          destruct Eq; subst.
-          constructor; apply Exists_exists.
-          destruct ss; try contradiction.
-          rewrite app_removelast_last with (l := o :: ss) (d := None) in Hin; try discriminate.
-          Opaque last.
-          simpl in *; subst.
-          rewrite <-map_cons, map_removelast.
-          apply in_app in Hin as [Hin|Hin].
-          -- eexists; split.
-             ++ apply in_app; left.
-                eapply in_map; eauto.
-             ++ destruct os; simpl in *; auto; contradiction.
-          -- exists None; split; simpl.
-             ++ apply in_app; auto using in_eq.
-             ++ change None with (option_map normalize_stmt None).
-                rewrite <-map_cons, CommonList.map_last.
-                inv Hin; try contradiction.
-                destruct (last (o :: ss) None); try contradiction; simpl in *; auto.
-      + unfold normalize_switch.
-        intro CW; constructor; apply Exists_exists.
-        destruct (has_default_branch (map (option_map normalize_stmt) ss)) eqn: E.
-        * inv CW.
-          take (Exists _ _) and apply Exists_exists in it as (os & Hin & CW).
-          apply in_map_iff in Hin as (os' &?&?); subst.
-          take (Forall _ _) and eapply Forall_forall in it; eauto.
-          eexists; split; eauto.
-          destruct os'; simpl in *; now apply it.
-        * eapply has_default_branch_false in E.
-          pose proof (normalize_branches_spec (map (option_map normalize_stmt) ss)) as Eq.
-          destruct (normalize_branches (map (option_map normalize_stmt) ss)).
-          destruct Eq; subst.
-          inv CW.
-          take (Exists _ _) and apply Exists_exists in it as (os & Hin & CW).
-          destruct ss.
-          -- simpl in *; subst; contradiction.
-          -- rewrite app_removelast_last with (l := o :: ss) (d := None); try discriminate.
-             rewrite app_removelast_last with (l := o :: ss) (d := None) in E; try discriminate.
-             take (Forall _ (_ :: _)) and rewrite app_removelast_last with (l := o :: ss) (d := None) in it;
-               try discriminate; apply Forall_app in it as [IH1 IH2].
-             rewrite Forall_map in E; apply Forall_app in E as [E1 E2].
-             simpl in *; subst.
-             apply in_app in Hin as [Hin|Hin]; [|inv Hin; try contradiction].
-             ++ rewrite <-map_cons, map_removelast in Hin.
-                apply in_map_iff in Hin as (os' &?& Hin); subst.
-                eapply Forall_forall in IH1; eauto.
-                eapply Forall_forall in E1; eauto.
-                eexists; split.
-                ** apply in_app; eauto.
-                ** rewrite IH1.
-                   destruct os'; simpl in *; auto; contradiction.
-             ++ simpl in *.
-                inv IH2; inv E2.
-                eexists; split.
-                ** apply in_app; auto using in_eq.
-                ** change None with (option_map normalize_stmt None) in CW.
-                   rewrite <-map_cons, CommonList.map_last in CW.
-                   destruct (last (o :: ss) None); simpl in *; try contradiction.
-                   take (forall x, _ <-> _) and now apply it.
-    - intro; rewrite 2 Can_write_in_Comp, IHs1, IHs2; reflexivity.
-  Qed.
-
   Lemma Can_write_in_var_normalize_stmt:
     forall s x ,
       Can_write_in_var x s <-> Can_write_in_var x (normalize_stmt s).
@@ -598,8 +517,8 @@ Module Type OBCSWITCHESNORMALIZATION
   Lemma normalize_switches_cannot_write_inputs:
     forall p,
       wt_program p ->
-      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m))) p ->
-      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in_var x (m_body m)) (map fst (m_in m))) p ->
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in_var x (m_body m)) (map fst (m_in m)))
                      (normalize_switches p).
   Proof.
     intros * WTp HH.
@@ -616,7 +535,7 @@ Module Type OBCSWITCHESNORMALIZATION
     eapply Forall_forall in WTms; eauto.
     destruct m; simpl in *.
     eapply Forall_forall in HH; eauto.
-    rewrite <-Can_write_in_normalize_stmt; eauto.
+    rewrite <-Can_write_in_var_normalize_stmt; eauto.
   Qed.
 
   (** ** Switches normalization preserves [No_Overwrites]. *)

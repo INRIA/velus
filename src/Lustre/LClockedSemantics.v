@@ -196,8 +196,8 @@ Module Type LCLOCKEDSEMANTICS
     | Sapp:
         forall H b f es er lann ss os rs bs,
           Forall2 (sem_exp_ck H b) es ss ->
-          Forall2 (fun e r => sem_exp_ck H b e [r]) er rs ->
-          bools_ofs rs bs ->
+          Forall2 (sem_exp_ck H b) er rs ->
+          bools_ofs (concat rs) bs ->
           (forall k, sem_node_ck f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)) ->
           sem_exp_ck H b (Eapp f es er lann) os
 
@@ -458,9 +458,9 @@ Module Type LCLOCKEDSEMANTICS
       forall H b f es er lann ss os sr bs,
         Forall2 (sem_exp_ck G H b) es ss ->
         Forall2 (P_exp H b) es ss ->
-        Forall2 (fun e r => sem_exp_ck G H b e [r]) er sr ->
-        Forall2 (fun e r => P_exp H b e [r]) er sr ->
-        bools_ofs sr bs ->
+        Forall2 (sem_exp_ck G H b) er sr ->
+        Forall2 (P_exp H b) er sr ->
+        bools_ofs (concat sr) bs ->
         (forall k, sem_node_ck G f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)
               /\ P_node f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)) ->
         P_exp H b (Eapp f es er lann) os.
@@ -1844,7 +1844,7 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** more `mask` properties *)
 
-  Lemma history_mask_count : forall r H n,
+  Lemma history_mask_count {K} : forall r (H: @history K) n,
       FEnv.Equiv eq (CIStr.tr_history (mask_hist (count r) # n r H) n) (CIStr.tr_history H n).
   Proof.
     intros * ?. simpl_fenv.
@@ -1852,7 +1852,7 @@ Module Type LCLOCKEDSEMANTICS
     unfold tr_Stream; rewrite maskv_nth, Nat.eqb_refl; auto with datatypes.
   Qed.
 
-  Corollary sem_var_instant_mask_hist_count: forall H n r x v,
+  Corollary sem_var_instant_mask_hist_count {K}: forall (H: @history K) n r x v,
       IStr.sem_var_instant (CIStr.tr_history H n) x v <->
         IStr.sem_var_instant (CIStr.tr_history (mask_hist ((count r) # n) r H) n) x v.
   Proof.
@@ -2516,7 +2516,7 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** Execution of a node with absent inputs *)
 
-  Lemma sem_var_instant_absent: forall H x v,
+  Lemma sem_var_instant_absent {K}: forall (H: @IStr.env K) x v,
       IStr.sem_var_instant H x v ->
       IStr.sem_var_instant (FEnv.map (fun _ => absent) H) x absent.
   Proof.
@@ -2738,7 +2738,7 @@ Module Type LCLOCKEDSEMANTICS
       - (* Eapp *)
         econstructor.
         1,2:erewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto]; intros ???? Hsem; eapply Hsem; eauto.
-        eauto using bools_ofs_absent.
+        + rewrite <- concat_map; eauto using bools_ofs_absent.
         + intros k. specialize (H6 k) as (?&SemN).
           repeat rewrite List.map_map in *.
           eapply sem_node_ck_morph; try eapply SemN; eauto.

@@ -139,14 +139,12 @@ Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: li
 Local Hint Resolve
       wc_global_Ordered_nodes
       complete_global_wt complete_global_wc
-      delast_global_wt delast_global_wc
       auto_global_wt auto_global_wc
       switch_global_wt switch_global_wc
       inlinelocal_global_wt inlinelocal_global_wc inlinelocal_global_sem
-      normalize_global_normalized_global normalized_global_unnested_global
-      Typing.normalize_global_wt
-      Clocking.normalize_global_wc
-      normalize_global_sem
+      unnest_global_wt unnest_global_wc unnest_global_sem
+      normlast_global_wt normlast_global_wc normlast_global_sem
+      normfby_global_wt normfby_global_wc normfby_global_sem
       check_causality_correct : core.
 
 Local Ltac unfold_l_to_nl Hltonl :=
@@ -169,7 +167,7 @@ Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Correctness.sem_l_nl in Hltonl; eauto 14 with ltyping.
-  eapply normalize_global_sem, inlinelocal_global_sem, switch_global_sem, auto_global_sem, delast_global_sem; eauto 7.
+  eapply normfby_global_sem, normlast_global_sem, unnest_global_sem, inlinelocal_global_sem, switch_global_sem, auto_global_sem; eauto 7.
   eapply sem_node_sem_node_ck; eauto using complete_global_sem with ltyping.
   - eapply check_causality_correct; eauto using complete_global_wt with ltyping.
   - edestruct Hwcins as (?&?&Find&?&?).
@@ -192,13 +190,14 @@ Proof.
   eapply TR.Tr.find_node_global' in Hfind as (n''&Hfind&Htonode); eauto.
   eapply global_iface_eq_find in Hfind as (n&Hfind&(_&_&Hin&Hout)); eauto.
   2:{ eapply global_iface_eq_sym.
-      eapply global_iface_eq_trans, normalize_global_iface_eq.
+      eapply global_iface_eq_trans, normfby_global_eq.
+      eapply global_iface_eq_trans, normlast_global_iface_eq.
+      eapply global_iface_eq_trans, unnest_global_eq.
       eapply global_iface_eq_trans, inlinelocal_global_iface_eq.
       eapply global_iface_eq_trans, switch_global_iface_eq. apply global_iface_eq_refl. }
   apply auto_global_find_node' in Hfind as (?&Hfind&(_&_&Hin'&Hout')).
   eapply global_iface_eq_find in Hfind as (?&Hfind&(_&_&Hin''&Hout'')); eauto.
   2:{ apply global_iface_eq_sym.
-      eapply global_iface_eq_trans, delast_global_iface_eq.
       apply complete_global_iface_eq. }
   do 2 esplit; eauto; split.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
@@ -260,6 +259,7 @@ Proof.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&_); eauto.
     eapply Hwti in Hfind'. rewrite Hin. eauto.
   - clear - Hwt Comp'. unfold_l_to_nl Comp'.
-    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto 14 with lclocking.
+    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto.
+    eapply normfby_global_normal_args, normlast_global_normal_args, unnest_global_normal_args; eauto 7 with lclocking.
   - eapply behavior_l_to_nl in Comp'; eauto.
 Qed.

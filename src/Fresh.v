@@ -499,9 +499,10 @@ Module Fresh(Ids : IDS).
 
   End mmap.
 
+  Import Tactics Notations.
+  Open Scope fresh_monad_scope.
+
   Section mmap2.
-    Import Tactics Notations.
-    Open Scope fresh_monad_scope.
     Context {pref : ident} {A A1 A2 B : Type}.
     Variable k : A -> Fresh pref (A1 * A2) B.
 
@@ -564,4 +565,137 @@ Module Fresh(Ids : IDS).
   Global Hint Resolve fresh_ident_st_follows : fresh.
   Global Hint Resolve st_follows_incl : fresh.
   Global Hint Resolve mmap2_st_follows : fresh.
+
+  (** Generate a bunch of fresh identifiers *)
+  Section fresh_idents.
+    Context {pref : ident} {B : Type}.
+
+    Definition fresh_idents (xs : list (ident * B)) : Fresh pref _ B :=
+      mmap (fun '(x, ann) => do lx <- fresh_ident (Some x) ann;
+                          ret (x, lx, ann)) xs.
+
+    Lemma fresh_idents_In : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        forall x ann, In (x, ann) xs ->
+                 exists lx, In (x, lx, ann) xs'.
+    Proof.
+      intros * Hfresh * Hin.
+      apply mmap_values, Forall2_ignore2 in Hfresh. simpl_Forall.
+      repeat inv_bind. eauto.
+    Qed.
+
+    Lemma fresh_idents_In' : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        forall x lx ann, In (x, lx, ann) xs' ->
+                    In (x, ann) xs.
+    Proof.
+      intros * Hfresh * Hin.
+      apply mmap_values, Forall2_ignore1 in Hfresh. simpl_Forall.
+      repeat inv_bind. eauto.
+    Qed.
+
+    Lemma fresh_idents_fst : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        map fst (map fst xs') = map fst xs.
+    Proof.
+      intros * Hfresh. apply mmap_values in Hfresh.
+      induction Hfresh; destruct_conjs; repeat inv_bind; auto.
+    Qed.
+
+    Corollary fresh_idents_InMembers : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        forall x, InMembers x xs <-> InMembers x (map fst xs').
+    Proof.
+      intros * Hfresh ?.
+      erewrite ? fst_InMembers, fresh_idents_fst; eauto. reflexivity.
+    Qed.
+
+    Corollary fresh_idents_NoDupMembers : forall xs xs' st st',
+        NoDupMembers xs ->
+        fresh_idents xs st = (xs', st') ->
+        NoDupMembers (map fst xs').
+    Proof.
+      intros * Hnd Hfresh.
+      rewrite fst_NoDupMembers in Hnd.
+      erewrite fst_NoDupMembers, fresh_idents_fst; eauto.
+    Qed.
+
+    Import Permutation.
+
+    Lemma fresh_idents_Perm : forall xs xs' sub st st',
+        NoDupMembers xs ->
+        fresh_idents xs st = (xs', st') ->
+        Permutation (map (fun '((_, lx), _) => lx) xs')
+          (map (fun x => or_default x (Env.find x (Env.adds' (map fst xs') sub))) (map fst xs)).
+    Proof.
+      induction xs as [|(?&?)]; intros * Nd Fr; inv Nd; repeat inv_bind; auto.
+      simpl.
+      rewrite IHxs; eauto.
+      setoid_rewrite Env.find_gsss'; simpl.
+      2:{ intros InM. eapply fresh_idents_InMembers in InM; eauto. }
+      constructor; auto.
+    Qed.
+
+    Lemma fresh_idents_st_follows : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        st_follows st st'.
+    Proof.
+      intros * Hfresh.
+      eapply mmap_st_follows in Hfresh; eauto.
+      simpl_Forall. repeat inv_bind. eauto with fresh.
+    Qed.
+
+    Fact fresh_idents_prefixed : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        Forall (fun '(_, lx, _) => exists n hint, lx = Ids.gensym pref hint n) xs'.
+    Proof.
+      intros * Hfresh.
+      eapply mmap_values, Forall2_ignore1 in Hfresh. simpl_Forall. repeat inv_bind.
+      eapply fresh_ident_prefixed in H1; auto.
+    Qed.
+
+    Fact fresh_idents_In_ids : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        Forall (fun '(_, lx, _) => In lx (st_ids st')) xs'.
+    Proof.
+      unfold fresh_idents.
+      induction xs; intros; destruct_conjs; repeat inv_bind; constructor; eauto.
+      apply Facts.fresh_ident_Inids in H. eapply incl_map; [|eauto].
+      eapply st_follows_incl, mmap_st_follows; eauto.
+      simpl_Forall. repeat inv_bind; eauto with fresh.
+    Qed.
+
+    Fact fresh_idents_nIn_ids : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        Forall (fun '(_, lx, _) => ~In lx (st_ids st)) xs'.
+    Proof.
+      unfold fresh_idents.
+      induction xs; intros; destruct_conjs; repeat inv_bind; constructor; eauto.
+      - eapply Facts.fresh_ident_nIn in H; eauto.
+      - eapply IHxs in H0.
+        simpl_Forall. contradict H0.
+        eapply incl_map; eauto.
+        apply st_follows_incl; eauto with fresh.
+    Qed.
+
+    Lemma fresh_idents_anns : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        Permutation (st_anns st') (map (fun '(_, lx, ann) => (lx, ann)) xs'++st_anns st).
+    Proof.
+      induction xs as [|(?&?)]; intros * Fr; repeat inv_bind; simpl; auto.
+      erewrite IHxs; eauto.
+      erewrite fresh_ident_anns; eauto with datatypes.
+      now rewrite Permutation_middle.
+    Qed.
+
+    Corollary fresh_idents_In_anns : forall xs xs' st st',
+        fresh_idents xs st = (xs', st') ->
+        Forall (fun '(_, lx, ann) => In (lx, ann) (st_anns st')) xs'.
+    Proof.
+      intros * Fr.
+      simpl_Forall. erewrite fresh_idents_anns; eauto.
+      apply in_app_iff. left. solve_In.
+    Qed.
+
+  End fresh_idents.
 End Fresh.

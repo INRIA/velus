@@ -10,7 +10,6 @@ From Velus Require Import Clocks.
 From Velus Require Import Fresh.
 From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax.
-From Velus Require Import Lustre.SubClock.SubClock.
 
 (** * Remove Local Blocks *)
 
@@ -24,11 +23,149 @@ Module Type INLINELOCAL
 
   (** ** Rename some variables *)
 
-  Module Import SC := SubClockFun Ids Op OpAux Cks Senv Syn.
+  Section rename.
+    Variable sub : Env.t ident.
 
-  Definition rename_in_clock := subclock_clock Cbase.
-  Definition rename_in_exp := subclock_exp Cbase.
-  Definition rename_in_equation := subclock_equation Cbase.
+    Definition rename_var (x : ident) :=
+      or_default x (Env.find x sub).
+
+    Fixpoint rename_clock (ck : clock) :=
+      match ck with
+      | Cbase => Cbase
+      | Con ck' x t => Con (rename_clock ck') (rename_var x) t
+      end.
+
+    Definition rename_nclock (nck : nclock) :=
+      (rename_clock (fst nck), option_map rename_var (snd nck)).
+
+    Definition rename_ann {A} (ann : (A * clock)) :=
+      (fst ann, rename_clock (snd ann)).
+
+    Fixpoint rename_exp (e : exp) :=
+      match e with
+      | Econst _ | Eenum _ _ => e
+      | Evar x ann => Evar (rename_var x) (rename_ann ann)
+      | Elast x ann => Elast (rename_var x) (rename_ann ann)
+      | Eunop op e1 ann => Eunop op (rename_exp e1) (rename_ann ann)
+      | Ebinop op e1 e2 ann => Ebinop op (rename_exp e1) (rename_exp e2) (rename_ann ann)
+      | Eextcall f es (tyout, ck) => Eextcall f (map rename_exp es) (tyout, rename_clock ck)
+      | Efby e0s e1s anns => Efby (map rename_exp e0s) (map rename_exp e1s) (map rename_ann anns)
+      | Earrow e0s e1s anns => Earrow (map rename_exp e0s) (map rename_exp e1s) (map rename_ann anns)
+      | Ewhen es (x, tx) t ann => Ewhen (map rename_exp es) (rename_var x, tx) t (rename_ann ann)
+      | Emerge (x, ty) es ann => Emerge (rename_var x, ty) (map (fun '(i, es) => (i, map rename_exp es)) es) (rename_ann ann)
+      | Ecase e es d ann =>
+        Ecase (rename_exp e) (map (fun '(i, es) => (i, map rename_exp es)) es) (option_map (map rename_exp) d) (rename_ann ann)
+      | Eapp f es er ann => Eapp f (map rename_exp es) (map rename_exp er) (map rename_ann ann)
+      end.
+
+    Definition rename_equation '(xs, es) : equation :=
+      (map rename_var xs, map rename_exp es).
+
+    (** *** Properties *)
+
+    Lemma rename_ann_clock {A} : forall (ann : (A * clock)),
+        snd (rename_ann ann) = rename_clock (snd ann).
+    Proof. reflexivity. Qed.
+
+    Corollary map_rename_ann_clock {A} : forall (anns : list (A * clock)),
+        map snd (map rename_ann anns) = map rename_clock (map snd anns).
+    Proof.
+      induction anns; simpl; auto.
+    Qed.
+
+    Lemma map_rename_ann_type {A} : forall (anns : list (A * clock)),
+        map fst (map rename_ann anns) = map fst anns.
+    Proof.
+      induction anns; simpl; auto.
+    Qed.
+
+  End rename.
+
+  Section rename_clockof.
+
+    Variable sub : Env.t ident.
+
+    Lemma rename_exp_nclockof : forall e,
+        nclockof (rename_exp sub e) = map (rename_nclock sub) (nclockof e).
+    Proof.
+      destruct e; destruct_conjs; simpl in *; rewrite ? map_map; auto.
+    Qed.
+
+    Corollary rename_exp_nclocksof : forall es,
+        nclocksof (map (rename_exp sub) es) = map (rename_nclock sub) (nclocksof es).
+    Proof.
+      intros es.
+      unfold nclocksof. rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
+      f_equal.
+      eapply map_ext; intros. apply rename_exp_nclockof.
+    Qed.
+
+    Corollary rename_exp_clockof : forall e,
+        clockof (rename_exp sub e) = map (rename_clock sub) (clockof e).
+    Proof.
+      intros.
+      rewrite 2 clockof_nclockof, rename_exp_nclockof, 2 map_map; auto.
+    Qed.
+
+    Corollary rename_exp_clocksof : forall es,
+        clocksof (map (rename_exp sub) es) = map (rename_clock sub) (clocksof es).
+    Proof.
+      intros es.
+      unfold clocksof. rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
+      f_equal.
+      eapply map_ext; intros. apply rename_exp_clockof.
+    Qed.
+
+  End rename_clockof.
+
+  Section rename_typeof.
+
+    Variable bck : clock.
+    Variable sub : Env.t ident.
+
+    Lemma rename_exp_typeof : forall e,
+        typeof (rename_exp sub e) = typeof e.
+    Proof.
+      destruct e; destruct_conjs; simpl in *; rewrite ? map_map; auto.
+    Qed.
+
+    Corollary rename_exp_typesof : forall es,
+        typesof (map (rename_exp sub) es) = typesof es.
+    Proof.
+      intros es.
+      unfold typesof . rewrite 2 flat_map_concat_map, map_map.
+      f_equal.
+      eapply map_ext; intros. apply rename_exp_typeof.
+    Qed.
+  End rename_typeof.
+
+  Section rename_empty.
+
+    Fact rename_var_empty : forall x,
+      rename_var (Env.empty _) x = x.
+    Proof.
+      intros. unfold rename_var.
+      simpl. rewrite Env.gempty. reflexivity.
+    Qed.
+
+    Corollary rename_vars_empty : forall xs,
+        map (rename_var (Env.empty _)) xs = xs.
+    Proof.
+      induction xs; simpl; f_equal; auto using rename_var_empty.
+    Qed.
+
+  End rename_empty.
+
+  Lemma rename_var_IsLast sub Γ Γ' : forall x,
+      (forall x y, Env.find x sub = Some y -> IsLast Γ x -> IsLast Γ' y) ->
+      (forall x, Env.find x sub = None -> IsLast Γ x -> IsLast Γ' x) ->
+      IsLast Γ x ->
+      IsLast Γ' (rename_var sub x).
+  Proof.
+    unfold rename_var.
+    intros * Sub NSub In.
+    destruct (Env.find _ _) eqn:Hfind; simpl in *; eauto.
+  Qed.
 
   (** ** More properties *)
 
@@ -84,7 +221,7 @@ Module Type INLINELOCAL
   Corollary disjoint_union_rename_in_clock : forall (sub1: Env.t ident) xs ys ck,
       (forall x, Env.In x sub1 -> ~In x xs) ->
       (forall x y, Env.MapsTo x y sub1 -> ~In y xs) ->
-      rename_in_clock (Env.from_list (combine xs ys)) (rename_in_clock sub1 ck) = rename_in_clock (Env.adds xs ys sub1) ck.
+      rename_clock (Env.from_list (combine xs ys)) (rename_clock sub1 ck) = rename_clock (Env.adds xs ys sub1) ck.
   Proof.
     intros * Hsub1 Hsub2.
     induction ck; simpl; auto.
@@ -373,17 +510,18 @@ Module Type INLINELOCAL
     Qed.
   End mmap2.
 
-  Fixpoint inlinelocal_block sub (blk : block) : Reuse (list (ident * ann) * list block) :=
+  Fixpoint inlinelocal_block sub (blk : block) : Reuse (list decl * list block) :=
     match blk with
-    | Beq eq => ret ([], [Beq (rename_in_equation sub eq)])
+    | Beq eq => ret ([], [Beq (rename_equation sub eq)])
+    | Blast x e => ret ([], [Blast (rename_var sub x) (rename_exp sub e)])
     | Breset blks er =>
         do (locs, blks') <- mmap2 (inlinelocal_block sub) blks;
-        ret (concat locs, [Breset (concat blks') (rename_in_exp sub er)])
+        ret (concat locs, [Breset (concat blks') (rename_exp sub er)])
     | Blocal (Scope locs blks) =>
         let xs := map fst locs in
         do newlocs <- mmap reuse_ident xs;
         let sub' := Env.adds xs newlocs sub in
-        let locs' := map (fun '(x, (ty, ck, _, _)) => (rename_var sub' x, (ty, (rename_in_clock sub' ck)))) locs in
+        let locs' := map (fun '(x, (ty, ck, cx, clx)) => (rename_var sub' x, (ty, (rename_clock sub' ck), cx, clx))) locs in
         do (locs1, blks') <- mmap2 (inlinelocal_block sub') blks;
         ret (locs'++concat locs1, concat blks')
     | _ => (* Should not happen *) ret ([], [blk])
@@ -395,7 +533,7 @@ Module Type INLINELOCAL
 
   Import Permutation.
 
-  Fact mmap_vars_perm : forall (f : _ -> block -> Reuse (list (ident * ann) * list block)) blks sub locs' blks' xs st st',
+  Fact mmap_vars_perm : forall (f : _ -> block -> Reuse (list decl * list block)) blks sub locs' blks' xs st st',
       Forall
         (fun blk => forall sub locs' blks' xs st st',
              noswitch_block blk ->
@@ -432,13 +570,15 @@ Module Type INLINELOCAL
     - (* equation *)
       destruct eq.
       repeat esplit; simpl; eauto using VarsDefinedComp with datatypes.
+    - (* last *)
+      simpl. repeat (econstructor; eauto).
     - (* reset *)
       eapply mmap_vars_perm in H0 as (ys1&Hvars1&Hperm1); eauto.
       do 2 esplit; eauto using VarsDefinedComp.
       simpl. now rewrite app_nil_r.
     - (* local *)
       repeat inv_scope. take (Permutation _ _) and rename it into Hperm.
-      eapply mmap_vars_perm in H4 as (ys1&Hvars1&Hperm1); eauto.
+      take (mmap2 _ _ _ = _) and eapply mmap_vars_perm in it as (ys1&Hvars1&Hperm1); eauto.
       2:{ simpl_Forall.
           eapply NoDupLocals_incl; [|eauto].
           rewrite <-app_assoc, Hperm.
@@ -455,56 +595,76 @@ Module Type INLINELOCAL
       erewrite not_in_union_map_rename2, map_ext with (l:=locs). reflexivity.
       + unfold decl. intros; destruct_conjs. reflexivity.
       + simpl_Forall. intros In. apply fst_InMembers in In.
-        eapply H12; eauto with datatypes.
+        eapply H11; eauto with datatypes.
   Qed.
 
   (** *** LastsDefined *)
 
-  Fact mmap_lasts_perm : forall (f : Env.t ident -> block -> Reuse (list (ident * ann) * list block)) blks sub locs' blks' xs st st',
+  Fact mmap_lasts_perm : forall (f : _ -> block -> Reuse (list decl * list block)) blks sub locs' blks' xs st st',
       Forall
-        (fun blk : block =>
-           forall sub locs' blks' xs st st',
+        (fun blk => forall sub locs' blks' xs st st',
              noswitch_block blk ->
              LastsDefined blk xs ->
+             NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
              f sub blk st = (locs', blks', st') ->
-             exists ys : list (list ident), Forall2 LastsDefined blks' ys /\ Permutation (concat ys) xs) blks ->
+             exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ lasts_of_decls locs')) blks ->
       Forall noswitch_block blks ->
       Forall2 LastsDefined blks xs ->
+      Forall (NoDupLocals (map fst (Env.elements sub) ++ concat xs)) blks ->
       mmap2 (f sub) blks st = (locs', blks', st') ->
-      exists ys, Forall2 LastsDefined (concat blks') ys /\ Permutation (concat ys) (concat xs).
+      exists ys, Forall2 LastsDefined (concat blks') ys /\ Permutation (concat ys) (map (rename_var sub) (concat xs) ++ lasts_of_decls (concat locs')).
   Proof.
-    induction blks; intros * Hf Hns Hvars Hnorm; inv Hf; inv Hns; inv Hvars; repeat monadInv; simpl.
+    induction blks; intros * Hf Hns Hlasts Hnd Hnorm; inv Hf; inv Hns; inv Hlasts; inv Hnd; repeat monadInv; simpl.
     - exists []. split; auto.
-    - eapply H1 in H5 as (ys1&Hvars1&Hperm1); eauto.
-      eapply IHblks in H2 as (ys2&Hvars2&Hperm2); eauto. clear IHblks.
+    - eapply H1 in H as (ys1&Hlasts1&Hperm1); eauto.
+      2:eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
+      eapply IHblks in H2 as (ys2&Hlasts2&Hperm2); eauto. clear IHblks.
+      2:simpl_Forall; intros; eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
       exists (ys1 ++ ys2). split.
       + apply Forall2_app; auto.
-      + rewrite concat_app, Hperm1, Hperm2. solve_Permutation_app.
+      + rewrite concat_app, Hperm1, Hperm2. unfold lasts_of_decls. solve_Permutation_app.
   Qed.
 
   Lemma inlinelocal_block_lasts_perm : forall blk sub locs' blks' xs st st',
       noswitch_block blk ->
       LastsDefined blk xs ->
+      NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
       inlinelocal_block sub blk st = (locs', blks', st') ->
-      exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) xs.
+      exists ys, Forall2 LastsDefined blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ lasts_of_decls locs').
   Proof.
-    induction blk using block_ind2; intros * Hns Hvars Hdl;
-      inv Hns; inv Hvars; repeat monadInv.
+    induction blk using block_ind2; intros * Hns Hlasts Hnd Hdl;
+      inv Hns; inv Hlasts; inv Hnd; repeat monadInv.
     - (* equation *)
       destruct eq.
       repeat esplit; simpl; eauto using LastsDefined with datatypes.
+    - (* last *)
+      repeat (econstructor; eauto); simpl.
     - (* reset *)
-      eapply mmap_lasts_perm in H0 as (?&L'&Perm); eauto.
-      do 2 esplit.
-      + repeat constructor; eauto.
-      + simpl. now rewrite app_nil_r.
+      eapply mmap_lasts_perm in H0 as (ys1&Hlasts1&Hperm1); eauto.
+      do 2 esplit; eauto using LastsDefined.
+      simpl. now rewrite app_nil_r.
     - (* local *)
       repeat inv_scope. take (Permutation _ _) and rename it into Hperm.
-      eapply mmap_lasts_perm in H4 as (ys1&Hvars1&Hperm1); eauto.
-      do 2 esplit; eauto.
-      rewrite Hperm1, Hperm.
-      unfold lasts_of_decls. rewrite map_filter_nil, app_nil_r; auto.
-      simpl_Forall; subst; auto.
+      take (mmap2 _ _ _ = _) and eapply mmap_lasts_perm in it as (ys1&Hlasts1&Hperm1); eauto.
+      2:{ simpl_Forall.
+          eapply NoDupLocals_incl; [|eauto].
+          rewrite <-app_assoc, Hperm.
+          apply incl_app; try solve [solve_incl_app].
+          intros ? Hin. simpl_In.
+          eapply Env.elements_complete, Env.find_adds'_In in Hin0 as [Hfind|Hfind].
+          - eapply in_combine_l in Hfind.
+            rewrite 2 in_app_iff. auto.
+          - eapply Env.elements_correct in Hfind.
+            apply in_or_app, or_introl; solve_In.
+          - apply incl_appr, incl_appr', lasts_of_decls_incl.
+      }
+      do 2 esplit; eauto. rewrite Hperm1, Hperm.
+      unfold lasts_of_decls. rewrite ? map_filter_app, ? map_app, <- ? app_assoc.
+      erewrite not_in_union_map_rename2, map_map_filter, map_filter_map, map_filter_ext with (xs:=locs). reflexivity.
+      + unfold decl. intros; destruct_conjs.
+        destruct o; simpl; auto.
+      + simpl_Forall. intros In. apply fst_InMembers in In.
+        eapply H11; eauto with datatypes.
   Qed.
 
   (** *** st_valid *)
@@ -583,14 +743,16 @@ Module Type INLINELOCAL
     induction blk using block_ind2; intros * Hns Hdl; inv Hns; repeat monadInv.
     - (* equation *)
       repeat constructor.
+    - (* last *)
+      repeat constructor.
     - (* reset *)
       repeat constructor. apply Forall_concat.
       eapply mmap2_values, Forall3_ignore12 in H0. simpl_Forall.
       eapply H in H4; eauto. simpl_Forall; auto.
     - (* local *)
       apply Forall_concat.
-      eapply mmap2_values, Forall3_ignore12 in H1. simpl_Forall.
-      eapply H in H6; eauto. simpl_Forall; auto.
+      eapply mmap2_values, Forall3_ignore12 in H2. simpl_Forall.
+      eapply H in H5; eauto. simpl_Forall; auto.
   Qed.
 
   Lemma reuse_idents_find {A} : forall (locs: list (ident * A)) locs' st st' sub x,
@@ -685,19 +847,6 @@ Module Type INLINELOCAL
 
   (** *** NoDupLocals *)
 
-  Lemma rename_var_injective : forall sub x y,
-      Env.In x sub ->
-      Env.In y sub ->
-      NoDup (map snd (Env.elements sub)) ->
-      rename_var sub x = rename_var sub y ->
-      x = y.
-  Proof.
-    unfold rename_var.
-    intros * (?&Hfind1) (?&Hfind2) Hndsub Hren.
-    rewrite Hfind1, Hfind2 in Hren; simpl in Hren; inv Hren.
-    eapply NoDup_snd_det; eauto using Env.elements_correct.
-  Qed.
-
   Lemma inlinelocal_block_NoDupLocals xs : forall blk sub locs' blks' st st',
       noswitch_block blk ->
       inlinelocal_block sub blk st = (locs', blks', st') ->
@@ -709,19 +858,19 @@ Module Type INLINELOCAL
       eapply Forall_concat. simpl_Forall.
       eapply H in H4; eauto. now simpl_Forall.
     - (* local *)
-      eapply mmap2_values, Forall3_ignore12 in H1.
+      eapply mmap2_values, Forall3_ignore12 in H2.
       eapply Forall_concat. simpl_Forall.
-      eapply H in H6; eauto. now simpl_Forall.
+      eapply H in H5; eauto. now simpl_Forall.
   Qed.
 
   Lemma local_not_in_switch_prefs :
     ~PS.In local switch_prefs.
   Proof.
     unfold switch_prefs, auto_prefs, last_prefs, elab_prefs.
-    rewrite 3 PS.add_spec, PSF.singleton_iff.
+    rewrite ? PS.add_spec, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
     repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
-    intros [contra|[contra|[contra|contra]]]; subst; rewrite contra in *; eauto 10 with datatypes.
+    intros Eq. repeat take (_ \/ _) and destruct it as [Eq|Eq]; eauto 8 with datatypes.
   Qed.
 
   Lemma reuse_ident_In : forall x y st st',
@@ -963,15 +1112,17 @@ Module Type INLINELOCAL
     induction blk using block_ind2; intros * Hns Hdl; inv Hns; repeat monadInv.
     - (* equation *)
       repeat constructor.
+    - (* last *)
+      repeat constructor.
     - (* reset *)
       repeat constructor.
       eapply mmap2_values, Forall3_ignore12 in H0.
       eapply Forall_concat. simpl_Forall.
       eapply H in H4; eauto. now simpl_Forall.
     - (* local *)
-      eapply mmap2_values, Forall3_ignore12 in H1.
+      eapply mmap2_values, Forall3_ignore12 in H2.
       eapply Forall_concat. simpl_Forall.
-      eapply H in H6; eauto. now simpl_Forall.
+      eapply H in H5; eauto. now simpl_Forall.
   Qed.
 
   (** ** Transformation of node and program *)
@@ -985,16 +1136,12 @@ Module Type INLINELOCAL
       n_hasstate := (n_hasstate n);
       n_in := (n_in n);
       n_out := (n_out n);
-      n_block := Blocal
-                   (Scope
-                      (map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
-                           (fst (fst res)))
-                      (snd (fst res)));
+      n_block := Blocal (Scope (fst (fst res)) (snd (fst res)));
       n_ingt0 := (n_ingt0 n);
       n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
-    pose proof (n_syn n) as Hns. inversion_clear Hns as [?? Hns1 Hns2 (?&Hvars&Hperm)].
+    pose proof (n_syn n) as Hns. inversion_clear Hns as [?? Hns1 (?&Hvars&Hperm)].
     pose proof (n_nodup n) as (_&Hndup).
     apply Permutation_map_inv in Hperm as (?&?&Hperm); subst.
     repeat esplit; eauto.
@@ -1009,29 +1156,30 @@ Module Type INLINELOCAL
         simpl_Forall; eauto using nolocal_noswitch. }
     rewrite map_fst_senv_of_decls.
     do 4 econstructor; eauto.
-    rewrite Hperm', <-Hperm. apply Permutation_app_head.
-    now rewrite map_map.
+    rewrite Hperm', <-Hperm. reflexivity.
   Qed.
   Next Obligation.
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 _].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 _].
     pose proof (n_lastd n) as (?&Last&Perm).
-    destruct (inlinelocal_block _ _) as ((?&?)&st') eqn:Hdl. simpl.
-    eapply inlinelocal_block_lasts_perm in Hdl as (?&Last1&Perm1); eauto.
-    do 2 esplit; eauto. do 4 econstructor; eauto.
-    unfold lasts_of_decls. rewrite map_filter_nil; [rewrite app_nil_r; auto|].
-    simpl_Forall. auto.
+    pose proof (n_nodup n) as (_&Hndup).
+    repeat esplit; eauto.
+    destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
+    eapply inlinelocal_block_lasts_perm in Hdl as (?&?&Hperm'); eauto.
+    rewrite rename_vars_empty in Hperm'.
+    2:{ rewrite Env.Props.P.elements_empty; simpl. rewrite Perm.
+        eapply NoDupLocals_incl; [|eauto]. apply incl_appr, lasts_of_decls_incl. }
+    do 2 constructor. do 2 esplit; eauto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 _].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 _].
     repeat rewrite app_nil_r.
     destruct (inlinelocal_block _ _) as ((?&?)&st') eqn:Hdl. simpl.
     split; auto. do 2 constructor; eauto.
     - eapply inlinelocal_block_NoDupLocals; eauto.
     - eapply inlinelocal_block_NoDupMembers in Hdl; eauto.
-      2:{ intros ? In. apply In_of_list in In. now simpl_Forall. }
-      apply NoDupMembers_map; auto.
+      intros ? In. apply In_of_list in In. now simpl_Forall.
     - intros * In1 In2.
       eapply inlinelocal_block_nIn in Hdl. 3-5:eauto.
       2:{ simpl_Forall. apply In_of_list. auto. }
@@ -1050,12 +1198,10 @@ Module Type INLINELOCAL
     - eapply inlinelocal_block_GoodLocals; eauto.
   Qed.
   Next Obligation.
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 (?&Hvars&Hperm)].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 (?&Hvars&Hperm)].
     pose proof (n_nodup n) as (_&Hndup).
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
     repeat constructor.
-    - simpl_Forall. auto.
-    - simpl_Forall. auto.
     - eapply inlinelocal_block_nolocal; eauto.
     - eapply inlinelocal_block_vars_perm in Hvars as (?&?&Hperm'); eauto.
       rewrite rename_vars_empty in Hperm'.
@@ -1063,8 +1209,6 @@ Module Type INLINELOCAL
           eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
       do 2 econstructor; [|eauto].
       do 4 econstructor; eauto.
-      rewrite Hperm'. apply Permutation_app_head.
-      now rewrite map_map.
   Qed.
 
   Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch switch_prefs) node :=
@@ -1111,6 +1255,15 @@ Module Type INLINELOCAL
   Qed.
   Global Hint Resolve senv_of_anns_concat_incl : senv.
 
+  Fact senv_of_decls_concat_incl Γ : forall locs locs',
+      In locs locs' ->
+      incl (Γ ++ senv_of_decls locs) (Γ ++ senv_of_decls (concat locs')).
+  Proof.
+    intros * In.
+    now apply incl_appr', incl_map, incl_concat.
+  Qed.
+  Global Hint Resolve senv_of_decls_concat_incl : senv.
+
   Lemma reuse_ident_gensym : forall x y st st',
       reuse_ident x st = (y, st') ->
       y = x \/ exists n hint, y = gensym local hint n.
@@ -1128,6 +1281,29 @@ Module Type INLINELOCAL
     eapply mmap_values, Forall2_ignore1 in Map. simpl_Forall.
     eapply reuse_ident_gensym in H1 as [|]; subst; eauto.
     - left. now apply fst_InMembers.
+  Qed.
+
+  Fact IsLast_sub1 : forall vars1 vars2 vars3 sub,
+      (forall x, InMembers x vars1 -> ~InMembers x vars2) ->
+      (forall x, Env.In x sub <-> InMembers x vars2) ->
+      (forall x y, Env.find x sub = Some y -> IsLast vars2 x -> IsLast vars3 y) ->
+      forall x y, Env.find x sub = Some y -> IsLast (vars1 ++ vars2) x -> IsLast (vars1 ++ vars3) y.
+  Proof.
+    intros * Hnd Hsubin Hsub * Hfind Hin.
+    rewrite IsLast_app in *. destruct Hin as [Hin|Hin]; eauto.
+    exfalso. inv Hin. eapply Hnd; eauto using In_InMembers.
+    eapply Hsubin. econstructor; eauto.
+  Qed.
+
+  Fact IsLast_sub2 : forall vars1 vars2 vars3 sub,
+      (forall x, Env.In x sub <-> InMembers x vars2) ->
+      (forall x y, Env.find x sub = Some y -> IsLast vars2 x -> IsLast vars3 y) ->
+      forall x, Env.find x sub = None -> IsLast (vars1 ++ vars2) x -> IsLast (vars1 ++ vars3) x.
+  Proof.
+    intros * Hsubin Hsub * Hfind Hin.
+    rewrite IsLast_app in *. destruct Hin as [Hin|Hin]; eauto.
+    exfalso. inv Hin. eapply In_InMembers, Hsubin in H as (?&?).
+    congruence.
   Qed.
 
 End INLINELOCAL.

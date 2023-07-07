@@ -2141,10 +2141,11 @@ Module Type LCLOCKCORRECTNESS
         econstructor; eauto.
         apply Forall_singl in H0. inv H0.
         inv H1; inv H14. inv H5. do 2 (econstructor; eauto).
-        + eapply Forall2_impl_In; [|eauto]; intros.
-          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
-        + eapply Forall2_impl_In; [|eauto]; intros.
-          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
+        + instantiate (1 := ss).
+          simpl_Forall.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto.
+        + simpl_Forall.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto.
         + intros k. eapply Hnode; eauto.
           specialize (H28 k). inv H28. rewrite H1 in H17; inv H17. rewrite H1 in H8; inv H8.
           repeat (esplit; eauto).

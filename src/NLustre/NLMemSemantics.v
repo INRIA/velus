@@ -10,6 +10,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import VelusMemory.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
@@ -111,7 +112,7 @@ Module Type NLMEMSEMANTICS
     Inductive msem_equation: stream bool -> history -> memories -> equation -> Prop :=
     | SEqDef:
         forall bk H M x ck xs ce,
-          sem_var H x xs ->
+          sem_var H (Var x) xs ->
           sem_arhs bk H ck ce xs ->
           msem_equation bk H M (EqDef x ck ce)
     | SEqApp:
@@ -120,8 +121,8 @@ Module Type NLMEMSEMANTICS
           sub_inst_n x M Mx ->
           sem_exps bk H arg ls ->
           sem_vars H xs xss ->
-          sem_clock bk H ck (clock_of ls) ->
-          Forall2 (sem_var H) (map fst xrs) ys ->
+          sem_clock bk (var_history H) ck (clock_of ls) ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
           bools_ofs ys rs ->
           (forall k, exists Mk,
                 msem_node f (mask k rs ls) Mk (mask k rs xss)
@@ -130,12 +131,22 @@ Module Type NLMEMSEMANTICS
     | SEqFby:
         forall bk H M x ck ls xs c0 le xrs ys rs,
           sem_aexp bk H ck le ls ->
-          sem_var H x xs ->
-          Forall2 (sem_var H) (map fst xrs) ys ->
-          sem_clocked_vars bk H xrs ->
+          sem_var H (Var x) xs ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars bk H xrs -> *)
           bools_ofs ys rs ->
           mfbyreset x (sem_const c0) ls rs M xs ->
           msem_equation bk H M (EqFby x ck c0 le xrs)
+    | SEqLast:
+        forall bk H M x ty ck c0 xrs xs ls ys rs,
+          sem_var H (Var x) xs ->
+          sem_clocked_var bk H (Var x) ck ->
+          sem_var H (Last x) ls ->
+          Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+          (* sem_clocked_vars bk H (map (fun '(x, ck) => (x, (ck, false))) xrs) -> *)
+          bools_ofs ys rs ->
+          mfbyreset x (sem_const c0) xs rs M ls ->
+          msem_equation bk H M (EqLast x ty ck c0 xrs)
 
     with msem_node:
            ident -> stream (list svalue) -> memories -> stream (list svalue) -> Prop :=
@@ -145,7 +156,7 @@ Module Type NLMEMSEMANTICS
                find_node f G = Some n ->
                sem_vars H (map fst n.(n_in)) xss ->
                sem_vars H (map fst n.(n_out)) yss ->
-               sem_clocked_vars bk H (idsnd n.(n_in)) ->
+               sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
                Forall (msem_equation bk H M) n.(n_eqs) ->
                memory_closed_n M n.(n_eqs) ->
                msem_node f xss M yss.
@@ -169,7 +180,7 @@ Module Type NLMEMSEMANTICS
 
     Hypothesis EqDefCase:
       forall bk H M x ck xs ce,
-        sem_var H x xs ->
+        sem_var H (Var x) xs ->
         sem_arhs bk H ck ce xs ->
         P_equation bk H M (EqDef x ck ce).
 
@@ -179,8 +190,8 @@ Module Type NLMEMSEMANTICS
         sub_inst_n x M Mx ->
         sem_exps bk H arg ls ->
         sem_vars H xs xss ->
-        sem_clock bk H ck (clock_of ls) ->
-        Forall2 (sem_var H) (map fst xrs) ys ->
+        sem_clock bk (var_history H) ck (clock_of ls) ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
         bools_ofs ys rs ->
         (forall k, exists Mk,
               msem_node G f (mask k rs ls) Mk (mask k rs xss)
@@ -191,12 +202,22 @@ Module Type NLMEMSEMANTICS
     Hypothesis EqFbyCase:
       forall bk H M x ck ls xs c0 le xrs ys rs,
         sem_aexp bk H ck le ls ->
-        sem_var H x xs ->
-        Forall2 (sem_var H) (map fst xrs) ys ->
-        sem_clocked_vars bk H xrs ->
+        sem_var H (Var x) xs ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+        (* sem_clocked_vars bk H xrs -> *)
         bools_ofs ys rs ->
         mfbyreset x (sem_const c0) ls rs M xs ->
         P_equation bk H M (EqFby x ck c0 le xrs).
+
+    Hypothesis EqLastCase:
+      forall bk H M x ty ck c0 xrs xs ls ys rs,
+        sem_var H (Var x) xs ->
+        sem_clocked_var bk H (Var x) ck ->
+        sem_var H (Last x) ls ->
+        Forall2 (fun '(x, _) => sem_var H (Var x)) xrs ys ->
+        bools_ofs ys rs ->
+        mfbyreset x (sem_const c0) xs rs M ls ->
+        P_equation bk H M (EqLast x ty ck c0 xrs).
 
     Hypothesis NodeCase:
       forall bk H f xss M yss n,
@@ -204,7 +225,7 @@ Module Type NLMEMSEMANTICS
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        sem_clocked_vars bk H (idsnd n.(n_in)) ->
+        sem_clocked_vars bk H (map (fun '(x, (_, ck)) => (x, (ck, false))) n.(n_in)) ->
         Forall (msem_equation G bk H M) n.(n_eqs) ->
         memory_closed_n M n.(n_eqs) ->
         Forall (P_equation bk H M) n.(n_eqs) ->
@@ -254,7 +275,7 @@ Module Type NLMEMSEMANTICS
   Proof.
     intros ?????? enums externs Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [ |????????????????????? Hsems|
+    induction Hsem as [ |????????????????????? Hsems| |
                        |???????? Hf ????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
@@ -328,11 +349,11 @@ Module Type NLMEMSEMANTICS
     split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
       apply IH in Heqs; auto; constructor; auto.
     - inversion_clear Hord as [|?? []].
-      destruct Heq as [|????????????????????? Hsems|]; eauto with nlsem.
+      destruct Heq as [|????????????????????? Hsems| |]; eauto with nlsem.
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?).
       eexists; split; eauto with nlsem.
-    - inversion Heq as [|????????????????????? Hsems|]; subst; eauto with nlsem;
+    - inversion Heq as [|????????????????????? Hsems| |]; subst; eauto with nlsem;
         assert (n.(n_name) <> f)
         by (intro HH; apply Hnini; rewrite HH; constructor).
       econstructor; eauto.
@@ -394,24 +415,28 @@ Module Type NLMEMSEMANTICS
 
   Lemma msem_equation_madd_val:
     forall G bk H M x ms eqs,
-      ~Is_defined_in x eqs ->
+      ~Is_fby_in x eqs ->
+      ~Is_last_in x eqs ->
       Forall (msem_equation G bk H M) eqs ->
       Forall (msem_equation G bk H (add_val_n x ms M)) eqs.
   Proof.
-    intros * Hnd Hsem.
+    unfold Is_fby_in, Is_last_in.
+    intros * Hnd1 Hnd2 Hsem.
     induction eqs as [|eq eqs IH]; [now constructor|].
-    apply not_Is_defined_in_cons in Hnd.
-    destruct Hnd as [Hnd Hnds].
-    apply Forall_cons2 in Hsem.
-    destruct Hsem as [Hsem Hsems].
-    constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem; eauto with nlsem.
-    apply not_Is_defined_in_eq_EqFby in Hnd; eauto with nlsem.
+    rewrite Exists_cons in Hnd1. apply not_or_and in Hnd1 as (Hnd1&Hnds1).
+    rewrite Exists_cons in Hnd2. apply not_or_and in Hnd2 as (Hnd2&Hnds2).
+    apply Forall_cons2 in Hsem as (Hsem&Hsems).
+    constructor; [|now eapply IH; eauto].
+    inv Hsem; eauto with nlsem.
+    - assert (x <> x0) as Neq; eauto with nlsem.
+      contradict Hnd1. subst. constructor.
+    - assert (x <> x0) as Neq; eauto with nlsem.
+      contradict Hnd2. subst. constructor.
   Qed.
 
   Lemma msem_equation_madd_inst:
     forall G bk H M Mx x eqs,
-      ~Is_defined_in x eqs ->
+      ~Is_defined_in (Var x) eqs ->
       Forall (msem_equation G bk H M) eqs ->
       Forall (msem_equation G bk H (add_inst_n x Mx M)) eqs.
   Proof.
@@ -422,7 +447,7 @@ Module Type NLMEMSEMANTICS
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem as [|??? x' ?????????? Hsome|];
+    destruct Hsem as [|??? x' ?????????? Hsome| |];
       eauto with nlsem;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -466,6 +491,23 @@ dataflow memory for which the non-standard semantics holds true.
     forall M eqs x ck v0 e r vs,
       memory_closed_n M eqs ->
       memory_closed_n (add_val_n x vs M) (EqFby x ck v0 e r :: eqs).
+  Proof.
+    intros * WF n; specialize (WF n); destruct WF as (?& Vals).
+    split; auto.
+    intro y; intros * Hin.
+    unfold add_val_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    destruct (ident_eq_dec y x).
+    - subst; simpl; auto.
+    - rewrite find_val_gso in Find; auto.
+      unfold gather_mems; simpl.
+      right; apply Vals; eauto.
+      apply not_None_is_Some; eauto.
+  Qed.
+
+  Lemma memory_closed_n_Last:
+    forall M eqs x ty ck v0 r vs,
+      memory_closed_n M eqs ->
+      memory_closed_n (add_val_n x vs M) (EqLast x ty ck v0 r :: eqs).
   Proof.
     intros * WF n; specialize (WF n); destruct WF as (?& Vals).
     split; auto.
@@ -527,22 +569,38 @@ dataflow memory for which the non-standard semantics holds true.
       rewrite Count; cases.
     Qed.
 
+    Lemma holdreset_mfbyreset : forall x M v0 ls rs,
+      (forall n, find_val x (M n) = Some (holdreset v0 ls rs n)) ->
+      mfbyreset x v0 ls rs M (fbyreset v0 ls rs).
+    Proof.
+      intros * Find.
+      split; intros; unfold fbyreset; simpl.
+      - specialize (Find 0); simpl in Find; auto.
+      - specialize (Find n) as FindN. rewrite FindN.
+        specialize (Find (S n)) as FindS. simpl in *.
+        destruct (rs n) eqn:Hrs, (ls n) eqn:Hls; auto.
+    Qed.
+
     Lemma sem_msem_eq:
       forall bk H eqs M eq,
         sem_equation G bk H eq ->
         NoDup_defs (eq :: eqs) ->
+        (forall x, Is_last_in x (eq::eqs) -> ~Is_fby_in x (eq::eqs)) ->
         Forall (msem_equation G bk H M) eqs ->
         memory_closed_n M eqs ->
         exists M1, Forall (msem_equation G bk H M1) (eq :: eqs)
               /\ memory_closed_n M1 (eq :: eqs).
     Proof.
-      intros * Heq NoDup Hmeqs WF.
+      intros * Heq NoDup FL Hmeqs WF.
       inversion Heq as [|
                         ??????????? Hls Hxs ? Hy Hr Hsem|
-                        ??????????? Hle Hvar Hr Hbools Hfby]; subst.
-      - exists M; eauto with nlsem.
+                        ??????????? Hle Hvar Hr Hbools Hfby|
+                         ?????????? Hvar Hck Hr Hbools Hlast]; subst.
+      - (* def *)
+        exists M; eauto with nlsem.
 
-      - pose proof Hsem as Hsem'.
+      - (* app *)
+        pose proof Hsem as Hsem'.
         apply sem_msem_reset in Hsem as (Mx & Hmsem); auto.
         exists (add_inst_n (hd Ids.default x) Mx M).
 
@@ -577,18 +635,32 @@ dataflow memory for which the non-standard semantics holds true.
             apply msem_equation_madd_inst; auto with nldef.
         + split; apply memory_closed_n_App; auto.
 
-      - rewrite reset_fby_fbyreset in Hvar.
+      - (* fby *)
+        rewrite reset_fby_fbyreset in Hvar.
         exists (add_val_n x (holdreset (sem_const c0) ls rs) M);
           split.
         + constructor.
-          * unfold add_val_n.
-            econstructor; eauto.
-            split; intros; unfold fbyreset;
-              simpl; repeat rewrite find_val_gss; auto.
-            destruct (rs n) eqn:Hrs, (ls n) eqn:Hls; auto.
+          * econstructor; eauto.
+            eapply holdreset_mfbyreset.
+            intros. unfold add_val_n. now rewrite find_val_gss.
           * inv NoDup.
             apply msem_equation_madd_val; auto with nldef.
+            -- intros Fby. eapply H3; eauto with nldef.
+            -- intros Last. eapply FL; [right|left]; eauto; constructor.
         + split; apply memory_closed_n_Fby; auto.
+
+      - (* last *)
+        rewrite reset_fby_fbyreset in Hlast.
+        exists (add_val_n x (holdreset (sem_const c0) xs rs) M); split.
+        + constructor.
+          * econstructor; eauto.
+            eapply holdreset_mfbyreset.
+            intros. unfold add_val_n. now rewrite find_val_gss.
+          * inv NoDup.
+            apply msem_equation_madd_val; auto with nldef.
+            -- intros Fby. eapply FL; [left|right]; eauto; constructor.
+            -- intros Last. eapply H3; eauto with nldef.
+        + split; apply memory_closed_n_Last; auto.
     Qed.
 
     Lemma memory_closed_empty:
@@ -602,11 +674,12 @@ dataflow memory for which the non-standard semantics holds true.
     Corollary sem_msem_eqs:
       forall bk H eqs,
         NoDup_defs eqs ->
+        (forall x, Is_last_in x eqs -> ~Is_fby_in x eqs) ->
         Forall (sem_equation G bk H) eqs ->
         exists M1, Forall (msem_equation G bk H M1) eqs
               /\ memory_closed_n M1 eqs.
     Proof.
-      intros bk H eqs NoDup Heqs.
+      intros bk H eqs NoDup FL Heqs.
       induction eqs as [|eq eqs IHeqs].
       - exists (fun n => empty_memory _); split; auto.
         apply memory_closed_empty.
@@ -614,6 +687,8 @@ dataflow memory for which the non-standard semantics holds true.
         eapply IHeqs in Heqs as (?&?&?).
         + eapply sem_msem_eq; eauto.
         + eapply NoDup_defs_cons; eauto.
+        + intros * L F.
+          eapply FL; right; eauto.
     Qed.
   End sem_msem_eq.
 
@@ -638,9 +713,9 @@ dataflow memory for which the non-standard semantics holds true.
       inv Hfind.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
       eapply sem_msem_eqs in Heqs as (M & ?&?); eauto using NoDup_defs_node.
-      exists M.
-      econstructor; eauto.
-      rewrite <-msem_equations_cons; eauto.
+      + exists M. econstructor; eauto.
+        rewrite <-msem_equations_cons; eauto.
+      + apply fby_last_NoDup.
     - apply sem_node_cons with (1:=Hord) in Hsem; auto.
       inv Hord.
       eapply IHnodes0 in Hsem as (M &?); eauto.
@@ -672,38 +747,30 @@ dataflow memory for which the non-standard semantics holds true.
     - clear Insts1 Insts2.
       intro x.
       specialize (Values1 x); specialize (Values2 x).
+      assert (In x (map fst (gather_mems eqs)) ->
+              Env.find x (values (M1 0)) = Env.find x (values (M2 0))) as Eq.
+      { intros Hin.
+        induction eqs as [|[]]; simpl in Hin; try contradiction;
+          inv Nodup;
+          inversion_clear Heqs1 as [|?? Heq1];
+          inversion_clear Heqs2 as [|?? Heq2]; auto.
+        * destruct Hin; auto; subst.
+          inversion_clear Heq1 as [| | |????????????????? (Find1'&?)];
+            inversion_clear Heq2 as [| | |????????????????? (Find2'&?)];
+            unfold find_val in *; congruence.
+        * destruct Hin; auto; subst.
+          inversion_clear Heq1 as [| |???????????????? (Find1'&?)|];
+            inversion_clear Heq2 as [| |???????????????? (Find2'&?)|];
+            unfold find_val in *; congruence.
+      }
       destruct (Env.find x (values (M1 0))) eqn: Find1;
         destruct (Env.find x (values (M2 0))) eqn: Find2; auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values1; congruence).
-        clear Values1 Values2.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs1 as [|?? Heq1];
-          inversion_clear Heqs2 as [|?? Heq2]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq1 as [| |????????????????? (Find1'&?)];
-          inversion_clear Heq2 as [| |????????????????? (Find2'&?)];
-          unfold find_val in *; congruence.
+        auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values1; congruence).
-        clear Values1 Values2.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs1 as [|?? Heq1];
-          inversion_clear Heqs2 as [|?? Heq2]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq1 as [| |????????????????? (Find1'&?)];
-          inversion_clear Heq2 as [| |????????????????? (Find2'&?)];
-          unfold find_val in *; congruence.
+        auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values2; congruence).
-        clear Values1 Values2.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs1 as [|?? Heq1];
-          inversion_clear Heqs2 as [|?? Heq2]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq1 as [| |????????????????? (Find1'&?)];
-          inversion_clear Heq2 as [| |????????????????? (Find2'&?)];
-          unfold find_val in *; congruence.
+        auto.
 
     - clear Values1 Values2.
       constructor.
@@ -717,7 +784,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq2 as [|?????????????? Hd|];
+          inversion_clear Heq2 as [|?????????????? Hd| |];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
         * apply Insts2 in Find.
           clear Insts1 Insts2.
@@ -727,7 +794,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq1 as [|?????????????? Hd|];
+          inversion_clear Heq1 as [|?????????????? Hd| |];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros i e e' Find1 Find2.
@@ -739,8 +806,8 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
         apply InMembers_app in Hin; destruct Hin as [Hin|]; auto.
         cases; inv Hin; try contradiction.
-        inversion Heq1 as [|?????????????? Hd1 Find1' ????? Reset1|]; subst;
-          inversion_clear Heq2 as [|?????????????? Hd2 Find2' ????? Reset2|];
+        inversion Heq1 as [|?????????????? Hd1 Find1' ????? Reset1| |]; subst;
+          inversion_clear Heq2 as [|?????????????? Hd2 Find2' ????? Reset2| |];
           inv Hd1; inv Hd2; unfold sub_inst_n, find_inst in *;
             rewrite Find1' in Find1; inv Find1;
               rewrite Find2' in Find2; inv Find2; eauto.
@@ -835,41 +902,35 @@ dataflow memory for which the non-standard semantics holds true.
     - clear Insts Insts0.
       intro x.
       specialize (Values x); specialize (Values0 x).
+      assert (In x (map fst (gather_mems eqs)) ->
+              Env.find x (values (M n)) = Env.find x (values (M 0))) as Eq.
+      { intros Hin.
+        induction eqs as [|[]]; simpl in Hin; try contradiction;
+          inv Nodup;
+          inversion_clear Heqs as [|?? Heq]; auto.
+        * destruct Hin; auto; subst.
+          inversion_clear Heq as [| | |???????????? Sem SemCk ??? Mfby].
+          pose proof Mfby as Mfby'; destruct Mfby'.
+          eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
+          intros k ?; specialize (Sem k). specialize (SemCk k) as (SemCk&_). rewrite Absbk in *; auto.
+          destruct (xs k); auto.
+          exfalso. eapply not_subrate_clock, SemCk; eauto.
+        * destruct Hin; auto; subst.
+          inversion_clear Heq as [| |???????????? Sem ??? Mfby|].
+          pose proof Mfby as Mfby'; destruct Mfby'.
+          eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
+          intros k ?; specialize (Sem k). inv Sem; auto.
+          rewrite Absbk in *; auto.
+          exfalso; eapply not_subrate_clock; eauto.
+      }
       destruct (Env.find x (values (M n))) eqn: Find;
         destruct (Env.find x (values (M 0))) eqn: Find0; auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values; congruence).
-        clear Values Values0.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs as [|?? Heq]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq as [| |???????????? Sem ???? Mfby].
-        pose proof Mfby as Mfby'; destruct Mfby'.
-        eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
-        intros k ?; specialize (Sem k). inv Sem; auto.
-        rewrite Absbk in *; auto.
-        exfalso; eapply not_subrate_clock; eauto.
+        auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values; congruence).
-        clear Values Values0.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs as [|?? Heq]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq as [| |???????????? Sem ???? Mfby].
-        pose proof Mfby as Mfby'; destruct Mfby'.
-        eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
+        auto.
       + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values0; congruence).
-        clear Values Values0.
-        induction eqs as [|[]]; simpl in Hin; try contradiction;
-          inv Nodup;
-          inversion_clear Heqs as [|?? Heq]; auto.
-        destruct Hin; auto; subst.
-        inversion_clear Heq as [| |???????????? Sem ???? Mfby].
-        pose proof Mfby as Mfby'; destruct Mfby'.
-        eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
-        intros k ?; specialize (Sem k). inv Sem; auto.
-        rewrite Absbk in *; auto.
-        exfalso; eapply not_subrate_clock; eauto.
+        auto.
 
     - clear Values Values0.
       constructor.
@@ -882,7 +943,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq as [|?????????????? Hd|];
+          inversion_clear Heq as [|?????????????? Hd| |];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
         * apply Insts0 in Find.
           clear Insts Insts0.
@@ -891,7 +952,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq as [|?????????????? Hd|];
+          inversion_clear Heq as [|?????????????? Hd| |];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros i e e' Find Find0.
@@ -902,7 +963,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
         apply InMembers_app in Hin; destruct Hin as [Hin|]; auto.
         cases; inv Hin; try contradiction.
-        inversion_clear Heq as [|?????????????? Hd Find' ?? Hck ?? Reset|];
+        inversion_clear Heq as [|?????????????? Hd Find' ?? Hck ?? Reset| |];
           inv Hd; unfold sub_inst_n, find_inst in *;
             rewrite Find' in Find; inv Find; rewrite Find' in Find0; inv Find0; eauto.
         destruct (Reset (if rs n then pred (count rs n) else count rs n))
@@ -1029,11 +1090,14 @@ dataflow memory for which the non-standard semantics holds true.
           sem_equation G bk H eq).
   Proof.
     intros; apply msem_node_equation_ind;
-      [intros|intros ????????????????????? Rst|intros|intros];
+      [intros|intros ????????????????????? Rst|intros|intros|intros];
       eauto using sem_equation, sem_node.
     - econstructor; eauto; intro k; destruct (Rst k) as (?&?&?); intuition.
     - econstructor; auto.
       1,3,4:eauto.
+      rewrite reset_fby_fbyreset, <- mfbyreset_fbyreset; eauto.
+    - econstructor; auto.
+      1,2,3:eauto.
       rewrite reset_fby_fbyreset, <- mfbyreset_fbyreset; eauto.
   Qed.
 

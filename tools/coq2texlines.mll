@@ -34,21 +34,28 @@ let deffirstline = ref 0
 let defname = ref ""
 let constrfirstline = ref 0
 let constrname = ref ""
+let modulepath = ref [] (* Keep track of module path *)
+
+let rec string_of_modulepath defname = function
+    | [] -> ""
+    | hd::tl when hd = defname -> string_of_modulepath defname tl
+    | s -> (String.concat "." (List.rev s))^"."
 
 (** Register a definition. *)
 (** The format of the commands is: *)
 (** [current_file]XX[name]XXfstline *)
 (** [current_file]XX[name]XXlastline *)
+(** [current_file]XX[name]XXmodulepath *)
 (** where in [current_file], all "/" have been replaced by "X" *)
 let register name fl ll =
   let file_name = Filename.chop_extension !current_file in
-  (* let file_name = String.map (fun x -> if x = '/' then 'X' else x) file_name in *)
-  (* let name = String.map (fun x -> if x = '_' then 'X' else x) name in *)
   let outch = Option.get !outch in
   Printf.fprintf outch "\\expandafter\\providecommand\\csname %sXX%sXXfstline\\endcsname{%d}\n"
     file_name name fl;
   Printf.fprintf outch "\\expandafter\\providecommand\\csname %sXX%sXXlastline\\endcsname{%d}\n"
-    file_name name ll
+    file_name name ll;
+  Printf.fprintf outch "\\expandafter\\providecommand\\csname %sXX%sXXmodulepath\\endcsname{%s}\n"
+    file_name name (string_of_modulepath name !modulepath)
 
 let register_def ll =
   register !defname !deffirstline ll
@@ -98,12 +105,15 @@ let def_start =
   | "CoFixpoint" | "Function"
   | ("Program" space+)? ("Definition" | "Fixpoint")
   | "Theorem" | "Lemma" | "Fact" | "Remark" | "Goal" | "Corollary"
-  | "Module" (space+ "Type")?
   | "Axiom" | "Conjecture" | "Parameter"
+let module_start =
+  "Module" space+ "Type"
+let end_start =
+  "End"
 let inductive_start =
   "Inductive" | "CoInductive"
 let admin_start =
-  "From" | "Require" | "Import" | "Open" | "End"
+  "From" | "Require" | "Import" | "Open"
   | ("Global" space+)? "Existing" space+ "Instance"
 let proof_start_anon =
   "Obligation" space+ (['0' - '9'])+ | "Next" space+ "Obligation"
@@ -126,6 +136,10 @@ rule file = parse
     { deffirstline := lexbuf.lex_curr_p.pos_lnum; start_def lexbuf }
   | inductive_start (* Start of an inductive *)
     { deffirstline := lexbuf.lex_curr_p.pos_lnum; start_ind lexbuf }
+  | module_start (* Start of a module *)
+    { deffirstline := lexbuf.lex_curr_p.pos_lnum; start_module lexbuf }
+  | end_start (* Possibly end of a module *)
+    { start_end lexbuf }
   | admin_start (* Some admin stuff *)
     { skip_to_dot lexbuf; file lexbuf }
   | assumption_start (* TODO *)
@@ -198,6 +212,27 @@ and skip_to_dot = parse
   | '\n' { Lexing.new_line lexbuf; skip_to_dot lexbuf }
   | "(*" { comment lexbuf; skip_to_dot lexbuf }
   | character | _ { skip_to_dot lexbuf }
+
+(*s Enter module. *)
+
+and start_module = parse
+  | '\n'   { Lexing.new_line lexbuf; start_module lexbuf }
+  | space+ | stars { start_module lexbuf }
+  | ident (* name of the start_def *)
+    { let modname = Lexing.lexeme lexbuf in
+      defname := modname;
+      modulepath := modname::!modulepath;
+      skip_def lexbuf }
+
+and start_end = parse
+  | '\n'   { Lexing.new_line lexbuf; start_end lexbuf }
+  | space+ | stars { start_end lexbuf }
+  | ident (* name of the start_def *)
+    { let modname = Lexing.lexeme lexbuf in
+      modulepath := (match !modulepath with
+                     | hd::tl when hd = modname -> tl
+                     | path -> path);
+      skip_def lexbuf }
 
 (*s Scans a comment. *)
 

@@ -71,7 +71,7 @@ Vélus, we recommend installing an ad-hoc
     $ mkdir opam
     $ opam init --root=opam --compiler=4.13.1
     $ eval `opam config env --root=$VELUS_DIR/opam`
-    $ opam install -j4 ocamlbuild coq.8.15.0 menhir
+    $ opam install -j4 ocamlbuild coq.8.15.0 menhir ocamlgraph
 
 To check the proofs and build Vélus:
 

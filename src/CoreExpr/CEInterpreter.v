@@ -5,7 +5,7 @@ From Coq Require Import Sorting.Permutation.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -31,7 +31,7 @@ Module Type CEINTERPRETER
     Variable R: env.
 
     Definition interp_vars_instant (xs: list ident): list svalue :=
-      map (interp_var_instant R) xs.
+      map (interp_var_instant (var_env R)) xs.
 
      Fixpoint interp_exp_instant (e: exp): svalue :=
       match e with
@@ -39,10 +39,10 @@ Module Type CEINTERPRETER
         if base then present (Vscalar (sem_cconst c)) else absent
       | Eenum x _ =>
         if base then present (Venum x) else absent
-      | Evar x _ =>
-        interp_var_instant R x
+      | Evar x _ => interp_var_instant R (Var x)
+      | Elast x _ => interp_var_instant R (Last x)
       | Ewhen e (x, _) b =>
-        match interp_var_instant R x, interp_exp_instant e with
+        match interp_var_instant R (Var x), interp_exp_instant e with
         | present (Venum b'), present ev =>
           if b ==b b' then present ev else absent
         | _, _ => absent
@@ -73,7 +73,7 @@ Module Type CEINTERPRETER
     Fixpoint interp_cexp_instant (e: cexp): svalue :=
       match e with
       | Emerge (x, _) es _ =>
-        match interp_var_instant R x with
+        match interp_var_instant R (Var x) with
         | present (Venum c) =>
           or_default absent (nth_error (map interp_cexp_instant es) c)
         | _ => absent
@@ -113,7 +113,8 @@ Module Type CEINTERPRETER
         vs = interp_vars_instant xs.
     Proof.
       unfold sem_vars_instant, interp_vars_instant.
-      induction 1; auto; simpl; rw_exp_helper; f_equal; auto.
+      intros * F2. symmetry. apply Forall2_eq. simpl_Forall.
+      erewrite <-interp_var_instant_complete; eauto.
     Qed.
 
     Lemma interp_exp_instant_complete:
@@ -195,7 +196,7 @@ Module Type CEINTERPRETER
     Qed.
 
     Definition interp_annotated_instant {A} (interp: A -> svalue) (ck: clock) (a: A): svalue :=
-      if interp_clock_instant base R ck then
+      if interp_clock_instant base (var_env R) ck then
         interp a
       else
         absent.

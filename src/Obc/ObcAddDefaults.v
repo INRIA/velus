@@ -1157,7 +1157,7 @@ Module Type OBCADDDEFAULTS
       match s with
       | Skip => (s, required, ∅, ∅)
       | Assign x e => (s, PS.remove x required, ∅, PS.singleton x)
-      | AssignSt x e => (s, required, ∅, ∅)
+      | AssignSt x e _ => (s, required, ∅, ∅)
       | Call xs f o m es =>
         let (es', required') := fold_right add_valid
                                            ([], ps_removes xs required) es
@@ -2761,7 +2761,7 @@ Module Type OBCADDDEFAULTS
       program_refines (fun _ _ => all_in1) p1 p2 ->
       wt_method p2 insts mems m ->
       No_Overwrites m.(m_body) ->
-      Forall (fun x => ~Can_write_in x m.(m_body)) (map fst m.(m_in)) ->
+      Forall (fun x => ~Can_write_in_var x m.(m_body)) (map fst m.(m_in)) ->
       (forall ome ome' clsid f vos rvos,
           Forall (fun vo => vo <> None) vos ->
           stmt_call_eval p1 ome clsid f vos ome' rvos ->
@@ -2873,7 +2873,7 @@ Module Type OBCADDDEFAULTS
       program_refines (fun _ _ => all_in1) p1 p2 ->
       wt_method p2 insts mems m ->
       No_Overwrites m.(m_body) ->
-      Forall (fun x => ~ Can_write_in x m.(m_body)) (map fst m.(m_in)) ->
+      Forall (fun x => ~ Can_write_in_var x m.(m_body)) (map fst m.(m_in)) ->
       (forall ome ome' clsid f vos rvos,
           Forall (fun vo => vo <> None) vos ->
           stmt_call_eval p1 ome clsid f vos ome' rvos ->
@@ -2901,7 +2901,7 @@ Module Type OBCADDDEFAULTS
       program_refines (fun _ _ => all_in1) p1 p2 ->
       wt_class p2 c ->
       Forall (fun m => No_Overwrites m.(m_body)) c.(c_methods) ->
-      Forall (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+      Forall (fun m => Forall (fun x => ~ Can_write_in_var x m.(m_body))
                               (map fst m.(m_in))) c.(c_methods) ->
       (forall ome ome' clsid f vos rvos,
           Forall (fun vo => vo <> None) vos ->
@@ -2923,7 +2923,7 @@ Module Type OBCADDDEFAULTS
     forall p,
       wt_program p ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
-      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in_var x m.(m_body))
                                       (map fst m.(m_in))) p ->
       program_refines (fun _ _ => all_in1) (add_defaults p) p.
   Proof.
@@ -2966,7 +2966,7 @@ Module Type OBCADDDEFAULTS
     forall p me f m vs me' rvs,
       wt_program p ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
-      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in_var x m.(m_body))
                                       (map fst m.(m_in))) p ->
       stmt_call_eval p me f m (map Some vs) me' (map Some rvs) ->
       stmt_call_eval (add_defaults p) me f m (map Some vs) me' (map Some rvs).
@@ -2988,7 +2988,7 @@ Module Type OBCADDDEFAULTS
     forall f c ins outs p me,
       wt_program p ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
-      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in_var x m.(m_body))
                                       (map fst m.(m_in))) p ->
       loop_call p c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me ->
       loop_call (add_defaults p) c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me.

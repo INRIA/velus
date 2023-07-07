@@ -1,0 +1,4 @@
+node f(x : int) returns (y : bool; z : int)
+let
+    y, z = ((true), (x));
+tel
