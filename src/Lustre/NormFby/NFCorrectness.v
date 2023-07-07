@@ -213,7 +213,7 @@ Module Type NFCORRECTNESS
         dom H (vars++st_senv st) /\
           LCS.sc_vars (vars++st_senv st) H b.
 
-      Lemma fresh_ident_refines : forall hint H a id (v: Stream svalue) (st st' : fresh_st Ids.fby _),
+      Lemma fresh_ident_refines : forall hint H a id (v: Stream svalue) (st st' : fresh_st Ids.fby_id _),
           dom H (vars++st_senv st) ->
           fresh_ident hint a st = (id, st') ->
           FEnv.refines (@EqSt _) H (FEnv.add (Var id) v H).
@@ -247,7 +247,7 @@ Module Type NFCORRECTNESS
           right. econstructor; eauto.
       Qed.
 
-      Fact fresh_ident_hist_st : forall hint b ty ck id v H (st st': fresh_st Ids.fby _),
+      Fact fresh_ident_hist_st : forall hint b ty ck id v H (st st': fresh_st Ids.fby_id _),
           sem_clock (var_history H) b ck (abstract_clock v) ->
           fresh_ident hint (ty, ck) st = (id, st') ->
           hist_st vars b H st ->
@@ -622,7 +622,7 @@ Module Type NFCORRECTNESS
     Fact init_st_hist_st : forall b H xs,
         dom H xs ->
         sc_vars xs H b ->
-        hist_st xs b H (@init_st Ids.fby _).
+        hist_st xs b H (@init_st Ids.fby_id _).
     Proof.
       intros b H n Hdom (?&?).
       split; [|split].

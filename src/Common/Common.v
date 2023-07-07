@@ -251,7 +251,7 @@ Module Type IDS.
   Parameter local : ident.
   Parameter norm1 : ident.
   Parameter last : ident.
-  Parameter fby : ident.
+  Parameter fby_id : ident.
   Parameter stc : ident.
   Parameter obc2c : ident.
 
@@ -262,11 +262,11 @@ Module Type IDS.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition last_prefs := PS.add last norm1_prefs.
-  Definition fby_prefs := PS.add fby last_prefs.
+  Definition fby_prefs := PS.add fby_id last_prefs.
 
-  Definition lustre_prefs := [elab; auto; switch; local; norm1; last; fby].
+  Definition lustre_prefs := [elab; auto; switch; local; norm1; last; fby_id].
   Conjecture lustre_prefs_NoDup : NoDup lustre_prefs.
-  Definition gensym_prefs := [elab; auto; switch; local; norm1; last; fby; stc].
+  Definition gensym_prefs := [elab; auto; switch; local; norm1; last; fby_id; stc].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
 
   Parameter default : ident.
@@ -287,7 +287,7 @@ Module Type IDS.
   Conjecture local_atom : atom local.
   Conjecture norm1_atom : atom norm1.
   Conjecture last_atom : atom last.
-  Conjecture fby_atom : atom fby.
+  Conjecture fby_atom : atom fby_id.
   Conjecture stc_atom : atom stc.
   Conjecture obc2c_atom : atom obc2c.
 

@@ -88,7 +88,7 @@ Module Export Ids <: IDS.
   Definition local := str_to_pos "local".
   Definition norm1 := str_to_pos "norm".
   Definition last := str_to_pos "last".
-  Definition fby := str_to_pos "fby".
+  Definition fby_id := str_to_pos "fby".
   Definition stc := str_to_pos "stc".
   Definition obc2c := str_to_pos "obc2c".
 
@@ -106,11 +106,11 @@ Module Export Ids <: IDS.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition last_prefs := PS.add last norm1_prefs.
-  Definition fby_prefs := PS.add fby last_prefs.
+  Definition fby_prefs := PS.add fby_id last_prefs.
 
 
-  Definition lustre_prefs := [elab; auto; switch; local; norm1; last; fby].
-  Definition gensym_prefs := [elab; auto; switch; local; norm1; last; fby; stc].
+  Definition lustre_prefs := [elab; auto; switch; local; norm1; last; fby_id].
+  Definition gensym_prefs := [elab; auto; switch; local; norm1; last; fby_id; stc].
 
   Lemma lustre_prefs_NoDup : NoDup lustre_prefs.
   Proof.
@@ -229,7 +229,7 @@ Module Export Ids <: IDS.
   Proof. prove_atom. Qed.
   Lemma last_atom: atom last.
   Proof. prove_atom. Qed.
-  Lemma fby_atom: atom fby.
+  Lemma fby_atom: atom fby_id.
   Proof. prove_atom. Qed.
   Lemma stc_atom: atom stc.
   Proof. prove_atom. Qed.

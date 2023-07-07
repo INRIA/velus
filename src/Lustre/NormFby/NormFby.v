@@ -30,7 +30,7 @@ Module Type NORMFBY
   Open Scope bool_scope.
 
   Lemma fby_not_in_last_prefs :
-    ~PS.In fby last_prefs.
+    ~PS.In fby_id last_prefs.
   Proof.
     unfold last_prefs, norm1_prefs, local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs.
     rewrite ? PSF.add_iff, PSF.singleton_iff.
@@ -39,7 +39,7 @@ Module Type NORMFBY
     intros Eq. repeat take (_ \/ _) and destruct it as [Eq|Eq]; eauto 8 with datatypes.
   Qed.
 
-  Definition FreshAnn A := Fresh fby A (type * clock).
+  Definition FreshAnn A := Fresh fby_id A (type * clock).
 
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
@@ -661,8 +661,8 @@ Module Type NORMFBY
     do 2 constructor; simpl.
     - eapply normfby_blocks_NoDupLocals; [|eauto].
       inv Hgood. inv H0. simpl_Forall.
-      eapply NoDupLocals_incl' with (npref:=fby). 1,2,4:eauto using fby_not_in_last_prefs.
-      assert (Forall (fun id => exists x hint, id = gensym fby hint x) (st_ids st')) as Hids.
+      eapply NoDupLocals_incl' with (npref:=fby_id). 1,2,4:eauto using fby_not_in_last_prefs.
+      assert (Forall (fun id => exists x hint, id = gensym fby_id hint x) (st_ids st')) as Hids.
       { eapply st_valid_prefixed; eauto. }
       intros ? Hin. repeat rewrite map_app in *. repeat rewrite in_app_iff in *. destruct Hin as [[?|Hin]|[Hin|Hin]]; auto.
       rewrite map_map in Hin. eapply Forall_forall in Hids; eauto.
