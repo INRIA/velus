@@ -21,8 +21,23 @@ Module Type LDENOT
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn).
 
 Context {Prefs : PS.t}.
+
 (* [nolocal] pour des variables locales à top-level seulement
-   et pas de last dans les variables de sortie *)
+   et pas de last dans les variables de sortie
+   FIXME: c'est ce qu'il y avait dans Vélus avant le commit 2370699a
+ *)
+Inductive nolocal_top_block : block -> Prop :=
+| NLtop : forall locs blks,
+    Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
+    Forall nolocal_block blks ->
+    nolocal_top_block (Blocal (Scope locs blks)).
+Inductive nolocal : list decl -> block -> Prop :=
+  | NLnode : forall out blk,
+      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
+      nolocal_top_block blk ->
+      (exists xs, VarsDefinedComp blk xs /\ Permutation.Permutation xs (List.map fst out)) ->
+      nolocal out blk.
+
 Definition node := @node nolocal Prefs.
 Definition global := @global nolocal Prefs.
 
