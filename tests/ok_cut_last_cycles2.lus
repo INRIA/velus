@@ -1,0 +1,11 @@
+node f(a : int) returns (t : int)
+var x, y, z : int;
+let
+    last x = 0;
+    last y = 0;
+    last z = 0;
+    x = last y + last z;
+    y = last x + 1;
+    z = last x + 1;
+    t = x + y + z;
+tel

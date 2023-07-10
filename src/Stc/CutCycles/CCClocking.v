@@ -92,12 +92,12 @@ Module Type CCCLOCKING
 
   End rename.
 
-  Lemma rename_trconstr_wc {prefs} (P: @program prefs) Γ Γ' i x y : forall tc,
+  Lemma rename_trconstr_wc {prefs} (P: @program prefs) Γ Γ' x y : forall tc,
       (forall xty, In xty Γ -> In xty Γ') ->
       (forall x' ty, x = Last x' -> In (x', (ty, true)) Γ -> In (y, (ty, false)) Γ') ->
       (forall x' ty islast, x = Var x' -> In (x', (ty, islast)) Γ -> In (y, (ty, false)) Γ') ->
       wc_trconstr P Γ tc ->
-      wc_trconstr P Γ' (rename_trconstr i x y tc).
+      wc_trconstr P Γ' (rename_trconstr x y tc).
   Proof.
     intros * Incl SubL SubN Wc; inv Wc; simpl.
     - (* Def *)
@@ -183,7 +183,7 @@ Module Type CCCLOCKING
         * simpl_Forall. intros * In. subst.
           rewrite ? map_app, ? in_app_iff. left. right. left. right.
           eapply fresh_idents_In' in H1; eauto. simpl_In. cases. inv Hf.
-          rewrite <-app_assoc, Permutation_app_comm with (l:=map _ (st_anns _)) in In.
+          rewrite <-app_assoc, Permutation_app_comm with (l:=st_anns _) in In.
           rewrite ? app_assoc, map_app, <- ? app_assoc in In.
           rewrite ? in_app_iff in In. destruct In as [In|[In|[In|In]]]; simpl_In.
           1:{ exfalso. eapply NoDup_app_In in ND; [|solve_In].

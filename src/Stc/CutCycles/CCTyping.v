@@ -129,12 +129,12 @@ Module Type CCTYPING
     Qed.
   End rename.
 
-  Lemma rename_trconstr_wt {prefs} (P: @program prefs) Γ Γ' i x y : forall tc,
+  Lemma rename_trconstr_wt {prefs} (P: @program prefs) Γ Γ' x y : forall tc,
       (forall xty, In xty Γ -> In xty Γ') ->
       (forall x' ty, x = Last x' -> In (x', (ty, true)) Γ -> In (y, (ty, false)) Γ') ->
       (forall x' ty islast, x = Var x' -> In (x', (ty, islast)) Γ -> In (y, (ty, false)) Γ') ->
       wt_trconstr P Γ tc ->
-      wt_trconstr P Γ' (rename_trconstr i x y tc).
+      wt_trconstr P Γ' (rename_trconstr x y tc).
   Proof.
     intros * Incl SubL SubN Wt; inv Wt; simpl.
     - (* Def *)
@@ -186,7 +186,7 @@ Module Type CCTYPING
         1,3:rewrite ? map_app, ? in_app_iff.
         * left. right. left. right. solve_In.
         * right. left. simpl_In. cases. inv Hf. solve_In.
-        * simpl_In. cases. inv Hf. simpl_Forall.
+        * simpl_In. simpl_Forall.
           eapply wt_clock_incl; [|eauto].
           intros * In. rewrite ? map_app, ? in_app_iff in *. firstorder.
       + eapply fresh_idents_In' in H0 as In'; eauto.
@@ -194,7 +194,7 @@ Module Type CCTYPING
         1,3:rewrite ? map_app, ? in_app_iff.
         * left. right. left. right. solve_In.
         * right. right. simpl_In. cases. inv Hf. solve_In.
-        * simpl_In. cases. inv Hf. simpl_Forall.
+        * simpl_In. simpl_Forall.
           eapply wt_clock_incl; [|eauto].
           intros * In. rewrite ? map_app, ? in_app_iff in *. firstorder.
       + rewrite ? map_fold_rename in H1. simpl_In. simpl_Forall.
@@ -217,7 +217,7 @@ Module Type CCTYPING
         * simpl_Forall. intros * In. subst.
           rewrite ? map_app, ? in_app_iff. left. right. left. right.
           eapply fresh_idents_In' in H1; eauto. simpl_In. cases. inv Hf.
-          rewrite <-app_assoc, Permutation_app_comm with (l:=map _ (st_anns _)) in In.
+          rewrite <-app_assoc, Permutation_app_comm with (l:=st_anns _) in In.
           rewrite ? app_assoc, map_app, <- ? app_assoc in In.
           rewrite ? in_app_iff in In. destruct In as [In|[In|[In|In]]]; simpl_In.
           1:{ exfalso. eapply NoDup_app_In in ND; [|solve_In].

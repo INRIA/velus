@@ -155,7 +155,7 @@ module PrintFun
                  @[<v 2>{@;%a@;<0 -2>@]\
                  }@]@]@]@;}"
         print_ident name
-        (print_comma_list_as "last" print_reset) lasts
+        (print_comma_list_as "init" print_reset) lasts
         (print_comma_list_as "init" print_reset) nexts
         (print_comma_list_as "sub" print_subsystem) subs
         print_decl_list inputs
@@ -185,7 +185,7 @@ module SchedulerFun
                  and type cexp   = CE.cexp
                  and type rhs    = CE.rhs) :
   sig
-    val cutting_points : ident list -> ident list -> Stc.trconstr list -> (ident * ident) list
+    val cutting_points : ident list -> ident list -> Stc.trconstr list -> ident list
     val schedule : ident -> Stc.trconstr list -> BinNums.positive list
   end
   =
@@ -589,7 +589,7 @@ module SchedulerFun
       let node_compare_sch n1 n2 =
         match n1.n_schedule, n2.n_schedule with
         | Some p1, Some p2 -> Camlcoq.P.compare p1 p2
-        | _, _ -> invalid_arg "node_compare_sch"
+        | _, _ -> exit 1
       in
 
       let node_list = Array.to_list tcs in
@@ -695,14 +695,7 @@ module SchedulerFun
       let equal = (=)
     end
 
-    module L = struct
-      type t = ident
-
-      let compare = Camlcoq.P.compare
-      let default = BinNums.Coq_xH
-    end
-
-    module G = Persistent.Digraph.ConcreteLabeled(V)(L)
+    module G = Persistent.Digraph.Concrete(V)
     module Viz = Graphviz.Dot(struct
         include G
 
@@ -746,10 +739,9 @@ module SchedulerFun
 
     let add_tc_dep nexts gr tc =
 
-      let add_dep gr x l y =
-        G.add_edge_e gr (G.E.create x l y) in
-      let add_dep_if_diff gr x l y =
-        if x <> y then add_dep gr x l y else gr
+      let add_dep = G.add_edge in
+      let add_dep_if_diff gr x y =
+        if x <> y then add_dep gr x y else gr
       in
 
       let rec free_exp acc = function
@@ -783,18 +775,18 @@ module SchedulerFun
       | TcReset _ -> gr
       | TcDef (_, y, e) ->
         let (bef, aft) = free_rhs ([], []) e in
-        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x y) gr aft) gr bef
-      | TcUpdate (_, _, UpdInst (i, _, _, es)) ->
+        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
+      | TcUpdate (_, _, UpdInst (_, _, _, es)) ->
         let (bef, aft) = free_exps ([], []) es in
-        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x i) gr aft) gr bef
+        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
       | TcUpdate (_, _, UpdLast (x, ce)) ->
         let (bef, aft) = free_cexp ([], []) ce in
-        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x x) gr bef in
-        List.fold_left (fun gr y -> add_dep_if_diff gr x x y) gr aft
+        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
+        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
       | TcUpdate (_, _, UpdNext (x, e)) ->
         let (bef, aft) = free_exp ([], []) e in
-        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x x) gr bef in
-        List.fold_left (fun gr y -> add_dep_if_diff gr x x y) gr aft
+        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
+        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
 
     let cutting_points _ nexts trconstrs =
       let nexts = List.fold_left (fun nexts x -> PM.add x () nexts) PM.empty nexts in
@@ -803,7 +795,6 @@ module SchedulerFun
       (* Viz.fprint_graph Format.std_formatter graph; *)
       (* Format.fprintf Format.std_formatter "\n"; *)
       let args = Fashwo.feedback_arc_set graph in
-      (* List.iter (fun (_, l, x) -> Printf.fprintf stdout "cutting %s on %s\n" (extern_atom x) (extern_atom l)) args; *)
-      List.map (fun (_, l, x) -> (x, l)) args
+      List.map fst args
 
   end

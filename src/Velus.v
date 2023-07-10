@@ -29,7 +29,7 @@ Import List.ListNotations.
 Open Scope error_monad_scope.
 Open Scope stream_scope.
 
-Parameter cutting_points: list ident -> list ident -> list trconstr -> list (ident * ident).
+Parameter cutting_points: list ident -> list ident -> list trconstr -> list ident.
 Parameter schedule      : ident -> list trconstr -> list positive.
 Parameter print_lustre  : @global (fun _ _ => True) elab_prefs -> unit.
 Parameter print_complete: @global complete elab_prefs -> unit.

@@ -306,11 +306,11 @@ Module Type CCCORRECTNESS
   End rename.
 
   Lemma rename_trconstr_sem {prefs1 prefs2} (P1: @program prefs1) (P2: @program prefs2) :
-    forall b R S I S' i x y tc,
+    forall b R S I S' x y tc,
       (forall x' v, x = Last x' -> R (Last x') = Some v -> R (Var y) = Some v) ->
       (forall x' v, x = Var x' -> R (Var x') = Some v -> R (Var y) = Some v) ->
       sem_trconstr P2 b R S I S' tc ->
-      sem_trconstr P2 b R S I S' (rename_trconstr i x y tc).
+      sem_trconstr P2 b R S I S' (rename_trconstr x y tc).
   Proof.
     intros * SubL SubN Sem.
     inv Sem; simpl.
@@ -334,7 +334,7 @@ Module Type CCCORRECTNESS
   Qed.
 
   Fact fresh_idents_NoDup : forall xs xs' st st',
-      @Fresh.fresh_idents stc (ident * (type * clock)) xs st = (xs', st') ->
+      @Fresh.fresh_idents stc (type * clock) xs st = (xs', st') ->
       NoDup (map snd (map fst xs')).
   Proof.
     unfold Fresh.fresh_idents.
@@ -348,15 +348,13 @@ Module Type CCCORRECTNESS
 
   Lemma cut_cycles_tcs_sem {prefs1 prefs2} :
     forall (P1: @program prefs1) (P2: @program prefs2) Γ b R S I S' lasts nexts tcs tcs' st',
-      (* NoDupMembers (map fst lasts) -> *)
-      (* NoDupMembers (map fst nexts) -> *)
       Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (map fst Γ) ->
-      Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (map fst (map fst nexts)) ->
+      Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (map fst nexts) ->
       last_consistency tcs ->
       next_consistency tcs ->
       inst_consistency tcs ->
-      (forall x i ty ck c, In (x, i, (c, ty, ck)) lasts -> exists ckrs e, In (TcUpdate ck ckrs (UpdLast x e)) tcs) ->
-      (forall x i ty ck c, In (x, i, (c, ty, ck)) nexts -> exists ckrs e, In (TcUpdate ck ckrs (UpdNext x e)) tcs) ->
+      (forall x ty ck c, In (x, (c, ty, ck)) lasts -> exists ckrs e, In (TcUpdate ck ckrs (UpdLast x e)) tcs) ->
+      (forall x ty ck c, In (x, (c, ty, ck)) nexts -> exists ckrs e, In (TcUpdate ck ckrs (UpdNext x e)) tcs) ->
       Forall (wt_trconstr P1 Γ) tcs ->
       Forall (sem_trconstr P2 b R S I S') tcs ->
       cut_cycles_tcs lasts nexts tcs Fresh.init_st = (tcs', st') ->
@@ -444,7 +442,7 @@ Module Type CCCORRECTNESS
             eapply Fresh.fresh_idents_prefixed in H0. simpl_Forall; subst.
             eapply Fresh.Facts.contradict_AtomOrGensym; eauto using stc_not_in_lustre_prefs.
         }
-        destruct (Env.find i1 _) eqn:Find3.
+        destruct (Env.find i0 _) eqn:Find3.
         1:{ exfalso.
             apply Env.from_list_find_In in Find3. simpl_In.
             apply Fresh.fresh_idents_In_ids in H. apply Fresh.fresh_idents_nIn_ids in H0.

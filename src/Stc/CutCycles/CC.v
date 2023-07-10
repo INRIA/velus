@@ -23,7 +23,7 @@ Module Type EXT_CC
 
   (** In the returned list a pair (x, y) indicates
       that x should be cut in transition constraint y *)
-  Parameter cutting_points : list ident -> list ident -> list Syn.trconstr -> list (ident * ident).
+  Parameter cutting_points : list ident -> list ident -> list Syn.trconstr -> list ident.
 
 End EXT_CC.
 
@@ -91,48 +91,44 @@ Module Type CC
       end.
   End rename.
 
-  Definition rename_trconstr i x y (tc : trconstr) :=
+  Definition rename_trconstr x y (tc : trconstr) :=
     match tc with
-    | TcDef ck i' rhs =>
-        if i' ==b i then TcDef ck i' (rename_rhs x y rhs)
-        else tc
+    | TcDef ck i' rhs => TcDef ck i' (rename_rhs x y rhs)
     | TcReset _ _ => tc (* Reset constraints do not contain expressions *)
-    | TcUpdate ck ckrs (UpdLast i' e) =>
-        if i' ==b i then TcUpdate ck ckrs (UpdLast i' (rename_cexp x y e))
-        else tc
-    | TcUpdate ck ckrs (UpdNext i' e) =>
-        if i' ==b i then TcUpdate ck ckrs (UpdNext i' (rename_exp x y e))
-        else tc
+    | TcUpdate ck ckrs (UpdLast i e) =>
+        if var_last_ident x ==b i then tc
+        else TcUpdate ck ckrs (UpdLast i (rename_cexp x y e))
+    | TcUpdate ck ckrs (UpdNext i e) =>
+        if var_last_ident x ==b i then tc
+        else TcUpdate ck ckrs (UpdNext i (rename_exp x y e))
     | TcUpdate ck ckrs (UpdInst i' xs f es) =>
         match x with
-        | Last _ =>
-            if i' ==b i then TcUpdate ck ckrs (UpdInst i' xs f (map (rename_exp x y) es))
-            else tc
+        | Last _ => TcUpdate ck ckrs (UpdInst i' xs f (map (rename_exp x y) es))
         | Var _ => tc
         end
     end.
 
   (** System *)
 
-  Definition FreshAnn A := Fresh stc A (ident * (type * clock)).
+  Definition FreshAnn A := Fresh stc A (type * clock).
 
-  Definition cut_cycles_tcs (lasts nexts: list ((ident * ident) * (const * type * clock))) tcs : FreshAnn (list trconstr) :=
+  Definition cut_cycles_tcs (lasts nexts: list (ident * (const * type * clock))) tcs : FreshAnn (list trconstr) :=
     (* Lasts *)
-    do nlasts <- fresh_idents (map (fun '((x, i), (_, ty, ck)) => (x, (i, (ty, ck)))) lasts);
-    let tcs := fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (Last x) lx) tcs) nlasts tcs in
-    let eqlasts := map (fun '(x, lx, (_, (ty, ck))) => TcDef ck lx (Ecexp (Eexp (Elast x ty)))) nlasts in
+    do nlasts <- fresh_idents (map (fun '(x, (_, ty, ck)) => (x, (ty, ck))) lasts);
+    let tcs := fold_left (fun tcs '(x, lx, _) => map (rename_trconstr (Last x) lx) tcs) nlasts tcs in
+    let eqlasts := map (fun '(x, lx, (ty, ck)) => TcDef ck lx (Ecexp (Eexp (Elast x ty)))) nlasts in
     (* Nexts *)
-    do nnexts <- fresh_idents (map (fun '((x, i), (_, ty, ck)) => (x, (i, (ty, ck)))) nexts);
-    let tcs := fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (Var x) lx) tcs) nnexts tcs in
-    let eqnexts := map (fun '(x, lx, (_, (ty, ck))) => TcDef ck lx (Ecexp (Eexp (Evar x ty)))) nnexts in
+    do nnexts <- fresh_idents (map (fun '(x, (_, ty, ck)) => (x, (ty, ck))) nexts);
+    let tcs := fold_left (fun tcs '(x, lx, _) => map (rename_trconstr (Var x) lx) tcs) nnexts tcs in
+    let eqnexts := map (fun '(x, lx, (ty, ck)) => TcDef ck lx (Ecexp (Eexp (Evar x ty)))) nnexts in
 
     ret (eqlasts++eqnexts++tcs).
 
   (** ** Properties *)
 
-  Lemma map_fold_rename {A} (cons: ident -> var_last) : forall (xs: list (ident * ident * (ident * A))) tcs,
-      fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (cons x) lx) tcs) xs tcs
-      = map (fun tc => fold_left (fun tc '(x, lx, (i, _)) => rename_trconstr i (cons x) lx tc) xs tc) tcs.
+  Lemma map_fold_rename {A} (cons: ident -> var_last) : forall (xs: list (ident * ident * A)) tcs,
+      fold_left (fun tcs '(x, lx, _) => map (rename_trconstr (cons x) lx) tcs) xs tcs
+      = map (fun tc => fold_left (fun tc '(x, lx, _) => rename_trconstr (cons x) lx tc) xs tc) tcs.
   Proof.
     intros.
     erewrite <-fold_left_rev_right, map_ext with (g:=fun _ => fold_right _ _ _).
@@ -167,7 +163,7 @@ Module Type CC
   (** *** Variables, Last, Next Definitions *)
 
   Lemma fresh_idents_vars_perm : forall xs xs' st st',
-      @fresh_idents stc (ident * (type * clock)) xs st = (xs', st') ->
+      @fresh_idents stc (type * clock) xs st = (xs', st') ->
       Permutation (st_ids st') (map (fun '(_, lx, _) => lx) xs' ++ st_ids st).
   Proof.
     induction xs as [|(?&?&?)]; intros * Fr; repeat inv_bind; simpl; auto.
@@ -302,22 +298,16 @@ Module Type CC
 
   Program Definition cut_cycles_system (b: @system (PSP.of_list lustre_prefs)) : @system (PSP.of_list gensym_prefs) :=
     let tocut := ECC.cutting_points (map fst b.(s_lasts)) (map fst b.(s_nexts)) b.(s_tcs) in
-    let tocut := Env.from_list tocut in
+    let tocut := PSP.of_list tocut in
     let res := cut_cycles_tcs
-                 (map_filter (fun x => match Env.find (fst x) tocut with
-                                    | Some i => Some (fst x, i, snd x)
-                                    | None => None
-                                    end) b.(s_lasts))
-                 (map_filter (fun x => match Env.find (fst x) tocut with
-                                    | Some i => Some (fst x, i, snd x)
-                                    | None => None
-                                    end) b.(s_nexts))
+                 (filter (fun x => PS.mem (fst x) tocut) b.(s_lasts))
+                 (filter (fun x => PS.mem (fst x) tocut) b.(s_nexts))
                  b.(s_tcs) init_st in
     {|
       s_name  := b.(s_name);
       s_subs  := b.(s_subs);
       s_in    := b.(s_in);
-      s_vars  := b.(s_vars)++map (fun xann => (fst xann, snd (snd xann))) (st_anns (snd res));
+      s_vars  := b.(s_vars)++st_anns (snd res);
       s_lasts := b.(s_lasts);
       s_nexts := b.(s_nexts);
       s_out   := b.(s_out);
@@ -333,7 +323,7 @@ Module Type CC
     rewrite map_app, <-app_assoc.
     eapply Permutation_NoDup, NoDup_app' with (ws:=map fst (st_anns st'));
       [|apply ND|apply st_valid_NoDup|].
-    - rewrite map_map. solve_Permutation_app.
+    - solve_Permutation_app.
     - rewrite ? Forall_app; repeat split; simpl_Forall.
       all:eapply st_valid_AtomOrGensym_nIn; eauto using stc_not_in_lustre_prefs.
   Qed.
@@ -341,7 +331,7 @@ Module Type CC
     destruct (cut_cycles_tcs _ _ _) as (tcs'&st') eqn:Htcs; simpl.
     apply cut_cycles_tcs_variables in Htcs.
     pose proof (s_vars_out_in_tcs b) as Perm.
-    erewrite map_app, <-app_assoc, Permutation_swap, Perm, Htcs, map_map.
+    erewrite map_app, <-app_assoc, Permutation_swap, Perm, Htcs.
     apply Permutation_app_comm.
   Qed.
   Next Obligation.
