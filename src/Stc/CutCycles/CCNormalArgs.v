@@ -51,9 +51,9 @@ Module Type CCNORMALARGS
     unfold cut_cycles_tcs in *. repeat Fresh.Tactics.inv_bind.
     rewrite ? Forall_app. repeat split; simpl_Forall.
     1,2:constructor.
-    inv Hn; simpl; try constructor.
-    take (find_system _ _ = _) and eapply cut_cycles_find_system in it.
-    econstructor; eauto.
+    rewrite 2 map_fold_rename in H1. simpl_In. simpl_Forall.
+    eapply fold_left_ind2, fold_left_ind2; intros; destruct_conjs; eauto.
+    all:take (normal_args_tc _ _) and inv it; simpl; cases; econstructor; eauto using cut_cycles_find_system.
     simpl_Forall; auto using rename_exp_noops.
   Qed.
 

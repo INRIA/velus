@@ -78,88 +78,79 @@ Module Type CCCORRECTNESS
   Qed.
   Global Hint Resolve cut_cycles_state_closed : stcsem.
 
-  Section rename.
+  Section incl.
     Variable R R' : @FEnv.t var_last svalue.
     Variable Γ : list (ident * (type * bool)).
-    Variable subl subn : Env.t ident.
 
     Hypothesis InclV : forall x ty islast v,
         In (x, (ty, islast)) Γ -> R (Var x) = Some v -> R' (Var x) = Some v.
     Hypothesis InclL : forall x ty v,
         In (x, (ty, true)) Γ -> R (Last x) = Some v -> R' (Last x) = Some v.
-    Hypothesis SubL : forall x y v,
-        Env.find x subl = Some y -> R (Last x) = Some v -> R' (Var y) = Some v.
-    Hypothesis SubN : forall x y v,
-        Env.find x subn = Some y -> R (Var x) = Some v -> R' (Var y) = Some v.
 
-    Lemma rename_exp_sem tys b : forall e v,
+    Lemma sem_exp_incl tys b : forall e v,
         wt_exp tys Γ e ->
         sem_exp_instant b R e v ->
-        sem_exp_instant b R' (rename_exp subl subn e) v.
+        sem_exp_instant b R' e v.
     Proof.
       induction e; intros * Wc Sem; inv Wc; inv Sem; simpl in *.
       - (* const *) constructor; auto.
       - (* enum *) constructor; auto.
       - (* var *)
         constructor.
-        unfold rename_var, or_default, sem_var_instant in *.
-        cases_eqn Eq; eauto.
+        unfold rename_var, sem_var_instant in *; eauto.
       - (* lasts *)
-        cases_eqn Eq; constructor.
-        1,2:unfold sem_var_instant in *; eauto.
+        constructor.
+        unfold sem_var_instant in *; eauto.
       - (* when *)
         constructor; unfold sem_var_instant; eauto.
       - eapply Swhen_abs1; unfold sem_var_instant in *; eauto.
       - eapply Swhen_abs; unfold sem_var_instant in *; eauto.
       - (* unop *)
-        econstructor; eauto. now rewrite rename_exp_typeof.
+        econstructor; eauto.
       - econstructor; eauto.
       - (* binop *)
-        econstructor; eauto. now rewrite 2 rename_exp_typeof.
+        econstructor; eauto.
       - econstructor; eauto.
     Qed.
 
-    Lemma rename_cexp_sem tys b : forall e v,
+    Lemma sem_cexp_incl tys b : forall e v,
         wt_cexp tys Γ e ->
         sem_cexp_instant b R e v ->
-        sem_cexp_instant b R' (rename_cexp subl subn e) v.
+        sem_cexp_instant b R' e v.
     Proof.
       induction e using cexp_ind2; intros * Wc Sem; inv Wc; inv Sem.
       - (* merge *)
         rewrite Forall_app in *. repeat take (_ /\ _) and destruct it; simpl_Forall.
         econstructor; eauto.
-        2:rewrite map_app; simpl; eauto.
-        + rewrite map_length. unfold sem_var_instant in *; eauto.
+        + unfold sem_var_instant in *; eauto.
         + apply Forall_app. split; simpl_Forall; eauto.
       - econstructor.
         + unfold sem_var_instant in *; eauto.
         + simpl_Forall; eauto.
       - (* case *)
-        econstructor; eauto using rename_exp_sem.
+        econstructor; eauto using sem_exp_incl.
         simpl_Forall.
         destruct a; eauto.
-      - econstructor; eauto using rename_exp_sem.
+      - econstructor; eauto using sem_exp_incl.
         simpl_Forall.
         destruct x; eauto.
       - (* exp *)
-        constructor; eauto using rename_exp_sem.
+        constructor; eauto using sem_exp_incl.
     Qed.
 
-    Lemma rename_rhs_sem exts tys b : forall e v,
+    Lemma sem_rhs_incl exts tys b : forall e v,
         wt_rhs exts tys Γ e ->
         sem_rhs_instant b R e v ->
-        sem_rhs_instant b R' (rename_rhs subl subn e) v.
+        sem_rhs_instant b R' e v.
     Proof.
       intros * Wc Sem; inv Wc; inv Sem.
       - (* rhs *)
         econstructor; eauto.
-        1,2:simpl_Forall; eauto using rename_exp_sem.
-        now rewrite rename_exp_typeof.
+        1:simpl_Forall; eauto using sem_exp_incl.
       - eapply Sextcall_abs with (tyins:=tyins); eauto.
-        1,2:simpl_Forall; eauto using rename_exp_sem.
-        now rewrite rename_exp_typeof.
+        1:simpl_Forall; eauto using sem_exp_incl.
       - (* cexp *)
-        constructor; eauto using rename_cexp_sem.
+        constructor; eauto using sem_cexp_incl.
     Qed.
 
     Lemma sem_clock_incl tys b : forall ck b',
@@ -174,67 +165,176 @@ Module Type CCCORRECTNESS
       - eapply Son_abs2; unfold sem_var_instant in *; eauto.
     Qed.
 
+    Definition rcks_spec tys Γ b R ckrs :=
+      Forall (wt_clock tys Γ) ckrs
+      /\ Forall (fun ckr => exists r, sem_clock_instant b (var_env R) ckr r) ckrs.
+
+    Lemma sem_trconstr_incl {prefs1 prefs2} (P1: @program prefs1) (P2: @program prefs2) :
+      forall b S I S' tc,
+        wt_trconstr P1 Γ tc ->
+        sem_trconstr P2 b R S I S' tc ->
+        (forall s ckrs, Last_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
+        (forall s ckrs, Next_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
+        (forall s ckrs, Inst_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
+        sem_trconstr P2 b R' S I S' tc.
+    Proof.
+      intros * Wc Sem LastCks NextCks InstCks.
+      inv Wc; inv Sem; simpl.
+      - (* Def *)
+        econstructor; eauto; unfold sem_var_instant in *; eauto.
+        take (sem_arhs_instant _ _ _ _ _) and inv it; econstructor; eauto using sem_rhs_incl, sem_clock_incl.
+      - (* Reset State *)
+        econstructor; eauto using sem_clock_incl.
+      - (* Update Last *)
+        assert (Forall (fun ckr : clock => sem_clock_instant b (var_env R') ckr false) ckrs -> find_val x S = Some c) as SemS.
+        { intros. take (Forall _ _ -> _) and apply it.
+          edestruct LastCks as (WtCks&SemCks); [constructor|].
+          simpl_Forall.
+          take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
+          eapply sem_clock_instant_det in H2; [|eauto]. subst; auto. }
+        econstructor; eauto; unfold sem_var_instant in *; eauto.
+        take (sem_caexp_instant _ _ _ _ _) and inv it; econstructor; eauto using sem_cexp_incl, sem_clock_incl.
+      - (* Update Next *)
+        assert (Forall (fun ckr : clock => sem_clock_instant b (var_env R') ckr false) ckrs -> find_val x S = Some c) as SemS.
+        { intros. take (Forall _ _ -> _) and apply it.
+          edestruct NextCks as (WtCks&SemCks); [constructor|].
+          simpl_Forall.
+          take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
+          eapply sem_clock_instant_det in H2; [|eauto]. subst; auto. }
+        econstructor; eauto; unfold sem_var_instant in *; eauto.
+        take (sem_aexp_instant _ _ _ _ _) and inv it; econstructor; eauto using sem_exp_incl, sem_clock_incl.
+      - (* Reset Inst *)
+        econstructor; eauto using sem_clock_incl.
+      - (* Update Inst *)
+        assert (Forall (fun ckr : clock => sem_clock_instant b (var_env R') ckr false) rst -> find_inst i S ⌈≋⌉ Some Ii) as SemS.
+        { intros. take (Forall _ _ -> _) and apply it.
+          edestruct InstCks as (WtCks&SemCks); [constructor|].
+          simpl_Forall.
+          take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
+          eapply sem_clock_instant_det in H4; [|eauto]. subst; auto.
+        }
+        assert (sem_vars_instant R' xs os) as Svs.
+        { unfold sem_vars_instant, sem_var_instant, var_env in *.
+          take (Forall2 _ xs (s_out _)) and apply Forall2_ignore2 in it.
+          simpl_Forall; eauto. }
+        cases; econstructor; eauto using sem_clock_incl.
+        unfold sem_exps_instant in *; simpl_Forall; eauto using sem_exp_incl.
+    Qed.
+
+  End incl.
+
+  Section rename.
+    Variable R : @FEnv.t var_last svalue.
+    Variable (x : var_last) (y : ident).
+
+    Hypothesis SubL : forall x' v,
+        x = Last x' -> R (Last x') = Some v -> R (Var y) = Some v.
+    Hypothesis SubN : forall x' v,
+        x = Var x' -> R (Var x') = Some v -> R (Var y) = Some v.
+
+    (** Rename *)
+
+    Lemma rename_exp_sem b : forall e v,
+        sem_exp_instant b R e v ->
+        sem_exp_instant b R (rename_exp x y e) v.
+    Proof.
+      induction e; intros * Sem; inv Sem; simpl in *.
+      - (* const *) constructor; auto.
+      - (* enum *) constructor; auto.
+      - (* var *)
+        constructor.
+        unfold rename_var, sem_var_instant in *.
+        cases_eqn Eq; eauto.
+        rewrite equiv_decb_equiv in Eq0. inv Eq0; eauto.
+      - (* lasts *)
+        cases_eqn Eq; constructor.
+        1-3:unfold sem_var_instant in *; eauto.
+        rewrite equiv_decb_equiv in Eq0. inv Eq0; eauto.
+      - (* when *)
+        constructor; unfold sem_var_instant; eauto.
+      - eapply Swhen_abs1; unfold sem_var_instant in *; eauto.
+      - eapply Swhen_abs; unfold sem_var_instant in *; eauto.
+      - (* unop *)
+        econstructor; eauto. now rewrite rename_exp_typeof.
+      - econstructor; eauto.
+      - (* binop *)
+        econstructor; eauto. now rewrite 2 rename_exp_typeof.
+      - econstructor; eauto.
+    Qed.
+
+    Lemma rename_cexp_sem b : forall e v,
+        sem_cexp_instant b R e v ->
+        sem_cexp_instant b R (rename_cexp x y e) v.
+    Proof.
+      induction e using cexp_ind2; intros * Sem; inv Sem.
+      - (* merge *)
+        rewrite Forall_app in *. repeat take (_ /\ _) and destruct it; simpl_Forall.
+        econstructor.
+        2:rewrite map_app; simpl; eauto. all:eauto.
+        + rewrite map_length. unfold sem_var_instant in *; eauto.
+        + apply Forall_app. split; simpl_Forall; eauto.
+      - econstructor.
+        + unfold sem_var_instant in *; eauto.
+        + simpl_Forall; eauto.
+      - (* case *)
+        econstructor; eauto using rename_exp_sem.
+        simpl_Forall.
+        destruct a; eauto.
+      - econstructor; eauto using rename_exp_sem.
+        simpl_Forall.
+        destruct x0; eauto.
+      - (* exp *)
+        constructor; eauto using rename_exp_sem.
+    Qed.
+
+    Lemma rename_rhs_sem b : forall e v,
+        sem_rhs_instant b R e v ->
+        sem_rhs_instant b R (rename_rhs x y e) v.
+    Proof.
+      intros * Sem; inv Sem.
+      - (* rhs *)
+        econstructor; eauto.
+        1,2:simpl_Forall; eauto using rename_exp_sem.
+        now rewrite rename_exp_typeof.
+      - eapply Sextcall_abs with (tyins:=tyins); eauto.
+        1,2:simpl_Forall; eauto using rename_exp_sem.
+        now rewrite rename_exp_typeof.
+      - (* cexp *)
+        constructor; eauto using rename_cexp_sem.
+    Qed.
+
   End rename.
 
-  Definition rcks_spec tys Γ b R ckrs :=
-    Forall (wt_clock tys Γ) ckrs
-    /\ Forall (fun ckr => exists r, sem_clock_instant b (var_env R) ckr r) ckrs.
-
   Lemma rename_trconstr_sem {prefs1 prefs2} (P1: @program prefs1) (P2: @program prefs2) :
-    forall b R R' S I S' Γ subl subn tc,
-      (forall x ck islast v, In (x, (ck, islast)) Γ -> R (Var x) = Some v -> R' (Var x) = Some v) ->
-      (forall x ck v, In (x, (ck, true)) Γ -> R (Last x) = Some v -> R' (Last x) = Some v) ->
-      (forall x y v, Env.find x subl = Some y -> R (Last x) = Some v -> R' (Var y) = Some v) ->
-      (forall x y v, Env.find x subn = Some y -> R (Var x) = Some v -> R' (Var y) = Some v) ->
-      wt_trconstr P1 Γ tc ->
+    forall b R S I S' i x y tc,
+      (forall x' v, x = Last x' -> R (Last x') = Some v -> R (Var y) = Some v) ->
+      (forall x' v, x = Var x' -> R (Var x') = Some v -> R (Var y) = Some v) ->
       sem_trconstr P2 b R S I S' tc ->
-      (forall s ckrs, Last_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
-      (forall s ckrs, Next_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
-      (forall s ckrs, Inst_with_reset_in_tc s ckrs tc -> rcks_spec P1.(types) Γ b R ckrs) ->
-      sem_trconstr P2 b R' S I S' (rename_trconstr subl subn tc).
+      sem_trconstr P2 b R S I S' (rename_trconstr i x y tc).
   Proof.
-    intros * Incl InclL SubL SubN Wc Sem LastCks NextCks InstCks.
-    inv Wc; inv Sem; simpl.
+    intros * SubL SubN Sem.
+    inv Sem; simpl.
     - (* Def *)
-      econstructor; [|unfold sem_var_instant in *; eauto].
-      take (sem_arhs_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_rhs_sem, sem_clock_incl.
+      cases; econstructor; eauto; unfold sem_var_instant in *; eauto.
+      take (sem_arhs_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_rhs_sem.
     - (* Reset State *)
-      econstructor; eauto using sem_clock_incl.
-    - (* Update Last *)
-      econstructor; eauto; unfold sem_var_instant in *; eauto.
-      + intros. take (Forall _ _ -> _) and apply it.
-        edestruct LastCks as (WtCks&SemCks); [constructor|].
-        simpl_Forall.
-        take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
-        eapply sem_clock_instant_det in H2; [|eauto]. subst; auto.
-      + take (sem_caexp_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_cexp_sem, sem_clock_incl.
-    - (* Update Next *)
-      econstructor; eauto; unfold sem_var_instant in *; eauto.
-      + intros. take (Forall _ _ -> _) and apply it.
-        edestruct NextCks as (WtCks&SemCks); [constructor|].
-        simpl_Forall.
-        take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
-        eapply sem_clock_instant_det in H2; [|eauto]. subst; auto.
-      + take (sem_aexp_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_exp_sem, sem_clock_incl.
+      econstructor; eauto.
     - (* Reset Inst *)
-      econstructor; eauto using sem_clock_incl.
+      econstructor; eauto.
+    - (* Update Last *)
+      destruct (_ ==b _); econstructor; eauto; unfold sem_var_instant in *; eauto.
+      take (sem_caexp_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_cexp_sem.
+    - (* Update Next *)
+      destruct (_ ==b _); econstructor; eauto; unfold sem_var_instant in *; eauto.
+      take (sem_aexp_instant _ _ _ _ _) and inv it; econstructor; eauto using rename_exp_sem.
     - (* Update Inst *)
-      econstructor; eauto using sem_clock_incl.
-      + intros. take (Forall _ _ -> _) and apply it.
-        edestruct InstCks as (WtCks&SemCks); [constructor|].
-        simpl_Forall.
-        take (sem_clock_instant _ (var_env R) _ _) and eapply sem_clock_incl in it as Ck'; eauto.
-        eapply sem_clock_instant_det in H4; [|eauto]. subst; auto.
-      + unfold sem_exps_instant in *. simpl_Forall.
-        eapply rename_exp_sem; eauto.
-        intros * Find. rewrite Env.gempty in Find. congruence.
-      + unfold sem_vars_instant, sem_var_instant, var_env in *.
-        take (Forall2 _ xs (s_out _)) and apply Forall2_ignore2 in it.
-        simpl_Forall; eauto.
+      cases; econstructor; eauto.
+      unfold sem_exps_instant in *; simpl_Forall; eauto.
+      eapply rename_exp_sem; eauto.
   Qed.
 
   Fact fresh_idents_NoDup : forall xs xs' st st',
-      @Fresh.fresh_idents stc (type * clock) xs st = (xs', st') ->
+      @Fresh.fresh_idents stc (ident * (type * clock)) xs st = (xs', st') ->
       NoDup (map snd (map fst xs')).
   Proof.
     unfold Fresh.fresh_idents.
@@ -248,14 +348,15 @@ Module Type CCCORRECTNESS
 
   Lemma cut_cycles_tcs_sem {prefs1 prefs2} :
     forall (P1: @program prefs1) (P2: @program prefs2) Γ b R S I S' lasts nexts tcs tcs' st',
-      NoDupMembers lasts ->
-      NoDupMembers nexts ->
+      (* NoDupMembers (map fst lasts) -> *)
+      (* NoDupMembers (map fst nexts) -> *)
       Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (map fst Γ) ->
+      Forall (AtomOrGensym (PSP.of_list lustre_prefs)) (map fst (map fst nexts)) ->
       last_consistency tcs ->
       next_consistency tcs ->
       inst_consistency tcs ->
-      (forall x ty ck c, In (x, (c, ty, ck)) lasts -> exists ckrs e, In (TcUpdate ck ckrs (UpdLast x e)) tcs) ->
-      (forall x ty ck c, In (x, (c, ty, ck)) nexts -> exists ckrs e, In (TcUpdate ck ckrs (UpdNext x e)) tcs) ->
+      (forall x i ty ck c, In (x, i, (c, ty, ck)) lasts -> exists ckrs e, In (TcUpdate ck ckrs (UpdLast x e)) tcs) ->
+      (forall x i ty ck c, In (x, i, (c, ty, ck)) nexts -> exists ckrs e, In (TcUpdate ck ckrs (UpdNext x e)) tcs) ->
       Forall (wt_trconstr P1 Γ) tcs ->
       Forall (sem_trconstr P2 b R S I S') tcs ->
       cut_cycles_tcs lasts nexts tcs Fresh.init_st = (tcs', st') ->
@@ -263,23 +364,19 @@ Module Type CCCORRECTNESS
         (forall x ty islast v, In (x, (ty, islast)) Γ -> R (Var x) = Some v -> R' (Var x) = Some v) /\
         Forall (sem_trconstr P2 b R' S I S') tcs'.
   Proof.
-    intros * NDl NDn At LastCons NextCons InstCons LastIn NextIn Wt Sem Cut.
+    intros * (* NDl NDn *) At AtN LastCons NextCons InstCons LastIn NextIn Wt Sem Cut.
     unfold cut_cycles_tcs in *. repeat Fresh.Tactics.inv_bind.
     rename x into lasts'. rename x1 into nexts'.
     assert (Wt':=Wt); rewrite Forall_forall in Wt'.
     assert (Sem':=Sem); rewrite Forall_forall in Sem'.
 
-    assert (NoDupMembers (map fst lasts')) as NDl'.
-    { erewrite fst_NoDupMembers, map_map, map_ext, <-map_map, <-fst_NoDupMembers.
-      eapply Fresh.fresh_idents_NoDupMembers; eauto. 2:intros; destruct_conjs; auto.
-      apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-    }
+    assert (NoDupMembers (map (fun x2 => (snd x2, fst x2)) (map fst lasts'))) as NDl'.
+    { rewrite fst_NoDupMembers, ? map_map. simpl.
+      apply fresh_idents_NoDup in H. now rewrite map_map in H. }
 
-    assert (NoDupMembers (map fst nexts')) as NDn'.
-    { erewrite fst_NoDupMembers, map_map, map_ext, <-map_map, <-fst_NoDupMembers.
-      eapply Fresh.fresh_idents_NoDupMembers; eauto. 2:intros; destruct_conjs; auto.
-      apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-    }
+    assert (NoDupMembers (map (fun x2 => (snd x2, fst x2)) (map fst nexts'))) as NDn'.
+    { rewrite fst_NoDupMembers, ? map_map. simpl.
+      apply fresh_idents_NoDup in H0. now rewrite map_map in H0. }
 
     (* New environment *)
     remember (fun x => match x with
@@ -306,62 +403,75 @@ Module Type CCCORRECTNESS
         eapply Fresh.Facts.contradict_AtomOrGensym; eauto using stc_not_in_lustre_prefs.
     }
 
-    assert (forall x y v,
-               Env.find x (Env.from_list (map fst lasts')) = Some y -> R (Last x) = Some v -> R' (Var y) = Some v
-           ) as SubL.
-    { intros * Find V. subst.
-      apply Env.from_list_rev in Find; eauto using fresh_idents_NoDup.
-      setoid_rewrite Find; auto.
-    }
-
-    assert (forall x y v,
-               Env.find x (Env.from_list (map fst nexts')) = Some y -> R (Var x) = Some v -> R' (Var y) = Some v
-           ) as SubN.
-    { intros * Find V. subst.
-        apply Env.from_list_rev in Find; eauto using fresh_idents_NoDup.
-        cases_eqn Find'.
-        * exfalso. apply Env.from_list_find_In in Find. apply Env.from_list_find_In in Find'.
-          apply Fresh.fresh_idents_In_ids in H. apply Fresh.fresh_idents_nIn_ids in H0.
-          simpl_In. simpl_Forall. contradiction.
-        * setoid_rewrite Find'0 in Find. now inv Find.
-        * setoid_rewrite Find'0 in Find. now inv Find.
-    }
-
     exists R'. split; auto.
     rewrite ? Forall_app. repeat split; simpl_Forall.
     - eapply Fresh.fresh_idents_In' in H1 as In'; eauto. simpl_In.
       apply LastIn in Hin as (?&?&Hin').
       specialize (Wt' _ Hin'). inv Wt'. specialize (Sem' _ Hin'). inv Sem'.
       econstructor.
-      2:{ unfold sem_var_instant in *; eapply SubL; eauto.
-          apply Env.find_In_from_list; [solve_In|auto]. }
+      2:{ unfold sem_var_instant in *.
+          erewrite Env.find_In_from_list; eauto. solve_In. }
       take (sem_caexp_instant _ _ _ _ _) and inv it; econstructor; eauto using sem_clock_incl.
       1,2:repeat constructor; auto.
     - eapply Fresh.fresh_idents_In' in H1 as In'; eauto. simpl_In.
       apply NextIn in Hin as (?&?&Hin').
       specialize (Wt' _ Hin'). inv Wt'. specialize (Sem' _ Hin'). inv Sem'.
       econstructor.
-      2:{ unfold sem_var_instant in *; eapply SubN; eauto.
-          apply Env.find_In_from_list; [solve_In|auto]. }
+      2:{ unfold sem_var_instant in *.
+          destruct (Env.find _ _) eqn:Find.
+          - exfalso.
+            apply Env.from_list_find_In in Find. simpl_In.
+            apply Fresh.fresh_idents_In_ids in H. apply Fresh.fresh_idents_nIn_ids in H0.
+            simpl_Forall. contradiction.
+          - erewrite Env.find_In_from_list; eauto. solve_In.
+      }
       take (sem_aexp_instant _ _ _ _ _) and inv it; econstructor; eauto using sem_clock_incl.
       1,2:repeat constructor; eapply Incl; eauto.
-    - eapply rename_trconstr_sem; eauto.
-      + intros * _ L. subst. auto.
-      + intros * Lr; split; simpl_Forall.
-        1,2:(edestruct LastCons as (Ir&_); [unfold Last_with_reset_in; solve_Exists|];
-             take (In _ ckrs) and specialize (Ir it); unfold Is_reset_state_in in *; simpl_Exists; inv Ir).
-        * specialize (Wt' _ Hin). inv Wt'; auto.
-        * specialize (Sem' _ Hin). inv Sem'; eauto.
-      + intros * Lr; split; simpl_Forall.
-        1,2:(edestruct NextCons as (Ir&_); [unfold Next_with_reset_in; solve_Exists|];
-             take (In _ ckrs) and specialize (Ir it); unfold Is_reset_state_in in *; simpl_Exists; inv Ir).
-        * specialize (Wt' _ Hin). inv Wt'; auto.
-        * specialize (Sem' _ Hin). inv Sem'; eauto.
-      + intros * Lr; split; simpl_Forall.
-        1,2:(edestruct InstCons as (Ir&_); [unfold Inst_with_reset_in; solve_Exists|];
-             take (In _ ckrs) and specialize (Ir it); unfold Is_reset_inst_in in *; simpl_Exists; inv Ir).
-        * specialize (Wt' _ Hin). inv Wt'; auto.
-        * specialize (Sem' _ Hin). inv Sem'; eauto.
+    - rewrite ? map_fold_rename in H1. simpl_In. simpl_Forall.
+      eapply fold_left_ind with (Pb:=fun x => In x nexts').
+      2:eapply fold_left_ind with (Pb:=fun x => In x lasts'). 4,5:simpl_Forall; eauto.
+      + intros * Sem1 In. destruct_conjs.
+        eapply rename_trconstr_sem in Sem1; eauto.
+        1,2:intros * Eq Find; inv Eq.
+        eapply Fresh.fresh_idents_In' in H0 as InNext; eauto. simpl_In. simpl_Forall.
+        destruct (Env.find _ _) eqn:Find1 in Find.
+        1:{ exfalso. apply Env.from_list_find_In in Find1. simpl_In.
+            eapply Fresh.fresh_idents_prefixed in H. simpl_Forall; subst.
+            eapply Fresh.Facts.contradict_AtomOrGensym; eauto using stc_not_in_lustre_prefs.
+        }
+        destruct (Env.find _ _) eqn:Find2 in Find.
+        1:{ exfalso. apply Env.from_list_find_In in Find2. simpl_In.
+            eapply Fresh.fresh_idents_prefixed in H0. simpl_Forall; subst.
+            eapply Fresh.Facts.contradict_AtomOrGensym; eauto using stc_not_in_lustre_prefs.
+        }
+        destruct (Env.find i1 _) eqn:Find3.
+        1:{ exfalso.
+            apply Env.from_list_find_In in Find3. simpl_In.
+            apply Fresh.fresh_idents_In_ids in H. apply Fresh.fresh_idents_nIn_ids in H0.
+            simpl_Forall. contradiction.
+        }
+        erewrite Env.find_In_from_list; eauto. solve_In.
+      + intros * Sem1 In. destruct_conjs.
+        eapply rename_trconstr_sem in Sem1; eauto.
+        1,2:intros * Eq Find; inv Eq.
+        erewrite Env.find_In_from_list; eauto. solve_In.
+      + eapply sem_trconstr_incl; eauto.
+        * intros * Lr; split; simpl_Forall.
+          1,2:(edestruct LastCons as (Ir&_); [unfold Last_with_reset_in; solve_Exists|];
+               take (In _ ckrs) and specialize (Ir it); unfold Is_reset_state_in in *; simpl_Exists; inv Ir).
+          -- specialize (Wt' _ Hin). inv Wt'; auto.
+          -- specialize (Sem' _ Hin). inv Sem'; eauto.
+        * intros * Lr; split; simpl_Forall.
+          1,2:(edestruct NextCons as (Ir&_); [unfold Next_with_reset_in; solve_Exists|];
+               take (In _ ckrs) and specialize (Ir it); unfold Is_reset_state_in in *; simpl_Exists; inv Ir).
+          -- specialize (Wt' _ Hin). inv Wt'; auto.
+          -- specialize (Sem' _ Hin). inv Sem'; eauto.
+        * intros * Lr; split; simpl_Forall.
+          1,2:(edestruct InstCons as (Ir&_); [unfold Inst_with_reset_in; solve_Exists|];
+               take (In _ ckrs) and specialize (Ir it); unfold Is_reset_inst_in in *; simpl_Exists; inv Ir).
+          -- specialize (Wt' _ Hin). inv Wt'; auto.
+          -- specialize (Sem' _ Hin). inv Sem'; eauto.
+
   Qed.
 
   Fact sem_clock_incl1 Γ R R' b : forall ck b',
@@ -445,21 +555,23 @@ Module Type CCCORRECTNESS
           edestruct RinIff as (?&Sv1&Sv2); [solve_In|]; simpl in *.
           rewrite Sv in Sv2; inv Sv2.
           eapply sem_clock_incl1, Abs2; eauto.
-      + apply NoDupMembers_filter, s_nodup_lasts.
-      + apply NoDupMembers_filter, s_nodup_nexts.
+      (* + apply NoDupMembers_filter, s_nodup_lasts. *)
+      (* + apply NoDupMembers_filter, s_nodup_nexts. *)
       + pose proof (s_good s) as Good. rewrite ? map_app, ? Forall_app in *.
         firstorder; simpl_Forall; auto.
+      + pose proof (s_good s) as (_&_&Good&_).
+        simpl_Forall. simpl_In. cases. inv Hf. now simpl_Forall.
       + apply s_last_consistency.
       + apply s_next_consistency.
       + apply s_inst_consistency.
-      + intros * In. simpl_In.
+      + intros * In. simpl_In. cases. inv Hf.
         assert (In x (map fst (s_lasts s))) as In by solve_In.
         rewrite s_lasts_in_tcs, <-lasts_of_In in In.
         unfold Is_update_last_in in *. simpl_Exists. simpl_Forall.
         inv In. take (wc_trconstr _ _ _) and inv it.
         rewrite ? in_app_iff in *. firstorder; simpl_In.
         eapply NoDupMembers_det in Hin; eauto using s_nodup_lasts. inv Hin. eauto.
-      + intros * In. simpl_In.
+      + intros * In. simpl_In. cases. inv Hf.
         assert (In x (map fst (s_nexts s))) as In by solve_In.
         rewrite s_nexts_in_tcs, <-nexts_of_In in In.
         unfold Is_update_next_in in *. simpl_Exists. simpl_Forall.

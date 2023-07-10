@@ -5627,3 +5627,44 @@ Example solve_Perm_app {A} : forall (l1 l2 l3 l4 l5 l6 l7 : list A),
 Proof.
   intros. solve_Permutation_app.
 Qed.
+
+Section fold_left_ind.
+  Variable A B : Type.
+  Variable Pa : A -> Prop.
+  Variable Pb : B -> Prop.
+
+  Variable f : A -> B -> A.
+
+  Hypothesis Hf: forall acc v,
+      Pa acc ->
+      Pb v ->
+      Pa (f acc v).
+
+  Fixpoint fold_left_ind l : forall initacc,
+      Pa initacc ->
+      Forall Pb l ->
+      Pa (fold_left f l initacc).
+  Proof.
+    induction l; intros * Init F; inversion F; subst; simpl; auto.
+  Qed.
+
+End fold_left_ind.
+
+Section fold_left_ind2.
+  Variable A B : Type.
+  Variable Pa : A -> Prop.
+
+  Variable f : A -> B -> A.
+
+  Hypothesis Hf: forall acc v,
+      Pa acc ->
+      Pa (f acc v).
+
+  Fixpoint fold_left_ind2 l : forall initacc,
+      Pa initacc ->
+      Pa (fold_left f l initacc).
+  Proof.
+    induction l; intros * Init; simpl; auto.
+  Qed.
+
+End fold_left_ind2.

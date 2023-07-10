@@ -4,6 +4,7 @@ Open Scope list_scope.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CommonProgram.
@@ -20,7 +21,9 @@ Module Type EXT_CC
   (CESyn : CESYNTAX    Ids Op OpAux Cks)
   (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
-  Parameter cutting_points : list ident -> list ident -> list Syn.trconstr -> list ident.
+  (** In the returned list a pair (x, y) indicates
+      that x should be cut in transition constraint y *)
+  Parameter cutting_points : list ident -> list ident -> list Syn.trconstr -> list (ident * ident).
 
 End EXT_CC.
 
@@ -38,24 +41,36 @@ Module Type CC
   Local Open Scope fresh_monad_scope.
 
   Section rename.
-    Definition rename_var sub x :=
-      or_default x (Env.find x sub).
+    Variable x : var_last.
+    Variable y : ident.
 
-    Variable subl subn : Env.t ident.
+    Definition rename_var id :=
+      match x with
+      | Var x => if id ==b x then y else id
+      | _ => id
+      end.
+
+    (* Definition rename_last id := *)
+    (*   match x with *)
+    (*   | Last x => if id ==b x then y else id *)
+    (*   | _ => id *)
+    (*   end. *)
+
+    (* Variable subl subn : Env.t (ident * ident). *)
 
     Fixpoint rename_clock (ck : clock) :=
       match ck with
       | Cbase => Cbase
-      | Con ck x (ty, k) => Con (rename_clock ck) (rename_var subn x) (ty, k)
+      | Con ck x (ty, k) => Con (rename_clock ck) (rename_var x) (ty, k)
       end.
 
     Fixpoint rename_exp (e : exp) :=
       match e with
       | Econst _ | Eenum _ _ => e
-      | Evar x ty => Evar (rename_var subn x) ty
-      | Elast x ty => match Env.find x subl with
-                     | Some xl => Evar xl ty
-                     | None => Elast x ty
+      | Evar x ty => Evar (rename_var x) ty
+      | Elast id ty => match x with
+                     | Last x => if id ==b x then Evar y ty else Elast id ty
+                     | _ => Elast id ty
                      end
       | Ewhen e (x, ty) k => Ewhen (rename_exp e) (x, ty) k
       | Eunop op e1 ty => Eunop op (rename_exp e1) ty
@@ -76,35 +91,57 @@ Module Type CC
       end.
   End rename.
 
-  Definition rename_trconstr subl subn (tc : trconstr) :=
+  Definition rename_trconstr i x y (tc : trconstr) :=
     match tc with
-    | TcDef ck x rhs => TcDef ck x (rename_rhs subl subn rhs)
+    | TcDef ck i' rhs =>
+        if i' ==b i then TcDef ck i' (rename_rhs x y rhs)
+        else tc
     | TcReset _ _ => tc (* Reset constraints do not contain expressions *)
-    | TcUpdate ck ckrs (UpdLast x e) =>
-        TcUpdate ck ckrs (UpdLast x (rename_cexp subl subn e))
-    | TcUpdate ck ckrs (UpdNext x e) =>
-        TcUpdate ck ckrs (UpdNext x (rename_exp subl subn e))
-    | TcUpdate ck ckrs (UpdInst i xs f es) =>
-        TcUpdate ck ckrs (UpdInst i xs f (map (rename_exp subl (@Env.empty _)) es))
+    | TcUpdate ck ckrs (UpdLast i' e) =>
+        if i' ==b i then TcUpdate ck ckrs (UpdLast i' (rename_cexp x y e))
+        else tc
+    | TcUpdate ck ckrs (UpdNext i' e) =>
+        if i' ==b i then TcUpdate ck ckrs (UpdNext i' (rename_exp x y e))
+        else tc
+    | TcUpdate ck ckrs (UpdInst i' xs f es) =>
+        match x with
+        | Last _ =>
+            if i' ==b i then TcUpdate ck ckrs (UpdInst i' xs f (map (rename_exp x y) es))
+            else tc
+        | Var _ => tc
+        end
     end.
 
   (** System *)
 
-  Definition FreshAnn A := Fresh stc A (type * clock).
+  Definition FreshAnn A := Fresh stc A (ident * (type * clock)).
 
-  Definition cut_cycles_tcs (lasts nexts: list (ident * (const * type * clock))) tcs : FreshAnn (list trconstr) :=
+  Definition cut_cycles_tcs (lasts nexts: list ((ident * ident) * (const * type * clock))) tcs : FreshAnn (list trconstr) :=
     (* Lasts *)
-    do nlasts <- fresh_idents (map (fun '(x, (_, ty, ck)) => (x, (ty, ck))) lasts);
-    let subl := Env.from_list (map fst nlasts) in
-    let eqlasts := map (fun '(x, lx, (ty, ck)) => TcDef ck lx (Ecexp (Eexp (Elast x ty)))) nlasts in
+    do nlasts <- fresh_idents (map (fun '((x, i), (_, ty, ck)) => (x, (i, (ty, ck)))) lasts);
+    let tcs := fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (Last x) lx) tcs) nlasts tcs in
+    let eqlasts := map (fun '(x, lx, (_, (ty, ck))) => TcDef ck lx (Ecexp (Eexp (Elast x ty)))) nlasts in
     (* Nexts *)
-    do nnexts <- fresh_idents (map (fun '(x, (_, ty, ck)) => (x, (ty, ck))) nexts);
-    let subn := Env.from_list (map fst nnexts) in
-    let eqnexts := map (fun '(x, lx, (ty, ck)) => TcDef ck lx (Ecexp (Eexp (Evar x ty)))) nnexts in
+    do nnexts <- fresh_idents (map (fun '((x, i), (_, ty, ck)) => (x, (i, (ty, ck)))) nexts);
+    let tcs := fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (Var x) lx) tcs) nnexts tcs in
+    let eqnexts := map (fun '(x, lx, (_, (ty, ck))) => TcDef ck lx (Ecexp (Eexp (Evar x ty)))) nnexts in
 
-    ret (eqlasts++eqnexts++map (rename_trconstr subl subn) tcs).
+    ret (eqlasts++eqnexts++tcs).
 
   (** ** Properties *)
+
+  Lemma map_fold_rename {A} (cons: ident -> var_last) : forall (xs: list (ident * ident * (ident * A))) tcs,
+      fold_left (fun tcs '(x, lx, (i, _)) => map (rename_trconstr i (cons x) lx) tcs) xs tcs
+      = map (fun tc => fold_left (fun tc '(x, lx, (i, _)) => rename_trconstr i (cons x) lx tc) xs tc) tcs.
+  Proof.
+    intros.
+    erewrite <-fold_left_rev_right, map_ext with (g:=fun _ => fold_right _ _ _).
+    2:intros; now rewrite <-fold_left_rev_right.
+    generalize (rev xs) as xs'.
+    induction xs'; destruct_conjs; simpl.
+    - intros. now rewrite map_id.
+    - intros *. rewrite IHxs', map_map. reflexivity.
+  Qed.
 
   (** Typeof *)
   Section rename_typeof.
@@ -130,7 +167,7 @@ Module Type CC
   (** *** Variables, Last, Next Definitions *)
 
   Lemma fresh_idents_vars_perm : forall xs xs' st st',
-      @fresh_idents stc (type * clock) xs st = (xs', st') ->
+      @fresh_idents stc (ident * (type * clock)) xs st = (xs', st') ->
       Permutation (st_ids st') (map (fun '(_, lx, _) => lx) xs' ++ st_ids st).
   Proof.
     induction xs as [|(?&?&?)]; intros * Fr; repeat inv_bind; simpl; auto.
@@ -147,10 +184,11 @@ Module Type CC
     unfold st_ids. rewrite ? variables_app, init_st_anns, app_nil_r.
     rewrite Permutation_app_comm, <-app_assoc, Permutation_app_comm, <-app_assoc.
     apply Permutation_app; [|rewrite Permutation_app_comm; apply Permutation_app].
-    - induction tcs as [|[]]; simpl; auto.
-      cases; simpl; auto using Permutation_app.
-    - clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto.
-    - clear - x. induction x as [|((?&?)&?&?)]; simpl; auto.
+    - eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+      1,2:intros * Perm; rewrite <-Perm; clear Perm.
+      1,2:induction acc as [|[]]; simpl; destruct_conjs; cases; simpl; auto using Permutation_app.
+    - clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto.
+    - clear - x. induction x as [|]; destruct_conjs; simpl; auto.
   Qed.
 
   Lemma cut_cycles_tcs_lasts_of : forall lasts nexts tcs tcs' st',
@@ -160,11 +198,15 @@ Module Type CC
     intros * Cut. unfold cut_cycles_tcs in *. repeat inv_bind.
     rewrite ? lasts_of_app.
     replace (lasts_of (map _ x)) with (@nil (ident * type)).
-    2:{ clear - x. induction x as [|((?&?)&?&?)]; simpl; auto. }
+    2:{ clear - x. induction x as [|]; destruct_conjs; simpl; auto. }
     replace (lasts_of (map _ x1)) with (@nil (ident * type)).
-    2:{ clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto. }
-    induction tcs as [|[| |?? []]]; simpl in *; auto.
-    rewrite rename_cexp_typeofc; auto.
+    2:{ clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto. }
+    simpl.
+    eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+    1,2:intros * Perm; rewrite <-Perm; clear Perm.
+    1,2:destruct_conjs.
+    1,2:induction acc as [|[| |?? []]]; simpl in *; try destruct (_ ==b _); auto.
+    1,2:rewrite rename_cexp_typeofc; auto.
   Qed.
 
   Lemma cut_cycles_tcs_nexts_of : forall lasts nexts tcs tcs' st',
@@ -174,11 +216,15 @@ Module Type CC
     intros * Cut. unfold cut_cycles_tcs in *. repeat inv_bind.
     rewrite ? nexts_of_app.
     replace (nexts_of (map _ x)) with (@nil (ident * type)).
-    2:{ clear - x. induction x as [|((?&?)&?&?)]; simpl; auto. }
+    2:{ clear - x. induction x as [|]; destruct_conjs; simpl; auto. }
     replace (nexts_of (map _ x1)) with (@nil (ident * type)).
-    2:{ clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto. }
-    induction tcs as [|[| |?? []]]; simpl in *; auto.
-    rewrite rename_exp_typeof; auto.
+    2:{ clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto. }
+    simpl.
+    eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+    1,2:intros * Perm; rewrite <-Perm; clear Perm.
+    1,2:destruct_conjs.
+    1,2:induction acc as [|[| |?? []]]; simpl in *; try destruct (_ ==b _); auto.
+    1,2:rewrite rename_exp_typeof; auto.
   Qed.
 
   Lemma cut_cycles_tcs_state_resets_of : forall lasts nexts tcs tcs' st',
@@ -188,10 +234,14 @@ Module Type CC
     intros * Cut. unfold cut_cycles_tcs in *. repeat inv_bind.
     rewrite ? state_resets_of_app.
     replace (state_resets_of (map _ x)) with (@nil ident).
-    2:{ clear - x. induction x as [|((?&?)&?&?)]; simpl; auto. }
+    2:{ clear - x. induction x as [|]; destruct_conjs; simpl; auto. }
     replace (state_resets_of (map _ x1)) with (@nil ident).
-    2:{ clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto. }
-    induction tcs as [|[|? []|?? []]]; simpl in *; auto.
+    2:{ clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto. }
+    simpl.
+    eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+    1,2:intros * Perm; rewrite <-Perm; clear Perm.
+    1,2:destruct_conjs.
+    1,2:induction acc as [|[| |?? []]]; simpl in *; try destruct (_ ==b _); cases; auto.
   Qed.
 
   Lemma cut_cycles_tcs_insts_of : forall lasts nexts tcs tcs' st',
@@ -201,10 +251,14 @@ Module Type CC
     intros * Cut. unfold cut_cycles_tcs in *. repeat inv_bind.
     rewrite ? insts_of_app.
     replace (insts_of (map _ x)) with (@nil (ident * ident)).
-    2:{ clear - x. induction x as [|((?&?)&?&?)]; simpl; auto. }
+    2:{ clear - x. induction x as [|]; destruct_conjs; simpl; auto. }
     replace (insts_of (map _ x1)) with (@nil (ident * ident)).
-    2:{ clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto. }
-    induction tcs as [|[|? []|?? []]]; simpl in *; auto.
+    2:{ clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto. }
+    simpl.
+    eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+    1,2:intros * Perm; rewrite <-Perm; clear Perm.
+    1,2:destruct_conjs.
+    1,2:induction acc as [|[| |?? []]]; simpl in *; try destruct (_ ==b _); cases; auto.
   Qed.
 
   Lemma cut_cycles_tcs_inst_resets_of : forall lasts nexts tcs tcs' st',
@@ -214,10 +268,14 @@ Module Type CC
     intros * Cut. unfold cut_cycles_tcs in *. repeat inv_bind.
     rewrite ? inst_resets_of_app.
     replace (inst_resets_of (map _ x)) with (@nil (ident * ident)).
-    2:{ clear - x. induction x as [|((?&?)&?&?)]; simpl; auto. }
+    2:{ clear - x. induction x as [|]; destruct_conjs; simpl; auto. }
     replace (inst_resets_of (map _ x1)) with (@nil (ident * ident)).
-    2:{ clear - x1. induction x1 as [|((?&?)&?&?)]; simpl; auto. }
-    induction tcs as [|[|? []|?? []]]; simpl in *; auto.
+    2:{ clear - x1. induction x1 as [|]; destruct_conjs; simpl; auto. }
+    simpl.
+    eapply fold_left_ind2, fold_left_ind2; try reflexivity.
+    1,2:intros * Perm; rewrite <-Perm; clear Perm.
+    1,2:destruct_conjs.
+    1,2:induction acc as [|[| |?? []]]; simpl in *; try destruct (_ ==b _); cases; auto.
   Qed.
 
   (** *** AtomOrGensym / NoDup *)
@@ -244,17 +302,22 @@ Module Type CC
 
   Program Definition cut_cycles_system (b: @system (PSP.of_list lustre_prefs)) : @system (PSP.of_list gensym_prefs) :=
     let tocut := ECC.cutting_points (map fst b.(s_lasts)) (map fst b.(s_nexts)) b.(s_tcs) in
-    let tocut := PSP.of_list tocut in
+    let tocut := Env.from_list tocut in
     let res := cut_cycles_tcs
-                 (filter (fun x => PS.mem (fst x) tocut) b.(s_lasts))
-                 (filter (fun x => PS.mem (fst x) tocut) b.(s_nexts))
+                 (map_filter (fun x => match Env.find (fst x) tocut with
+                                    | Some i => Some (fst x, i, snd x)
+                                    | None => None
+                                    end) b.(s_lasts))
+                 (map_filter (fun x => match Env.find (fst x) tocut with
+                                    | Some i => Some (fst x, i, snd x)
+                                    | None => None
+                                    end) b.(s_nexts))
                  b.(s_tcs) init_st in
-    let cnexts := filter (fun x => PS.mem (fst x) tocut) b.(s_nexts) in
     {|
       s_name  := b.(s_name);
       s_subs  := b.(s_subs);
       s_in    := b.(s_in);
-      s_vars  := b.(s_vars)++st_anns (snd res);
+      s_vars  := b.(s_vars)++map (fun xann => (fst xann, snd (snd xann))) (st_anns (snd res));
       s_lasts := b.(s_lasts);
       s_nexts := b.(s_nexts);
       s_out   := b.(s_out);
@@ -270,7 +333,7 @@ Module Type CC
     rewrite map_app, <-app_assoc.
     eapply Permutation_NoDup, NoDup_app' with (ws:=map fst (st_anns st'));
       [|apply ND|apply st_valid_NoDup|].
-    - solve_Permutation_app.
+    - rewrite map_map. solve_Permutation_app.
     - rewrite ? Forall_app; repeat split; simpl_Forall.
       all:eapply st_valid_AtomOrGensym_nIn; eauto using stc_not_in_lustre_prefs.
   Qed.
@@ -278,7 +341,7 @@ Module Type CC
     destruct (cut_cycles_tcs _ _ _) as (tcs'&st') eqn:Htcs; simpl.
     apply cut_cycles_tcs_variables in Htcs.
     pose proof (s_vars_out_in_tcs b) as Perm.
-    erewrite map_app, <-app_assoc, Permutation_swap, Perm, Htcs.
+    erewrite map_app, <-app_assoc, Permutation_swap, Perm, Htcs, map_map.
     apply Permutation_app_comm.
   Qed.
   Next Obligation.
@@ -292,11 +355,23 @@ Module Type CC
     unfold cut_cycles_tcs in *. repeat inv_bind.
     intros ?? Ex ?. unfold last_consistency, Last_with_reset_in, Is_reset_state_in in *.
     rewrite ? List.Exists_app in *. destruct Ex as [Ex|[Ex|Ex]]; simpl_Exists; try now inv Ex.
-    destruct x2 as [|? []|?? []]; simpl in *; inv Ex.
-    rewrite Cons; [|solve_Exists; constructor].
+    rewrite ? map_fold_rename in *. simpl_In.
+    assert (exists ck e, x2 = TcUpdate ck ckrs (UpdLast s e)) as (?&?&?); subst.
+    { revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+    }
+    rewrite Cons; [|solve_Exists; constructor]. clear Ex.
     split; [intros Ex|intros [Ex|[Ex|Ex]]]; simpl_Exists; try now inv Ex.
-    - do 2 right. solve_Exists. inv Ex. constructor.
-    - destruct x2 as [|? []|?? []]; simpl in *; inv Ex. solve_Exists. constructor.
+    - do 2 right. solve_Exists. inv Ex.
+      eapply fold_left_ind2, fold_left_ind2; try constructor.
+      1,2:intros; destruct_conjs; inv H1; simpl; constructor.
+    - revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+      solve_Exists. constructor.
   Qed.
   Next Obligation.
     destruct (cut_cycles_tcs _ _ _) as (tcs'&st') eqn:Htcs; simpl.
@@ -309,11 +384,23 @@ Module Type CC
     unfold cut_cycles_tcs in *. repeat inv_bind.
     intros ?? Ex ?. unfold next_consistency, Next_with_reset_in, Is_reset_state_in in *.
     rewrite ? List.Exists_app in *. destruct Ex as [Ex|[Ex|Ex]]; simpl_Exists; try now inv Ex.
-    destruct x2 as [|? []|?? []]; simpl in *; inv Ex.
-    rewrite Cons; [|solve_Exists; constructor].
+    rewrite ? map_fold_rename in *. simpl_In.
+    assert (exists ck e, x2 = TcUpdate ck ckrs (UpdNext s e)) as (?&?&?); subst.
+    { revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+    }
+    rewrite Cons; [|solve_Exists; constructor]. clear Ex.
     split; [intros Ex|intros [Ex|[Ex|Ex]]]; simpl_Exists; try now inv Ex.
-    - do 2 right. solve_Exists. inv Ex. constructor.
-    - destruct x2 as [|? []|?? []]; simpl in *; inv Ex. solve_Exists. constructor.
+    - do 2 right. solve_Exists. inv Ex.
+      eapply fold_left_ind2, fold_left_ind2; try constructor.
+      1,2:intros; destruct_conjs; inv H1; simpl; constructor.
+    - revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+      solve_Exists. constructor.
   Qed.
   Next Obligation.
     destruct (cut_cycles_tcs _ _ _) as (tcs'&st') eqn:Htcs; simpl.
@@ -336,11 +423,23 @@ Module Type CC
     unfold cut_cycles_tcs in *. repeat inv_bind.
     intros ?? Ex ?. unfold inst_consistency, Inst_with_reset_in, Is_reset_inst_in in *.
     rewrite ? List.Exists_app in *. destruct Ex as [Ex|[Ex|Ex]]; simpl_Exists; try now inv Ex.
-    destruct x2 as [|? []|?? []]; simpl in *; inv Ex.
-    rewrite Cons; [|solve_Exists; constructor].
+    rewrite ? map_fold_rename in *. simpl_In.
+    assert (exists ck xs f es, x2 = TcUpdate ck ckrs (UpdInst s xs f es)) as (?&?&?&?&?); subst.
+    { revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+    }
+    rewrite Cons; [|solve_Exists; constructor]. clear Ex.
     split; [intros Ex|intros [Ex|[Ex|Ex]]]; simpl_Exists; try now inv Ex.
-    - do 2 right. solve_Exists. inv Ex. constructor.
-    - destruct x2 as [|? []|?? []]; simpl in *; inv Ex. solve_Exists. constructor.
+    - do 2 right. solve_Exists. inv Ex.
+      eapply fold_left_ind2, fold_left_ind2; try constructor.
+      1,2:intros; destruct_conjs; inv H1; simpl; constructor.
+    - revert Ex. eapply fold_left_ind2, fold_left_ind2.
+      3:intros * Ex; inv Ex; eauto.
+      1,2:(intros; destruct_conjs; subst; destruct acc as [|? []|?? []]; simpl in *; cases;
+           inv Ex; eauto with stcsyntax).
+      solve_Exists. constructor.
   Qed.
   Next Obligation.
     destruct (cut_cycles_tcs _ _ _) as (tcs'&st') eqn:Htcs; simpl.
