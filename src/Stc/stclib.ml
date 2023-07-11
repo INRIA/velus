@@ -287,12 +287,12 @@ module SchedulerFun
       in
       go
 
-    let add_exp_deps add_dep add_last_dep =
+    let add_exp_deps add_dep add_dep_last =
       let rec go = function
         | Econst _
         | Eenum _               -> ()
         | Evar (x, _)           -> add_dep x
-        | Elast (x, _)          -> add_last_dep x
+        | Elast (x, _)          -> add_dep_last x
         | Ewhen (e, (x, _), _)  -> add_dep x; go e
         | Eunop (_, e, _)       -> go e
         | Ebinop (_, e1, e2, _) -> go e1; go e2
@@ -320,11 +320,13 @@ module SchedulerFun
       | TcReset (ckr, _) ->
         add_clock_deps add_dep_var ckr
       | TcUpdate (ck, _, UpdLast (x, ce)) ->
+        add_dep_var x;
         add_clock_deps add_dep_var ck;
-        add_cexp_deps add_dep_var (fun y -> if y <> x then add_dep_last y) ce
+        add_cexp_deps add_dep_var add_dep_last ce
       | TcUpdate (ck, _, UpdNext (x, e)) ->
+        add_dep_var x;
         add_clock_deps add_dep_var ck;
-        add_exp_deps (fun y -> if y <> x then add_dep_var y) add_dep_last e
+        add_exp_deps add_dep_var add_dep_last e
       | TcUpdate (ck, _, UpdInst (i, _, _, es)) ->
         add_clock_deps add_dep_var ck;
         List.iter (add_exp_deps add_dep_var add_dep_last) es;
@@ -639,11 +641,16 @@ module SchedulerFun
       eprint "@[<v>--scheduling %s" (extern_atom f);
       eprint "@;@[<v 2>trconstrs =";
       Array.iteri (show_tc sbtcs) tcs;
-      eprint "@]";
+      eprint "@]@;";
 
       let varmap, instmap = variable_inst_maps sbtcs in
 
-      let add xi yi = add_depends tcs.(xi) tcs.(yi) in
+      let add xi yi =
+        eprint "@;Added dependency: %a -> %a"
+          (pp_print_tc_lhs sbtcs) xi
+          (pp_print_tc_lhs sbtcs) yi;
+        add_depends tcs.(xi) tcs.(yi) in
+
       let add_dep_var xi y =
         match PM.find y varmap with
         | None             -> ()        (* ignore inputs *)
@@ -658,6 +665,7 @@ module SchedulerFun
         | None -> ()
         | Some ys ->
           List.iter (fun (yi, typ) ->
+              eprint "%d" yi;
               match typ with
               | Last -> add yi xi
               | _ -> add xi yi) ys
@@ -672,6 +680,8 @@ module SchedulerFun
 
       (* Add dependencies to free variables *)
       List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_last n) (add_dep_inst n)) sbtcs;
+
+      eprint "@;";
 
       let node_list = schedule_with_queue f sbtcs tcs in
       (* let node_list = recooking node_list in *)

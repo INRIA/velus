@@ -1,0 +1,10 @@
+node f(c, r1, r2 : bool) returns (y : int)
+var x : int when c;
+let
+  reset
+    reset
+      x = 0 fby (x + 1);
+    every r2
+  every r1;
+  y = merge c (true => x) (false => 0);
+tel
