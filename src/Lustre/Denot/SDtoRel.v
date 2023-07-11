@@ -710,19 +710,17 @@ Proof.
   - (* Eapp *)
     apply Sapp with
       (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es)
-      (rs := repeat (Streams.const absent) (list_sum (List.map numstreams er)))
+      (rs := List.map (fun e => repeat (Streams.const absent) (numstreams e)) er)
       (bs := Streams.const false)
     ; simpl.
     + rewrite Forall2_map_2. apply Forall2_same.
       apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
-    + induction er; simpl_Forall.
-      take (typeof _ = _) and
-        apply (f_equal (@length _)) in it;
-        rewrite length_typeof_numstreams  in it;
-        rewrite it in *.
-      constructor; auto.
-    + rewrite repeat_map.
+    + rewrite Forall2_map_2. apply Forall2_same.
+      apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    + clear.
+      rewrite <- flat_map_concat_map, flat_map_repeat, repeat_map.
       apply bools_ofs_absent.
     + intro k.
       rewrite <- flat_map_concat_map, flat_map_repeat, 2 map_repeat.
