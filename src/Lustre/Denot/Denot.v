@@ -180,17 +180,40 @@ Section Denot_node.
 
 Variable (G : global).
 
-Fixpoint sbools_ofs {n} : @nprod (DS (sampl value)) n -C-> DS (sampl bool) :=
-  match n with
-  | O => CTE _ _ (DS_const abs)
-  | S _ => (ZIP (fun b acc =>
-                  match b, acc with
-                  | pres (Venum 1), _ => pres true (* 1 = OpAux.true_tag *)
-                  | err e, _ => err e
-                  | _, _ => acc
-                  end
-             ) @2_ nprod_hd) (sbools_ofs @_ nprod_tl)
-  end.
+
+(* TODO: c'est un test, bouger!! *)
+Section Nprod_Fold.
+
+  Context {A B : cpo}.
+
+  Fixpoint nprod_Fold {n} : (B -C-> A -C-> A) -C-> A -C-> @nprod B n -C-> A.
+    destruct n.
+    - apply CTE, CTE.
+    - apply curry, curry.
+      refine ((ID _ @3_ _) _ _).
+      + exact ((FST _ _ @_ FST _ _)).
+      + exact (nprod_hd @_ SND _ _).
+      + exact ((nprod_Fold n @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
+  Defined.
+
+  Lemma Fold_eq :
+    forall F a n (np : nprod (S n)),
+      nprod_Fold F a np = F (nprod_hd np) (nprod_Fold F a (nprod_tl np)).
+  Proof.
+    trivial.
+  Qed.
+
+End Nprod_Fold.
+
+
+Definition sbool_of : DS (sampl value) -C-> DS bool :=
+  MAP (fun v => match v with
+             | pres (Venum 1) => true
+             | _ => false
+             end).
+
+Definition sbools_of {n} : @nprod (DS (sampl value)) n -C-> DS bool :=
+  nprod_Fold (ZIP orb) (DS_const false) @_ lift sbool_of.
 
 (* l'opérateur swhen spécialisé aux Velus.Op.value *)
 Definition swhenv :=
@@ -365,7 +388,7 @@ Definition denot_exp_ (ins : list ident)
     (* chaînage *)
     refine
       (np_of_env (List.map fst (n_out n)) @_
-         (sreset @3_ f) (sbools_ofs @_ rs) (env_of_np (idents (n_in n)) @_ ss)).
+         (sreset @3_ f) (sbools_of @_ rs) (env_of_np (idents (n_in n)) @_ ss)).
 Defined.
 
 Definition denot_exp (ins : list ident) (e : exp) :
@@ -579,7 +602,7 @@ Lemma denot_exp_eq :
               match Nat.eq_dec (length (List.map fst n.(n_out))) (length an) with
               | left eqan =>
                   eq_rect _ nprod
-                    (np_of_env (List.map fst n.(n_out)) (sreset (envG f) (sbools_ofs rs) (env_of_np (idents n.(n_in)) ss)))
+                    (np_of_env (List.map fst n.(n_out)) (sreset (envG f) (sbools_of rs) (env_of_np (idents n.(n_in)) ss)))
                     _ eqan
               | _ => nprod_const errTy _
               end

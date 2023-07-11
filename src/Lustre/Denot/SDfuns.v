@@ -1812,9 +1812,9 @@ Section Sreset.
 
   Definition sresetf_aux :
     (* la fonctionnelle : *)
-    ((DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI) -C->
+    ((DS_prod SI -C-> DS_prod SI) -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI) -C->
     (* les arguments *)
-    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
+    (DS_prod SI -C-> DS_prod SI) -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
 
     do 4 apply curry.
     match goal with
@@ -1834,34 +1834,30 @@ Section Sreset.
 
     (* on décrit l'environnement pour chaque variable *)
     apply Dprodi_DISTR; intro x.
-    refine ((DSCASE (sampl bool) _ @2_ _) R).
-    apply ford_fcont_shift; intro vr.
+    refine ((DSCASE bool _ @2_ _) R).
+    apply ford_fcont_shift; intro r.
 
     (* on dégage (tl R) du contexte pour pouvoir utiliser nos alias : *)
     refine (curry (_ @_ FST _ _)).
 
     (* on teste la condition booléenne *)
-    destruct vr as [|[]|] eqn:?.
-    (* pas de reset *)
-    1,3: exact ((APP _ @2_ PROJ _ x @_ Y)
-                  (PROJ _ x @_
-                     ((AP _ _ @5_ reset)
-                        f (REM _ @_ R) (REM_env @_ X) (REM_env @_ Y)))).
-    (* erreur *)
-    2: exact (CTE _ _ (DS_const (err e))).
+    destruct r eqn:?.
     (* signal reçu *)
     exact (PROJ _ x @_ ((AP _ _ @5_ reset) f
-             (CONS (pres false) @_ (REM _ @_ R))
+             (CONS false @_ (REM _ @_ R))
              X ((AP _ _ @2_ f) X))).
+    (* pas de reset *)
+    exact ((APP _ @2_ PROJ _ x @_ Y)
+             (PROJ _ x @_
+                ((AP _ _ @5_ reset)
+                   f (REM _ @_ R) (REM_env @_ X) (REM_env @_ Y)))).
   Defined.
 
-  Lemma sresetf_aux_eq : forall F f vr R X Y,
-      sresetf_aux F f (cons vr R) X Y ==
-        match vr with
-        | pres true => F f (cons (pres false) R) X (f X)
-        | err e => fun _ => DS_const (err e)
-        | _ => APP_env Y (F f R (REM_env X) (REM_env Y))
-        end.
+  Lemma sresetf_aux_eq : forall F f r R X Y,
+      sresetf_aux F f (cons r R) X Y ==
+        if r
+        then F f (cons false R) X (f X)
+        else APP_env Y (F f R (REM_env X) (REM_env Y)).
   Proof.
     intros.
     apply Oprodi_eq_intro; intro i.
@@ -1870,7 +1866,7 @@ Section Sreset.
     setoid_rewrite Dprodi_DISTR_simpl.
     setoid_rewrite DSCASE_simpl.
     setoid_rewrite DScase_cons.
-    destruct vr as [|[]|]; cbn; now autorewrite with localdb.
+    destruct r; cbn; now autorewrite with localdb.
   Qed.
 
   Lemma is_cons_sresetf_aux :
@@ -1884,16 +1880,14 @@ Section Sreset.
   Qed.
 
   Definition sreset_aux :
-    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
+    (DS_prod SI -C-> DS_prod SI) -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI :=
     FIXP _ sresetf_aux.
 
-  Lemma sreset_aux_eq : forall f vr R X Y,
-      sreset_aux f (cons vr R) X Y ==
-        match vr with
-        | pres true => sreset_aux f (cons (pres false) R) X (f X)
-        | err e => fun _ => DS_const (err e)
-        | _ => APP_env Y (sreset_aux f R (REM_env X) (REM_env Y))
-        end.
+  Lemma sreset_aux_eq : forall f r R X Y,
+      sreset_aux f (cons r R) X Y ==
+        if r
+        then sreset_aux f (cons false R) X (f X)
+        else APP_env Y (sreset_aux f R (REM_env X) (REM_env Y)).
   Proof.
     intros.
     assert (Heq:=FIXP_eq sresetf_aux).
@@ -1911,8 +1905,10 @@ Section Sreset.
     now apply DScase_is_cons in Hc.
   Qed.
 
+  (* on n'échantillonne pas la condition de reset pour des questions
+     de commodité dans les preuves *)
   Definition sreset :
-    (DS_prod SI -C-> DS_prod SI) -C-> DS (sampl bool) -C-> DS_prod SI -C-> DS_prod SI.
+    (DS_prod SI -C-> DS_prod SI) -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
     apply curry, curry.
     match goal with
     | |- _ (_ (Dprod ?pl ?pr) _) =>

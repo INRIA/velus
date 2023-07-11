@@ -2994,11 +2994,10 @@ Section Node_safe.
       let ins := List.map fst (n_in n) in
       let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
       bss (List.map fst (n_in n)) envI <= bs ->
-      safe_DS rs ->
       env_correct Γ ins envI bs 0 ->
       env_correct Γ ins envI bs (sreset (envG f) rs envI).
   Proof.
-    intros * Hfind ?? Hbs Hr Hco.
+    intros * Hfind ?? Hbs Hco.
     rewrite sreset_eq.
     remember_ds envI as envIk.
     remember (_ (envG f) envIk) as Y eqn:HH.
@@ -3010,12 +3009,12 @@ Section Node_safe.
     unfold sreset_aux.
     rewrite FIXP_fixp.
     (* on utilise le principe d'induction sur [fixp] de la bibliothèque *)
-    revert Hr Hbs Hco Hy.
+    revert Hbs Hco Hy.
     revert Y rs envIk bs.
     apply fixp_ind; auto.
     (* admissible *)
     { red; intros; apply env_correct_admissible; simpl; now eauto. }
-    intros freset Hco' Y rs envIk bs Hr Hbs Hco Hy.
+    intros freset Hco' Y rs envIk bs Hbs Hco Hy.
 
     (* Ici on a besoin d'un raisonnement co-inductif pour extraire la
        tête de [rs]. (Tant que [rs] vaut [Eps], sresetf_aux ajoute [Eps]
@@ -3056,43 +3055,21 @@ Section Node_safe.
       rewrite Hmem in Hxs.
       now apply symmetry, cons_is_cons, is_cons_sresetf_aux, is_cons_elim in Hxs. }
 
-    rewrite Hrs in Hr |- *.
-    inv Hr.
+    rewrite Hrs.
     destruct Hy as (envI & k & Hk & Hco3).
     apply rem_le_compat in Hbs as Hbsr.
     apply env_correct_rem in Hco as Hcor, Hco3 as Hco4.
     rewrite REM_env_bot, rem_bss in *.
     setoid_rewrite sresetf_aux_eq.
-    cases.
-    - (* signal abs *)
-      apply env_correct_APP; auto.
-      apply Hco'; auto.
-      exists envI, (S k); rewrite Hk in Hco4 |- * ; auto.
-    - (* signal pres true *)
+    destruct vr.
+    - (* signal true *)
       apply Hco'; eauto; now constructor.
-    - (* signal pres false *)
+    - (* signal false *)
       apply env_correct_APP; auto.
       apply Hco'; auto.
       exists envI, (S k); rewrite Hk in Hco4 |- * ; auto.
   Qed.
 
-
-  Lemma safe_sbools_ofs :
-    forall n (np : nprod n),
-      forall_nprod safe_DS np ->
-      forall_nprod (ty_DS bool_velus_type) np ->
-      safe_DS (sbools_ofs np).
-  Proof.
-    clear.
-    intros * Sf Ty.
-    revert dependent np; induction n; intros.
-    - now apply DSForall_const.
-    - apply forall_nprod_inv in Ty as [Ty1 Ty2], Sf as [Sf1 Sf2].
-      simpl; autorewrite with cpodb.
-      apply DSForall_and with (1 := Sf1) in Ty1.
-      eapply DSForall_zip in IHn; eauto.
-      simpl; intros; cases_eqn HH; subst.
-  Qed.
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
@@ -3402,7 +3379,7 @@ Section Node_safe.
       pose proof (safe_sreset f n
                     (env_of_np (idents (n_in n)) ss)
                     (denot_clock ins envI bs env bck)
-                    (sbools_ofs sr) it) as Hres.
+                    (sbools_of sr) it) as Hres.
       apply env_correct_decompose in Hres as (fTy & fCl & fEf).
       + repeat split.
         * eapply inst_ty_env; eauto.
@@ -3410,10 +3387,6 @@ Section Node_safe.
         * eapply inst_cl_env; eauto.
         * eapply inst_ef_env; eauto.
       + eapply bss_le_bs, cl_env_inst; eauto.
-      + apply safe_sbools_ofs; auto.
-        apply Forall_forall_nprod.
-        take (Forall (fun _ => typeof _ = _) _) and
-          eapply typeof_same, Forall2_Forall_eq in it as Hs; eauto.
       + eapply safe_inst_in; eauto.
   Qed.
 
@@ -3559,12 +3532,8 @@ Section Node_safe.
     apply (safe_sreset f n
              (env_of_np (idents (n_in n)) ses)
              (denot_clock ins envI bs env bck)
-             (sbools_ofs rs) Hfind) in Hs0.
+             (sbools_of rs) Hfind) in Hs0.
     2: eapply bss_le_bs, cl_env_inst; eauto.
-    2:{ apply safe_sbools_ofs; auto.
-        apply Forall_forall_nprod.
-        take (Forall (fun _ => typeof _ = _) _) and
-          eapply typeof_same, Forall2_Forall_eq in it as Hs; eauto. }
     (**** fin instanciation de safe_sreset *)
     intro Henv'.
     apply env_correct_decompose in Hs0 as (Ty & Cl & Sf).
@@ -3582,7 +3551,7 @@ Section Node_safe.
           denot_clock (idents (n_in n))
             (env_of_np (idents (n_in n)) ses)
             (denot_clock ins envI bs env bck)
-            (sreset (envG f) (sbools_ofs rs) (env_of_np (idents (n_in n)) ses)) ck
+            (sreset (envG f) (sbools_of rs) (env_of_np (idents (n_in n)) ses)) ck
           <= denot_clock ins envI bs env' ck') as Hcks.
     {
       (* TODO: lemme? Simplifier ? *)
@@ -3603,7 +3572,7 @@ Section Node_safe.
         (* cas intéressant : mise à jour d'une variable *)
         eapply IHck in Hino as Hck; eauto 1.
         assert (denot_var (idents (n_in n)) (env_of_np (idents (n_in n)) ses)
-                  (sreset (envG f) (sbools_ofs rs) (env_of_np (idents (n_in n)) ses)) i
+                  (sreset (envG f) (sbools_of rs) (env_of_np (idents (n_in n)) ses)) i
                 <= denot_var ins envI env' i0); auto.
         (* maintenant il faut utiliser Henv', et c'est long... *)
         assert (In i0 xs) as Hxs.

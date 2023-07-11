@@ -285,17 +285,21 @@ Module Type LDENOTINF
     now rewrite <- annots_numstreams.
   Qed.
 
-  Lemma is_ncons_sbools_ofs :
+  Lemma is_ncons_sbools_of :
     forall n m (np : nprod m),
       forall_nprod (is_ncons n) np ->
-      is_ncons n (sbools_ofs np).
+      is_ncons n (sbools_of np).
   Proof.
     clear.
-    induction m; intros * Hf; simpl.
+    induction m; intros * Hf; auto.
     - apply is_ncons_DS_const.
-    - apply forall_nprod_inv in Hf as [].
+    - apply forall_nprod_inv in Hf as [Hh Ht].
+      unfold sbools_of.
       autorewrite with cpodb.
-      apply is_ncons_zip; auto.
+      rewrite Fold_eq, lift_hd, lift_tl.
+      apply is_ncons_zip.
+      + apply is_ncons_map; auto.
+      + apply (IHm _ Ht).
   Qed.
 
   Ltac solve_err :=
@@ -440,7 +444,7 @@ Module Type LDENOTINF
       apply forall_np_of_env; intro.
       apply is_ncons_sreset; intros.
       + apply Hnode; eauto using find_node_name.
-      + apply is_ncons_sbools_ofs.
+      + apply is_ncons_sbools_of.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         now apply P_exps_k, Forall_P_exps.
       + apply forall_env_of_np; solve_err.
@@ -593,7 +597,7 @@ Module Type LDENOTINF
       apply forall_np_of_env; intro.
       apply is_ncons_sreset with (n := S n); intros.
       + apply Hnode; eauto using find_node_name.
-      + apply is_ncons_sbools_ofs.
+      + apply is_ncons_sbools_of.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         rewrite annots_numstreams in *.
         apply P_exps_k; eauto using P_exps_impl.
@@ -915,13 +919,17 @@ Qed.
 Lemma sbools_ofs_inf :
   forall n (np : nprod n),
     forall_nprod (@infinite _) np ->
-    infinite (sbools_ofs np).
+    infinite (sbools_of np).
 Proof.
   induction n; intros * Hf; simpl.
   - apply DS_const_inf.
-  - apply forall_nprod_inv in Hf as [].
+  - apply forall_nprod_inv in Hf as [Hh Ht].
+    unfold sbools_of.
     autorewrite with cpodb.
-    apply zip_inf; auto.
+    rewrite Fold_eq, lift_hd, lift_tl.
+    apply zip_inf.
+    + apply map_inf; auto.
+    + apply (IHn _ Ht).
 Qed.
 
 (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour

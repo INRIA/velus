@@ -535,7 +535,7 @@ Proof.
   apply is_cons_elim in Cr as (vr & R' & Hr).
   rewrite <- PROJ_simpl, sreset_eq, Hr, sreset_aux_eq.
   cases; try apply is_cons_DS_const.
-  2: rewrite sreset_aux_eq.
+  rewrite sreset_aux_eq.
   all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
 Qed.
 
@@ -552,7 +552,7 @@ Proof.
   apply is_cons_elim in Cr as (vr & R' & Hr).
   rewrite <- PROJ_simpl, Hr, sreset_aux_eq.
   cases; try apply is_cons_DS_const.
-  2: rewrite sreset_aux_eq.
+  rewrite sreset_aux_eq.
   all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
 Qed.
 
@@ -580,7 +580,7 @@ Proof.
   rewrite <- PROJ_simpl, Hr, sreset_aux_eq in *.
   simpl in Cr; rewrite rem_cons in Cr.
   cases; solve_err.
-  2: rewrite sreset_aux_eq.
+  rewrite sreset_aux_eq.
   all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, is_ncons_SS, rem_app;
     eauto using is_ncons_is_cons.
   all: apply IHn; auto.
@@ -616,14 +616,12 @@ Proof.
   constructor.
   - rewrite Htx.
     cases.
-    4: rewrite DS_const_eq, PROJ_simpl; auto.
-    2: rewrite sreset_aux_eq.
+    rewrite sreset_aux_eq.
     all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
   - apply rem_eq_compat in Htx.
     destruct (Iy x), (If X Ix x). (* pour plus tard *)
     cases.
-    4: rewrite Htx, DS_const_eq, PROJ_simpl, rem_cons; apply DS_const_inf.
-    2: rewrite sreset_aux_eq in Htx.
+    rewrite sreset_aux_eq in Htx.
     all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, rem_app in Htx; auto.
     all: eapply Cof in Htx; eauto using REM_env_inf.
 Qed.
