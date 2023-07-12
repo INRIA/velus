@@ -1901,6 +1901,82 @@ Ltac gen_inf_sub_exps :=
   gen_infinite_exp;
   gen_sub_exps. (* voir dans Denot.v *)
 
+
+Section OLD_MASK.
+
+  Import Streams.
+
+  (* le masque comme il était avant *)
+  CoFixpoint mask {A : Type} (absent: A) (k: nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
+    let mask' k' := mask absent k' (tl rs) (tl xs) in
+    match k, hd rs with
+    | 0, true    => Streams.const absent
+    | 0, false   => hd xs  ⋅ mask' O
+    | 1, true    => hd xs  ⋅ mask' O
+    | S k', true => absent ⋅ mask' k'
+    | S _, false => absent ⋅ mask' k
+    end.
+  Definition maskv := @mask svalue absent.
+
+
+  Lemma mask'_abs :
+    forall A (absent : A) k rs xs,
+      O < k ->
+      mask' absent O k rs xs ≡ const absent.
+  Proof.
+    clear.
+    cofix Cof; intros.
+    destruct rs as [[]], xs; constructor; simpl; eauto.
+    cases_eqn HH.
+    apply Nat.eqb_eq in HH; subst; lia.
+  Qed.
+
+  (* on peut interchanger l'ancien et le nouveau *)
+  Lemma mask_retro_compat :
+    forall k rs xs,
+      maskv k rs xs ≡ Str.maskv k rs xs.
+  Proof.
+    clear.
+    unfold maskv, Str.maskv, Str.mask.
+    intros.
+    match goal with |- _ ≡ ?aa => remember_st aa as v end.
+    revert_all; cofix Cof; intros.
+    rewrite (unfold_Stream (mask _ _ _ _)).
+    rewrite (unfold_Stream (mask' _ _ _ _ _)) in Hv.
+    destruct rs as [r rs], xs as [x xs].
+    simpl in *.
+    destruct r.
+    - (* true *)
+      cases_eqn HH; subst.
+      + inv Hv; simpl in *; subst.
+        constructor; simpl; auto.
+        apply Cof.
+        rewrite mask'_S in *; auto.
+      + rewrite <- HH1, <- Hv, mask'_abs; auto.
+        now constructor.
+      + inv Hv; simpl in *; subst.
+        constructor; simpl; auto.
+        apply Cof.
+        rewrite mask'_S in *; auto.
+    - (* false *)
+      inv Hv; simpl in *.
+      destruct k as [|[]]; constructor; simpl; eauto.
+  Qed.
+
+End OLD_MASK.
+
+(* FIXME: ce morphime est un cas particulier
+   de maskv_morph et pourtant il faut le déclarer
+   pour que les réécritures fonctionnent dans ok_sem_Eapp
+ *)
+Global Add Parametric Morphism k bs : (maskv k bs)
+    with signature @EqSt _ ==> @EqSt _
+      as maskv_morph2.
+Proof.
+  now apply maskv_morph.
+Qed.
+
+
 (** On traite à part le cas des appels de nœuds car il apparaît à la fois
     dans une expression Eapp et dans une équation de type xs=[Eapp].
     Dand les deux cas seules les hypothèses du lemme suivant sont
