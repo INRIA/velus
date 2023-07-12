@@ -1695,6 +1695,122 @@ Proof.
   now apply mem_ident_spec in Hmem.
 Qed.
 
+(* TODO: si ça marche, bouger et nettoyer *)
+Section BOOLS_OFS.
+
+  (* TODO: move to Vélus ? *)
+  Lemma disj_str_orb :
+    forall bs bss,
+      disj_str [bs; disj_str bss] ≡ map2 orb bs (disj_str bss).
+  Proof.
+    intros.
+    apply ntheq_eqst; intro n.
+    rewrite disj_str_spec, Str_nth_map2.
+    simpl.
+    now rewrite Bool.orb_false_r.
+  Qed.
+
+  (* TODO: move to Vélus ? *)
+  Lemma bools_ofs_cons :
+    forall s ss b bs,
+      bools_ofs ss bs ->
+      bools_of s b ->
+      bools_ofs (s :: ss) (map2 orb b bs).
+  Proof.
+    unfold bools_ofs.
+    intros * (rss & Hf & Hbs) Hb.
+    exists (b :: rss); split; auto.
+    now rewrite disj_str_cons, Hbs, disj_str_orb.
+  Qed.
+
+  Lemma bools_of_sbool_of :
+    forall s Inf1 Inf2,
+      ty_DS bool_velus_type s ->
+      bools_of (S_of_DSv s Inf1) (S_of_DS id (sbool_of s) Inf2).
+  Proof.
+    unfold ty_DS, sbool_of.
+    intros * Hty.
+    remember_st (S_of_DSv s Inf1) as u.
+    remember_st (S_of_DS id _ Inf2) as v.
+    revert_all; cofix Cof; intros.
+    destruct u as [u us], v as [v vs].
+    apply S_of_DS_Cons in Hu as (?&?& Hs &?&?& Hus); subst.
+    apply S_of_DS_Cons in Hv as (?&?& Hbs &?&?& Hvs); subst.
+    rewrite Hs, MAP_map, Cpo_streams_type.map_eq_cons in *.
+    apply Con_eq_simpl in Hbs as [? Hm]; subst.
+    edestruct (S_of_DS_eq id _ x4 _ (symmetry Hm)) as [Inf3 HH].
+    rewrite HH in Hvs; clear HH.
+    inv Hty.
+    cases; try take (wt_value _ _) and inv it; simpl in *; try lia.
+    all: constructor; eauto.
+  Qed.
+
+  Lemma zip_map2_ :
+    forall {A B C} (op : A -> B -> C) s t Inf1 Inf2 Inf3,
+      S_of_DS id (ZIP op s t) Inf3 ≡ map2 op (S_of_DS id s Inf1) (S_of_DS id t Inf2).
+  Proof.
+    intros.
+    remember_st (S_of_DS id (ZIP op s t) Inf3) as u.
+    remember_st (map2 op (S_of_DS id s Inf1) (S_of_DS id t Inf2)) as v.
+    revert_all; cofix Cof; intros.
+    destruct u as [u us], v as [v vs].
+    apply S_of_DS_Cons in Hu as (?&?& Hz & ? & Infz & Hus); subst.
+    apply zip_uncons in Hz as (?&?&?&?& Hs & Ht & Hz &?); subst.
+    edestruct (S_of_DS_eq id _ Inf1 _ Hs) as [Inf4 HHs].
+    edestruct (S_of_DS_eq id _ Inf2 _ Ht) as [Inf5 HHt].
+    rewrite HHs, HHt, 2 S_of_DS_cons in Hv.
+    edestruct (S_of_DS_eq id _ Infz _ Hz) as [Inf6 HHz].
+    rewrite HHz in Hus.
+    inv Hv; simpl in *; subst.
+    constructor; simpl; auto.
+    eapply Cof; eauto.
+  Qed.
+
+  Lemma inf_zip :
+    forall {A B C} (op : A -> B -> C) s t,
+      infinite (ZIP op s t) ->
+      infinite s /\ infinite t.
+  Proof.
+    split; revert_all; cofix Cof; intros * Hf; inversion_clear Hf as [Hc Hinf].
+    all: apply zip_is_cons in Hc as [(?&?& Hs)%is_cons_elim (?&?&Ht)%is_cons_elim].
+    all: rewrite rem_zip in Hinf; constructor; eauto using cons_is_cons.
+  Qed.
+
+  Lemma zip_map2 :
+    forall {A B C} (op : A -> B -> C) s t Inf3,
+    exists Inf1 Inf2,
+      S_of_DS id (ZIP op s t) Inf3 ≡ map2 op (S_of_DS id s Inf1) (S_of_DS id t Inf2).
+  Proof.
+    clear.
+    intros.
+    apply inf_zip in Inf3 as HH; destruct HH as [Infs Inft].
+    exists Infs, Inft.
+    apply zip_map2_.
+  Qed.
+
+  Lemma bools_ofs_sbools_of :
+    forall n (np : nprod n) Inf1 Inf2,
+      forall_nprod (ty_DS bool_velus_type) np ->
+      bools_ofs (Ss_of_nprod np Inf1) (S_of_DS id (sbools_of np) Inf2).
+  Proof.
+    clear.
+    intros * Hf.
+    edestruct (S_of_DS_eq id _ Inf2) as [Inf3 ->].
+    { unfold sbools_of. autorewrite with cpodb. reflexivity. }
+    induction n.
+    - edestruct (S_of_DS_eq id _ Inf3) as [Inf4 ->].
+      { simpl; autorewrite with cpodb; reflexivity. }.
+      rewrite <- const_DS_const; simpl.
+      apply bools_ofs_empty.
+    - edestruct (S_of_DS_eq id _ Inf3) as [Inf4 ->].
+      { rewrite Fold_eq, lift_tl, lift_hd. reflexivity. }
+      apply forall_nprod_inv in Hf as [], Inf1 as HH; destruct HH.
+      edestruct (zip_map2 orb _ _ Inf4) as (Inf5 & Inf6 & ->).
+      apply bools_ofs_cons; auto using bools_of_sbool_of, sbools_ofs_inf.
+  Qed.
+
+End BOOLS_OFS.
+
 
 (** Hypothèse sur les entrées d'un nœud : elles doivent être bien typées
     et respecter leurs annotations d'horloge. *)
