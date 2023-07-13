@@ -1963,7 +1963,219 @@ Section OLD_MASK.
       destruct k as [|[]]; constructor; simpl; eauto.
   Qed.
 
+
+  (* FIXME : ça vient d'une ancienne version de Vélus *)
+  Lemma mask_nth {A} (absent: A) :
+    forall n k rs xs,
+      (mask absent k rs xs) # n = if (count rs) # n  =? k then xs # n else absent.
+  Proof.
+    unfold Str_nth.
+    induction n, k as [|[|k]]; intros;
+      unfold_Stv rs; simpl; auto.
+    - pose proof (count_acc_grow 1 rs) as H.
+      apply (ForAll_Str_nth_tl n) in H; inv H.
+      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> O) as E by lia.
+      apply Nat.eqb_neq in E; rewrite E.
+      pose proof (const_nth n absent); auto.
+    - rewrite IHn; unfold count.
+      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? 1) eqn: E;
+        rewrite count_S_nth in E.
+      + apply Nat.eqb_eq, eq_add_S, Nat.eqb_eq in E as ->; auto.
+      + rewrite Nat.eqb_neq, Nat.succ_inj_wd_neg, <- Nat.eqb_neq in E;
+          rewrite E; auto.
+    - rewrite IHn; unfold count.
+      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? S (S k)) eqn: E;
+        rewrite count_S_nth in E.
+      + apply Nat.eqb_eq, eq_add_S, Nat.eqb_eq in E; rewrite E; auto.
+      + rewrite Nat.eqb_neq, Nat.succ_inj_wd_neg, <- Nat.eqb_neq in E;
+          rewrite E; auto.
+  Qed.
+
+  (* FIXME : ça vient d'une ancienne version de Vélus *)
+  Global Add Parametric Morphism {A} (absent: A) k : (mask absent k)
+      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
+        as mask_morph.
+  Proof.
+    intros rs rs' Ers xs xs' Exs.
+    eapply ntheq_eqst; intros n.
+    eapply eqst_ntheq with (n:=n) in Exs.
+    rewrite 2 mask_nth, Exs, Ers. reflexivity.
+  Qed.
+
+  (* FIXME : ça vient d'une ancienne version de Vélus *)
+  Global Add Parametric Morphism k : (maskv k)
+      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
+        as maskv_morph.
+  Proof.
+    intros rs rs' Ers xs xs' Exs.
+    apply mask_morph; auto.
+  Qed.
+
 End OLD_MASK.
+
+
+Section SMASK.
+Import Cpo_streams_type.
+
+Definition smaskf : (nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI) -C->
+                    nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
+  clear.
+  apply ford_fcont_shift; intro k.
+  apply curry, curry.
+
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (mask := fcont_ford_shift _ _ _ (FST _ _ @_ FST pl pr));
+      pose (R := SND _ _ @_ (FST pl pr));
+      pose (X := SND pl pr);
+      idtac
+  end.
+
+  (* on décrit l'environnement pour chaque variable *)
+  apply Dprodi_DISTR; intro x.
+  refine ((DSCASE bool _ @2_ _) R).
+  apply ford_fcont_shift; intro r.
+
+  (* on dégage (tl R) du contexte pour pouvoir utiliser nos alias : *)
+  refine (curry (_ @_ FST _ _)).
+
+  destruct k as [|[|k]].
+  - (* k = 0 *)
+    destruct r.
+    (* r = true *)
+    apply CTE, (DS_const abs).
+    (* r = false *)
+    exact ((APP _ @2_ PROJ _ x @_ X)
+             (PROJ _ x @_ ((AP _ _ @3_ (mask O)) (REM _ @_ R) (REM_env @_ X)))).
+  - (* k = 1 *)
+    destruct r.
+    (* r = true *)
+    exact ((APP _ @2_ PROJ _ x @_ X)
+             (PROJ _ x @_ ((AP _ _ @3_ (mask O)) (REM _ @_ R) (REM_env @_ X)))).
+    (* r = false *)
+    exact (CONS abs @_ (PROJ _ x @_ ((AP _ _ @3_ (mask 1)) (REM _ @_ R) (REM_env @_ X)))).
+  - (* k > 1 *)
+    destruct r.
+    (* r = true *)
+    exact (CONS abs @_ (PROJ _ x @_ ((AP _ _ @3_ (mask (S k))) (REM _ @_ R) (REM_env @_ X)))).
+    (* r = false *)
+    exact (CONS abs @_ (PROJ _ x @_ ((AP _ _ @3_ (mask (S (S k)))) (REM _ @_ R) (REM_env @_ X)))).
+Defined.
+
+Lemma smaskf_eq : forall F k r R X,
+    smaskf F k (cons r R) X
+    == match k with
+       | 0 => if r
+             then fun _ => DS_const abs
+             else APP_env X (F O R (REM_env X))
+       | 1 => if r
+             then APP_env X (F O R (REM_env X))
+             else DMAPi (fun _ => CONS abs) (F 1 R (REM_env X))
+       | S (S _ as k') =>
+           if r
+           then DMAPi (fun _ => CONS abs) (F k' R (REM_env X))
+           else DMAPi (fun _ => CONS abs) (F k R (REM_env X))
+       end.
+Proof.
+  clear.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  unfold smaskf.
+  setoid_rewrite fcont_comp_simpl.
+  setoid_rewrite fcont_comp2_simpl.
+  rewrite DSCASE_simpl.
+  setoid_rewrite DScase_cons.
+  setoid_rewrite fcont_comp_simpl.
+  destruct k as [|[]], r; cbn; now autorewrite with cpodb.
+Qed.
+
+Definition smask : nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  FIXP _ smaskf.
+
+Lemma smask_eq : forall k r R X,
+    smask k (cons r R) X
+    == match k with
+       | 0 => if r
+             then fun _ => DS_const abs
+             else APP_env X (smask O R (REM_env X))
+       | 1 => if r
+             then APP_env X (smask O R (REM_env X))
+             else DMAPi (fun _ => CONS abs) (smask 1 R (REM_env X))
+       | S (S _ as k') =>
+           if r
+           then DMAPi (fun _ => CONS abs) (smask k' R (REM_env X))
+           else DMAPi (fun _ => CONS abs) (smask k R (REM_env X))
+       end.
+Proof.
+  intros.
+  unfold smask at 1.
+  assert (Heq:=FIXP_eq smaskf).
+  rewrite (ford_eq_elim Heq) at 1.
+  now rewrite smaskf_eq.
+Qed.
+
+
+Lemma smask_inf :
+  forall k R X,
+    infinite R -> all_infinite X -> all_infinite (smask k R X).
+Proof.
+  clear.
+  intros * Hr HX x.
+  remember_ds (smask k R X x) as t.
+  revert_all; cofix Cof; intros.
+  apply infinite_decomp in Hr as (r & R' & Hr &?).
+  rewrite <- PROJ_simpl, Hr, smask_eq, PROJ_simpl in Ht.
+  specialize (HX x) as Infx; inv Infx.
+  cases.
+  { rewrite Ht; apply DS_const_inf. }
+  all: rewrite ?DMAPi_simpl, ?APP_env_eq, ?CONS_simpl in Ht.
+  all: apply rem_eq_compat in Ht as Hrt.
+  all: rewrite ?APP_simpl, ?rem_app, ?CONS_simpl, ?rem_cons in Hrt; auto.
+  all: constructor; [| eapply Cof in Hrt; eauto using REM_env_inf].
+  all: rewrite Ht; auto.
+  all: now apply is_cons_app.
+Qed.
+
+(* TODO: virer le la section ? *)
+Lemma smask_mask :
+  forall k R X x ri xi mi,
+    S_of_DSv (smask k R X x) mi ≡ maskv k (S_of_DS id R ri) (S_of_DSv (X x) xi).
+Proof.
+  clear.
+  intros.
+  remember_st (S_of_DSv (smask k R X x) mi) as sl.
+  remember_st (maskv k (S_of_DS id R ri) (S_of_DSv (X x) xi)) as sr.
+  revert_all; cofix Cof; intros.
+  remember_ds (smask k R X x) as t.
+  apply infinite_decomp in ri as HH; destruct HH as (r & R' & Hr & ri').
+  rewrite <- PROJ_simpl, Hr, smask_eq, PROJ_simpl in Ht.
+  apply infinite_decomp in xi as HH; destruct HH as (vx & s' & Hs' & si').
+  edestruct (S_of_DS_eq id _ ri _ Hr) as [Inf3 HH]; rewrite HH in Hsr; clear HH.
+  edestruct (S_of_DSv_eq _ xi _ Hs') as [Inf4 HH]; rewrite HH in Hsr; clear HH.
+  cases.
+  { (* DS_const abs *)
+    rewrite <- Hsl, <- Hsr.
+    rewrite DS_const_eq in Ht.
+    edestruct (S_of_DSv_eq _ mi _ Ht) as [Inf2 ->].
+    unfold S_of_DSv; rewrite 2 S_of_DS_cons, unfold_Stream; simpl.
+    constructor; simpl; auto.
+    now rewrite <- const_DS_const.
+  }
+  all: rewrite ?DMAPi_simpl, ?APP_env_eq, ?CONS_simpl in Ht.
+  all: rewrite <- ?Hs, ?Hs', ?APP_simpl, ?app_cons in Ht.
+  all: edestruct (S_of_DSv_eq _ mi _ Ht) as [Inf2 HH]; rewrite HH in Hsl; clear HH.
+  all: unfold S_of_DSv in *; repeat rewrite S_of_DS_cons in *.
+  all: constructor; [rewrite <- Hsl, <- Hsr; auto |]. (* hd ok, reste tl *)
+  all: eapply Cof; rewrite <- ?Hsl, <- ?Hsr; simpl; [now apply _S_of_DS_eq|].
+  all: apply maskv_morph; try reflexivity.
+  all: apply _S_of_DS_eq; now rewrite REM_env_eq, Hs', rem_cons.
+  Unshelve.
+  all: rewrite ?REM_env_eq, ?Hs', ?rem_cons; auto.
+  all: eapply cons_infinite; now rewrite <- Ht.
+Qed.
+
+End SMASK.
+
 
 (* FIXME: ce morphime est un cas particulier
    de maskv_morph et pourtant il faut le déclarer
