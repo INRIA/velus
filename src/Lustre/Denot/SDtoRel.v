@@ -1814,10 +1814,10 @@ End BOOLS_OFS.
 
 (** Hypothèse sur les entrées d'un nœud : elles doivent être bien typées
     et respecter leurs annotations d'horloge. *)
-Definition correct_ins (n : node) envI bs :=
+Definition wf_ins (n : node) envI bs :=
   let ins := List.map fst n.(n_in) in
   let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-  env_correct Γ ins envI bs 0.
+  wf_env Γ ins envI bs 0.
 
 
 Section Ok_node.
@@ -1836,14 +1836,14 @@ Hypothesis (Hrg : restr_global G).
 Hypothesis InfG :
   forall envI f, all_infinite envI -> all_infinite (envG f envI).
 
-Hypothesis CorrectG :
+Hypothesis Wfg :
     forall f n envI,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
       let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
       forall bs, bss ins envI <= bs ->
-      env_correct Γ ins envI bs 0 ->
-      env_correct Γ ins envI bs (envG f envI).
+      wf_env Γ ins envI bs 0 ->
+      wf_env Γ ins envI bs (envG f envI).
 
 Hypothesis Hnode :
   forall f n (ss : nprod (length (n_in n))),
@@ -1851,7 +1851,7 @@ Hypothesis Hnode :
     let ins := idents (n_in n) in
     let envI := env_of_np ins ss in
     let os := np_of_env (List.map fst (n_out n)) (envG f envI) in
-    correct_ins n envI (bss ins envI) ->
+    wf_ins n envI (bss ins envI) ->
     forall infI infO,
       sem_node G f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
 
@@ -2196,7 +2196,7 @@ Qed.
     horloges de l'équation et de l'application. *)
 Lemma ok_sem_Eapp :
   forall Γ ins env Inf envI InfI bs bsi,
-    env_correct Γ ins envI bs env ->
+    wf_env Γ ins envI bs env ->
     let H := hist_of_envs ins envI InfI env Inf in
     forall f n es anns bck sub,
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) (typesof es) (n_in n) ->
@@ -2226,16 +2226,16 @@ Proof.
     setoid_rewrite masks_false_0.
     rewrite annots_numstreams in Hli.
     (* hypothèse principale pour Hnode : *)
-    assert (Hins : correct_ins n (env_of_np (idents (n_in n)) ss)
+    assert (Hins : wf_ins n (env_of_np (idents (n_in n)) ss)
                      (bss (idents (n_in n)) (env_of_np (idents (n_in n)) ss))).
-    { unfold correct_ins.
+    { unfold wf_ins.
       pose proof (nclocksof_sem G envG ins envI bs env es) as Ncs.
       edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf); eauto.
       rewrite clocksof_nclocksof in sCl.
       eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto.
-      eapply env_correct_morph in Hec; eauto 1.
+      eapply wf_env_morph in Hec; eauto 1.
       (* équivalence des horloges *)
-      apply env_correct_decompose in Hec as (?& Hcl &?).
+      apply wf_env_decompose in Hec as (?& Hcl &?).
       apply bss_le_bs in Hcl as Hbs; auto.
       apply infinite_le_eq in Hbs as ->; auto.
       now apply bss_inf, env_of_np_inf, infinite_exps.
@@ -2407,7 +2407,7 @@ Qed.
 
 Lemma ok_sem_exp :
   forall Γ ins env Inf envI InfI bs bsi,
-    env_correct Γ ins envI bs env ->
+    wf_env Γ ins envI bs env ->
     let H := hist_of_envs ins envI InfI env Inf in
     forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
       op_correct_exp G ins envG envI bs env e ->
@@ -2642,7 +2642,7 @@ Qed.
 
 Corollary ok_sem_exps :
   forall Γ ins env Inf envI InfI bs bsi,
-    env_correct Γ ins envI bs env ->
+    wf_env Γ ins envI bs env ->
     let H := hist_of_envs ins envI InfI env Inf in
     forall es,
       Forall restr_exp es ->
@@ -2766,7 +2766,7 @@ Lemma ok_sem_equation :
     wc_equation G Γ (xs,es) ->
     wt_equation G Γ (xs,es) ->
     NoDup (ins ++ xs) ->
-    env_correct Γ ins envI bs env ->
+    wf_env Γ ins envI bs env ->
     Forall (op_correct_exp G ins envG envI bs env) es ->
     (* hypothèse sur [env] qui doit satisfaire les contraintes
        de l'équation; typiquement obtenue avec [denot_blocks_equs] *)
@@ -2813,7 +2813,7 @@ Qed.
 Lemma ok_sem_blocks :
   forall Γ ins (env : DS_prod SI) envI InfI bs bsi blks,
     env == denot_blocks G ins blks envG envI bs env ->
-    env_correct Γ ins envI bs env ->
+    wf_env Γ ins envI bs env ->
     Forall restr_block blks ->
     NoDup (flat_map get_defined blks ++ ins) ->
     Forall (wt_block G Γ) blks ->
@@ -2850,7 +2850,7 @@ Proof.
     apply IHblks; auto; now simpl_Forall.
 Qed.
 
-(** Pour pouvoir utiliser InfG, CorrectG, Hnode, on considère
+(** Pour pouvoir utiliser InfG, Wfg, Hnode, on considère
  * l'ajout d'un nœud en tête de G.(nodes). *)
 Lemma ok_sem_node :
   forall (n : node),
@@ -2867,7 +2867,7 @@ Lemma ok_sem_node :
     let bs := bss ins envI in
     let envn := FIXP _ (denot_node G n envG envI) in
     let os := np_of_env (List.map fst (n_out n)) envn in
-    env_correct Γ ins envI bs envn ->
+    wf_env Γ ins envI bs envn ->
     op_correct G ins envG envI bs envn n ->
     all_infinite envn ->
     forall infI infO,
@@ -2986,7 +2986,7 @@ Theorem _ok_global :
       let envI := env_of_np ins ss in
       let os := np_of_env (List.map fst (n_out n)) (denot_global G f envI) in
       let bs := bss ins envI in
-      correct_ins n envI bs ->
+      wf_ins n envI bs ->
       forall InfSs InfO,
         sem_node G f (Ss_of_nprod ss InfSs) (Ss_of_nprod os InfO).
 Proof.
@@ -3026,12 +3026,12 @@ Proof.
     inversion Wcg; subst.
     inversion Wtg; subst.
     eapply ok_sem_node in Wtg' as Hsem;
-      eauto using env_correct_loc, env_correct_0_ext, find_node_uncons.
+      eauto using wf_env_loc, wf_env_0_ext, find_node_uncons.
     { eapply Hsem; eauto.
       all: rewrite (denot_node_cons _ n);
         eauto using find_node_not_Is_node_in, find_node_now.
       all: rewrite <- HenvG; auto using find_node_now,
-        env_of_np_inf, env_correct_loc, env_correct_0_ext.
+        env_of_np_inf, wf_env_loc, wf_env_0_ext.
       inv Ocg. apply (op_correct_cons _ n);
         eauto using find_node_not_Is_node_in, find_node_now.
     }
@@ -3066,12 +3066,12 @@ Proof.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
 Qed.
 
-Definition correct_inputs (n : node) (ss : nprod (length (n_in n))) :=
+Definition wf_inputs (n : node) (ss : nprod (length (n_in n))) :=
   let ins := idents (n_in n) in
   let envI := env_of_np ins ss in
   let bs := bss ins envI in
   let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-  env_correct Γ ins envI bs 0.
+  wf_env Γ ins envI bs 0.
 
 (** Witness of the relational semantics *)
 Theorem ok_global :
@@ -3084,7 +3084,7 @@ Theorem ok_global :
     Forall node_causal (nodes G) ->
     forall f n, find_node f G = Some n ->
     forall (xs : nprod (length (n_in n))) InfXs,
-      correct_inputs n xs ->
+      wf_inputs n xs ->
       exists (os : nprod ((length (n_out n)))) InfO,
         sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
 Proof.
