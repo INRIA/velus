@@ -2903,7 +2903,7 @@ Section Node_safe.
       simpl; tauto.
     Qed.
 
-    Lemma ec_wfv_ :
+    Lemma wfe_wfv_ :
       forall ins envI bs env,
       forall ty ck s,
         ty_DS ty s /\ cl_DS ins envI bs env ck s /\ safe_DS s ->
@@ -3027,7 +3027,7 @@ Section Node_safe.
     destruct (mem_ident x ins) eqn:Hmem.
     { (* si x est une entrée, c'est ok *)
       destruct (Hco x ty ck Hty Hck) as (?&?&?).
-      apply ec_wfv_.
+      apply wfe_wfv_.
       unfold denot_var in *.
       rewrite Hmem in *.
       repeat split; auto.
