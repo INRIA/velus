@@ -113,7 +113,7 @@ Module Type EI
 
     Fixpoint always_inline_exp e :=
       match e with
-      | Evar _ _ => true
+      | Evar _ _ | Elast _ _ => true
       | Ewhen e _ _ => always_inline_exp e
       | _ => false
       end.
@@ -140,48 +140,6 @@ Module Type EI
       forallb always_inline_eq eqs.
   End always_inline.
 
-  Section inlinable.
-    Variable x : ident.
-
-    Fixpoint inlinable_in_exp e :=
-      match e with
-      | Elast x' _ => negb (x ==b x')
-      | Ewhen e (x', _) _ => negb (x ==b x') && inlinable_in_exp e
-      | Eunop _ e1 _ => inlinable_in_exp e1
-      | Ebinop _ e1 e2 _ => inlinable_in_exp e1 && inlinable_in_exp e2
-      | _ => true
-      end.
-
-    Fixpoint inlinable_in_cexp e :=
-      match e with
-      | Emerge (x', _) es _ => negb (x ==b x') && forallb inlinable_in_cexp es
-      | Ecase e es d =>
-          inlinable_in_exp e
-          && forallb (or_default_with true inlinable_in_cexp) es
-          && inlinable_in_cexp d
-      | Eexp e => inlinable_in_exp e
-      end.
-
-    Definition inlinable_in_equation eq :=
-      match eq with
-      | EqDef _ _ (Ecexp ce) => inlinable_in_cexp ce
-      | EqDef x' _ _ => negb (x ==b x')
-      | EqApp xs _ _ es xr =>
-          negb (mem_ident x xs)
-          && forallb inlinable_in_exp es
-          && negb (mem_assoc_ident x xr)
-      | EqFby x' _ _ e xr =>
-          negb (x ==b x')
-          && (nb_usage_in_exp x e =? 0)
-          && negb (mem_assoc_ident x xr)
-      | EqLast x' _ _ _ xr =>
-          negb (x ==b x')
-          && negb (mem_assoc_ident x xr)
-      end.
-
-    Definition inlinable_in_equations := forallb inlinable_in_equation.
-  End inlinable.
-
   Definition inlinable vars (eqs: list equation) : list (ident * cexp) :=
     let vars' := PSP.of_list (map_filter (fun '(x, (_, islast)) => if (islast : bool) then None else Some x) vars) in
     (* Variables that are defined with a cexp *)
@@ -193,8 +151,7 @@ Module Type EI
                           end) eqs in
     filter
       (fun '(x, e) =>
-         inlinable_in_equations x eqs (* Mandatory check *)
-         && ((nb_usage_in_equations x eqs =? 1) || (always_inline x eqs)) (* Heuristics *)
+         ((nb_usage_in_equations x eqs =? 1) || (always_inline x eqs)) (* Heuristics *)
          && forallb (fun '(_, (ck, islast)) => if (Is_free_in_clock_dec x ck) then false else true) vars
       )
       inl.
