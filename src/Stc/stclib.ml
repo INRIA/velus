@@ -571,7 +571,23 @@ module SchedulerFun
     let show_tc tcs i tc =
       eprint "@;%d: %a :: %a" i (pp_print_tc_lhs tcs) i pp_clock_path tc.n_clock_path
 
-    (** First candidate schedule *)
+    (** Any candidate schedule *)
+    let schedule_with_topological tcs =
+      let rec sortrec n_set seq =
+        NodeSet.fold (fun n seq ->
+            if n.n_visited then seq
+            else
+              begin
+                n.n_visited <- true;
+                n::(sortrec n.n_depends_on seq)
+              end
+          ) n_set seq
+      in
+      let seq = sortrec (NodeSet.of_seq (Array.to_seq tcs)) [] in
+      Array.iter (fun ({ n_visited = _ } as node) -> node.n_visited <- false) tcs;
+      List.rev seq
+
+    (** Good candidate schedule *)
 
     let schedule_with_queue f sbtcs tcs =
       let ct = empty_clock_tree () in
@@ -684,6 +700,7 @@ module SchedulerFun
       eprint "@;";
 
       let node_list = schedule_with_queue f sbtcs tcs in
+      (* let node_list = schedule_with_topological tcs in *)
       (* let node_list = recooking node_list in *)
 
       List.iteri (fun i n -> tcs.(n.n_id).n_schedule <- Some (Camlcoq.P.of_int (i+1))) node_list;
