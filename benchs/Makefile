@@ -74,9 +74,9 @@ clean:
 	@rm -rf *.hept.* *.hept-gcc.*
 	@rm -f *.bkp *.ff
 
-%.velus.s: %.lus
-	$(VELUS) $(VELUS_OPT) -nomain $<
-	mv $(<:.lus=.s) $@
+%.velus.s: %.ept
+	$(VELUS) $(VELUS_OPT) -heptc -nomain $<
+	mv $(<:.ept=.s) $@
 	sed -i.bkp -e 's/\$$/_/g' $@
 
 %.velus.exe: main.c %.velus.s

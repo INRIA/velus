@@ -28,6 +28,8 @@ let no_main = ref false
 
 let output_file = ref None
 
+let heptagon_parser = ref false
+
 let set_output_file s =
   output_file := Some s
 
@@ -109,6 +111,18 @@ let parse toks =
   | LustreParser.MenhirLibParser.Inter.Timeout_pr -> assert false
   | LustreParser.MenhirLibParser.Inter.Parsed_pr (ast, _) -> ast
 
+(** Use heptagon frontend *)
+
+open Hept_parser
+
+let parse_heptc source_name =
+  let chan = open_in source_name in
+  let hept_ast = Hept_parser.program Hept_lexer.token (Lexing.from_channel chan) in
+  close_in chan;
+  Hept_to_velus.program hept_ast
+
+(** Compiler entry point *)
+
 let compile source_name out_name =
   if !write_lustre
   then Veluslib.lustre_destination := Some (out_name ^ ".parsed.lus");
@@ -144,8 +158,9 @@ let compile source_name out_name =
   then PrintCminor.destination := Some (out_name ^ ".cm");
   if !write_header
   then Veluslib.header_destination := Some (out_name ^ ".h");
-  let toks = LustreLexer.tokens_stream source_name in
-  let ast = parse toks in
+  let ast =
+    if !heptagon_parser then parse_heptc source_name
+    else parse (LustreLexer.tokens_stream source_name) in
   let main_node = get_main_node ast in
   match Compiler.apply_partial
           (Velus.compile ast main_node)
@@ -182,6 +197,8 @@ let speclist = [
   "-sync", Arg.Set write_sync, " Generate sync() in <output>.sync.c";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
   "-header", Arg.Set write_header, " Generate a header file in <output>.h";
+
+  "-heptc", Arg.Set heptagon_parser, " Use heptagon parser and desugarizer";
 
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
   "-dcomplete", Arg.Set write_complete, " Save Lustre after completion in <output>.complete.lus";

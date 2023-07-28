@@ -1,1 +1,5 @@
-count.lus
+node count (i:int) returns (o:int)
+let
+  o = (0 fby o) + i;
+tel
+

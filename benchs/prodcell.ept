@@ -1,1 +1,132 @@
-prodcell.lus
+(*
+    Production Cell in Lustre
+    1995 Leszek Holenderski
+
+    Published in "Formal Development of Reactive Systems", Claus Lewerentz and
+    Thomas Lindner (eds.), Springer-Verlag, LNCS 891, 1995.
+ *)
+
+node redge (signal: bool) returns (r: bool);
+let
+  r = signal -> (signal and (false fby (not signal)));
+tel;
+
+node fedge (signal: bool) returns (f: bool);
+let
+  f = redge(not signal);
+tel;
+
+node sustain (son, off: bool) returns (s: bool);
+let
+  s = son -> (if son then true else if off then false else (false fby s));
+tel;
+
+node after (e1, e2: bool) returns (a: bool);
+  var e2_since_last_e1: bool;
+let
+  a = e1 and e2_since_last_e1;
+  e2_since_last_e1 = e2 ->
+    (if e2 then true else if (false fby e1) then false else (false fby e2_since_last_e1));
+tel;
+
+node movingitem (maysafelymove, trytomove1, trytomove2: bool)
+returns
+  (start1, start2, stop: bool);
+var
+  maymove1, maymove2: bool;
+let
+  maymove1 = trytomove1 and maysafelymove;
+  maymove2 = trytomove2 and maysafelymove;
+
+  start1 = redge(maymove1 and (true fby (not trytomove2)));
+  start2 = redge(maymove2 and (true fby (not trytomove1)));
+  stop = fedge(maymove1) or fedge(maymove2);
+tel;
+
+node press
+  (rput1, nearpress1, outpress1,
+   rget2, nearpress2, outpress2,
+   pbot, pmid, ptop: bool)
+returns
+  (pup, pdn, pstop, armsmaypasspress: bool);
+var
+  arm1maypasspress, arm2maypasspress,
+  arm1outofpress, arm2outofpress, armsoutofpress,
+  arm1cannotcollidewithpress, arm2cannotcollidewithpress,
+  up, down, stopped: bool;
+let
+  (pup, pdn, pstop) = movingitem(true, up, down);
+
+  up = sustain(after(armsoutofpress, rput1), ptop) or
+       sustain(after(armsoutofpress, rget2), pmid);
+  down = sustain(false -> ptop and (false fby pstop), pbot);
+  stopped = not sustain(pup or pdn, pstop);
+
+  armsoutofpress = arm1outofpress and arm2outofpress;
+  arm1outofpress = not nearpress1 or outpress1;
+  arm2outofpress = not nearpress2 or outpress2;
+
+  armsmaypasspress = arm1maypasspress and arm2maypasspress;
+  arm1maypasspress = arm1outofpress or arm1cannotcollidewithpress;
+  arm2maypasspress = arm2outofpress or arm2cannotcollidewithpress;
+
+  arm1cannotcollidewithpress = stopped and (pmid or ptop) or
+    sustain(pbot, pmid) or sustain(pmid, pbot);
+  arm2cannotcollidewithpress = stopped and (pbot or ptop);
+tel;
+
+node rbase
+  (armsmaypasspress,
+   rget1, rput1, totable, topress1,
+   rget2, rput2, todbelt, topress2: bool)
+returns
+  (rleft, rright, rstop: bool);
+var
+  left, right, beforefirstrput1: bool;
+let
+  (rleft, rright, rstop) = movingitem(armsmaypasspress, left, right);
+
+  left = sustain(rget1, topress2) or
+         sustain(rput2, topress1) or
+         sustain(rget2, todbelt) or
+         sustain(rget1, topress1) and beforefirstrput1;
+  right = sustain(true -> rput1, totable);
+
+  beforefirstrput1 = sustain((not rput1) -> false, rput1);
+tel;
+
+node rgrips
+  (inpress1, overtable, totable, topress1,
+   inpress2, overdbelt, todbelt, topress2,
+   ttop, pbot, pmid: bool)
+returns
+  (rget1, rput1, rget2, rput2: bool);
+let
+  rget1 = after(overtable and totable and ttop, true fby rput1);
+  rput1 = after(inpress1 and topress1 and pmid, rget1);
+  rget2 = after(inpress2 and topress2 and pbot, rput1);
+  rput2 = after(overdbelt and todbelt, rget2);
+tel;
+
+node verifymovingitem
+  (maysafelymove, trytomove1, trytomove2: bool)
+returns
+  (prop: bool);
+var
+  maymove1, maymove2: bool;
+  start1, start2, stop, moving: bool;
+let
+  maymove1 = trytomove1 and maysafelymove;
+  maymove2 = trytomove2 and maysafelymove;
+  moving = sustain(start1 or start2, stop);
+
+  start1 = redge(maymove1 and (true fby (not trytomove2)));
+  start2 = redge(maymove2 and (true fby (not trytomove1)));
+  stop = fedge(maymove1) or fedge(maymove2);
+
+  prop = (start1 or start2 or stop)
+         and (not (start1 and start2))
+         and (not (start1 and stop))
+         and (not (start2 and stop)) and
+         ((moving and maysafelymove) or not moving);
+tel;

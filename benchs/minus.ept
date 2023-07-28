@@ -1,1 +1,32 @@
-minus.lus
+(* minus example from the lustre v4 distribution. *)
+
+node two_vstates(set,vreset,vinit:bool) returns (vstate:bool);
+let
+  vstate = vinit -> (if set and not (false fby vstate) then true
+                     else if vreset and (false fby vstate) then false
+                     else false fby vstate);
+tel;
+
+node one_button(change,vinit: bool) returns (vstate:bool);
+let
+  vstate = vinit -> (if change then not (false fby vstate)
+                     else (false fby vstate));
+tel;
+
+node two_buttons(von,voff,vinit:bool) returns(vstate:bool);
+let
+  vstate = vinit -> (if von then true 
+                     else if voff then false 
+                     else (false fby vstate));
+tel;
+
+node minus (e1,e2,e3,vvinit:bool) returns (ok:bool);
+var s1,s2,s3,s4:bool;
+let
+   s1= two_vstates(e1,e2,vvinit);
+   s2= two_buttons(e1,e2,vvinit);
+   s3= two_vstates(e3,e3,vvinit);
+   s4= one_button(e3,vvinit);
+   ok =(s1=s2) and (s3=s4);
+tel;
+

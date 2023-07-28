@@ -89,10 +89,10 @@ node watchdog3 (set, vreset, time_unit: bool;
 var clock: bool;
 let
    alarm = merge clock
-                 (true => watchdog2(set when clock,
+                 (watchdog2(set when clock,
                                     vreset when clock,
                                     delay when clock)) 
-                 (false => (false fby alarm) when not clock);
+                 ((false fby alarm) when not clock);
    clock = true -> set or vreset or time_unit;
 tel
 

@@ -1,0 +1,7 @@
+function & velus & hept & % & hept-gcc & % & hept-gcci & % \\
+buttons~\cite{ColacoPagPou:SCADE:2017} & 1005 & 1430 & 42 & 625 & -37 & 625 & -37 \\
+chrono~\cite{ColacoPagPou:StateMachines:2005} & 500 & 970 & 94 & 570 & 14 & 570 & 14 \\
+cruisecontrol~\cite{lucy:manual:2006} & 1385 & 1680 & 21 & 880 & -36 & 830 & -40 \\
+heater~\cite{lucy:manual:2006} & 2415 & 3110 & 28 & 725 & -69 & 500 & -79 \\
+stepper\_motor & 930 & 1185 & 27 & 605 & -34 & 520 & -44 \\
+stopwatch~\cite{ColacoPagPou:SCADE:2017} & 1255 & 1970 & 56 & 1280 & 1 & 1280 & 1 \\

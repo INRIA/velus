@@ -1,8 +1,0 @@
-(*
-   This example is taken from §1.2.2, Pouzet 2006. “The Lucid Synchrone
-   reference manual”, version 3.
- *)
-node current(d : int; ck : bool; x : int when ck) returns (y : int);
-let
-  y = merge(ck; x; (d fby y) when not ck);
-tel
