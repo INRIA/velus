@@ -61,15 +61,6 @@ let type_name tn =
   | "real" | "float64" -> Tfloat64
   | s -> Tenum_name (name s)
 
-let type_dec ty =
-  match ty.t_desc with
-  | Type_abs -> unsupported "abstract types"
-  | Type_alias ty -> unsupported "type aliases"
-  | Type_enum decs -> Some (TYPE (name ty.t_name,
-                                  List.map name decs,
-                                  location ty.t_loc))
-  | Type_struct _ -> None (* TODO use to compile structures *)
-
 let ty = function
   | Tprod _ -> unsupported "product types"
   | Tid (ToQ n) -> type_name n
@@ -137,7 +128,9 @@ let app f es loc =
 module Env = Map.Make(String)
 
 type cenv = {
-  consts : (LustreAst.expression list) Env.t
+  consts : (LustreAst.expression list) Env.t;
+  types  : type_desc Env.t;
+  decls  : LustreAst.declaration list
 }
 
 (** Shadow constants in environment with local var decls *)
@@ -152,8 +145,14 @@ let rec static_exp (env: cenv) se =
   | Sint i -> [CONSTANT (CONST_INT (string_of_int i), location se.se_loc)]
   | Sfloat f ->
     let (f, i) = Float.modf f in
-    let i = List.nth (String.split_on_char '.' (string_of_float i)) 0
-    and f = List.nth (String.split_on_char '.' (string_of_float f)) 1 in
+    let i =
+      match String.split_on_char '.' (string_of_float i) with
+      | i::_ -> i
+      | _ -> "0"
+    and f =
+      match String.split_on_char '.' (string_of_float f) with
+      | _::f::_ -> f
+      | _ -> "0" in
     [CONSTANT (CONST_FLOAT {
       isHex_FI = false;
       integer_FI = Some i;
@@ -248,22 +247,24 @@ let node_dec env nd =
        block env lasts nd.n_block,
        location nd.n_loc)
 
+let type_dec env ty =
+  match ty.t_desc with
+  | Type_abs -> unsupported "abstract types"
+  | Type_alias ty -> unsupported "type aliases"
+  | Type_enum decs ->
+    { env with decls =
+                 (TYPE (name ty.t_name,
+                        List.map name decs,
+                        location ty.t_loc))::env.decls }
+  | Type_struct _ -> env (* TODO *)
+
 let program_desc env = function
   | Ppragma _ -> unsupported "pragmas"
-  | Ptype ty -> type_dec ty
-  | Pconst _ -> None
-  | Pnode n -> Some (node_dec env n)
-
-let const_dec env = function
-  | Pconst cd -> Some (cd.c_name, exp env cd.c_value)
-  | _ -> None
+  | Ptype ty -> type_dec env ty
+  | Pconst cd -> { env with consts = Env.add cd.c_name (exp env cd.c_value) env.consts }
+  | Pnode n -> { env with decls = (node_dec env n)::env.decls }
 
 let program (p : program) : declaration list =
-  let consts = List.fold_left
-      (fun consts d ->
-         match const_dec { consts } d with
-         | Some (x, e) -> Env.add x e consts
-         | None -> consts)
-      Env.empty p.p_desc in
-  let env = { consts } in
-  List.filter_map (program_desc env) p.p_desc
+  let init_env = { consts = Env.empty; types = Env.empty; decls = []; } in
+  let env =  List.fold_left program_desc init_env p.p_desc in
+  List.rev env.decls
