@@ -1749,7 +1749,8 @@ Module Type CORRECTNESS
             apply to_node_name in EQ0. rewrite <- EQ0.
             eapply ninin_l_nl; eauto. }
         tonodeInv EQ0; simpl in *.
-        eapply sem_blockstoeqs with (cenv:=senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n) ++ _). 1-9:eauto.
+        eapply sem_blockstoeqs with (cenv:=senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n) ++ senv_of_decls locs).
+        1-9:eauto.
         6:{ clear Htr. rewrite <-Hblk in Hmmap. monadInv Hmmap; eauto. }
         * inv Hwt4. inv H8. subst Γ'. simpl_app. eauto.
         * inv Hwc3. inv H8. subst Γ'. simpl_app. eauto.

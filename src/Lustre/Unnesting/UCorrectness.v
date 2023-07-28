@@ -36,9 +36,6 @@ Module Type UCORRECTNESS
   Module Import Clocking := UClockingFun Ids Op OpAux Cks Senv Syn Cl Un.
   Import List.
 
-  CoFixpoint default_stream : Stream svalue :=
-    absent ⋅ default_stream.
-
   Import Permutation.
 
   (** *** Relation between state and history *)

@@ -51,7 +51,7 @@ Module Type UNNESTING
         eapply Forall2_Forall2 in H1; [|eapply H2]; clear H2
       | H1 : Forall3 _ ?l1 ?l2 ?l3, H2 : Forall3 _ ?l1 ?l2 ?l3 |- _ =>
         eapply Forall3_Forall3 in H1; [|eapply H2]; clear H2
-      (* Try to hyp Foralls in the same form as conclusion *)
+      (* Try to put hyp Foralls in the same form as conclusion *)
       | H : Forall _ ?l1 |- Forall2 _ ?l1 ?l2 =>
         eapply Forall2_ignore2' with (ys:=l2) in H; try congruence
       | H : Forall _ ?l2 |- Forall2 _ ?l1 ?l2 =>
@@ -92,31 +92,7 @@ Module Type UNNESTING
           specialize (in_combine_l _ _ _ _ H) as ?; apply in_combine_r in H
       end.
 
-  (** Simplify an expression with maps and other stuff... *)
   Global Hint Unfold typesof annots clocksof : list.
-
-  Ltac simpl_list :=
-    simpl in *;
-    autounfold with list in *;
-    match goal with
-    (* annots, clocksof and typesof are just plurals *)
-    (* flat_map, map_map, map_app, concat_app *)
-    | H: context c [flat_map ?f ?l] |- _ => rewrite flat_map_concat_map in H
-    | |- context c [flat_map ?f ?l] => rewrite flat_map_concat_map
-    | H: context c [map ?f (map ?g ?l)] |- _ => rewrite map_map in H
-    | |- context c [map ?f (map ?g ?l)] => rewrite map_map
-    | H: context c [map ?f (app ?l1 ?l2)] |- _ => rewrite map_app in H
-    | |- context c [map ?f (app ?l1 ?l2)] => rewrite map_app
-    | H: context c [concat (app ?l1 ?l2)] |- _ => rewrite concat_app in H
-    | |- context c [concat (app ?l1 ?l2)] => rewrite concat_app
-    (* idsnd_app, idfst_app *)
-    (* app_nil_r *)
-    | H: context c [app ?l nil] |- _ => rewrite app_nil_r in H
-    | |- context c [app ?l nil] => rewrite app_nil_r
-    (* app_assoc *)
-    | H: context c [app (app ?l1 ?l2) ?l3] |- _ => rewrite <- app_assoc in H
-    | |- context c [app (app ?l1 ?l2) ?l3] => rewrite <- app_assoc
-    end.
 
   Ltac subst_length :=
     match goal with
@@ -698,7 +674,7 @@ Module Type UNNESTING
   Proof.
     intros * Hf Hmap.
     apply mmap2_values in Hmap.
-    repeat simpl_list.
+    unfold annots. rewrite flat_map_concat_map.
     apply concat_length_eq.
     rewrite Forall2_map_2, Forall2_swap_args.
     eapply Forall3_ignore3, Forall2_Forall2 in Hmap; [| eapply Hf]. clear Hf.
@@ -978,7 +954,7 @@ Module Type UNNESTING
     - (* arrow *) apply idents_for_anns_annots in H1...
     - (* when *)
       assert (length (concat x0) = length (annots l)) as Hlen by eauto with norm.
-      unfold unnest_when; repeat simpl_list.
+      unfold unnest_when, annots in *. rewrite flat_map_concat_map, map_map in *.
       rewrite H5 in Hlen.
       remember (concat x0) as l0.
       clear x0 H H2 H5 Heql0. revert l0 Hlen.
@@ -1051,7 +1027,7 @@ Module Type UNNESTING
     eapply mmap2_unnest_exp_annots' in Hmap; eauto.
     induction Hmap; simpl; auto.
     inv Hwl.
-    repeat simpl_list.
+    unfold annots. rewrite <-flat_map_app.
     f_equal; auto.
   Qed.
 
@@ -1123,7 +1099,7 @@ Module Type UNNESTING
     - reflexivity.
     - inv Hf.
       destruct H as [? [? H]]. eapply unnest_rhs_annot in H; eauto.
-      repeat simpl_list.
+      unfold annots. rewrite <-flat_map_app.
       f_equal; auto.
   Qed.
 
@@ -1167,8 +1143,7 @@ Module Type UNNESTING
       specialize (IHes _ _ _ _ H0 H4).
       specialize (H3 _ _ _ _ H).
       etransitivity. 2: apply IHes.
-      repeat simpl_list.
-      rewrite Permutation_swap.
+      simpl. rewrite <-flat_map_app, <-app_assoc, Permutation_swap.
       apply Permutation_app_head. assumption.
   Qed.
 
@@ -1207,10 +1182,10 @@ Module Type UNNESTING
     induction e using exp_ind2; intros is_control e' eqs' st st' Hnorm;
       simpl in Hnorm; destruct_conjs; repeat inv_bind...
     - (* binop *)
-      repeat simpl_list.
+      rewrite <-flat_map_app, <-app_assoc.
       apply IHe1 in H...
       apply IHe2 in H0...
-      etransitivity. 2: eauto. repeat simpl_list.
+      etransitivity. 2:eauto.
       rewrite Permutation_swap.
       apply Permutation_app_head...
     - (* extcall *)
@@ -1223,7 +1198,7 @@ Module Type UNNESTING
       apply mmap2_vars_perm in H2. 2:simpl_Forall; eauto.
       apply idents_for_anns_vars_perm in H3.
       rewrite <- H3, <- H2, <- H1.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app. simpl_app.
       rewrite mk_equations_map_fst.
       eapply Permutation_app_head.
       rewrite Permutation_swap; auto.
@@ -1234,7 +1209,7 @@ Module Type UNNESTING
       apply mmap2_vars_perm in H2. 2:simpl_Forall; eauto.
       apply idents_for_anns_vars_perm in H3.
       rewrite <- H3, <- H2, <- H1.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app. simpl_app.
       rewrite mk_equations_map_fst.
       eapply Permutation_app_head.
       rewrite Permutation_swap; auto.
@@ -1246,7 +1221,7 @@ Module Type UNNESTING
       2:{ simpl_Forall; repeat inv_bind.
           eapply mmap2_vars_perm in H3; eauto. simpl_Forall; eauto. }
       destruct is_control; repeat inv_bind; auto.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app in *. simpl_app.
       apply idents_for_anns_vars_perm in H1.
       etransitivity. 2: eauto.
       rewrite mk_equations_map_fst.
@@ -1264,7 +1239,7 @@ Module Type UNNESTING
       + etransitivity...
         now rewrite <-2 flat_map_app, <-app_assoc, Permutation_swap, H1,
         <-app_assoc, Permutation_swap, H2.
-      + repeat simpl_list.
+      + rewrite ? flat_map_concat_map, ? map_app, ? concat_app in *. simpl_app.
         rewrite mk_equations_map_fst.
         eapply idents_for_anns_vars_perm in H4.
         etransitivity. 2:eauto.
@@ -1285,7 +1260,7 @@ Module Type UNNESTING
       apply mmap2_vars_perm in H1. 2:(simpl_Forall; eauto).
       apply unnest_noops_exps_vars_perm in H2.
       rewrite <- H4, <- H3, <- H2, <- H1; simpl.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app in *. simpl_app.
       apply Permutation_app_head. rewrite Permutation_app_comm, Permutation_swap, <- app_assoc, <- app_assoc.
       apply Permutation_app_head, Permutation_app_head. apply Permutation_app_comm.
   Qed.
@@ -1316,14 +1291,14 @@ Module Type UNNESTING
       eapply unnest_exps_vars_perm in H...
       eapply unnest_exps_vars_perm in H0...
       rewrite <- H0, <- H.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app in *. simpl_app.
       rewrite Permutation_swap...
     - (* arrow *)
       repeat inv_bind.
       eapply unnest_exps_vars_perm in H...
       eapply unnest_exps_vars_perm in H0...
       rewrite <- H0, <- H.
-      repeat simpl_list.
+      rewrite ? flat_map_concat_map, ? map_app, ? concat_app in *. simpl_app.
       rewrite Permutation_swap...
     - (* app *)
       repeat inv_bind.
@@ -1371,7 +1346,7 @@ Module Type UNNESTING
     - reflexivity.
     - destruct a as [xs es].
       specialize (split_equation_fst xs es) as Heq.
-      repeat simpl_list.
+      rewrite <-flat_map_app.
       f_equal; auto.
   Qed.
 
@@ -1387,7 +1362,7 @@ Module Type UNNESTING
     specialize (unnest_rhss_vars_perm _ _ _ _ _ _ H) as Hperm1.
     assert (flat_map fst (flat_map split_equation [(l, x)]) = flat_map fst [(l, x)]) as Hxl.
     { apply split_equations_fst. }
-    repeat simpl_list.
+    rewrite ? flat_map_concat_map in *. simpl in *. simpl_app.
     apply Permutation_app; auto.
     rewrite <- Hxl at 2. reflexivity.
   Qed.
