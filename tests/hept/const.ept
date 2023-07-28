@@ -1,0 +1,18 @@
+const pi : real = 3.14159
+
+node perimeter(radius : real) returns (per : real)
+let
+    per = 2.0 *. pi *. radius;
+tel
+
+node perimeter2(pi, radius : real) returns (per : real)
+let
+    per = 2.0 *. pi *. radius;
+tel
+
+const tau : real = 2.0 *. pi
+
+node perimeter3(pi, radius : real) returns (per : real)
+let
+    per = tau *. radius;
+tel

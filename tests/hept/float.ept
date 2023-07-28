@@ -1,0 +1,4 @@
+node perimeter(radius : real) returns (per : real)
+let
+    per = 2.0 * 3.14159 * radius;
+tel

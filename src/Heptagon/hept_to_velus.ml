@@ -132,7 +132,21 @@ let app f es loc =
 
   | _, _ -> APP (qualname f, es, [], loc)
 
-let rec static_exp se =
+(** Compilation environment *)
+
+module Env = Map.Make(String)
+
+type cenv = {
+  consts : (LustreAst.expression list) Env.t
+}
+
+(** Shadow constants in environment with local var decls *)
+let shadow env vds =
+  { env with consts = Env.filter (fun x _ -> not (List.mem x (List.map (fun vd -> vd.v_name) vds))) env.consts }
+
+(** Compilation of exprs, equations, blocks *)
+
+let rec static_exp (env: cenv) se =
   match se.se_desc with
   | Svar cname -> failwith "TODO: const"
   | Sint i -> [CONSTANT (CONST_INT (string_of_int i), location se.se_loc)]
@@ -152,87 +166,104 @@ let rec static_exp se =
   | Sstring _ -> unsupported "string"
   | Sconstructor n -> [CONSTANT (CONST_ENUM (constructor n), location se.se_loc)]
   | Sfield f -> failwith "TODO: field"
-  | Stuple es -> List.concat_map static_exp es
+  | Stuple es -> List.concat_map (static_exp env) es
   | Sarray_power _ -> failwith "TODO: array_power"
   | Sarray _ -> failwith "TODO: array"
   | Srecord _ -> failwith "TODO: record"
-  | Sop (f, es) -> [app f (List.concat_map static_exp es) (location se.se_loc)]
+  | Sop (f, es) -> [app f (List.concat_map (static_exp env) es) (location se.se_loc)]
 
-let rec exp e =
+let rec exp (env: cenv) e =
   match e.e_desc with
-  | Econst se -> static_exp se
-  | Evar x -> [VARIABLE (name x, location e.e_loc)] (* TODO constants *)
+  | Econst se -> static_exp env se
+  | Evar x ->
+    (match Env.find_opt x env.consts with
+     | Some e -> e
+     | None -> [VARIABLE (name x, location e.e_loc)])
   | Elast x -> [LAST (name x, location e.e_loc)]
   | Epre _ -> unsupported "pre"
-  | Efby (e1, e2) -> [FBY (exp e1, exp e2, location e.e_loc)]
+  | Efby (e1, e2) -> [FBY (exp env e1, exp env e2, location e.e_loc)]
   | Estruct _ -> failwith "TODO: struct"
-  | Eapp ({ a_op = Etuple }, es) -> List.concat_map exp es
+  | Eapp ({ a_op = Etuple }, es) -> List.concat_map (exp env) es
   | Eapp ({ a_op = Enode f | Efun f }, es) ->
-    [app f (List.concat_map exp es) (location e.e_loc)]
+    [app f (List.concat_map (exp env) es) (location e.e_loc)]
   | Eapp ({ a_op = Eifthenelse }, [ec; et; ef]) ->
-    [CASE (exp ec, [(Ident.Ids.true_id, exp et); (Ident.Ids.false_id, exp ef)], [], location e.e_loc)]
-  | Eapp ({ a_op = Earrow }, [e0; e1]) -> [ARROW (exp e0, exp e1, location e.e_loc)]
+    [CASE (exp env ec, [(Ident.Ids.true_id, exp env et); (Ident.Ids.false_id, exp env ef)], [], location e.e_loc)]
+  | Eapp ({ a_op = Earrow }, [e0; e1]) -> [ARROW (exp env e0, exp env e1, location e.e_loc)]
   | Eapp ({ a_op = Efield }, _) -> failwith "TODO: field"
   | Eapp ({ a_op = Efield_update}, _) -> failwith "TODO: field update"
   | Eapp ({ a_op = Earray}, _) -> failwith "TODO: array"
   | Eapp ({ a_op = Earray_fill}, _) -> failwith "TODO: array_fill"
   | Eapp ({ a_op = _ }, _) -> unsupported "app"
   | Eiterator _ -> unsupported "iterators"
-  | Ewhen (e, c, x) -> [WHEN (exp e, name x, constructor c, location e.e_loc)]
-  | Emerge (x, brs) -> [MERGE (name x, List.map (fun (c, e) -> (constructor c, exp e)) brs, location e.e_loc)]
+  | Ewhen (e, c, x) -> [WHEN (exp env e, name x, constructor c, location e.e_loc)]
+  | Emerge (x, brs) -> [MERGE (name x, List.map (fun (c, e) -> (constructor c, exp env e)) brs, location e.e_loc)]
   | Esplit _ -> unsupported "split"
 
-let escape esc =
-  ((exp esc.e_cond, (name esc.e_next_state, esc.e_reset)), location esc.e_cond.e_loc)
+let escape env esc =
+  ((exp env esc.e_cond, (name esc.e_next_state, esc.e_reset)), location esc.e_cond.e_loc)
 
-let last_decl vd =
+let last_decl env vd =
   match vd.v_last with
-  | Last (Some e) -> Some (name vd.v_name, exp e, location vd.v_loc)
+  | Last (Some e) -> Some (name vd.v_name, exp env e, location vd.v_loc)
   | _ -> None
 
-let rec eq eq =
+let rec eq env eq =
   match eq.eq_desc with
   | Eautomaton sts -> BAUTO (([], name (List.hd sts).s_state),
-                             List.map state_handler sts,
+                             List.map (state_handler env) sts,
                              location eq.eq_loc)
-  | Eswitch (e, brs) -> BSWITCH (exp e, List.map switch_handler brs, location eq.eq_loc)
+  | Eswitch (e, brs) -> BSWITCH (exp env e, List.map (switch_handler env) brs, location eq.eq_loc)
   | Epresent _ -> unsupported "present"
-  | Ereset (blk, e) -> BRESET ([block [] blk], exp e, location eq.eq_loc)
-  | Eblock blk -> block [] blk
-  | Eeq (p, _, e) -> BEQ ((pat p, exp e), location eq.eq_loc)
+  | Ereset (blk, e) -> BRESET ([block env [] blk], exp env e, location eq.eq_loc)
+  | Eblock blk -> block env [] blk
+  | Eeq (p, _, e) -> BEQ ((pat p, exp env e), location eq.eq_loc)
 
-and block lasts1 blk =
-  let lasts2 = List.filter_map last_decl blk.b_local in
+and block env lasts1 blk =
+  let env' = shadow env blk.b_local in
+  let lasts2 = List.filter_map (last_decl env') blk.b_local in
   BLOCAL (List.map var_dec blk.b_local,
-          List.map eq blk.b_equs@
+          List.map (eq env') blk.b_equs@
           List.map (fun (x, e, loc) -> BLAST (x, e, loc)) (lasts1@lasts2),
           location blk.b_loc)
 
-and switch_handler br =
-  (constructor br.w_name, [block [] br.w_block])
+and switch_handler env br =
+  (constructor br.w_name, [block env [] br.w_block])
 
-and state_handler st =
-  let lasts = List.filter_map last_decl st.s_block.b_local in
+and state_handler env st =
+  let env' = shadow env st.s_block.b_local in
+  let lasts = List.filter_map (last_decl env') st.s_block.b_local in
   (name st.s_state,
    (((List.map var_dec st.s_block.b_local,
-      List.map eq st.s_block.b_equs@
+      List.map (eq env') st.s_block.b_equs@
       List.map (fun (x, e, loc) -> BLAST (x, e, loc)) lasts),
-     List.map escape st.s_until),
-    List.map escape st.s_unless))
+     List.map (escape env') st.s_until),
+    List.map (escape env') st.s_unless))
 
-let node_dec nd =
-  let lasts = List.filter_map last_decl nd.n_output in
+let node_dec env nd =
+  let lasts = List.filter_map (last_decl env) nd.n_output in
+  let env = shadow env (nd.n_input@nd.n_output) in
   NODE (name nd.n_name, nd.n_stateful,
        List.map var_dec nd.n_input,
        List.map var_dec nd.n_output,
-       block lasts nd.n_block,
+       block env lasts nd.n_block,
        location nd.n_loc)
 
-let program_desc = function
+let program_desc env = function
   | Ppragma _ -> unsupported "pragmas"
   | Ptype ty -> type_dec ty
-  | Pconst _ -> None (* TODO use to rewrite constant use *)
-  | Pnode n -> Some (node_dec n)
+  | Pconst _ -> None
+  | Pnode n -> Some (node_dec env n)
+
+let const_dec env = function
+  | Pconst cd -> Some (cd.c_name, exp env cd.c_value)
+  | _ -> None
 
 let program (p : program) : declaration list =
-  List.filter_map program_desc p.p_desc
+  let consts = List.fold_left
+      (fun consts d ->
+         match const_dec { consts } d with
+         | Some (x, e) -> Env.add x e consts
+         | None -> consts)
+      Env.empty p.p_desc in
+  let env = { consts } in
+  List.filter_map (program_desc env) p.p_desc
