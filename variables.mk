@@ -5,6 +5,7 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 MKFILE_DIR := $(patsubst %/,%,$(dir $(MKFILE_PATH)))
 
 SRC_DIR=src
+HEPTAGON_DIR=src/Heptagon
 
 VELUSMAIN=velusmain
 VELUS=velus
@@ -53,7 +54,7 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 
 # ocamlbuild flags
 VERBOSITY=-verbose 1
-FLAGS=-Is $(SRC_DIR),$(EXTRACTED) -use-ocamlfind -use-menhir \
+FLAGS=-Is $(SRC_DIR),$(HEPTAGON_DIR),$(EXTRACTED) -use-ocamlfind -use-menhir \
       -pkgs str,unix,menhirLib,ocamlgraph -no-hygiene $(VERBOSITY)
 	#-cflags $(MENHIR_INCLUDES)$(WARNINGS)
 TARGET=native

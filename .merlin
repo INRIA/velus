@@ -1,4 +1,5 @@
 B _build/src
+B _build/src/Heptagon
 B _build/extraction/extracted
 S src
 S src/Lustre
@@ -8,6 +9,7 @@ S src/NLustre
 S src/SyBloc
 S src/Obc
 S src/ObcToClight
+S src/Heptagon
 S CompCert/common
 S CompCert/lib
 S CompCert/cparser
