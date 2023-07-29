@@ -9,10 +9,37 @@ open LustreAst
 
 exception Unsupported of string
 
+(** Compilation environment *)
+
+module Env = Map.Make(String)
+
+type cenv = {
+  consts : (LustreAst.expression list) Env.t;
+  types  : type_desc Env.t;
+  venv   : ty Env.t;
+  decls  : LustreAst.declaration list
+}
+
+(* exception TypeNotFound of string *)
+
+(* let find_type tn env = *)
+(*   match Env.find_opt tn env with *)
+(*   | Some td -> td *)
+(*   | None -> raise (TypeNotFound tn) *)
+
+exception VarNotFound of string
+
+let find_var tn env =
+  match Env.find_opt tn env with
+  | Some ty -> ty
+  | None -> raise (VarNotFound tn)
+
 let unsupported s = raise (Unsupported s)
 
 let name (n : Names.name) : Common.ident =
   Camlcoq.intern_string n
+
+let postfix x1 x2 = x1^"_"^x2
 
 (* let string_of_qualname = function *)
 (*   | ToQ n -> n *)
@@ -61,9 +88,14 @@ let type_name tn =
   | "real" | "float64" -> Tfloat64
   | s -> Tenum_name (name s)
 
-let ty = function
+let rec ty env ((n, (clock, loc)) as decl) = function
   | Tprod _ -> unsupported "product types"
-  | Tid (ToQ n) -> type_name n
+  | Tid (ToQ tn) ->
+    (match Env.find_opt tn env.types with
+     | Some (Type_alias t) -> ty env decl t
+     | Some (Type_struct fs) ->
+       List.concat_map (fun (f, t) -> ty env (postfix n f, (clock, loc)) t) fs
+     | _ -> [(name n, ((type_name tn, clock), loc))])
   | Tid _ -> unsupported "qualified names"
   | Tarray _ -> failwith "TODO: array"
   | Tinvalid -> failwith "Invalid type ?"
@@ -81,16 +113,65 @@ let opt_ck = function
   | None -> FULLCK BASE
   | Some ck -> pre_ck ck
 
-let var_dec vd =
-  (* TODO last *)
-  (name vd.v_name,
-   ((ty vd.v_type,
-     opt_ck vd.v_clock),
-    location vd.v_loc))
+let var_dec env vd =
+  let decl = (vd.v_name, (opt_ck vd.v_clock, location vd.v_loc)) in
+  ty env decl vd.v_type
 
-let rec pat = function
-  | Etuplepat pats -> List.concat_map pat pats
-  | Evarpat v -> [name v]
+(** Number of scalar values represented by [ty] *)
+let rec size_type env ty =
+  match ty with
+  | Tprod tys ->
+    List.fold_left (fun acc ty -> acc + size_type env ty) 0 tys
+  | Tarray (ty, _) -> failwith "TODO: tarray"
+  | Tinvalid -> failwith "Invalid type ?"
+  | Tid tn ->
+    match Env.find_opt (shortname tn) env.types with
+    | Some (Type_alias ty) -> size_type env ty
+    | Some (Type_struct fs) ->
+      List.fold_left (fun acc (f, ty) -> acc + size_type env ty) 0 fs
+    | _ -> 1
+
+(** Decompose a variable [n] with type [ty] *)
+let rec decomp_type env n ty =
+  match ty with
+  | Tprod tys ->
+    List.flatten
+      (List.mapi (fun i -> decomp_type env (postfix n (string_of_int i))) tys)
+  | Tarray (ty, _) -> failwith "TODO: tarray"
+  | Tinvalid -> failwith "Invalid type ?"
+  | Tid tn ->
+    match Env.find_opt (shortname tn) env.types with
+    | Some (Type_alias ty) -> decomp_type env n ty
+    | Some (Type_struct fs) ->
+      List.concat_map (fun (f, ty) -> decomp_type env (postfix n f) ty) fs
+    | _ -> [name n]
+
+(** Find the record definition with field [f] *)
+let find_record env f =
+  match
+    Env.fold
+      (fun _ td acc ->
+         if Option.is_some acc then acc else
+           match td with
+           | Type_struct fs ->
+             if List.mem_assoc f fs then Some fs else None
+           | _ -> None)
+      env.types None
+  with Some fs -> fs | None -> invalid_arg "find_record"
+
+(** Find the record definition with field [f] and its index *)
+let find_record_index env f =
+  let rec aux fs n =
+    match fs with
+    | [] -> invalid_arg "find_record_index"
+    | (f', ty)::_ when f' = f -> n
+    | (_, ty)::fs -> aux fs (n + size_type env ty)
+  in aux (find_record env f) 0
+
+let rec pat env = function
+  | Etuplepat pats -> List.concat_map (pat env) pats
+  | Evarpat n ->
+    decomp_type env n (find_var n env.venv)
 
 (** Application of node or operator *)
 let app f es loc =
@@ -123,19 +204,11 @@ let app f es loc =
 
   | _, _ -> APP (qualname f, es, [], loc)
 
-(** Compilation environment *)
-
-module Env = Map.Make(String)
-
-type cenv = {
-  consts : (LustreAst.expression list) Env.t;
-  types  : type_desc Env.t;
-  decls  : LustreAst.declaration list
-}
-
-(** Shadow constants in environment with local var decls *)
-let shadow env vds =
-  { env with consts = Env.filter (fun x _ -> not (List.mem x (List.map (fun vd -> vd.v_name) vds))) env.consts }
+(** Add local declarations to the env *)
+let add_decls env vds =
+  { env with
+    consts = Env.filter (fun x _ -> not (List.mem x (List.map (fun vd -> vd.v_name) vds))) env.consts;
+    venv = Env.add_seq (List.to_seq (List.map (fun vd -> (vd.v_name, vd.v_type)) vds)) env.venv }
 
 (** Compilation of exprs, equations, blocks *)
 
@@ -164,7 +237,7 @@ let rec static_exp (env: cenv) se =
   | Sbool false -> [CONSTANT (CONST_ENUM Ident.Ids.false_id, location se.se_loc)]
   | Sstring _ -> unsupported "string"
   | Sconstructor n -> [CONSTANT (CONST_ENUM (constructor n), location se.se_loc)]
-  | Sfield f -> failwith "TODO: field"
+  | Sfield f -> invalid_arg "static_exp: field"
   | Stuple es -> List.concat_map (static_exp env) es
   | Sarray_power _ -> failwith "TODO: array_power"
   | Sarray _ -> failwith "TODO: array"
@@ -177,21 +250,41 @@ let rec exp (env: cenv) e =
   | Evar x ->
     (match Env.find_opt x env.consts with
      | Some e -> e
-     | None -> [VARIABLE (name x, location e.e_loc)])
-  | Elast x -> [LAST (name x, location e.e_loc)]
+     | None ->
+       let vs = decomp_type env x (find_var x env.venv) in
+       List.map (fun x -> VARIABLE (x, location e.e_loc)) vs)
+  | Elast x ->
+    let vs = decomp_type env x (find_var x env.venv) in
+    List.map (fun x -> LAST (x, location e.e_loc)) vs
   | Epre _ -> unsupported "pre"
   | Efby (e1, e2) -> [FBY (exp env e1, exp env e2, location e.e_loc)]
-  | Estruct _ -> failwith "TODO: struct"
+  | Estruct fs ->
+    let fs = List.map (fun (s, e) -> (shortname s, exp env e)) fs in
+    let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
+    List.concat_map snd fs
   | Eapp ({ a_op = Etuple }, es) -> List.concat_map (exp env) es
   | Eapp ({ a_op = Enode f | Efun f }, es) ->
     [app f (List.concat_map (exp env) es) (location e.e_loc)]
   | Eapp ({ a_op = Eifthenelse }, [ec; et; ef]) ->
     [CASE (exp env ec, [(Ident.Ids.true_id, exp env et); (Ident.Ids.false_id, exp env ef)], [], location e.e_loc)]
   | Eapp ({ a_op = Earrow }, [e0; e1]) -> [ARROW (exp env e0, exp env e1, location e.e_loc)]
-  | Eapp ({ a_op = Efield }, _) -> failwith "TODO: field"
-  | Eapp ({ a_op = Efield_update}, _) -> failwith "TODO: field update"
-  | Eapp ({ a_op = Earray}, _) -> failwith "TODO: array"
-  | Eapp ({ a_op = Earray_fill}, _) -> failwith "TODO: array_fill"
+  | Eapp ({ a_op = Efield;
+            a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
+          [e]) ->
+    let es = exp env e in
+    [List.nth es (find_record_index env (shortname f))]
+  | Eapp ({ a_op = Efield_update;
+            a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
+          [e1;e2]) ->
+    let rec replace e1s e2s n =
+      (match e1s, e2s, n with
+      | [], _, _ -> []
+      | e1s, [], _ -> e1s
+      | _::e1s, e2::e2s, 0 -> e2::replace e1s e2s 0
+      | e1::e1s, e2s, n -> e1::replace e1s e2s (n - 1))
+    in replace (exp env e1) (exp env e2) (find_record_index env (shortname f))
+  | Eapp ({ a_op = Earray }, _) -> failwith "TODO: array"
+  | Eapp ({ a_op = Earray_fill }, _) -> failwith "TODO: array_fill"
   | Eapp ({ a_op = _ }, _) -> unsupported "app"
   | Eiterator _ -> unsupported "iterators"
   | Ewhen (e, c, x) -> [WHEN (exp env e, name x, constructor c, location e.e_loc)]
@@ -215,12 +308,12 @@ let rec eq env eq =
   | Epresent _ -> unsupported "present"
   | Ereset (blk, e) -> BRESET ([block env [] blk], exp env e, location eq.eq_loc)
   | Eblock blk -> block env [] blk
-  | Eeq (p, _, e) -> BEQ ((pat p, exp env e), location eq.eq_loc)
+  | Eeq (p, _, e) -> BEQ ((pat env p, exp env e), location eq.eq_loc)
 
 and block env lasts1 blk =
-  let env' = shadow env blk.b_local in
+  let env' = add_decls env blk.b_local in
   let lasts2 = List.filter_map (last_decl env') blk.b_local in
-  BLOCAL (List.map var_dec blk.b_local,
+  BLOCAL (List.concat_map (var_dec env) blk.b_local,
           List.map (eq env') blk.b_equs@
           List.map (fun (x, e, loc) -> BLAST (x, e, loc)) (lasts1@lasts2),
           location blk.b_loc)
@@ -229,10 +322,10 @@ and switch_handler env br =
   (constructor br.w_name, [block env [] br.w_block])
 
 and state_handler env st =
-  let env' = shadow env st.s_block.b_local in
+  let env' = add_decls env st.s_block.b_local in
   let lasts = List.filter_map (last_decl env') st.s_block.b_local in
   (name st.s_state,
-   (((List.map var_dec st.s_block.b_local,
+   (((List.concat_map (var_dec env) st.s_block.b_local,
       List.map (eq env') st.s_block.b_equs@
       List.map (fun (x, e, loc) -> BLAST (x, e, loc)) lasts),
      List.map (escape env') st.s_until),
@@ -240,23 +333,27 @@ and state_handler env st =
 
 let node_dec env nd =
   let lasts = List.filter_map (last_decl env) nd.n_output in
-  let env = shadow env (nd.n_input@nd.n_output) in
+  let env = add_decls env (nd.n_input@nd.n_output) in
   NODE (name nd.n_name, nd.n_stateful,
-       List.map var_dec nd.n_input,
-       List.map var_dec nd.n_output,
-       block env lasts nd.n_block,
-       location nd.n_loc)
+        List.concat_map (var_dec env) nd.n_input,
+        List.concat_map (var_dec env) nd.n_output,
+        block env lasts nd.n_block,
+        location nd.n_loc)
 
 let type_dec env ty =
   match ty.t_desc with
   | Type_abs -> unsupported "abstract types"
-  | Type_alias ty -> unsupported "type aliases"
   | Type_enum decs ->
     { env with decls =
                  (TYPE (name ty.t_name,
                         List.map name decs,
                         location ty.t_loc))::env.decls }
-  | Type_struct _ -> env (* TODO *)
+  | Type_alias _ ->
+    { env with types = Env.add ty.t_name ty.t_desc env.types }
+  | Type_struct fs ->
+    (* We order fields by lexicographic order *)
+    let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
+    { env with types = Env.add ty.t_name (Type_struct fs) env.types }
 
 let program_desc env = function
   | Ppragma _ -> unsupported "pragmas"
@@ -265,6 +362,6 @@ let program_desc env = function
   | Pnode n -> { env with decls = (node_dec env n)::env.decls }
 
 let program (p : program) : declaration list =
-  let init_env = { consts = Env.empty; types = Env.empty; decls = []; } in
+  let init_env = { consts = Env.empty; types = Env.empty; decls = []; venv = Env.empty } in
   let env =  List.fold_left program_desc init_env p.p_desc in
   List.rev env.decls

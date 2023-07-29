@@ -1,0 +1,44 @@
+type point = {
+    x : int;
+    y : int
+}
+
+node mkpoint(x, y : int) returns (p : point)
+let
+    p = { x = x; y = y }
+tel
+
+const p1 : point = { x = 1; y = 2 }
+const p2 : point = { y = 1; x = 2 }
+
+node p1_or_p2(b : bool) returns (p : point)
+let
+    p = if b then p1 else p2
+tel
+
+node copy_point(p1 : point) returns (p2 : point)
+let
+    p2 = p1
+tel
+
+node add(p1, p2 : point) returns (p3 : point)
+let
+    p3 = { x = p1.x + p2.x; y = p1.y + p2.y }
+tel
+
+type segment = {
+    p1 : point;
+    p2 : point
+}
+
+const s : segment = { p1 = p1; p2 = p2 }
+
+node s_x2(s : segment) returns (o : int)
+let
+    o = s.p2.x;
+tel
+
+node update_s_x2(x2 : int) returns (s1 : segment)
+let
+    s1 = { s with .p2 = { s.p2 with .x = x2 } }
+tel
