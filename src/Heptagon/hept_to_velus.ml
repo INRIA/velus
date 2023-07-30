@@ -263,8 +263,8 @@ let rec exp (env: cenv) e =
     let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
     List.concat_map snd fs
   | Eapp ({ a_op = Etuple }, es) -> List.concat_map (exp env) es
-  | Eapp ({ a_op = Enode f | Efun f }, es) ->
-    [app f (List.concat_map (exp env) es) (location e.e_loc)]
+  | Eapp ({ a_op = Enode f | Efun f; a_params }, es) ->
+    [app f (List.concat_map (exp env) (a_params@es)) (location e.e_loc)]
   | Eapp ({ a_op = Eifthenelse }, [ec; et; ef]) ->
     [CASE (exp env ec, [(Ident.Ids.true_id, exp env et); (Ident.Ids.false_id, exp env ef)], [], location e.e_loc)]
   | Eapp ({ a_op = Earrow }, [e0; e1]) -> [ARROW (exp env e0, exp env e1, location e.e_loc)]
@@ -333,9 +333,9 @@ and state_handler env st =
 
 let node_dec env nd =
   let lasts = List.filter_map (last_decl env) nd.n_output in
-  let env = add_decls env (nd.n_input@nd.n_output) in
+  let env = add_decls env (nd.n_params@nd.n_input@nd.n_output) in
   NODE (name nd.n_name, nd.n_stateful,
-        List.concat_map (var_dec env) nd.n_input,
+        List.concat_map (var_dec env) (nd.n_params@nd.n_input),
         List.concat_map (var_dec env) nd.n_output,
         block env lasts nd.n_block,
         location nd.n_loc)

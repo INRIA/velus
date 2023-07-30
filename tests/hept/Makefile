@@ -1,6 +1,6 @@
 VELUS = ../../velus
 
-TESTS := decl.ept float.ept const.ept record.ept
+TESTS := decl.ept float.ept const.ept record.ept static.ept
 
 all: $(TESTS:.ept=.s)
 
