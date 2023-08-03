@@ -1867,21 +1867,14 @@ Qed.
 Section Cont_alt.
 
   (* version continue de denot_var *)
-  Definition denot_var_C ins envI x : DS_prod SI -C-> DS (sampl value) :=
-    if mem_ident x ins then CTE _ _ (envI x) else PROJ _ x.
+  Definition denot_var_C ins x : DS_prod SI -C-> DS_prod SI -C-> DS (sampl value) :=
+    curry (if mem_ident x ins
+           then PROJ _ x @_ FST _ _
+           else PROJ _ x @_ SND _ _).
 
   Fact denot_var_eq :
     forall ins x envI env,
-      denot_var ins envI env x = denot_var_C ins envI x env.
-  Proof.
-    intros.
-    unfold denot_var, denot_var_C.
-    cases.
-  Qed.
-
-  Fact AC_var_eq :
-    forall ins x envI env,
-      AC (denot_var ins envI env x) = (AC @_ denot_var_C ins envI x) env.
+      denot_var ins envI env x = denot_var_C ins x envI env.
   Proof.
     intros.
     unfold denot_var, denot_var_C.
@@ -1889,18 +1882,19 @@ Section Cont_alt.
   Qed.
 
   (* version continue de denot_clock *)
-  Fixpoint denot_clock_C ins envI bs ck : DS_prod SI -C-> DS bool :=
-    match ck with
-    | Cbase =>  CTE _ _ bs
+  Fixpoint denot_clock_C ins ck : DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS bool :=
+    curry (curry match ck with
+    | Cbase =>  SND _ _ @_ FST _ _
     | Con ck x (_, k) =>
-        let sx := denot_var_C ins envI x in
-        let cks := denot_clock_C ins envI bs ck in
+        let sx := (denot_var_C ins x @2_ FST _ _ @_ FST _ _) (SND _ _) in
+        let cks := (denot_clock_C ins ck @3_ FST _ _ @_ FST _ _)
+                     (SND  _ _ @_ FST _ _) (SND _ _) in
         (ZIP (sample k) @2_ sx) cks
-    end.
+    end).
 
   Fact denot_clock_eq :
     forall ins envI bs env ck,
-      denot_clock ins envI bs env ck = denot_clock_C ins envI bs ck env.
+      denot_clock ins envI bs env ck = denot_clock_C ins ck envI bs env.
   Proof.
     induction ck; simpl; cases.
     now rewrite IHck, denot_var_eq.
@@ -1910,13 +1904,6 @@ End Cont_alt.
 
 
 Section Admissibility.
-
-  (** Pour l'instant, on montre l'admissibilité de [wf_env] en tant que
-      propriété de l'environnement des variables seulement (pas des entrées).
-      Ça nécessite de donner les composants de wf_env sous forme de fonctions
-      continues de l'environnement : DS_prod SI -C-> DS ...
-      TODO: ça va peut-être changer avec l'environnement des entrées ???
-   *)
 
   (* TODO: comment généraliser admissible_and plus joliment que ça? *)
   Lemma admissible_and3 :
@@ -1929,28 +1916,44 @@ Section Admissibility.
     firstorder.
   Qed.
 
+  (* admissibilité vis-à-vis de l'environnement *)
   Lemma wf_env_admissible :
     forall Γ ins envI bs,
       admissible (wf_env Γ ins envI bs).
   Proof.
     intros.
-    unfold wf_env.
-    apply admissiblePT.
-    do 4 setoid_rewrite and_impl.
-    repeat apply admissible_and3; apply admissiblePT.
-    - unfold ty_DS, DSForall_pres.
-      do 4 setoid_rewrite DSForall_forall.
-      setoid_rewrite denot_var_eq.
-      apply DSForall_admissible3.
-    - unfold cl_DS.
-      setoid_rewrite AC_var_eq.
-      setoid_rewrite denot_clock_eq.
-      intros ???????. (* TODO: appliquer le_admissible direct?? *)
-      apply le_admissible; eauto 2.
-    - unfold safe_DS.
-      do 4 setoid_rewrite DSForall_forall.
-      setoid_rewrite denot_var_eq.
-      apply DSForall_admissible3.
+    unfold wf_env, cl_DS, ty_DS.
+    intros f Hf ??? Hty Hck.
+    setoid_rewrite denot_var_eq.
+    setoid_rewrite denot_clock_eq.
+    do 2 (setoid_rewrite lub_comp_eq; auto).
+    repeat split
+    ; [ apply DSForall_admissible
+      | apply lub_le_compat
+      | apply DSForall_admissible]
+    ; intro n
+    ; specialize (Hf n _ _ _ Hty Hck)
+    ; now rewrite denot_clock_eq, denot_var_eq in Hf.
+  Qed.
+
+  (* admissibilité vis-à-vis des entrées *)
+  Lemma wf_env_admissible_ins :
+    forall Γ ins bs env,
+      admissible (fun envI => wf_env Γ ins envI bs env).
+  Proof.
+    intros.
+    unfold wf_env, cl_DS, ty_DS.
+    intros f Hf ??? Hty Hck.
+    setoid_rewrite denot_var_eq.
+    setoid_rewrite denot_clock_eq.
+    do 2 (setoid_rewrite lub_comp_eq; auto).
+    repeat split
+    ; [ apply DSForall_admissible
+      | apply lub_le_compat
+      | apply DSForall_admissible]
+    ; intro n
+    ; specialize (Hf n _ _ _ Hty Hck)
+    ; now rewrite denot_clock_eq, denot_var_eq in Hf.
   Qed.
 
 End Admissibility.
