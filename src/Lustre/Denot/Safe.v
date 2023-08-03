@@ -2728,26 +2728,33 @@ Section Node_safe.
   Qed.
 
   Lemma denot_clock_ins :
-    (* FIXME: toutes ces hypothèses sur le nœud sont aberrantes,
-       on voudrait trouver une façon plus simple de caractériser
-       les propriétés de Γ et ins... *)
-    forall f (n : node) x ck envI bs env1 env2,
-      find_node f G = Some n ->
-      let ins := List.map fst (n_in n) in
-      In (x, ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
+    forall ins bs envI env1 env2 ck,
+      (forall y, Is_free_in_clock y ck -> In y ins) ->
       denot_clock ins envI bs env1 ck == denot_clock ins envI bs env2 ck.
   Proof.
-    intros * Hfind ? Hin.
-    eapply wc_find_node in Hfind as (?& Wcn); auto.
-    inv Wcn.
-    revert dependent x.
-    induction ck as [|??? []]; simpl; intros; auto.
-    apply wc_env_var in Hin; auto.
-    inv Hin.
-    rewrite IHck with i; auto.
-    eapply in_map_iff in H6 as ((?&(?&?)&?) & HH & Hin%(in_map fst)); inv HH.
-    unfold denot_var, ins; simpl in *.
-    now apply mem_ident_spec in Hin as ->.
+    clear.
+    induction ck as [|?? i []]; simpl; auto.
+    intros * Hfr.
+    unfold denot_var.
+    rewrite (proj2 (mem_ident_spec _ _)), IHck; auto using Is_free_in_clock.
+  Qed.
+
+  Lemma clock_ins_stable :
+    forall G (n : node) x ck,
+      wc_node G n ->
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+      let ins := List.map fst (n_in n) in
+      HasClock Γ x ck ->
+      In x ins ->
+      (forall y, Is_free_in_clock y ck -> In y ins).
+  Proof.
+    clear.
+    intros * Hwc * Hck Hin y Hfr.
+    pose proof (n_nodup n) as [Nd Ndl].
+    inversion_clear Hwc as [? Wci Wcio].
+    apply HasClock_ins_app in Hck; auto using node_NoDupMembers.
+    eapply wc_env_Is_free_in_clock_In in Wci as Hy; eauto using HasClock_senv.
+    subst ins; solve_In.
   Qed.
 
   (* TODO: déplacer la section à côté de wf_env ? *)
@@ -3031,11 +3038,12 @@ Section Node_safe.
       unfold denot_var in *.
       rewrite Hmem in *.
       repeat split; auto.
-      apply HasClock_ins_app, HasClock_senv in Hck;
-        auto using node_NoDupMembers;
-        try now apply mem_ident_spec.
       unfold cl_DS, ins.
-      erewrite denot_clock_ins; eauto. }
+      rewrite denot_clock_ins; eauto.
+      apply mem_ident_spec in Hmem.
+      apply wc_find_node in Hfind as (?&?); auto.
+      now eauto using clock_ins_stable.
+    }
 
     (* sinon on va "attendre" les [Eps] sur x jusqu'à lui trouver
        une tête *)
