@@ -8,6 +8,12 @@ open Hept_parsetree
 open LustreAst
 
 exception Unsupported of string
+let unsupported s = raise (Unsupported s)
+
+exception CompileError of string
+let compile_error msg loc =
+  Location.print_location Format.str_formatter loc;
+  raise (CompileError (msg^" at "^(Format.flush_str_formatter ())))
 
 (** Compilation environment *)
 
@@ -33,8 +39,6 @@ let find_var tn env =
   match Env.find_opt tn env with
   | Some ty -> ty
   | None -> raise (VarNotFound tn)
-
-let unsupported s = raise (Unsupported s)
 
 let name (n : Names.name) : Common.ident =
   Camlcoq.intern_string n
@@ -164,7 +168,7 @@ let find_record_index env f =
   let rec aux fs n =
     match fs with
     | [] -> invalid_arg "find_record_index"
-    | (f', ty)::_ when f' = f -> n
+    | (f', ty)::_ when f' = f -> n, size_type env ty
     | (_, ty)::fs -> aux fs (n + size_type env ty)
   in aux (find_record env f) 0
 
@@ -271,8 +275,12 @@ let rec exp (env: cenv) e =
   | Eapp ({ a_op = Efield;
             a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
           [e]) ->
-    let es = exp env e in
-    [List.nth es (find_record_index env (shortname f))]
+    let rec select es (n, l) =
+      (match es, n, l with
+       | [], _, _ | _, _, 0 -> []
+       | e::es, 0, l -> e::select es (0, l-1)
+       | _::es, n, l -> select es (n-1, l))
+    in select (exp env e) (find_record_index env (shortname f))
   | Eapp ({ a_op = Efield_update;
             a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
           [e1;e2]) ->
@@ -282,7 +290,7 @@ let rec exp (env: cenv) e =
       | e1s, [], _ -> e1s
       | _::e1s, e2::e2s, 0 -> e2::replace e1s e2s 0
       | e1::e1s, e2s, n -> e1::replace e1s e2s (n - 1))
-    in replace (exp env e1) (exp env e2) (find_record_index env (shortname f))
+    in replace (exp env e1) (exp env e2) (fst (find_record_index env (shortname f)))
   | Eapp ({ a_op = Earray }, _) -> failwith "TODO: array"
   | Eapp ({ a_op = Earray_fill }, _) -> failwith "TODO: array_fill"
   | Eapp ({ a_op = _ }, _) -> unsupported "app"

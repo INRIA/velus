@@ -205,7 +205,7 @@ let speclist = [
   "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <output>.noauto.lus";
   "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <output>.noswitch.lus";
   "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <output>.nolocal.lus";
-  "-dunnested", Arg.Set write_normlast, " Save unnested Lustre in <output>.unn.lus";
+  "-dunnested", Arg.Set write_unnested, " Save unnested Lustre in <output>.unn.lus";
   "-dnormlast", Arg.Set write_normlast, " Save Lustre with normalized last in <output>.nolast.lus";
   "-dnormfby", Arg.Set write_normlast, " Save Lustre with normalized fby in <output>.nfby.lus";
   "-dnlustre", Arg.Set write_nlustre,
