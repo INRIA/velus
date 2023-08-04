@@ -15,7 +15,7 @@ CompCert-job:
   stage: CompCert
   script:
     - echo "Hello"
-    - test -f "./CompCert/Makefile.config" || ./CompCert/configure x86_64-linux
+    - test -f "./CompCert/Makefile.config" || (cd CompCert/ && ./configure x86_64-linux)
     - make -C CompCert -j
 
 proof-job:
