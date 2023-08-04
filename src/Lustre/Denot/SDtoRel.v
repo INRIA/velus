@@ -1812,96 +1812,6 @@ Section BOOLS_OFS.
 End BOOLS_OFS.
 
 
-(** Hypothèse sur les entrées d'un nœud : elles doivent être bien typées
-    et respecter leurs annotations d'horloge. *)
-Definition wf_ins (n : node) envI bs :=
-  let ins := List.map fst n.(n_in) in
-  let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-  wf_env Γ ins envI bs 0.
-
-
-Section Ok_node.
-
-Variables
-  (G : global)
-  (envG : Dprodi FI).
-
-(** Toutes les hypothèses de section sur G et envG seront obtenues par
-    récurrence dans ok_global. *)
-
-Hypothesis (Wtg : wt_global G).
-Hypothesis (Wcg : wc_global G).
-Hypothesis (Hrg : restr_global G).
-
-Hypothesis InfG :
-  forall envI f, all_infinite envI -> all_infinite (envG f envI).
-
-Hypothesis Wfg :
-    forall f n envI,
-      find_node f G = Some n ->
-      let ins := List.map fst n.(n_in) in
-      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-      forall bs, bss ins envI <= bs ->
-      wf_env Γ ins envI bs 0 ->
-      wf_env Γ ins envI bs (envG f envI).
-
-Hypothesis Hnode :
-  forall f n (ss : nprod (length (n_in n))),
-    find_node f G = Some n ->
-    let ins := idents (n_in n) in
-    let envI := env_of_np ins ss in
-    let os := np_of_env (List.map fst (n_out n)) (envG f envI) in
-    wf_ins n envI (bss ins envI) ->
-    forall infI infO,
-      sem_node G f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
-
-
-Lemma wc_env_in :
-  forall f (n : node),
-    find_node f G = Some n ->
-    wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
-Proof.
-  intros * Hfind.
-  eapply wc_find_node in Hfind as (? & Hc); eauto.
-  now inv Hc.
-Qed.
-
-(** Deux tactiques bien pratiques pour la suite *)
-
-(* C'est souvent une bonne idée de généraliser les termes [infinite_exp]
-   car ça élimine une dépendance sur [denot_exp]. *)
-Ltac gen_infinite_exp :=
-  repeat (
-  simpl; (* important, même si l'action n'est pas visible *)
-  let f := fresh "Inf" in
-  match goal with
-  | |- context [ infinite_exp ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
-      generalize (infinite_exp H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11) as f
-  | |- context [ infinite_exps ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
-      generalize (infinite_exps H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11) as f
-  | |- context [ infinite_expss ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ] =>
-      generalize (infinite_expss H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13) as f
-  end).
-
-(* Isole un terme [denot_exp ...] dans une égalisé [Hse] afin de pouvoir
-   réécrire [denot_exp_eq] dedans, sans complications liées à S_of_DSv. *)
-Ltac save_denot_exp se Hse :=
-  gen_infinite_exp;
-  simpl; (* important, même si l'action n'est pas visible *)
-  match goal with
-  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
-      remember (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
-      as se eqn:Hse
-  end.
-
-(* Une fois [denot_exp_eq] appliqué, on voit souvent apparaître [denot_exps]
-   sur les sous-expressions. Si l'hypothèse de récurrence est déjà dégrossie,
-   il peut être utile d'abstraire les sous-flots avec ça : *)
-Ltac gen_inf_sub_exps :=
-  gen_infinite_exp;
-  gen_sub_exps. (* voir dans Denot.v *)
-
-
 Section OLD_MASK.
 
   Import Streams.
@@ -1918,13 +1828,11 @@ Section OLD_MASK.
     end.
   Definition maskv := @mask svalue absent.
 
-
   Lemma mask'_abs :
     forall A (absent : A) k rs xs,
       O < k ->
       mask' absent O k rs xs ≡ const absent.
   Proof.
-    clear.
     cofix Cof; intros.
     destruct rs as [[]], xs; constructor; simpl; eauto.
     cases_eqn HH.
@@ -1936,7 +1844,6 @@ Section OLD_MASK.
     forall k rs xs,
       maskv k rs xs ≡ Str.maskv k rs xs.
   Proof.
-    clear.
     unfold maskv, Str.maskv, Str.mask.
     intros.
     match goal with |- _ ≡ ?aa => remember_st aa as v end.
@@ -2011,15 +1918,340 @@ Section OLD_MASK.
     apply mask_morph; auto.
   Qed.
 
+  Lemma Sapp_retro_compat :
+    forall (G:global) (H : history) (b : Stream bool) (f : ident) (es er : list exp) 
+      (lann : list ann) (ss : list (list (Stream svalue))) (os : list (Stream svalue))
+      (rs : list (list (Stream svalue))) (bs : Stream bool),
+      Forall2 (sem_exp G H b) es ss ->
+      Forall2 (sem_exp G H b) er rs ->
+      bools_ofs (concat rs) bs ->
+      (forall k : nat, sem_node G f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)) ->
+      sem_exp G H b (Eapp f es er lann) os.
+  Proof.
+    intros * ??? Hsem.
+    econstructor; eauto.
+    intro k.
+    eapply sem_node_morph in Hsem; eauto.
+    all: unfold EqSts; simpl_Forall; eauto using mask_retro_compat.
+  Qed.
+
 End OLD_MASK.
 
 
-Section SMASK.
+
+Section MOVE_ME.
 Import Cpo_streams_type.
 
-Definition smaskf : (nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI) -C->
-                    nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
+(* TODO: move *)
+Lemma nprod_eq :
+  forall D n (np1 np2 : @nprod D (S n)),
+    (forall k d, k < (S n) -> get_nth k d np1 == get_nth k d np2) ->
+    np1 == np2.
+Proof.
+  induction n; simpl; intros * Heq.
+  - apply (Heq O np1); auto.
+  - destruct np1 as [d1 np1], np2 as [d2 np2].
+    apply Dprod_eq_pair.
+    + apply (Heq O d1); lia.
+    + apply IHn; intros.
+      rewrite (Heq (S k) d); auto; lia.
+Qed.
+(* TODO: move *)
+Lemma get_nth_indep :
+  forall D n (np : @nprod D n) k d d',
+    k < n ->
+    get_nth k d np = get_nth k d' np.
+Proof.
+  induction n; intros * Hk.
+  - inversion Hk.
+  - destruct k; auto; simpl.
+    rewrite fcont_comp_simpl, IHn with (d' := d'); auto with arith.
+Qed.
+(* TODO: move *)
+Lemma np_of_env_of_np :
+  forall l np,
+    0 < length l ->
+    NoDup l ->
+    np_of_env l (env_of_np l np) == np.
+Proof.
+  intros * Hl Nd.
+  destruct l as [| x l]. now inv Hl.
+  apply nprod_eq.
+  intros k d Hk.
+  erewrite (nth_np_of_env x d (x :: l)); auto.
+  rewrite env_of_np_eq.
+  setoid_rewrite mem_nth_nth; auto.
+  now erewrite get_nth_indep.
+Qed.
+(* TODO: move *)
+(* TODO: généraliser à F : D1->D2 ?
+   ça complique l'utilisation de d *)
+Lemma nth_lift :
+  forall D F n (np : @nprod D n) k d,
+    k < n ->
+    get_nth k d (lift F np) = F (get_nth k d np).
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - inv Hk.
+  - now destruct k; try lia.
+  - destruct k; auto.
+    rewrite 2 get_nth_tl, lift_tl.
+    rewrite IHn; auto; lia.
+Qed.
+
+Lemma first_DS_const :
+  forall A (c : A),
+    first (DS_const c) == cons c 0.
+Proof.
+  intros.
+  now rewrite DS_const_eq, first_cons.
+Qed.
+
+Lemma map_ext :
+  forall D D' (f g : D -> D'),
+    (forall d, f d = g d) ->
+    forall x, map f x == map g x.
+Proof.
+  intros * Hfg x.
+  apply DS_bisimulation_allin1
+    with (R := fun U V => exists x, U == map f x /\ V == map g x); eauto 3.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    auto. }
+  clear - Hfg; intros U V Hc (xs & Hu & Hv).
+  destruct (@is_cons_elim _ xs) as (x & xs' & Hxs).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%map_is_cons|?%map_is_cons]. }
+  rewrite Hxs, map_eq_cons in *.
+  split;[|exists xs']; now rewrite Hu, Hv, ?first_cons, ?rem_cons, ?Hfg.
+Qed.
+Lemma zip_ext :
+  forall A B C (f g : A -> B -> C),
+    (forall a b, f a b = g a b) ->
+    forall x y, ZIP f x y == ZIP g x y.
+Proof.
+  intros * Hfg x y.
+  apply DS_bisimulation_allin1
+    with (R := fun U V => exists x y, U == ZIP f x y /\ V == ZIP g x y); eauto 4.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    auto. }
+  clear - Hfg; intros U V Hc (xs & ys & Hu & Hv).
+  destruct (@is_cons_elim _ xs) as (x & xs' & Hxs).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%zip_is_cons|?%zip_is_cons]. }
+  destruct (@is_cons_elim _ ys) as (y & ys' & Hys).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%zip_is_cons|?%zip_is_cons]. }
+  rewrite Hxs, Hys, zip_cons in *.
+  split;[|exists xs', ys']; now rewrite Hu, Hv, ?first_cons, ?rem_cons, ?Hfg.
+Qed.
+
+Lemma APP_env_bot :
+  forall I SI,
+    @APP_env I SI 0 0 == 0.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro.
+  now rewrite APP_env_eq, APP_simpl, app_eq_bot.
+Qed.
+(* TODO: move *)
+Lemma env_of_np_inf :
+  forall l n (np : nprod n),
+    forall_nprod (@infinite _) np ->
+    all_infinite (env_of_np l np).
+Proof.
   clear.
+  intros * Hf x.
+  rewrite env_of_np_eq.
+  cases_eqn Hmem; try apply DS_const_inf.
+  apply forall_nprod_k_def; auto; apply DS_const_inf.
+Qed.
+
+
+End MOVE_ME.
+
+
+(** Mask de flot en version dénotationnelle *)
+(* TODO: move *)
+Section Smask.
+
+Import Cpo_streams_type.
+Context {A : Type}.
+
+Definition smaskf : (nat -O-> DS bool -C-> DS (sampl A) -C-> DS (sampl A)) -C-> (nat -O-> DS bool -C-> DS (sampl A) -C-> DS (sampl A)).
+  apply ford_fcont_shift. intro k.
+  apply curry.
+  apply curry.
+  apply (fcont_comp2 (DSCASE bool _)). 2: apply (SND _ _ @_ FST _ _).
+  apply ford_fcont_shift. intro r.
+  apply curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (mask' := fcont_ford_shift _ _ _ (FST _ _ @_ (FST _ _ @_ (FST pl pr))));
+      pose (X := SND _ _ @_ (FST pl pr));
+      pose (R := SND pl pr);
+      idtac
+  end.
+  destruct k as [|[|k]].
+  - (* k = 0 *)
+    destruct r.
+    + apply CTE, (DS_const abs). (* r = true *)
+    + apply ((APP _ @2_ X) ((AP _ _ @3_ (mask' O)) R (REM _ @_ X))).
+  - (* k = 1 *)
+    destruct r.
+    + apply ((APP _ @2_ X) ((AP _ _ @3_ (mask' O)) R (REM _ @_ X))).
+    + apply ((CONS abs) @_ ((AP _ _ @3_ (mask' 1)) R (REM _ @_ X))).
+  - (* k > 1 *)
+    destruct r.
+    + apply ((CONS abs) @_ ((AP _ _ @3_ (mask' (S k))) R (REM _ @_ X))).
+    + apply ((CONS abs) @_ ((AP _ _ @3_ (mask' (S (S k)))) R (REM _ @_ X))).
+Defined.
+
+Lemma smaskf_eq :
+  forall f k r rs (xs : DS (sampl A)),
+    smaskf f k (cons r rs) xs
+    == match k with
+       | 0 => if r
+             then DS_const abs
+             else app xs (f O rs (rem xs))
+       | 1 => if r
+             then app xs (f O rs (rem xs))
+             else cons abs (f 1 rs (rem xs))
+       | S (S _ as k') =>
+           if r
+           then cons abs (f k' rs (rem xs))
+           else cons abs (f k rs (rem xs))
+       end.
+Proof.
+  intros.
+  unfold smaskf.
+  setoid_rewrite fcont_comp_simpl.
+  rewrite fcont_comp2_simpl.
+  rewrite DSCASE_simpl.
+  setoid_rewrite DScase_cons.
+  setoid_rewrite fcont_comp_simpl.
+  destruct k as [|[]], r; cbn; now autorewrite with cpodb.
+Qed.
+
+Definition smask : nat -O-> DS bool -C-> DS (sampl A) -C-> DS (sampl A) :=
+  FIXP _ smaskf.
+
+Lemma smask_eq :
+    forall k r rs (xs : DS (sampl A)),
+      smask k (cons r rs) xs
+      == match k with
+         | 0 => if r
+               then DS_const abs
+               else app xs (smask O rs (rem xs))
+         | 1 => if r
+               then app xs (smask O rs (rem xs))
+               else cons abs (smask 1 rs (rem xs))
+         | S (S _ as k') =>
+             if r
+             then cons abs (smask k' rs (rem xs))
+             else cons abs (smask k rs (rem xs))
+         end.
+Proof.
+  intros.
+  unfold smask at 1.
+  assert (Heq:=FIXP_eq smaskf).
+  rewrite (ford_eq_elim Heq) at 1.
+  now rewrite smaskf_eq.
+Qed.
+
+Lemma is_cons_smask :
+  forall k rs xs,
+    is_cons (smask k rs xs) ->
+    is_cons rs.
+Proof.
+  unfold smask.
+  intros * Hc.
+  rewrite (ford_eq_elim (FIXP_eq smaskf) _) in Hc.
+  now apply DScase_is_cons in Hc.
+Qed.
+
+Lemma smask_inf :
+  forall k rs (xs:DS (sampl A)),
+    infinite rs -> infinite xs ->  infinite (smask k rs xs).
+Proof.
+  intros.
+  remember (smask k rs xs) as sm eqn:Heq.
+  apply Oeq_refl_eq in Heq.
+  revert_all.
+  cofix Cof; intros * rsi xsi sm Hsm.
+  apply infinite_decomp in rsi as (r&rs'& Hr &?).
+  apply infinite_decomp in xsi as (x&xs'& Hx &?).
+  rewrite Hr, Hx, smask_eq in Hsm.
+  destruct k as [|[]], r.
+  rewrite Hsm; apply DS_const_inf.
+  all:  constructor; [| eapply Cof; eauto 1 ];
+    rewrite Hsm, ?app_cons, ?rem_cons; auto.
+Qed.
+
+End Smask.
+
+Lemma smask_maskv :
+  forall k R U Ri Ui Mi,
+    S_of_DSv (smask k R U) Mi ≡ maskv k (S_of_DS id R Ri) (S_of_DSv U Ui).
+Proof.
+  clear.
+  intros.
+  remember_st (S_of_DSv (smask k R U) Mi) as sl.
+  remember_st (maskv k (S_of_DS id R Ri) (S_of_DSv U Ui)) as sr.
+  revert_all; cofix Cof; intros.
+  remember_ds (smask k R U) as t.
+  apply infinite_decomp in Ri as HH; destruct HH as (r & R' & Hr & ri').
+  rewrite Hr, smask_eq in Ht.
+  apply infinite_decomp in Ui as HH; destruct HH as (vx & s' & Hs' & si').
+  edestruct (S_of_DS_eq id _ Ri _ Hr) as [Inf3 HH]; rewrite HH in Hsr; clear HH.
+  edestruct (S_of_DSv_eq _ Ui _ Hs') as [Inf4 HH]; rewrite HH in Hsr; clear HH.
+  cases.
+  { (* DS_const abs *)
+    rewrite <- Hsl, <- Hsr.
+    rewrite DS_const_eq in Ht.
+    edestruct (S_of_DSv_eq _ Mi _ Ht) as [Inf2 ->].
+    unfold S_of_DSv; rewrite 2 S_of_DS_cons, unfold_Stream; simpl.
+    constructor; simpl; auto.
+    now rewrite <- const_DS_const.
+  }
+  all: rewrite <- ?Hs, ?Hs', ?APP_simpl, ?app_cons, ?rem_cons in Ht.
+  all: edestruct (S_of_DSv_eq _ Mi _ Ht) as [Inf2 HH]; rewrite HH in Hsl; clear HH.
+  all: unfold S_of_DSv in *; repeat rewrite S_of_DS_cons in *.
+  all: constructor; [rewrite <- Hsl, <- Hsr; auto |]. (* hd ok, reste tl *)
+  all: eapply Cof; rewrite <- ?Hsl, <- ?Hsr; simpl; [now apply _S_of_DS_eq|].
+  all: apply maskv_morph; try reflexivity.
+  Unshelve.
+  all: eapply cons_infinite; now rewrite <- Ht.
+Qed.
+
+(** Une première définition de smask_env, appliquant smask point à point *)
+Section MASKENV1.
+Import Cpo_streams_type.
+Definition smask_env1 : nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
+  intro k.
+  apply curry, Dprodi_DISTR; intro i.
+  exact ((smask k @2_ FST _ _) (PROJ _ i @_ SND _ _)).
+Defined.
+Lemma smask_env1_eq :
+  forall k R X x, smask_env1 k R X x = smask k R (X x).
+Proof.
+  reflexivity.
+Qed.
+End MASKENV1.
+
+
+(** Masque sur les environnements dénotationnels défini indépendamment
+    de [smask], en utilisant plutôt APP_env, REM_env etc. *)
+(* TODO: move, clear clear *)
+Section Smask_env.
+
+Import Cpo_streams_type.
+
+Definition smask_envf : (nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI) -C->
+                    nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
   apply ford_fcont_shift; intro k.
   apply curry, curry.
 
@@ -2062,120 +2294,721 @@ Definition smaskf : (nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI) -C->
     exact (CONS abs @_ (PROJ _ x @_ ((AP _ _ @3_ (mask (S (S k)))) (REM _ @_ R) (REM_env @_ X)))).
 Defined.
 
-Lemma smaskf_eq : forall F k r R X,
-    smaskf F k (cons r R) X
+(* FIXME: changer les Dprodi dans la définition aussi  *)
+Lemma smask_envf_eq : forall F k r R X,
+    smask_envf F k (cons r R) X
     == match k with
        | 0 => if r
              then fun _ => DS_const abs
              else APP_env X (F O R (REM_env X))
        | 1 => if r
              then APP_env X (F O R (REM_env X))
-             else DMAPi (fun _ => CONS abs) (F 1 R (REM_env X))
+             else APP_env (fun _ => DS_const abs) (F 1 R (REM_env X))
        | S (S _ as k') =>
            if r
-           then DMAPi (fun _ => CONS abs) (F k' R (REM_env X))
-           else DMAPi (fun _ => CONS abs) (F k R (REM_env X))
+           then APP_env (fun _ => DS_const abs) (F k' R (REM_env X))
+           else APP_env (fun _ => DS_const abs) (F k R (REM_env X))
        end.
 Proof.
-  clear.
   intros.
   apply Oprodi_eq_intro; intro x.
-  unfold smaskf.
+  unfold smask_envf.
   setoid_rewrite fcont_comp_simpl.
   setoid_rewrite fcont_comp2_simpl.
   rewrite DSCASE_simpl.
   setoid_rewrite DScase_cons.
   setoid_rewrite fcont_comp_simpl.
+  rewrite DS_const_eq.
   destruct k as [|[]], r; cbn; now autorewrite with cpodb.
 Qed.
 
-Definition smask : nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
-  FIXP _ smaskf.
+Definition smask_env : nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  FIXP _ smask_envf.
 
-Lemma smask_eq : forall k r R X,
-    smask k (cons r R) X
+Lemma smask_env_eq : forall k r R X,
+    smask_env k (cons r R) X
     == match k with
        | 0 => if r
              then fun _ => DS_const abs
-             else APP_env X (smask O R (REM_env X))
+             else APP_env X (smask_env O R (REM_env X))
        | 1 => if r
-             then APP_env X (smask O R (REM_env X))
-             else DMAPi (fun _ => CONS abs) (smask 1 R (REM_env X))
+             then APP_env X (smask_env O R (REM_env X))
+             else APP_env (fun _ => DS_const abs) (smask_env 1 R (REM_env X))
        | S (S _ as k') =>
            if r
-           then DMAPi (fun _ => CONS abs) (smask k' R (REM_env X))
-           else DMAPi (fun _ => CONS abs) (smask k R (REM_env X))
+           then APP_env (fun _ => DS_const abs) (smask_env k' R (REM_env X))
+           else APP_env (fun _ => DS_const abs) (smask_env k R (REM_env X))
        end.
 Proof.
   intros.
-  unfold smask at 1.
-  assert (Heq:=FIXP_eq smaskf).
+  unfold smask_env at 1.
+  assert (Heq:=FIXP_eq smask_envf).
   rewrite (ford_eq_elim Heq) at 1.
-  now rewrite smaskf_eq.
+  now rewrite smask_envf_eq.
 Qed.
 
-
-Lemma smask_inf :
-  forall k R X,
-    infinite R -> all_infinite X -> all_infinite (smask k R X).
+Lemma is_cons_smask_env :
+  forall k rs X x,
+    is_cons (smask_env k rs X x) ->
+    is_cons rs.
 Proof.
-  clear.
+  unfold smask_env.
+  intros * Hc.
+  rewrite <- PROJ_simpl, (ford_eq_elim (FIXP_eq smask_envf) _),
+    PROJ_simpl in Hc.
+  now apply DScase_is_cons in Hc.
+Qed.
+
+Lemma smask_env_inf :
+  forall k R X,
+    infinite R -> all_infinite X -> all_infinite (smask_env k R X).
+Proof.
   intros * Hr HX x.
-  remember_ds (smask k R X x) as t.
+  remember_ds (smask_env k R X x) as t.
   revert_all; cofix Cof; intros.
   apply infinite_decomp in Hr as (r & R' & Hr &?).
-  rewrite <- PROJ_simpl, Hr, smask_eq, PROJ_simpl in Ht.
+  rewrite <- PROJ_simpl, Hr, smask_env_eq, PROJ_simpl in Ht.
   specialize (HX x) as Infx; inv Infx.
   cases.
   { rewrite Ht; apply DS_const_inf. }
   all: rewrite ?DMAPi_simpl, ?APP_env_eq, ?CONS_simpl in Ht.
   all: apply rem_eq_compat in Ht as Hrt.
-  all: rewrite ?APP_simpl, ?rem_app, ?CONS_simpl, ?rem_cons in Hrt; auto.
+  all: rewrite ?APP_simpl, ?rem_app, ?CONS_simpl, ?rem_cons in Hrt; auto using is_cons_DS_const.
   all: constructor; [| eapply Cof in Hrt; eauto using REM_env_inf].
   all: rewrite Ht; auto.
-  all: now apply is_cons_app.
+  all: try rewrite DS_const_eq; now apply is_cons_app.
 Qed.
 
-(* TODO: virer le la section ? *)
-Lemma smask_mask :
-  forall k R X x ri xi mi,
-    S_of_DSv (smask k R X x) mi ≡ maskv k (S_of_DS id R ri) (S_of_DSv (X x) xi).
+(** Lien avec la définition de smask sur les flots individuels *)
+Lemma smask_env_proj_eq :
+  forall k R X x, smask_env k R X x == smask k R (X x).
+Proof.
+  intros.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V => exists k R X,
+            U == smask_env k R X x
+            /\ V == smask k R (X x)).
+  3: eauto.
+  { clear.
+    intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (k & R & X & Hu & Hv).
+  destruct (@is_cons_elim _ R) as (r & R' & Hr).
+  { destruct Hc as [Hc|Hc].
+    - eapply is_cons_smask_env; now rewrite <- Hu.
+    - eapply is_cons_smask; now rewrite <- Hv.
+  }
+  rewrite <- PROJ_simpl, Hr in Hu, Hv.
+  rewrite smask_eq in Hv.
+  rewrite smask_env_eq in Hu.
+  cases.
+  { (* cas toujours absent *)
+    split. now rewrite Hu, Hv; auto.
+    exists O, (cons true 0), 0.
+    rewrite Hu, Hv, PROJ_simpl, DS_const_eq, rem_cons.
+    now rewrite <- PROJ_simpl, smask_env_eq, smask_eq, PROJ_simpl. }
+  all: rewrite Hu, Hv, PROJ_simpl, APP_env_eq, PROJ_simpl, APP_simpl in Hc.
+  all: try assert (is_cons (X x)) by
+    (destruct Hc as [Hc|Hc]; now apply app_is_cons in Hc).
+  all: split; [
+      (* first *)
+      rewrite Hu, Hv, PROJ_simpl, APP_env_eq, ?first_cons, APP_simpl, first_app_first
+      ; auto; (* puis les autres *) now rewrite DS_const_eq, first_cons
+    |].
+  all: eexists _, R', (REM_env X).
+  all: rewrite Hu, Hv, 2 PROJ_simpl, APP_env_eq, APP_simpl, ?rem_app;
+    auto using is_cons_DS_const.
+Qed.
+
+Lemma lift_smask :
+  forall k rs l env,
+    0 < length l ->
+    lift (smask k rs) (np_of_env l env)
+    == np_of_env l (smask_env k rs env).
+Proof.
+  clear.
+  intros * Hl.
+  destruct l as [|x l]. inv Hl.
+  apply nprod_eq.
+  intros n d Hn.
+  erewrite (nth_np_of_env x d (x :: l) _ n); auto.
+  erewrite nth_lift, smask_env_proj_eq, nth_np_of_env; eauto.
+Qed.
+
+End Smask_env.
+
+
+(** Résultats sur wf_env, où mettre tout ce merdier ? *)
+Section WTF.
+Import Cpo_streams_type.
+
+Lemma wf_var_bot:
+  forall ty ck ins envI bs env,
+    wf_var ty ck ins envI bs env 0.
+Proof.
+  cofix Cof; intros.
+  rewrite DS_inv; now constructor.
+Qed.
+
+Lemma wf_env_bot :
+  forall Γ ins bs,
+    wf_env Γ ins 0 bs 0.
 Proof.
   clear.
   intros.
-  remember_st (S_of_DSv (smask k R X x) mi) as sl.
-  remember_st (maskv k (S_of_DS id R ri) (S_of_DSv (X x) xi)) as sr.
-  revert_all; cofix Cof; intros.
-  remember_ds (smask k R X x) as t.
-  apply infinite_decomp in ri as HH; destruct HH as (r & R' & Hr & ri').
-  rewrite <- PROJ_simpl, Hr, smask_eq, PROJ_simpl in Ht.
-  apply infinite_decomp in xi as HH; destruct HH as (vx & s' & Hs' & si').
-  edestruct (S_of_DS_eq id _ ri _ Hr) as [Inf3 HH]; rewrite HH in Hsr; clear HH.
-  edestruct (S_of_DSv_eq _ xi _ Hs') as [Inf4 HH]; rewrite HH in Hsr; clear HH.
-  cases.
-  { (* DS_const abs *)
-    rewrite <- Hsl, <- Hsr.
-    rewrite DS_const_eq in Ht.
-    edestruct (S_of_DSv_eq _ mi _ Ht) as [Inf2 ->].
-    unfold S_of_DSv; rewrite 2 S_of_DS_cons, unfold_Stream; simpl.
-    constructor; simpl; auto.
-    now rewrite <- const_DS_const.
-  }
-  all: rewrite ?DMAPi_simpl, ?APP_env_eq, ?CONS_simpl in Ht.
-  all: rewrite <- ?Hs, ?Hs', ?APP_simpl, ?app_cons in Ht.
-  all: edestruct (S_of_DSv_eq _ mi _ Ht) as [Inf2 HH]; rewrite HH in Hsl; clear HH.
-  all: unfold S_of_DSv in *; repeat rewrite S_of_DS_cons in *.
-  all: constructor; [rewrite <- Hsl, <- Hsr; auto |]. (* hd ok, reste tl *)
-  all: eapply Cof; rewrite <- ?Hsl, <- ?Hsr; simpl; [now apply _S_of_DS_eq|].
-  all: apply maskv_morph; try reflexivity.
-  all: apply _S_of_DS_eq; now rewrite REM_env_eq, Hs', rem_cons.
-  Unshelve.
-  all: rewrite ?REM_env_eq, ?Hs', ?rem_cons; auto.
-  all: eapply cons_infinite; now rewrite <- Ht.
+  apply wfv_wfe.
+  unfold denot_var.
+  intros; cases; apply wf_var_bot.
 Qed.
 
-End SMASK.
+Lemma denot_clock_abs :
+  forall ins ck,
+    let abs_env := fun _ : ident => DS_const abs in
+    denot_clock ins abs_env (DS_const false) abs_env ck == DS_const false.
+Proof.
+  clear.
+  induction ck as [|??? []]; simpl; auto.
+  rewrite IHck.
+  unfold denot_var.
+  cases; now rewrite zip_const, MAP_map, map_DS_const.
+Qed.
 
+Lemma wf_env_abs_ins :
+  forall Γ ins,
+    (forall x ck, HasClock Γ x ck -> In x ins -> (forall y, Is_free_in_clock y ck -> In y ins)) ->
+    wf_env Γ ins (fun _ : ident => DS_const abs) (DS_const false) 0.
+Proof.
+  clear.
+  intros * Hfr ??? Hty Hck.
+  unfold denot_var; cases_eqn Hmem.
+  - repeat split; try apply DSForall_const; auto.
+    apply mem_ident_spec in Hmem.
+    unfold cl_DS, AC.
+    erewrite denot_clock_ins, denot_clock_abs, MAP_map, map_DS_const; eauto.
+  - repeat split; try apply DSForall_bot.
+    unfold cl_DS, AC.
+    now rewrite MAP_map, map_bot.
+Qed.
+
+Definition bool_of_sbool : sampl bool -> bool :=
+  fun v => match v with
+        | pres true => true
+        | _ => false
+        end.
+
+Lemma bool_of_sbool_pres :
+  forall s, map bool_of_sbool (map pres s) == s.
+Proof.
+  clear.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V => U == map bool_of_sbool (map pres V)); auto.
+  { intros * -> ? <-; auto. }
+  clear; intros U V Hc Hu.
+  destruct (@is_cons_elim _ V) as (v & V' & Hv).
+  { destruct Hc; auto.
+    eapply map_is_cons, map_is_cons; now rewrite <- Hu. }
+  rewrite Hv, Hu in *.
+  autorewrite with cpodb; split; auto.
+  unfold bool_of_sbool; cases.
+Qed.
+
+Lemma wf_env_smask0 :
+  forall Γ ins envI bs k rs,
+    (forall x ck, HasClock Γ x ck -> In x ins -> (forall y, Is_free_in_clock y ck -> In y ins)) ->
+    wf_env Γ ins envI bs 0 ->
+    wf_env Γ ins
+      (smask_env k rs envI)
+      (MAP bool_of_sbool (smask k rs (MAP pres bs)))
+      0.
+Proof.
+  intros * Hfr Hwf.
+  unfold smask_env.
+  rewrite FIXP_fixp.
+  revert Hwf.
+  revert k envI rs bs.
+  apply fixp_ind.
+  - red; intros; eapply wf_env_admissible_ins; simpl; now eauto.
+  - intros; apply wf_env_bot.
+  - intros fmask_env HR **.
+    (* on attend une valeur sur rs, cf. [safe_sreset] *)
+    apply wfv_wfe.
+    intros x ty ck Hty Hck.
+    cbv zeta.
+    destruct (mem_ident x ins) eqn:Hmem.
+    (* si x n'est pas une entrée, c'est ok *)
+    2: unfold denot_var; rewrite Hmem; apply wf_var_bot.
+    remember_ds (denot_var ins _ _ x) as xs.
+    revert dependent xs.
+    cofix Cof; intros.
+    destruct xs.
+    { constructor; rewrite <- eqEps in Hxs; eauto. }
+    clear Cof.
+    rewrite Hxs.
+    eapply wfe_wfv; eauto.
+    destruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+    { unfold denot_var in Hxs.
+      rewrite Hmem in Hxs.
+      now apply symmetry, cons_is_cons, DScase_is_cons in Hxs. }
+    apply wf_env_rem in Hwf as Hwfr.
+    rewrite REM_env_bot in Hwfr.
+    rewrite Hrs, (smask_envf_eq fmask_env k), smask_eq.
+    cases.
+    1: rewrite MAP_map, map_DS_const; now auto using wf_env_abs_ins.
+    all: rewrite 2 MAP_map, rem_map, <- APP_env_bot.
+    1,2: rewrite app_map, bool_of_sbool_pres; now eauto using wf_env_APP_.
+    all: rewrite map_eq_cons, <- (app_cons _ (DS_const false)), <- DS_const_eq;
+      apply wf_env_APP_; eauto using wf_env_abs_ins.
+Qed.
+
+Lemma AC_smask :
+  forall A k rs (xs : DS (sampl A)),
+    AC (smask k rs xs) == MAP bool_of_sbool (smask k rs (MAP pres (AC xs))).
+Proof.
+  clear.
+  intros.
+  eapply DS_bisimulation_allin1
+    with (R := fun U V => exists k rs xs,
+                 U == AC (smask k rs xs)
+                 /\ V == MAP bool_of_sbool (smask k rs (MAP pres (AC xs)))).
+  3: eauto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (k & rs & xs & Hu & Hv).
+  destruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%AC_is_cons%is_cons_smask
+                       |?%map_is_cons%is_cons_smask]. }
+
+  split.
+  - (* first *)
+    rewrite Hu, Hv, Hrs.
+    clear.
+    rewrite first_AC, MAP_map, first_map.
+    rewrite 2 smask_eq; cases; unfold AC.
+    { setoid_rewrite DS_const_eq.
+      now rewrite 2 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot. }
+    1,2: rewrite 2 first_app_first, 3 MAP_map, 2 first_map, 2 map_comp, map_ext;
+         eauto 1; intros; cases.
+    all: rewrite 2 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot; auto.
+  - (* rem *)
+    rewrite Hrs, smask_eq in Hu.
+    rewrite Hrs, smask_eq in Hv.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    cases.
+    { (* cas toujours absent *)
+      exists O, (cons true 0), 0.
+      setoid_rewrite DS_const_eq.
+      unfold AC.
+      now rewrite 4 MAP_map, 2 map_eq_cons, 2 rem_cons, 2 smask_eq. }
+    (* les autres *)
+    all: eexists _, rs', (rem xs).
+    all: rewrite rem_AC, 4 MAP_map, 2 rem_map, ?rem_app, rem_AC, ?rem_cons; eauto.
+    (* reste les is_cons *)
+    all: rewrite Hu, Hv in Hc.
+    all: destruct Hc as [Hc%AC_is_cons%app_is_cons
+                        |Hc%map_is_cons%app_is_cons%map_is_cons%AC_is_cons];
+      eauto using is_cons_map, AC_is_cons.
+Qed.
+
+(* FIXME, bien sûr *)
+Lemma smask_or_ad_hoc :
+  forall A k rs (xs : DS (sampl A)) bs,
+    ZIP orb (AC (smask k rs xs)) (MAP bool_of_sbool (smask k rs (MAP pres bs)))
+    == MAP bool_of_sbool (smask k rs (MAP pres (ZIP orb (AC xs) bs))).
+Proof.
+  clear.
+  intros.
+  eapply DS_bisimulation_allin1
+    with (R := fun U V => exists k rs xs bs,
+                   U == ZIP orb (AC (smask k rs xs)) (MAP bool_of_sbool (smask k rs (MAP pres bs)))
+                 /\ V == MAP bool_of_sbool (smask k rs (MAP pres (ZIP orb (AC xs) bs)))).
+  3: eauto 10.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (k & rs & xs & bs & Hu & Hv).
+  destruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+  { rewrite Hu, Hv in Hc.
+    destruct Hc as [[?%AC_is_cons%is_cons_smask]%zip_is_cons
+                   |?%map_is_cons%is_cons_smask]; auto. }
+  split.
+  - (* first *)
+    rewrite Hu, Hv, Hrs.
+    rewrite first_zip, first_AC, 3 MAP_map, 2 first_map.
+    rewrite 3 smask_eq; cases; unfold AC.
+    { setoid_rewrite DS_const_eq.
+      now rewrite 2 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot, zip_cons, zip_bot1. }
+    1,2: rewrite 3 first_app_first, 3 MAP_map, 2 first_map, first_zip, first_map, 2 map_comp.
+    1,2: rewrite zip_map, <- map_zip, zip_ext; eauto 1; intros [] []; auto.
+    all: rewrite 3 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot, zip_cons, zip_bot1; auto.
+  - (* rem *)
+    rewrite Hrs, 2 smask_eq in Hu.
+    rewrite Hrs, smask_eq in Hv.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    cases.
+    { (* cas toujours absent *)
+      exists O, (cons true 0), 0, 0.
+      setoid_rewrite DS_const_eq.
+      unfold AC.
+      rewrite 8 MAP_map, 2 map_eq_cons, zip_cons, 2 rem_cons, 3 smask_eq; auto. }
+    (* les autres *)
+    all: eexists _, rs', (rem xs), (rem bs).
+    all: rewrite rem_zip, rem_AC, 8 MAP_map, 4 rem_map, ?rem_app, ?rem_zip, rem_AC, ?rem_cons; eauto.
+    (* reste les is_cons *)
+    all: rewrite Hu, Hv in Hc.
+    all: destruct Hc as [[Hc%AC_is_cons%app_is_cons Hr%map_is_cons%app_is_cons%map_is_cons]%zip_is_cons
+                        |[Hc%AC_is_cons]%map_is_cons%app_is_cons%map_is_cons%zip_is_cons];
+      eauto using is_cons_map, is_cons_zip.
+Qed.
+
+Lemma bss_smask :
+  forall ins envI k rs,
+    0 < length ins ->
+    bss ins (smask_env k rs envI)
+    == MAP bool_of_sbool (smask k rs (MAP pres (bss ins envI))).
+Proof.
+  clear.
+  induction ins as [|x[|y]]; intros * Hlen.
+  inversion Hlen.
+  - simpl.
+    autorewrite with cpodb.
+    rewrite (smask_env_proj_eq k rs envI x).
+    setoid_rewrite (PROJ_simpl x envI).
+apply AC_smask.
+  - rewrite 2 (bss_cons x), smask_env_proj_eq, IHins; try (simpl; lia).
+    (* apply smask_or_ad_hoc. *)
+    clear.
+    generalize (bss (y :: l) envI); intro bs.
+    generalize (envI x); intro xs.
+    apply smask_or_ad_hoc.
+Qed.
+
+End WTF.
+
+(** Correspondance clocks_of/bss *)
+
+Lemma ac_AC :
+  forall s Inf,
+    abstract_clock (S_of_DSv s Inf) ≡ S_of_DS id (AC s) (map_inf _ _ _ _ Inf).
+Proof.
+  clear.
+  intros.
+  match goal with
+  | |- ?tt ≡ ?uu => remember_st tt as t; remember_st uu as u
+  end.
+  revert_all.
+  cofix Cof; intros s Inf t Ht u Hu.
+  destruct t, u.
+  apply infinite_decomp in Inf as HH.
+  destruct HH as (x & s' & Hs & Inf2).
+  destruct (S_of_DSv_eq _ Inf _ Hs) as [Inf3 HH].
+  rewrite HH in Ht; clear HH.
+  setoid_rewrite S_of_DS_cons in Ht.
+  edestruct (S_of_DS_eq id (AC s)) as [Inf4 HH]. { now rewrite Hs, AC_cons. }
+  rewrite HH in Hu; clear HH.
+  cases; rewrite S_of_DS_cons in Hu; inv Hu; inv Ht; simpl in *; subst.
+  all: constructor; simpl; auto.
+  all: eapply Cof; eauto; rewrite <- H0; eauto using _S_of_DS_eq.
+Qed.
+
+Lemma zip_zipWith :
+  forall A B C (f : A -> B -> C),
+    forall x y Infx Infy Infr,
+      zipWith f (S_of_DS id x Infx) (S_of_DS id y Infy) ≡ S_of_DS id (ZIP f x y) Infr.
+Proof.
+  clear.
+  intros.
+  remember_st (S_of_DS id x Infx) as xs.
+  remember_st (S_of_DS id y Infy) as ys.
+  remember_st (S_of_DS id _ Infr) as rs.
+  revert_all; cofix Cof; intros.
+  destruct xs as [vx xs], ys as [vy ys], rs as [vr rs].
+  apply S_of_DS_Cons in Hxs as (vx' & xs' & Hx & Hvx & Infx' & Hxs).
+  apply S_of_DS_Cons in Hys as (vy' & ys' & Hy & Hvy & Infy' & Hys).
+  apply S_of_DS_Cons in Hrs as (vr' & rs' & Hr & Hvr & Infr' & Hrs).
+  rewrite Hx, Hy, zip_cons in Hr.
+  apply Con_eq_simpl in Hr as [].
+  constructor; simpl.
+  - subst; auto.
+  - unshelve eapply Cof; eauto.
+    { eapply infinite_morph; eauto. }
+    rewrite <- Hrs.
+    now apply _S_of_DS_eq.
+Qed.
+
+Lemma _clocks_of_bss :
+  forall env l Inf Infb,
+    NoDup l ->
+    clocks_of (Ss_of_nprod (np_of_env l env) Inf)
+      ≡ S_of_DS id (bss l env) Infb.
+Proof.
+  clear.
+  induction l as [| x [| y l]]; intros * ND.
+  - rewrite clocks_of_nil.
+    unshelve rewrite (const_DS_const id false); auto.
+    apply _S_of_DS_eq; auto.
+  - simpl.
+    rewrite clocks_of_ac, ac_AC.
+    now apply _S_of_DS_eq.
+  - inv ND.
+    setoid_rewrite clocks_of_cons.
+    setoid_rewrite IHl; auto.
+    rewrite ac_AC, zip_zipWith.
+    apply _S_of_DS_eq; auto.
+  Unshelve.
+  rewrite bss_cons in Infb; apply inf_zip in Infb as [].
+  all: auto.
+Qed.
+
+(* TODO: move *)
+Lemma bss_env_inf :
+  forall l env,
+    (forall_nprod (@infinite _) (np_of_env l env)) ->
+    infinite (bss l env).
+Proof.
+  induction l as [|?[]]; simpl; intros * Hinf.
+  - apply DS_const_inf.
+  - autorewrite with cpodb.
+    apply map_inf, Hinf.
+  - autorewrite with cpodb.
+    apply zip_inf; auto; [|now cases].
+    apply map_inf, Hinf; auto.
+Qed.
+
+Corollary clocks_of_bss :
+  forall env l Inf,
+    NoDup l ->
+    exists Infb,
+    clocks_of (Ss_of_nprod (np_of_env l env) Inf) ≡
+      S_of_DS id (bss l env) Infb.
+Proof.
+  intros.
+  pose (Infb := bss_env_inf _ _ Inf).
+  exists Infb.
+  rewrite (_clocks_of_bss _ _ _ Infb); auto.
+  now apply _S_of_DS_eq.
+Qed.
+
+
+(** Hypothèse sur les entrées d'un nœud : elles doivent être bien typées
+    et respecter leurs annotations d'horloge. *)
+Definition wf_ins (n : node) envI bs :=
+  let ins := List.map fst n.(n_in) in
+  let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+  wf_env Γ ins envI bs 0.
+
+
+Section Ok_node.
+
+Variables
+  (G : global)
+  (envG : Dprodi FI).
+
+(** Toutes les hypothèses de section sur G et envG seront obtenues par
+    récurrence dans ok_global. *)
+
+Hypothesis (Wtg : wt_global G).
+Hypothesis (Wcg : wc_global G).
+Hypothesis (Hrg : restr_global G).
+
+Hypothesis InfG :
+  forall envI f, all_infinite envI -> all_infinite (envG f envI).
+
+Hypothesis Wfg :
+    forall f n envI,
+      find_node f G = Some n ->
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+      forall bs, bss ins envI <= bs ->
+      wf_env Γ ins envI bs 0 ->
+      wf_env Γ ins envI bs (envG f envI).
+
+Hypothesis Hnode :
+  forall f n envI,
+    find_node f G = Some n ->
+    let ins := List.map fst (n_in n) in
+    let outs := List.map fst (n_out n) in
+    let xs := np_of_env ins envI in
+    let os := np_of_env outs (envG f envI) in
+    wf_ins n envI (bss ins envI) ->
+    all_infinite envI ->
+    (* on peut obtenir Infi et Info comme suit :
+       set (Infi := forall_np_of_env _ _ _ infI)
+       set (Info := forall_np_of_env _ _ _ (InfG _ _ infI)) *)
+    forall Infi Info,
+    sem_node G f (Ss_of_nprod xs Infi) (Ss_of_nprod os Info).
+
+Lemma wc_env_in :
+  forall f (n : node),
+    find_node f G = Some n ->
+    wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
+Proof.
+  intros * Hfind.
+  eapply wc_find_node in Hfind as (? & Hc); eauto.
+  now inv Hc.
+Qed.
+
+(** Deux tactiques bien pratiques pour la suite *)
+
+(* C'est souvent une bonne idée de généraliser les termes [infinite_exp]
+   car ça élimine une dépendance sur [denot_exp]. *)
+Ltac gen_infinite_exp :=
+  repeat (
+  simpl; (* important, même si l'action n'est pas visible *)
+  let f := fresh "Inf" in
+  match goal with
+  | |- context [ infinite_exp ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
+      generalize (infinite_exp H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11) as f
+  | |- context [ infinite_exps ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
+      generalize (infinite_exps H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11) as f
+  | |- context [ infinite_expss ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ] =>
+      generalize (infinite_expss H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13) as f
+  end).
+
+(* Isole un terme [denot_exp ...] dans une égalisé [Hse] afin de pouvoir
+   réécrire [denot_exp_eq] dedans, sans complications liées à S_of_DSv. *)
+Ltac save_denot_exp se Hse :=
+  gen_infinite_exp;
+  simpl; (* important, même si l'action n'est pas visible *)
+  match goal with
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      remember (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
+      as se eqn:Hse
+  end.
+
+(* Une fois [denot_exp_eq] appliqué, on voit souvent apparaître [denot_exps]
+   sur les sous-expressions. Si l'hypothèse de récurrence est déjà dégrossie,
+   il peut être utile d'abstraire les sous-flots avec ça : *)
+Ltac gen_inf_sub_exps :=
+  gen_infinite_exp;
+  gen_sub_exps. (* voir dans Denot.v *)
+
+
+(* TODO: nettoyer la section *)
+Section RESET.
+
+(* FIXME: l'énoncé est tordu mais ça fonctionne *)
+Lemma map_mask_ :
+  forall k rs Infr l (ss : nprod (length l)) InfI InfM,
+    0 < length l ->
+    NoDup l ->
+    EqSts
+      (map (maskv k (S_of_DS id rs Infr)) (Ss_of_nprod ss InfI))
+      (Ss_of_nprod (np_of_env l (smask_env k rs (env_of_np l ss))) InfM).
+Proof.
+  intros * Hl Nd.
+  erewrite Ss_map.
+  2: intros; now apply symmetry, smask_maskv.
+  apply _Ss_of_nprod_eq.
+  destruct l as [|x l]; try (simpl in *; lia).
+  apply nprod_eq; intros n d Hn.
+  rewrite nth_lift; auto.
+  rewrite (nth_np_of_env x d (x :: l)); auto.
+  rewrite smask_env_proj_eq.
+  erewrite env_of_np_nth; eauto 2 using mem_nth_nth.
+  erewrite get_nth_indep; eauto.
+  Unshelve.
+  eapply forall_nprod_lift, forall_nprod_impl;
+    eauto using smask_inf.
+Qed.
+
+Corollary map_mask :
+  forall k rs Infr l (ss : nprod (length l)) InfI,
+    0 < length l ->
+    NoDup l ->
+  exists InfM,
+    EqSts
+      (map (maskv k (S_of_DS id rs Infr)) (Ss_of_nprod ss InfI))
+      (Ss_of_nprod (np_of_env l (smask_env k rs (env_of_np l ss))) InfM).
+Proof.
+  intros.
+  unshelve (esplit; apply map_mask_); auto.
+  apply forall_np_of_env; intros.
+  rewrite smask_env_proj_eq.
+  apply smask_inf, env_of_np_inf; auto.
+Qed.
+
+Import Cpo_streams_type.
+
+(* le résultat important, à prouver *)
+Lemma smask_sreset :
+  forall (f : DS_prod SI -C-> DS_prod SI) k R X,
+    (* conditions sur f, lp etc. *)
+    f (smask_env k R X) == smask_env k R (sreset f R X).
+Proof.
+  (* cf dépôt K *)
+  clear.
+Admitted.
+
+Lemma ok_reset :
+  forall f n,
+    find_node f G = Some n ->
+    let nf := envG f in
+    let nin := List.map fst (n_in n) in
+    let nout := List.map fst (n_out n) in
+    forall rs (ss : nprod (length nin)),
+    let os := np_of_env nout (sreset nf rs (env_of_np nin ss)) in
+    wf_ins n (env_of_np nin ss) (bss nin (env_of_np nin ss)) ->
+    forall InfI InfO Infr,
+    forall k, sem_node G f (List.map (maskv k (S_of_DS id rs Infr)) (Ss_of_nprod ss InfI))
+                      (List.map (maskv k (S_of_DS id rs Infr)) (Ss_of_nprod os InfO)).
+Proof.
+  intros * Hfind * Hwf *.
+  pose proof (n_nodup n) as [Ndio _].
+  apply NoDup_app_l in Ndio as Ndi.
+  apply NoDup_app_r in Ndio as Ndo.
+  pose proof (n_ingt0 n) as Innil; rewrite <- (map_length fst) in Innil.
+  pose proof (n_outgt0 n) as Onnil; setoid_rewrite <- (map_length fst) in Onnil.
+  edestruct map_mask as [Inf3 ->]; auto.
+  edestruct map_mask as [Inf4 ->]; auto.
+  eapply sem_node_morph with (x := f), Hnode with (n := n); auto.
+  - (* input ok *)
+    reflexivity.
+  - (* output *)
+    subst os.
+    fold nout nf in Onnil, Ndo|- *.
+    apply _Ss_of_nprod_eq.
+    rewrite smask_sreset.
+    (* TODO: sans doute du boulot ici *)
+    destruct nout as [| x nout]; auto.
+    apply nprod_eq; intros m d Hm.
+    rewrite 2 (nth_np_of_env x d (x :: nout)); auto.
+    rewrite 2 smask_env_proj_eq.
+    erewrite env_of_np_nth; eauto 2 using mem_nth_nth.
+    rewrite (nth_np_of_env x _ (x :: nout)); auto.
+  - (* wf_ins *)
+    unfold wf_ins in *.
+    rewrite bss_smask; [| rewrite map_length; apply n_ingt0].
+    eapply wc_find_node in Hfind as (? & Hc); eauto.
+    apply wf_env_smask0; eauto using clock_ins_stable.
+  - (* all_infinite *)
+    apply smask_env_inf; auto using env_of_np_inf.
+  Unshelve.
+  apply forall_np_of_env; intro.
+  apply InfG, smask_env_inf, env_of_np_inf; auto.
+Qed.
+
+End RESET.
+
+Global Add Parametric Morphism {A} abs k : (Str.mask abs k)
+    with signature @Streams.EqSt bool ==> @Streams.EqSt A ==> @Streams.EqSt A
+      as mask_EqSt.
+Admitted.
+Global Add Parametric Morphism f : (sem_node G f)
+    with signature @EqSts svalue ==> @EqSts svalue ==> iff
+      as sem_node_EqSt.
+Admitted.
 
 (* FIXME: ce morphime est un cas particulier
    de maskv_morph et pourtant il faut le déclarer
@@ -2188,7 +3021,6 @@ Proof.
   now apply maskv_morph.
 Qed.
 
-
 (** On traite à part le cas des appels de nœuds car il apparaît à la fois
     dans une expression Eapp et dans une équation de type xs=[Eapp].
     Dand les deux cas seules les hypothèses du lemme suivant sont
@@ -2198,9 +3030,10 @@ Lemma ok_sem_Eapp :
   forall Γ ins env Inf envI InfI bs bsi,
     wf_env Γ ins envI bs env ->
     let H := hist_of_envs ins envI InfI env Inf in
-    forall f n es anns bck sub,
+    forall f n es er anns bck sub,
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) (typesof es) (n_in n) ->
       Forall2 (WellInstantiated bck sub) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof es) ->
+      Forall (fun e : exp => numstreams e = 1) er ->
       wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in)) ->
       find_node f G = Some n ->
       length (anns) = length (n_out n) ->
@@ -2208,59 +3041,68 @@ Lemma ok_sem_Eapp :
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
       Forall (op_correct_exp G ins envG envI bs env) es ->
-      let ss := denot_exps G ins es envG envI bs env in
-      let os := denot_exp G ins (Eapp f es [] anns) envG envI bs env in
-      let sss := map (fun e => Ss_of_nprod
+      Forall2 (sem_exp G H (S_of_DS id bs bsi)) es
+              (map (fun e => Ss_of_nprod
                               (denot_exp G ins e envG envI bs env)
-                              (infinite_exp G ins envI envG bs env InfG bsi InfI Inf e)) es in
+                              (infinite_exp G ins envI envG bs env InfG bsi InfI Inf e)) es) ->
+      Forall restr_exp er ->
+      Forall (wt_exp G Γ) er ->
+      Forall (fun e => typeof e = [bool_velus_type]) er ->
+      Forall (wc_exp G Γ) er ->
+      Forall (op_correct_exp G ins envG envI bs env) er ->
+      Forall2 (sem_exp G H (S_of_DS id bs bsi)) er
+              (map (fun e => Ss_of_nprod
+                              (denot_exp G ins e envG envI bs env)
+                              (infinite_exp G ins envI envG bs env InfG bsi InfI Inf e)) er) ->
+      let os := denot_exp G ins (Eapp f es er anns) envG envI bs env in
       forall infO,
-        Forall2 (sem_exp G H (S_of_DS id bs bsi)) es sss ->
-        sem_exp G H (S_of_DS id bs bsi) (Eapp f es [] anns) (Ss_of_nprod os infO).
+        sem_exp G H (S_of_DS id bs bsi) (Eapp f es er anns) (Ss_of_nprod os infO).
 Proof.
-  intros ?? env * Hc * WTi WIi WCi Hfind Hlo Hr Hwt Hwc Hoc ???? Hsem.
+  intros ?? env * Hc * WTi WIi Nr1 WCi Hfind Hlo Hr Hwt Hwc Hoc Hsem Hrr Hwtr Hwtr' Hwcr Hocr Hsemr ??.
   apply Forall2_length in WTi as Hli.
   rewrite length_typesof_annots in Hli.
-  econstructor; eauto using bools_ofs_empty.
-  clear Hsem. intros [].
-  - (* k = 0, c'est intéressant *)
-    setoid_rewrite masks_false_0.
+  set (ss := denot_exps G ins es envG envI bs env).
+  set (rs := denot_exps G ins er envG envI bs env).
+  (* utile pour après ou pas ? *)
+  assert (Hins : wf_ins n (env_of_np (idents (n_in n)) ss)
+                   (bss (idents (n_in n)) (env_of_np (idents (n_in n)) ss))).
+  { unfold wf_ins.
     rewrite annots_numstreams in Hli.
-    (* hypothèse principale pour Hnode : *)
-    assert (Hins : wf_ins n (env_of_np (idents (n_in n)) ss)
-                     (bss (idents (n_in n)) (env_of_np (idents (n_in n)) ss))).
-    { unfold wf_ins.
-      pose proof (nclocksof_sem G envG ins envI bs env es) as Ncs.
-      edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf); eauto.
-      rewrite clocksof_nclocksof in sCl.
-      eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto.
-      eapply wf_env_morph in Hec; eauto 1.
-      (* équivalence des horloges *)
-      apply wf_env_decompose in Hec as (?& Hcl &?).
-      apply bss_le_bs in Hcl as Hbs; auto.
-      apply infinite_le_eq in Hbs as ->; auto.
-      now apply bss_inf, env_of_np_inf, infinite_exps.
-    }
-    subst sss.
+    pose proof (nclocksof_sem G envG ins envI bs env es) as Ncs.
+    edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf); eauto.
+    rewrite clocksof_nclocksof in sCl.
+    eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto.
+    eapply wf_env_morph in Hec; eauto 1.
+    (* équivalence des horloges *)
+    apply wf_env_decompose in Hec as (?& Hcl &?).
+    apply bss_le_bs in Hcl as Hbs; auto.
+    apply infinite_le_eq in Hbs as ->; auto.
+    now apply bss_inf, env_of_np_inf, infinite_exps.
+  }
+  eapply Sapp_retro_compat; eauto.
+  - (* bools_ofs *)
+    eapply safe_exps_ in Hwtr as (rTy & _ & _); eauto.
+    apply typeof_same, Forall2_Forall_eq with (2:= rTy), Forall_forall_nprod in Hwtr'.
+    rewrite <- flat_map_concat_map, <- Ss_exps.
+    apply bools_ofs_sbools_of; auto.
+  - (* sem_node *)
+    intro k.
     unshelve rewrite <- flat_map_concat_map, <- Ss_exps;
-      auto using DS_of_S_inf, infinite_exps.
-    (* il faut aussi que ss soit de type nprod (length n_in n) *)
-    subst ss.
-    revert infO Hins. revert os.
+      eauto using infinite_exps.
+    subst ss rs; revert infO Hins; revert os.
     save_denot_exp se Hse.
     setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
     gen_sub_exps.
-    rewrite Hfind, Hli.
-    unfold decl in Hlo. rewrite <- (map_length fst) in Hlo.
+    rewrite Hfind, <- annots_numstreams, Hli.
+    unfold decl in Hlo; rewrite <- (map_length fst) in Hlo.
+    rewrite <- (map_length fst).
     unfold idents, eq_rect.
-    cases; intros; subst; try congruence; eauto.
-  - (* k <> 0, on utilise sem_global_absent *)
-    setoid_rewrite masks_false_S.
-    subst sss; simpl.
-    rewrite 2 map_ignore, concat_length_sum, map_map.
-    setoid_rewrite Ss_of_nprod_length.
-    rewrite <- annots_numstreams, Hli, Hlo.
-    apply sem_global_absent; auto.
+    cases; intros; subst; try congruence.
+    apply ok_reset; auto.
+  Unshelve.
+  all: eauto using sbools_ofs_inf, infinite_exps.
 Qed.
+
 
 (** Morphismes rencontrés dans la preuve de [ok_sem_exp].
     La plupart sont ad hoc, donc on les laisse ici. *)
@@ -2632,12 +3474,12 @@ Proof.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
     repeat take (find_node _ _ = _) and rewrite it in *.
     repeat take (Some _ = Some _) and inv it.
-    apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
-    apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
-    apply Forall_impl_inside with (P := restr_exp) in H0; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0,H1; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0,H1; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H0,H1; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0,H1; auto.
     eapply ok_sem_Eapp; eauto using wc_env_in.
-    now rewrite Forall2_map_2, <- Forall2_same.
+    all: now rewrite Forall2_map_2, <- Forall2_same.
 Qed.
 
 Corollary ok_sem_exps :
@@ -2661,102 +3503,6 @@ Proof.
   eapply ok_sem_exp; eauto.
   all: apply (proj1 (Forall_nth _ _)); eauto.
 Qed.
-
-
-(** Correspondance clocks_of/bss *)
-
-Lemma ac_AC :
-  forall s Inf,
-    abstract_clock (S_of_DSv s Inf) ≡ S_of_DS id (AC s) (map_inf _ _ _ _ Inf).
-Proof.
-  clear.
-  intros.
-  match goal with
-  | |- ?tt ≡ ?uu => remember_st tt as t; remember_st uu as u
-  end.
-  revert_all.
-  cofix Cof; intros s Inf t Ht u Hu.
-  destruct t, u.
-  apply infinite_decomp in Inf as HH.
-  destruct HH as (x & s' & Hs & Inf2).
-  destruct (S_of_DSv_eq _ Inf _ Hs) as [Inf3 HH].
-  rewrite HH in Ht; clear HH.
-  setoid_rewrite S_of_DS_cons in Ht.
-  edestruct (S_of_DS_eq id (AC s)) as [Inf4 HH]. { now rewrite Hs, AC_cons. }
-  rewrite HH in Hu; clear HH.
-  cases; rewrite S_of_DS_cons in Hu; inv Hu; inv Ht; simpl in *; subst.
-  all: constructor; simpl; auto.
-  all: eapply Cof; eauto; rewrite <- H0; eauto using _S_of_DS_eq.
-Qed.
-
-Lemma zip_zipWith :
-  forall A B C (f : A -> B -> C),
-    forall x y Infx Infy Infr,
-      zipWith f (S_of_DS id x Infx) (S_of_DS id y Infy) ≡ S_of_DS id (ZIP f x y) Infr.
-Proof.
-  clear.
-  intros.
-  remember_st (S_of_DS id x Infx) as xs.
-  remember_st (S_of_DS id y Infy) as ys.
-  remember_st (S_of_DS id _ Infr) as rs.
-  revert_all; cofix Cof; intros.
-  destruct xs as [vx xs], ys as [vy ys], rs as [vr rs].
-  apply S_of_DS_Cons in Hxs as (vx' & xs' & Hx & Hvx & Infx' & Hxs).
-  apply S_of_DS_Cons in Hys as (vy' & ys' & Hy & Hvy & Infy' & Hys).
-  apply S_of_DS_Cons in Hrs as (vr' & rs' & Hr & Hvr & Infr' & Hrs).
-  rewrite Hx, Hy, zip_cons in Hr.
-  apply Con_eq_simpl in Hr as [].
-  constructor; simpl.
-  - subst; auto.
-  - unshelve eapply Cof; eauto.
-    { eapply infinite_morph; eauto. }
-    rewrite <- Hrs.
-    now apply _S_of_DS_eq.
-Qed.
-
-Lemma _clocks_of_bss :
-  forall l (np : nprod (length l)) Inf Infb,
-    NoDup l ->
-    clocks_of (Ss_of_nprod np Inf) ≡
-      S_of_DS id (bss l (env_of_np l np)) Infb.
-Proof.
-  clear.
-  induction l as [| x [| y l]]; intros * ND.
-  - rewrite clocks_of_nil.
-    unshelve rewrite (const_DS_const id false); auto.
-    apply _S_of_DS_eq; auto.
-  - simpl.
-    rewrite clocks_of_ac, ac_AC.
-    apply _S_of_DS_eq, map_eq_compat.
-    setoid_rewrite env_of_np_eq; simpl.
-    cases_eqn HH; congruence.
-  - inv ND.
-    setoid_rewrite clocks_of_cons.
-    unshelve setoid_rewrite (IHl (snd np)); auto.
-    { inv Inf. now apply bss_inf, env_of_np_inf. }
-    unshelve rewrite ac_AC, zip_zipWith.
-    { inv Inf. apply zip_inf. apply map_inf; auto.
-      now apply bss_inf, env_of_np_inf. }
-    apply _S_of_DS_eq.
-    setoid_rewrite bss_cons at 2.
-    rewrite env_of_np_eq; simpl (mem_nth _ _).
-    destruct (ident_eq_dec _ _); try congruence.
-    setoid_rewrite bss_switch_env at 2; auto.
-    intros; apply env_of_np_tl; intro; congruence.
-Qed.
-
-Corollary clocks_of_bss :
-  forall l (np : nprod (length l)) Inf,
-    NoDup l ->
-    exists Infb,
-    clocks_of (Ss_of_nprod np Inf) ≡
-      S_of_DS id (bss l (env_of_np l np)) Infb.
-Proof.
-  intros.
-  exists (bss_inf l _ (env_of_np_inf _ _ _ Inf)).
-  apply _clocks_of_bss; auto.
-Qed.
-
 
 (** Node semantics  *)
 
@@ -2782,11 +3528,12 @@ Proof.
     (* reste le cas d'un appel dépendant, à la mano *)
     constructor; auto.
     repeat take (Forall _ [_]) and inv it.
-    take (wt_exp _ _ _) and inv it.
+    take (wt_exp _ _ _) and apply wt_exp_wl_exp in it as Hwl.
+    inv it. inv Hwl.
     take (op_correct_exp _ _ _ _ _ _ _) and inv it.
     take (restr_exp _) and inv it.
     take (find_node _ _ = _) and rewrite it in *.
-    take (Some _ = Some _) and inv it.
+    repeat take (Some _ = Some _) and inv it.
     eapply ok_sem_Eapp; eauto using wc_env_in, ok_sem_exps, Forall2_length.
   - (* variables *)
     apply Forall2_map_1.
@@ -2850,6 +3597,7 @@ Proof.
     apply IHblks; auto; now simpl_Forall.
 Qed.
 
+
 (** Pour pouvoir utiliser InfG, Wfg, Hnode, on considère
  * l'ajout d'un nœud en tête de G.(nodes). *)
 Lemma ok_sem_node :
@@ -2862,13 +3610,14 @@ Lemma ok_sem_node :
     let f := n_name n in
     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
     let ins := map fst (n_in n) in
-    forall (ss : nprod (length (n_in n))),
-    let envI := env_of_np ins ss in
+    forall envI,
     let bs := bss ins envI in
     let envn := FIXP _ (denot_node G n envG envI) in
+    let ss := np_of_env ins envI in
     let os := np_of_env (List.map fst (n_out n)) envn in
     wf_env Γ ins envI bs envn ->
     op_correct G ins envG envI bs envn n ->
+    all_infinite envI ->
     all_infinite envn ->
     forall infI infO,
       sem_node (Global tys exts (n :: nds)) f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
@@ -2876,26 +3625,24 @@ Proof.
   (* on pose ok_sem_blocks car une fois G détruit, c'est impossible *)
   pose proof ok_sem_blocks as ok_sem_blocks.
   destruct G as [tys exts nds].
-  intros n Hord Hr Wc Wt ???????? Hco Hoc Infn ??.
-  pose (InfI := env_of_np_inf ins _ _ infI).
+  intros n Hord Hr Wc Wt ???????? Hco Hoc InfI Infn ??.
   pose (Hn := hist_of_envs ins envI InfI _ Infn).
   (* on masque les variables locales pour mieux les exposer dans sem_scope *)
   pose (H := restrict Hn (senv_of_ins (n_in n) ++ senv_of_decls (n_out n))).
   eapply Snode with (H := H); eauto using find_node_now.
   - (* sem_var in *)
-    subst H envI.
+    subst H ss.
     apply Forall2_forall2.
-    split. { rewrite Ss_of_nprod_length. now setoid_rewrite map_length. }
+    split. { now rewrite Ss_of_nprod_length. }
     intros ?? k ?? Hk **; subst.
     assert (Hk' : k < length (n_in n)) by (rewrite map_length in Hk; auto).
     apply sem_var_restrict, sem_var_ins; auto using nth_In.
     { apply IsVar_app; left.
       apply IsVarC, fst_InMembers.
       rewrite map_fst_senv_of_ins; eauto using nth_In. }
-    edestruct Ss_of_nprod_nth as [Inf2 ->]; auto using errTy.
+    unshelve edestruct Ss_of_nprod_nth as [Inf2 ->]; auto using errTy.
     apply _S_of_DS_eq.
-    erewrite env_of_np_nth; eauto.
-    apply mem_nth_nth; auto using node_NoDup_in.
+    erewrite nth_np_of_env; eauto.
   - (* sem_var out *)
     subst H os.
     apply Forall2_forall2.
@@ -2957,10 +3704,7 @@ Proof.
       rewrite Perm2, Perm in Hin2.
       solve_incl_app.
     }
-    (* on veut que ss soit du type (nprod (length idents (n_in n))) *)
-    assert (length (map fst (n_in n)) = length (n_in n)) as Hl
-        by now setoid_rewrite map_length.
-    revert dependent ss; rewrite <- Hl; intros.
+    subst ss.
     edestruct clocks_of_bss as [Inf ->]; eauto 2 using NoDup_app_l.
     subst Γ Γ' Γ0 Γ'0.
     rewrite <- app_assoc, <- it in *; simpl in Hco.
@@ -2980,17 +3724,18 @@ Theorem _ok_global :
     wc_global G ->
     op_correct_global G ->
     Forall node_causal (nodes G) ->
-    forall f n (ss : nprod (length (n_in n))),
+    forall f n envI,
       find_node f G = Some n ->
-      let ins := idents (n_in n) in
-      let envI := env_of_np ins ss in
-      let os := np_of_env (List.map fst (n_out n)) (denot_global G f envI) in
-      let bs := bss ins envI in
-      wf_ins n envI bs ->
-      forall InfSs InfO,
-        sem_node G f (Ss_of_nprod ss InfSs) (Ss_of_nprod os InfO).
+      let ins := map fst (n_in n) in
+      let outs := map fst (n_out n) in
+      let xs := np_of_env ins envI in
+      let os := np_of_env outs (denot_global G f envI) in
+      wf_ins n envI (bss ins envI) ->
+      all_infinite envI ->
+      exists InfI InfO,
+        sem_node G f (Ss_of_nprod xs InfI) (Ss_of_nprod os InfO).
 Proof.
-  intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins ??.
+  intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins InfI.
   unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
@@ -3008,13 +3753,19 @@ Proof.
     now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
   (* HenvG est tout ce qu'il faut savoir sur la définition de envG *)
   clear HG.
-  revert dependent n. revert f.
+  exists (forall_np_of_env _ _ _ InfI), (forall_np_of_env _ _ _ (InfG _ _ InfI)).
+  remember (forall_np_of_env _ _ _ _) as Infi eqn:HH; clear HH.
+  remember (forall_np_of_env _ _ _ _) as Info eqn:HH; clear HH.
+  fold xs os in Info, Infi.
+  revert dependent n.
+  revert dependent envI.
+  revert f.
   destruct G as [tys exts nds].
   induction nds as [|a nds]; intros. { inv Hfind. }
   destruct (ident_eq_dec (n_name a) f); subst.
   - (* cas du nœud courant *)
     rewrite find_node_now in Hfind; auto; inv Hfind.
-    edestruct (Ss_of_nprod_eq _ InfO) as [Inf3 ->].
+    edestruct (Ss_of_nprod_eq _ Info) as [Inf3 ->].
     { subst os.
       rewrite HenvG, <- denot_node_cons;
         eauto using find_node_not_Is_node_in, find_node_now.
@@ -3066,6 +3817,36 @@ Proof.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
 Qed.
 
+(** Autre formulation, en fournissant un nprod plutôt qu'un environnement en entrée *)
+Corollary _ok_global2 :
+  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
+  forall G,
+    restr_global G ->
+    wt_global G ->
+    wc_global G ->
+    op_correct_global G ->
+    Forall node_causal (nodes G) ->
+    forall f n (ss : nprod (length (n_in n))),
+      find_node f G = Some n ->
+      let ins := idents (n_in n) in
+      let envI := env_of_np ins ss in
+      let os := np_of_env (List.map fst (n_out n)) (denot_global G f envI) in
+      let bs := bss ins envI in
+      wf_ins n envI bs ->
+      forall InfSs InfO,
+        sem_node G f (Ss_of_nprod ss InfSs) (Ss_of_nprod os InfO).
+Proof.
+  intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins ??.
+  edestruct _ok_global as (?&?& Hsem); eauto using env_of_np_inf.
+  eapply sem_node_morph in Hsem; eauto using _Ss_of_nprod_eq.
+  subst envI os ins; clear.
+  revert dependent ss.
+  rewrite <- (map_length fst).
+  intros; apply _Ss_of_nprod_eq, np_of_env_of_np.
+  rewrite map_length; apply n_ingt0.
+  destruct (n_nodup n); eauto using NoDup_app_weaken.
+Qed.
+
 Definition wf_inputs (n : node) (ss : nprod (length (n_in n))) :=
   let ins := idents (n_in n) in
   let envI := env_of_np ins ss in
@@ -3089,7 +3870,7 @@ Theorem ok_global :
         sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
 Proof.
   intros ?? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
-  unshelve eapply _ok_global with (InfSs := InfXs) in Hins; eauto.
+  unshelve eapply _ok_global2 with (InfSs := InfXs) in Hins; eauto.
   { apply forall_np_of_env, denot_inf; auto using env_of_np_inf. }
   unfold decl.
   rewrite <- (map_length fst (n_out n)); eauto.
