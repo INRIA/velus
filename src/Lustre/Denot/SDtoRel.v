@@ -1799,7 +1799,7 @@ Section BOOLS_OFS.
     { unfold sbools_of. autorewrite with cpodb. reflexivity. }
     induction n.
     - edestruct (S_of_DS_eq id _ Inf3) as [Inf4 ->].
-      { simpl; autorewrite with cpodb; reflexivity. }.
+      { simpl; autorewrite with cpodb; reflexivity. }
       rewrite <- const_DS_const; simpl.
       apply bools_ofs_empty.
     - edestruct (S_of_DS_eq id _ Inf3) as [Inf4 ->].
