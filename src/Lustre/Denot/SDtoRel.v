@@ -2943,9 +2943,9 @@ Import Cpo_streams_type.
 
 (* le résultat important, à prouver *)
 Lemma smask_sreset :
-  forall (f : DS_prod SI -C-> DS_prod SI) k R X,
+  forall f k R X,
     (* conditions sur f, lp etc. *)
-    f (smask_env k R X) == smask_env k R (sreset f R X).
+    envG f (smask_env k R X) == smask_env k R (sreset (envG f) R X).
 Proof.
   (* cf dépôt K *)
   clear.
@@ -2976,11 +2976,10 @@ Proof.
   - (* input ok *)
     reflexivity.
   - (* output *)
-    subst os.
-    fold nout nf in Onnil, Ndo|- *.
+    subst os nf.
+    fold nout in Onnil, Ndo|- *.
     apply _Ss_of_nprod_eq.
     rewrite smask_sreset.
-    (* TODO: sans doute du boulot ici *)
     destruct nout as [| x nout]; auto.
     apply nprod_eq; intros m d Hm.
     rewrite 2 (nth_np_of_env x d (x :: nout)); auto.
