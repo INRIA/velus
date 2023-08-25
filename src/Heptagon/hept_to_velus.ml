@@ -92,18 +92,6 @@ let type_name tn =
   | "real" | "float64" -> Tfloat64
   | s -> Tenum_name (name s)
 
-let rec ty env ((n, (clock, loc)) as decl) = function
-  | Tprod _ -> unsupported "product types"
-  | Tid (ToQ tn) ->
-    (match Env.find_opt tn env.types with
-     | Some (Type_alias t) -> ty env decl t
-     | Some (Type_struct fs) ->
-       List.concat_map (fun (f, t) -> ty env (postfix n f, (clock, loc)) t) fs
-     | _ -> [(name n, ((type_name tn, clock), loc))])
-  | Tid _ -> unsupported "qualified names"
-  | Tarray _ -> failwith "TODO: array"
-  | Tinvalid -> failwith "Invalid type ?"
-
 let rec full_ck = function
   | Cbase -> BASE
   | Con (ck, c, x) -> ON (full_ck ck, name x, constructor c)
@@ -117,39 +105,6 @@ let opt_ck = function
   | None -> FULLCK BASE
   | Some ck -> pre_ck ck
 
-let var_dec env vd =
-  let decl = (vd.v_name, (opt_ck vd.v_clock, location vd.v_loc)) in
-  ty env decl vd.v_type
-
-(** Number of scalar values represented by [ty] *)
-let rec size_type env ty =
-  match ty with
-  | Tprod tys ->
-    List.fold_left (fun acc ty -> acc + size_type env ty) 0 tys
-  | Tarray (ty, _) -> failwith "TODO: tarray"
-  | Tinvalid -> failwith "Invalid type ?"
-  | Tid tn ->
-    match Env.find_opt (shortname tn) env.types with
-    | Some (Type_alias ty) -> size_type env ty
-    | Some (Type_struct fs) ->
-      List.fold_left (fun acc (f, ty) -> acc + size_type env ty) 0 fs
-    | _ -> 1
-
-(** Decompose a variable [n] with type [ty] *)
-let rec decomp_type env n ty =
-  match ty with
-  | Tprod tys ->
-    List.flatten
-      (List.mapi (fun i -> decomp_type env (postfix n (string_of_int i))) tys)
-  | Tarray (ty, _) -> failwith "TODO: tarray"
-  | Tinvalid -> failwith "Invalid type ?"
-  | Tid tn ->
-    match Env.find_opt (shortname tn) env.types with
-    | Some (Type_alias ty) -> decomp_type env n ty
-    | Some (Type_struct fs) ->
-      List.concat_map (fun (f, ty) -> decomp_type env (postfix n f) ty) fs
-    | _ -> [name n]
-
 (** Find the record definition with field [f] *)
 let find_record env f =
   match
@@ -162,20 +117,6 @@ let find_record env f =
            | _ -> None)
       env.types None
   with Some fs -> fs | None -> invalid_arg "find_record"
-
-(** Find the record definition with field [f] and its index *)
-let find_record_index env f =
-  let rec aux fs n =
-    match fs with
-    | [] -> invalid_arg "find_record_index"
-    | (f', ty)::_ when f' = f -> n, size_type env ty
-    | (_, ty)::fs -> aux fs (n + size_type env ty)
-  in aux (find_record env f) 0
-
-let rec pat env = function
-  | Etuplepat pats -> List.concat_map (pat env) pats
-  | Evarpat n ->
-    decomp_type env n (find_var n env.venv)
 
 (** Application of node or operator *)
 let app f es loc =
@@ -243,9 +184,9 @@ let rec static_exp (env: cenv) se =
   | Sconstructor n -> [CONSTANT (CONST_ENUM (constructor n), location se.se_loc)]
   | Sfield f -> invalid_arg "static_exp: field"
   | Stuple es -> List.concat_map (static_exp env) es
-  | Sarray_power _ -> failwith "TODO: array_power"
-  | Sarray _ -> failwith "TODO: array"
-  | Srecord _ -> failwith "TODO: record"
+  | Sarray_power _ -> failwith "TODO: static array_power"
+  | Sarray _ -> failwith "TODO: static array"
+  | Srecord _ -> failwith "TODO: static record"
   | Sop (f, es) -> [app f (List.concat_map (static_exp env) es) (location se.se_loc)]
 
 let rec exp (env: cenv) e =
@@ -291,13 +232,71 @@ let rec exp (env: cenv) e =
       | _::e1s, e2::e2s, 0 -> e2::replace e1s e2s 0
       | e1::e1s, e2s, n -> e1::replace e1s e2s (n - 1))
     in replace (exp env e1) (exp env e2) (fst (find_record_index env (shortname f)))
-  | Eapp ({ a_op = Earray }, _) -> failwith "TODO: array"
-  | Eapp ({ a_op = Earray_fill }, _) -> failwith "TODO: array_fill"
+  | Eapp ({ a_op = Earray }, es) -> List.concat_map (exp env) es
+  | Eapp ({ a_op = Earray_fill;
+            a_params = [esize] },
+          [e]) ->
+    let es = exp env e in
+    let size = const_int_exp env esize in
+    List.flatten (List.init size (fun _ -> es))
+  | Eapp ({ a_op = Eselect;
+            a_params = [eidx] },
+         [e]) ->
+    let es = exp env e in
+    let idx = const_int_exp env eidx in
+    [List.nth es idx] (* Attention la longeur *)
   | Eapp ({ a_op = _ }, _) -> unsupported "app"
   | Eiterator _ -> unsupported "iterators"
   | Ewhen (e, c, x) -> [WHEN (exp env e, name x, constructor c, location e.e_loc)]
   | Emerge (x, brs) -> [MERGE (name x, List.map (fun (c, e) -> (constructor c, exp env e)) brs, location e.e_loc)]
   | Esplit _ -> unsupported "split"
+
+and const_int_exp env e =
+  match exp env e with
+  | [CONSTANT (CONST_INT s, _)] -> int_of_string s
+  | _ -> unsupported "Array with non-constant size"
+
+(** Decompose a variable [n] with type [ty] *)
+and decomp_type env n ty =
+  match ty with
+  | Tprod tys ->
+    List.flatten
+      (List.mapi (fun i -> decomp_type env (postfix n (string_of_int i))) tys)
+  | Tarray (ty, e) ->
+    let size = const_int_exp env e in
+    List.flatten (List.init size (fun i -> decomp_type env (postfix n (string_of_int i)) ty))
+  | Tinvalid -> failwith "Invalid type ?"
+  | Tid tn ->
+    match Env.find_opt (shortname tn) env.types with
+    | Some (Type_alias ty) -> decomp_type env n ty
+    | Some (Type_struct fs) ->
+      List.concat_map (fun (f, ty) -> decomp_type env (postfix n f) ty) fs
+    | _ -> [name n]
+
+(** Number of scalar values represented by [ty] *)
+and size_type env ty =
+  match ty with
+  | Tprod tys ->
+    List.fold_left (fun acc ty -> acc + size_type env ty) 0 tys
+  | Tarray (ty, e) ->
+    let size = const_int_exp env e in
+    size * (size_type env ty)
+  | Tinvalid -> failwith "Invalid type ?"
+  | Tid tn ->
+    match Env.find_opt (shortname tn) env.types with
+    | Some (Type_alias ty) -> size_type env ty
+    | Some (Type_struct fs) ->
+      List.fold_left (fun acc (f, ty) -> acc + size_type env ty) 0 fs
+    | _ -> 1
+
+(** Find the record definition with field [f] and its index *)
+and find_record_index env f =
+  let rec aux fs n =
+    match fs with
+    | [] -> invalid_arg "find_record_index"
+    | (f', ty)::_ when f' = f -> n, size_type env ty
+    | (_, ty)::fs -> aux fs (n + size_type env ty)
+  in aux (find_record env f) 0
 
 let escape env esc =
   ((exp env esc.e_cond, (name esc.e_next_state, esc.e_reset)), location esc.e_cond.e_loc)
@@ -306,6 +305,29 @@ let last_decl env vd =
   match vd.v_last with
   | Last (Some e) -> Some (name vd.v_name, exp env e, location vd.v_loc)
   | _ -> None
+
+let rec ty env ((n, (clock, loc)) as decl) = function
+  | Tprod _ -> unsupported "product types"
+  | Tid (ToQ tn) ->
+    (match Env.find_opt tn env.types with
+     | Some (Type_alias t) -> ty env decl t
+     | Some (Type_struct fs) ->
+       List.concat_map (fun (f, t) -> ty env (postfix n f, (clock, loc)) t) fs
+     | _ -> [(name n, ((type_name tn, clock), loc))])
+  | Tid _ -> unsupported "qualified names"
+  | Tarray (t, e) ->
+    let size = const_int_exp env e in
+    List.flatten (List.init size (fun i -> ty env (postfix n (string_of_int i), (clock, loc)) t))
+  | Tinvalid -> failwith "Invalid type ?"
+
+let var_dec env vd =
+  let decl = (vd.v_name, (opt_ck vd.v_clock, location vd.v_loc)) in
+  ty env decl vd.v_type
+
+let rec pat env = function
+  | Etuplepat pats -> List.concat_map (pat env) pats
+  | Evarpat n ->
+    decomp_type env n (find_var n env.venv)
 
 let rec eq env eq =
   match eq.eq_desc with

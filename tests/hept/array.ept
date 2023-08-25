@@ -1,0 +1,21 @@
+type farr = real^4
+
+node mk_arr(x : real) returns (y : farr)
+let
+    y = [x,x,x,x]
+tel
+
+node mk_arr_fill(x : real) returns (y : farr)
+let
+    y = x^4
+tel
+
+node arr_access(x : farr) returns (y : real)
+let
+    y = x[0] + x[1] + x[2] + x[3]
+tel
+
+node arr_access2(x : farr^2) returns (y : farr)
+let
+    y = x[1]
+tel
