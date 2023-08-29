@@ -2944,6 +2944,17 @@ Import Cpo_streams_type.
 Definition all_cons {I} {SI : I -> Type} (p : DS_prod SI) : Prop :=
   forall x, is_cons (p x).
 
+(* TODO: move *)
+Lemma all_cons_app :
+  forall (X Y : DS_prod SI),
+    all_cons X ->
+    all_cons (APP_env X Y).
+Proof.
+  clear.
+  intros * Hc i.
+  apply is_cons_app, Hc.
+Qed.
+
 Lemma rem_app_env :
   forall (X Y : DS_prod SI),
     all_cons X ->
@@ -2953,6 +2964,15 @@ Proof.
   intros * Hc.
   apply Oprodi_eq_intro; intro x.
   rewrite REM_env_eq, APP_env_eq, APP_simpl, rem_app; auto.
+Qed.
+
+Lemma rem_env_eq_compat :
+  forall I SI (X Y : @DS_prod I SI), X == Y -> REM_env X == REM_env Y.
+Proof.
+  clear.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite 2 REM_env_eq, <- 2 PROJ_simpl, H.
 Qed.
 
 Lemma app_app_env :
@@ -2967,21 +2987,6 @@ Qed.
 
 Section MASK_RESET.
 
-Lemma abs_ok :
-  forall f X,
-    envG f (APP_env (fun _ => DS_const abs) X)
-    == APP_env (fun _ => DS_const abs) (envG f X).
-Proof.
-  clear.
-Abort.
-
-(* Lemma smask_eq_1 : *)
-(*   forall {A} rs (xs : DS (sampl A)), *)
-(*     smask 1 (cons true rs) xs == smask O (cons false rs) xs. *)
-(* Proof. *)
-(*   intros. *)
-(*   rewrite 2 smask_eq; auto. *)
-(* Qed. *)
 Definition FIRST_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => FIRST _).
 Lemma FIRST_env_eq :
   forall X x,
@@ -3005,280 +3010,8 @@ Proof.
   now rewrite FIRST_env_eq, APP_env_eq, APP_simpl, first_app_first.
 Qed.
 
-(* Fixpoint nrem_env (n : nat) (X : DS_prod SI) : DS_prod SI := *)
-(*   match n with *)
-(*   | O => X *)
-(*   | S n => nrem_env n (REM_env X) *)
-(*   end. *)
-
+(* TODO: utiliser partout ? *)
 Definition abs_env : DS_prod SI := fun _ => DS_const abs.
-Lemma abs_ok :
-  forall f X n,
-    FIRST_env (nrem_env n X) == APP_env abs_env 0 ->
-    FIRST_env (nrem_env n (envG f X)) == APP_env abs_env 0.
-Abort.
-
-
-Lemma env_bisimulation_allin1 : forall (R: DS_prod SI -> DS_prod SI -> Prop),
-        (forall x1 x2 y1 y2, R x1 y1 -> x1==x2 -> y1==y2 -> R x2 y2)
-   -> (forall (x y:DS_prod SI), (all_cons x \/ all_cons y) -> R x y -> FIRST_env x == FIRST_env y /\ R (REM_env x) (REM_env y))
-   -> forall x y, R x y -> x == y.
-Proof.
-  clear.
-  (* intros * IH Hfr X Y Hr. *)
-  (* apply Oprodi_eq_intro; intro i. *)
-  (* eapply DS_bisimulation_allin1 with *)
-  (*   (R := fun U V => exists X Y, U == X i /\ V == Y i). 3: eauto. admit. *)
-  (* clear Hr. clear X Y. *)
-  (* intros U V Hc (X & Y & Hu & Hv). *)
-  (* destruct (Hfr X Y); auto. *)
-
-  (* apply (DS_bisimulation R); *)
-  (*   auto; intros ?? Hic ?; now apply Hfr in Hic. *)
-  (* Qed. *)
-Abort.
-
-Lemma first_le :
-  forall A (x : DS A),
-    first x <= x.
-Proof.
-  clear.
-  intros.
-  remember_ds (first x) as y.
-  revert_all; cofix Cof; intros.
-  destruct y.
-  - constructor.
-    rewrite <- eqEps in Hy.
-    now apply Cof.
-  - clear Cof.
-    destruct (@is_cons_elim _ x) as (vx & x' & Hx).
-    { apply first_is_cons; now rewrite <- Hy. }
-    rewrite Hy, Hx, first_cons; auto.
-Qed.
-
-Lemma first_fun :
-  forall A B (f : DS A -C-> DS B) x,
-    is_cons x ->
-    is_cons (f x) ->
-    first (f x) == first (f (first x)).
-Proof.
-  clear.
-  intros * Hc Hcf.
-  destruct (is_cons_elim Hc) as (vx & x' & Hx).
-  destruct (is_cons_elim Hcf) as (vfx & fx' & Hfx).
-  rewrite Hfx, Hx, 2 first_cons.
-  rewrite Hx in Hfx.
-  destruct (@is_cons_elim _ (f (cons vx 0))) as (?&?&?).
-  { rewrite Hx in *.
-    admit. }
-Abort.
-
-(* Lemma test_du_principe_d'induction : *)
-(*   forall f R X, *)
-(*     envG f (smask_env O R X) == smask_env O R (sreset_aux (envG f) R X (envG f X)). *)
-(* Proof. *)
-(*   clear. *)
-(*   intros. *)
-(*   eapply env_bisimulation_allin1 with *)
-(*     (R := fun U V => exists R X, *)
-(*             U == envG f (smask_env O R X) *)
-(*             /\ V == smask_env O R (sreset_aux (envG f) R X (envG f X)) *)
-(*     ). *)
-(*   3: eauto. *)
-(*   admit. *)
-(*   clear. *)
-(*   intros U V Hc (R & X & Hu & Hv). *)
-(*   assert (exists r R', R == cons r R') by admit. *)
-(*   destruct H as (r & R' & Hr). *)
-
-(*   rewrite Hr, smask_env_eq in Hu. *)
-(*   rewrite Hr, sreset_aux_eq, smask_env_eq in Hv. *)
-(*   destruct r. admit. (*  OK abs *) *)
-(*   rewrite app_app_env in Hv. *)
-(*   split. *)
-(*   { rewrite Hu, Hv, first_app_env. *)
-(* (*   } *) *)
-(* (*   Search app first. *) *)
-(* (* Qed. *) *)
-(* Abort. *)
-
-(* Lemma smask0_sreset : *)
-(*   forall f R X, *)
-(*     (* conditions sur f, lp etc. *) *)
-(*   (* idée : FIRST_env (f X) == f (FIRST_env X) pour length-preserving ???? *) *)
-(*     envG f (smask_env O R X) == smask_env O R (sreset (envG f) R X). *)
-(* Proof. *)
-(*   clear. *)
-(*   intros. *)
-(*   assert (exists r R', R == cons r R') by admit. *)
-(*   destruct H as (r & R' & Hr). *)
-(*   rewrite sreset_eq. *)
-(*   rewrite Hr. *)
-(*   rewrite sreset_aux_eq. *)
-(*   rewrite 2 smask_env_eq. *)
-(*   destruct r. *)
-(*   admit. (* ok absences *) *)
-(*   rewrite rem_app_env. *)
-(*   2: admit. (* ok all_cons *) *)
-(*   rewrite app_app_env. *)
-(* Qed. *)
-
-
-(** Un prédicat co-inductif pour remplacer DS_bisimulation ? *)
-Section TEST_bisim.
-  Context {A : Type}.
-
-  CoInductive DS_eq : DS A -> DS A -> Prop :=
-  | DSe :
-    forall x y,
-      DS_eq (rem x) (rem y) ->
-      first x == first y ->
-      DS_eq x y.
-
-  Lemma Oeq_DS_eq : forall x y, x == y -> DS_eq x y.
-  Proof.
-    cofix Cof; intros; constructor; auto.
-  Qed.
-
-  Lemma DS_eq_Oeq : forall x y, DS_eq x y -> x == y.
-  Proof.
-    intros.
-    apply DS_bisimulation_allin1 with
-      (R := fun U V => exists x y, DS_eq x y
-                           /\ U == x /\ V == y).
-    3: eauto.
-    { intros * ? Eq1 Eq2.
-      setoid_rewrite <- Eq1.
-      setoid_rewrite <- Eq2.
-      auto. }
-    clear.
-    intros U V Hc (X & Y & Heq & Hu & Hv).
-    inversion_clear Heq as [?? He Hf Eq1 Eq2].
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    split; eauto.
-  Qed.
-
-  Lemma DS_eq_Oeq_iff : forall x y, DS_eq x y <-> x == y.
-  Proof.
-    split; auto using Oeq_DS_eq, DS_eq_Oeq.
-  Qed.
-
-End TEST_bisim.
-
-(* le même pour les environnements *)
-Section TEST_env.
-  CoInductive env_eq : DS_prod SI -> DS_prod SI -> Prop :=
-| Ee :
-  forall X Y (* X' Y' *),
-    env_eq (REM_env X) (REM_env Y) ->
-    FIRST_env X == FIRST_env Y ->
-    (* pour éviter d'avoir à le faire dans les preuves : *)
-    (* X == X' -> *)
-    (* Y == Y' -> *)
-    env_eq X Y.
-
-Lemma Oeq_env_eq : forall X Y, X == Y -> env_eq X Y.
-Proof.
-  clear.
-  cofix Cof; intros.
-  apply Ee; auto.
-  - apply Cof.
-    now rewrite H.
-  - now rewrite H.
-Qed.
-
-Lemma env_eq_Oeq : forall X Y, env_eq X Y -> X == Y.
-Proof.
-  clear.
-  intros * Heq.
-  apply Oprodi_eq_intro; intro i.
-  apply DS_bisimulation_allin1
-    with (R := fun U V => exists X Y, env_eq X Y
-                              /\ U == X i /\ V == Y i).
-  3: eauto.
-  { intros * ? Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    auto. }
-  clear.
-  intros U V Hc (X & Y & Heq & Hu & Hv).
-  inversion_clear Heq as [?? He Hf Eq1 Eq2].
-  (* rewrite Eq1, Eq2 in Hf. *)
-  split.
-  - rewrite Hu, Hv, <- 2 FIRST_env_eq; auto.
-  - exists (REM_env X), (REM_env Y); split; auto.
-    now rewrite Hu, Hv.
-Qed.
-
-Lemma env_eq_ok : forall X Y, X == Y <-> env_eq X Y.
-Proof.
-  split; auto using Oeq_env_eq, env_eq_Oeq.
-Qed.
-
-Global Add Parametric Morphism : env_eq
-       with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> iff
-         as env_eq_morph.
-Proof.
-  clear.
-  intros * Eq1 * Eq2.
-  split; intros Heq%env_eq_ok; apply env_eq_ok; eauto.
-Qed.
-
-End TEST_env.
-
-Lemma nrem_rem_env :
-  forall X n, nrem_env n (REM_env X) == REM_env (nrem_env n X).
-Proof.
-  clear.
-  intros.
-  revert X.
-  induction n; auto.
-  intro X; simpl.
-  autorewrite with cpodb.
-  rewrite IHn; auto.
-Qed.
-
-(* TODO: ailleurs ? Utiliser ? *)
-Lemma nrem_env_eq :
-  forall X Y,
-    (forall n, FIRST_env (nrem_env n X) == FIRST_env (nrem_env n Y)) ->
-    X == Y.
-Proof.
-  clear.
-  intros * Hr.
-  apply env_eq_Oeq.
-  revert Hr. revert X Y.
-  cofix Cof; intros.
-  constructor.
-  - apply Cof; intro n.
-    rewrite 2 nrem_rem_env.
-    apply (Hr (S n)).
-  - apply (Hr O).
-Qed.
-
-Lemma smask_env_eq_1 :
-  forall rs X,
-    smask_env 1 (cons true rs) X == smask_env O (cons false rs) X.
-Proof.
-  intros.
-  rewrite 2 smask_env_eq; auto.
-Qed.
-
-
-Lemma all_infinite_all_cons :
-  forall (env : DS_prod SI),
-    all_infinite env -> all_cons env.
-Proof.
-  intros env Inf x; specialize (Inf x); now inv Inf.
-Qed.
-
-
-(* à prouver par induction sur le programme?  *)
-Axiom abs_indep :
-  forall f X,
-    envG f (APP_env abs_env X)
-    == APP_env abs_env (envG f X).
 
 Lemma abs_abs_abs :
   abs_env == APP_env abs_env abs_env.
@@ -3291,32 +3024,84 @@ Proof.
   now rewrite APP_simpl, app_cons.
 Qed.
 
+Lemma rem_abs_env : REM_env (abs_env) == abs_env.
+Proof.
+  unfold abs_env.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite REM_env_eq, DS_const_eq, rem_cons at 1.
+Qed.
+
 Lemma all_cons_abs_env : all_cons abs_env.
 Proof.
   clear.
   intro; eauto using is_cons_DS_const.
 Qed.
 
-Corollary forever_abs :
-  forall f,
-    envG f abs_env == abs_env.
-Proof.
-  clear.
-  intro f.
-  apply env_eq_Oeq.
-  remember_ds abs_env as X.
-  remember_ds (envG f X) as Y.
-  revert HX HY.
-  revert X Y.
-  cofix Cof; intros.
-  rewrite abs_abs_abs in HX.
-  rewrite HX, abs_indep in HY.
-  constructor.
-  - apply Cof.
-    + rewrite HX, rem_app_env; auto using all_cons_abs_env.
-    + rewrite HY, HX, 2 rem_app_env; auto using all_cons_abs_env.
-  - now rewrite HX, HY, first_app_env, <- abs_abs_abs.
-Qed.
+
+(** Un prédicat co-inductif pour décrire l'égalité d'environnements.
+    Plus facile à manipuler dans les preuves mais nécessite souvent
+    une hypothèse [all_infinite X] *)
+Section Env_eq.
+
+  CoInductive env_eq : DS_prod SI -> DS_prod SI -> Prop :=
+  | Ee :
+    forall X Y,
+      env_eq (REM_env X) (REM_env Y) ->
+      FIRST_env X == FIRST_env Y ->
+      env_eq X Y.
+
+  Lemma Oeq_env_eq : forall X Y, X == Y -> env_eq X Y.
+  Proof.
+    clear.
+    cofix Cof; intros.
+    apply Ee; auto.
+    - apply Cof.
+      now rewrite H.
+    - now rewrite H.
+  Qed.
+
+  Lemma env_eq_Oeq : forall X Y, env_eq X Y -> X == Y.
+  Proof.
+    clear.
+    intros * Heq.
+    apply Oprodi_eq_intro; intro i.
+    apply DS_bisimulation_allin1
+      with (R := fun U V => exists X Y, env_eq X Y
+                                /\ U == X i /\ V == Y i).
+    3: eauto.
+    { intros * ? Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      auto. }
+    clear.
+    intros U V Hc (X & Y & Heq & Hu & Hv).
+    inversion_clear Heq as [?? He Hf Eq1 Eq2].
+    (* rewrite Eq1, Eq2 in Hf. *)
+    split.
+    - rewrite Hu, Hv, <- 2 FIRST_env_eq; auto.
+    - exists (REM_env X), (REM_env Y); split; auto.
+      now rewrite Hu, Hv.
+  Qed.
+
+  Lemma env_eq_ok : forall X Y, X == Y <-> env_eq X Y.
+  Proof.
+    split; auto using Oeq_env_eq, env_eq_Oeq.
+  Qed.
+
+  Global Add Parametric Morphism : env_eq
+         with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> iff
+           as env_eq_morph.
+  Proof.
+    clear.
+    intros * Eq1 * Eq2.
+    split; intros Heq%env_eq_ok; apply env_eq_ok; eauto.
+  Qed.
+
+End Env_eq.
+
+
+(* TODO: remplacer l'autre take? *)
+Section Take.
 
 Fixpoint take {A} (n : nat) (s : DS A) : DS A :=
   match n with
@@ -3356,20 +3141,9 @@ Proof.
   trivial.
 Qed.
 
-
 Lemma take_1 : forall A (x : DS A), take 1 x = first x.
 Proof.
   trivial.
-Qed.
-
-(* FIXME: virer ? *)
-Lemma take_rem_env :
-  forall n X,
-    all_cons X ->
-    take_env n (REM_env X) == REM_env (take_env (S n) X).
-Proof.
-  intros.
-  destruct n; simpl; rewrite rem_app_env; auto.
 Qed.
 
 Lemma take_env_eq :
@@ -3415,14 +3189,9 @@ Proof.
     now apply Con_eq_simpl in Ht as [].
 Qed.
 
-Lemma app_first_rem_env :
-  forall X, APP_env (FIRST_env X) (REM_env X) == X.
-Proof.
-  intros.
-  apply Oprodi_eq_intro; intro i.
-  rewrite APP_env_eq, FIRST_env_eq, REM_env_eq.
-  apply app_first_rem.
-Qed.
+End Take.
+
+(* TODO: move *)
 Lemma app_app_first_env :
   forall X Y, APP_env (FIRST_env X) Y == APP_env X Y.
 Proof.
@@ -3431,16 +3200,64 @@ Proof.
   rewrite APP_env_eq, FIRST_env_eq.
   apply app_app_first.
 Qed.
-Lemma all_cons_app :
-  forall (X Y : DS_prod SI),
-    all_cons X ->
-    all_cons (APP_env X Y).
+
+
+(* TODO: move *)
+Lemma nrem_env_inf :
+  forall n X,
+    all_infinite X ->
+    all_infinite (nrem_env n X).
 Proof.
-  clear.
-  intros * Hc i.
-  apply is_cons_app, Hc.
+  induction n; simpl; intros * HH; auto.
+  apply REM_env_inf, IHn, HH.
 Qed.
 
+(* TODO: move *)
+Lemma all_infinite_all_cons :
+  forall (env : DS_prod SI),
+    all_infinite env -> all_cons env.
+Proof.
+  intros env Inf x; specialize (Inf x); now inv Inf.
+Qed.
+
+(* TODO: move *)
+Lemma smask_env_eq_1 :
+  forall rs X,
+    smask_env 1 (cons true rs) X == smask_env O (cons false rs) X.
+Proof.
+  intros.
+  rewrite 2 smask_env_eq; auto.
+Qed.
+
+
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx les hypthèses !! *)
+
+(* à prouver par induction sur le programme?  *)
+Axiom abs_indep :
+  forall f X,
+    envG f (APP_env abs_env X)
+    == APP_env abs_env (envG f X).
+
+Corollary forever_abs :
+  forall f,
+    envG f abs_env == abs_env.
+Proof.
+  clear.
+  intro f.
+  apply env_eq_Oeq.
+  remember_ds abs_env as X.
+  remember_ds (envG f X) as Y.
+  revert HX HY.
+  revert X Y.
+  cofix Cof; intros.
+  rewrite abs_abs_abs in HX.
+  rewrite HX, abs_indep in HY.
+  constructor.
+  - apply Cof.
+    + rewrite HX, rem_app_env; auto using all_cons_abs_env.
+    + rewrite HY, HX, 2 rem_app_env; auto using all_cons_abs_env.
+  - now rewrite HX, HY, first_app_env, <- abs_abs_abs.
+Qed.
 
 (* à prouver par induction sur le programme?  *)
 Axiom lp :
@@ -3449,23 +3266,7 @@ Axiom lp :
     take_env n X == take_env n Y ->
     take_env n (envG f X) == take_env n (envG f Y).
 
-(* TODO: autre formulation, avec first ?  C'est pas nul en fait ?<*)
-Corollary lp_app :
-  forall f X Y,
-    all_cons (envG f X) -> (* pas forcément X s besoin *)
-    envG f (APP_env X Y) == APP_env (envG f X) (REM_env (envG f (APP_env X Y))).
-Proof.
-  clear.
-  intros * Hc.
-  pose proof (Hlp := lp f (APP_env X Y) X 1).
-  simpl in Hlp.
-  rewrite app_app_env in Hlp.
-  rewrite <- app_first_rem_env, Hlp, rem_app_env, app_app_env;
-    auto using all_cons_app.
-Abort. (* aparemment inutile *)
-
-(** Entrées absentes -> sorties absentes, à prouver avec la correction
-    des horloges *)
+(** Entrées absentes -> sorties absentes *)
 (* TODO: toutes les entrées ou seulement ins ? *)
 CoInductive abs_align : DS_prod SI -> DS_prod SI -> Prop :=
 | Aa :
@@ -3484,12 +3285,33 @@ Proof.
   - now rewrite <- Eq1, <- Eq2.
 Qed.
 
+(** à prouver avec la correction des horloges *)
 Axiom abs_align_ok :
   forall f X,
     abs_align X (envG f X).
 
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx / hypthèses *)
 
 
+Lemma abs_align_abs :
+  forall X, abs_align abs_env X ->
+       X == abs_env.
+Proof.
+  clear.
+  intros.
+  apply env_eq_Oeq.
+  remember_ds abs_env as A.
+  revert_all; cofix Cof; intros * Ha Habs.
+  inversion_clear Habs as [?? Hab Hf].
+  constructor.
+  - apply Cof; auto.
+    now rewrite Ha, rem_abs_env.
+  - assert (FIRST_env abs_env == (fun _ => cons abs 0)).
+    { unfold abs_env.
+      apply Oprodi_eq_intro; intro x.
+      now rewrite FIRST_env_eq, DS_const_eq, first_cons. }
+    rewrite Hf; rewrite Ha; auto.
+Qed.
 
 Lemma take_bool_dec :
   forall n R,
@@ -3552,43 +3374,6 @@ Proof.
     auto.
 Qed.
 
-(* Lemma TEST : *)
-(*   (* TEST: plus général encore *) *)
-(*   forall I SI f (X Y : @DS_prod I SI), *)
-(*     (* (forall (X:@DS_prod I SI)c i, f X i = f (X i)) -> *) *)
-(*     APP_env X (f (REM_env (APP_env X Y))) == APP_env X (f Y). *)
-(* Proof. *)
-(*   clear. *)
-(*   intros. *)
-(*   apply Oprodi_eq_intro; intro i. *)
-(*   repeat rewrite ?APP_env_eq, ?REM_env_eq. *)
-(*   apply DS_bisimulation_allin1 with *)
-(*     (R := fun U V => *)
-(*             U == V *)
-(*             \/ exists X Y, *)
-(*               U == app X (f (REM_env  (rem (app X Y))) *)
-(*               /\ V == app X (take n Y)). *)
-(*   3: right; exists (X i), (Y i); auto. *)
-(*   { intros * ? Eq1 Eq2. *)
-(*     setoid_rewrite <- Eq1. *)
-(*     setoid_rewrite <- Eq2. *)
-(*     eauto. } *)
-(*   clear. *)
-(*   intros U V Hc [Heq | (X & Y & Hu & Hv)]. *)
-(*   { setoid_rewrite Heq; auto. } *)
-(*   destruct (@is_cons_elim _ X) as (x & X' & Hx). *)
-(*   { destruct Hc; eapply app_is_cons; [rewrite <- Hu| rewrite <- Hv]; auto. } *)
-(*   rewrite Hx, app_cons, rem_app in Hu; auto. *)
-(*   rewrite Hx, app_cons in Hv. *)
-(*   split. *)
-(*   - rewrite Hu, Hv; auto. *)
-(*   - setoid_rewrite Hu. *)
-(*     setoid_rewrite Hv. *)
-(*     auto. *)
-(* Qed. *)
-
-
-
 Lemma take_smask_false :
   forall n R X,
     take n R == take n (DS_const false) ->
@@ -3619,42 +3404,6 @@ Proof.
   rewrite app_app_env.
   setoid_rewrite <- (IHn f R' (REM_env X)) at 2; auto.
   now rewrite app_rem_take_env.
-Qed.
-
-Lemma rem_abs_env : REM_env (abs_env) == abs_env.
-Proof.
-  unfold abs_env.
-  apply Oprodi_eq_intro; intro x.
-  now rewrite REM_env_eq, DS_const_eq, rem_cons at 1.
-Qed.
-
-Lemma abs_align_abs :
-  forall X, abs_align abs_env X ->
-       X == abs_env.
-Proof.
-  clear.
-  intros.
-  apply env_eq_Oeq.
-  remember_ds abs_env as A.
-  revert_all; cofix Cof; intros * Ha Habs.
-  inversion_clear Habs as [?? Hab Hf].
-  constructor.
-  - apply Cof; auto.
-    now rewrite Ha, rem_abs_env.
-  - assert (FIRST_env abs_env == (fun _ => cons abs 0)).
-    { unfold abs_env.
-      apply Oprodi_eq_intro; intro x.
-      now rewrite FIRST_env_eq, DS_const_eq, first_cons. }
-    rewrite Hf; rewrite Ha; auto.
-Qed.
-
-Lemma rem_env_eq_compat :
-  forall I SI (X Y : @DS_prod I SI), X == Y -> REM_env X == REM_env Y.
-Proof.
-  clear.
-  intros.
-  apply Oprodi_eq_intro; intro x.
-  now rewrite 2 REM_env_eq, <- 2 PROJ_simpl, H.
 Qed.
 
 (* le véritable cas de base *)
@@ -3719,22 +3468,12 @@ Proof.
   all: apply all_infinite_all_cons, InfG, Infx.
 Qed.
 
-      Set Nested Proofs Allowed.
-    Lemma nrem_env_inf :
-      forall n (X : DS_prod SI),
-        all_infinite X ->
-        all_infinite (nrem_env n X).
-    Proof.
-      induction n; simpl; intros * HH; auto.
-      apply REM_env_inf, IHn, HH.
-    Qed.
 
-(* le résultat important, à prouver *)
+(** Caractérisation fondamentale de la fonction de reset *)
 Lemma smask_sreset :
   forall f k R X,
     infinite R ->
     all_infinite X ->
-    (* conditions sur f, lp etc. *)
     envG f (smask_env k R X) == smask_env k R (sreset (envG f) R X).
 Proof.
   clear - InfG.
