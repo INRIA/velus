@@ -1756,12 +1756,12 @@ Proof.
 Qed.
 
 (** nprod concatenation *)
-Definition nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p).
-  apply curry.
-  induction n.
-  - apply SND.
-  - refine ((nprod_cons @2_ nprod_hd @_ FST _ _) ((curry IHn @2_ nprod_tl @_ FST _ _) (SND _ _))).
-Defined.
+Fixpoint nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p) :=
+  match n return nprod n -C-> nprod p -C-> nprod (n+p) with
+  | O => curry (SND _ _)
+  | S n => curry ((nprod_cons @2_ nprod_hd @_ FST _ _)
+                   ((nprod_app @2_ nprod_tl @_ FST _ _) (SND _ _)))
+  end.
 
 Lemma nprod_hd_app :
   forall m n (mp : nprod (S m)) (np : nprod n),
@@ -2247,14 +2247,9 @@ Context {D1 D2 D3 : cpo}.
 
 Fixpoint lift (F : D1 -C-> D2) {n} : @nprod D1 n -C-> @nprod D2 n :=
   match n with
-  | O => AP _ _ F
-  | S n =>
-      match n return nprod n -C-> nprod n -> nprod (S n) -C-> nprod (S n) with
-      | O => fun _ => F
-      | S _ => fun fn => PROD_map F fn
-      end (@lift F n)
+  | O => F
+  | S n => (nprod_cons @2_ F @_ nprod_hd) (lift F @_ nprod_tl)
   end.
-Opaque lift.
 
 Lemma lift_hd :
   forall f n (np : nprod (S n)),
@@ -2528,9 +2523,10 @@ Lemma lift_ID :
   forall D n (np : nprod n),
     lift (ID D) np = np.
 Proof.
-  induction n as [|[]]; intros; simpl; auto.
-  rewrite PROD_map_simpl.
-  destruct np; f_equal; auto.
+  induction n; simpl; intros; auto.
+  autorewrite with cpodb.
+  rewrite IHn.
+  now setoid_rewrite <- (nprod_hd_tl np).
 Qed.
 
 Lemma lift_lift :
@@ -2538,8 +2534,8 @@ Lemma lift_lift :
     lift G (lift F np) = lift (G @_ F) np.
 Proof.
   induction n as [|[]]; intros; simpl; auto.
-  rewrite 3 PROD_map_simpl.
-  simpl; f_equal; auto.
+  autorewrite with cpodb.
+  now setoid_rewrite <- IHn.
 Qed.
 
 
