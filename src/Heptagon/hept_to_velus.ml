@@ -15,12 +15,68 @@ let compile_error msg loc =
   Location.print_location Format.str_formatter loc;
   raise (CompileError (msg^" at "^(Format.flush_str_formatter ())))
 
+(** Utilities *)
+
+let rec replace_assoc f v = function
+  | [] -> []
+  | (f', _)::tl when f' = f -> (f', v)::tl
+  | hd::tl -> hd::(replace_assoc f v tl)
+
+(** Structured expressions, used to "normalize" structs and arrays *)
+
+type 'a struct_exp =
+  | Simple of 'a list
+  | Struct of (string * 'a struct_exp) list
+  | Array of 'a struct_exp list
+
+let rec struct_flatten = function
+  | Simple es -> es
+  | Struct fs -> List.concat_map (fun (_, e) -> struct_flatten e) fs
+  | Array es -> List.concat_map struct_flatten es
+
+let rec struct_map f = function
+  | Simple es -> Simple (f es)
+  | Struct fs -> Struct (List.map (fun (s, e) -> (s, struct_map f e)) fs)
+  | Array es -> Array (List.map (struct_map f) es)
+
+(** Distribute binary operator *)
+let rec struct_map2 f e1 e2 =
+  match e1, e2 with
+  | Simple es1, Simple es2 -> Simple (f es1 es2)
+  | Struct fs1, Struct fs2 ->
+    Struct (List.map2 (fun (s, e1) (_, e2) -> (s, struct_map2 f e1 e2)) fs1 fs2)
+  | Array es1, Array es2 ->
+    Array (List.map2 (struct_map2 f) es1 es2)
+  | _, _ -> invalid_arg "struct_map2: incompatible structures"
+
+let struct_distrn es =
+  let rec go : 'a struct_exp list -> ('a list) struct_exp = function
+    | [] -> invalid_arg "struct_distrn: empty"
+    | [e] -> go1 e
+    | e1::tl -> go2 e1 (go tl)
+  and go1 = function
+    | Simple es -> Simple [es]
+    | Struct fs -> Struct (List.map (fun (f, e) -> (f, go1 e)) fs)
+    | Array es -> Array (List.map go1 es)
+  and go2 e1 e2 =
+    match e1, e2 with
+    | Simple es1, Simple es2 -> Simple (es1::es2)
+    | Struct fs1, Struct fs2 ->
+      Struct (List.map2 (fun (f, e1) (_, e2) -> (f, go2 e1 e2)) fs1 fs2)
+    | Array es1, Array es2 ->
+      Array (List.map2 go2 es1 es2)
+    | _, _ -> invalid_arg "struct_distrn: incompatible structures"
+  in go es
+
+let rec struct_mapn f e =
+  struct_map f (struct_distrn e)
+
 (** Compilation environment *)
 
 module Env = Map.Make(String)
 
 type cenv = {
-  consts : (LustreAst.expression list) Env.t;
+  consts : LustreAst.expression struct_exp Env.t;
   types  : type_desc Env.t;
   venv   : ty Env.t;
   decls  : LustreAst.declaration list
@@ -189,89 +245,108 @@ let rec static_exp (env: cenv) se =
   | Srecord _ -> failwith "TODO: static record"
   | Sop (f, es) -> [app f (List.concat_map (static_exp env) es) (location se.se_loc)]
 
-let rec exp (env: cenv) e =
+let rec exp (env: cenv) e : LustreAst.expression struct_exp =
   match e.e_desc with
-  | Econst se -> static_exp env se
+  | Econst se -> Simple (static_exp env se)
   | Evar x ->
     (match Env.find_opt x env.consts with
      | Some e -> e
      | None ->
-       let vs = decomp_type env x (find_var x env.venv) in
-       List.map (fun x -> VARIABLE (x, location e.e_loc)) vs)
+       let ste = decomp_type env x (find_var x env.venv) in
+       struct_map (List.map (fun x -> VARIABLE (x, location e.e_loc))) ste)
   | Elast x ->
-    let vs = decomp_type env x (find_var x env.venv) in
-    List.map (fun x -> LAST (x, location e.e_loc)) vs
+    let ste = decomp_type env x (find_var x env.venv) in
+    struct_map (List.map (fun x -> LAST (x, location e.e_loc))) ste
   | Epre _ -> unsupported "pre"
-  | Efby (e1, e2) -> [FBY (exp env e1, exp env e2, location e.e_loc)]
+  | Efby (e1, e2) ->
+    let e1 = exp env e1 and e2 = exp env e2 in
+    struct_map2 (fun e1 e2 -> [FBY (e1, e2, location e.e_loc)]) e1 e2
   | Estruct fs ->
     let fs = List.map (fun (s, e) -> (shortname s, exp env e)) fs in
     let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
-    List.concat_map snd fs
-  | Eapp ({ a_op = Etuple }, es) -> List.concat_map (exp env) es
+    Struct fs
+  | Eapp ({ a_op = Etuple }, es) -> (* List.concat_map (exp env) es *)
+    failwith "TODO: tuple"
   | Eapp ({ a_op = Enode f | Efun f; a_params }, es) ->
-    [app f (List.concat_map (exp env) (a_params@es)) (location e.e_loc)]
+    (* TODO This is not ideal, as it means we cannot write f(x).[0] *)
+    Simple [app f (List.concat_map (flat_exp env) (a_params@es)) (location e.e_loc)]
   | Eapp ({ a_op = Eifthenelse }, [ec; et; ef]) ->
-    [CASE (exp env ec, [(Ident.Ids.true_id, exp env et); (Ident.Ids.false_id, exp env ef)], [], location e.e_loc)]
-  | Eapp ({ a_op = Earrow }, [e0; e1]) -> [ARROW (exp env e0, exp env e1, location e.e_loc)]
+    let ec = flat_exp env ec and et = exp env et and ef = exp env ef in
+    struct_map2
+      (fun et ef -> [CASE (ec, [(Ident.Ids.true_id, et); (Ident.Ids.false_id, ef)], [], location e.e_loc)])
+      et ef
+  | Eapp ({ a_op = Earrow }, [e1; e2]) ->
+    let e1 = exp env e1 and e2 = exp env e2 in
+    struct_map2 (fun e1 e2 -> [ARROW (e1, e2, location e.e_loc)]) e1 e2
   | Eapp ({ a_op = Efield;
             a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
-          [e]) ->
-    let rec select es (n, l) =
-      (match es, n, l with
-       | [], _, _ | _, _, 0 -> []
-       | e::es, 0, l -> e::select es (0, l-1)
-       | _::es, n, l -> select es (n-1, l))
-    in select (exp env e) (find_record_index env (shortname f))
+          [e1]) ->
+    (match exp env e1 with
+     | Struct fs ->
+       (try List.assoc (shortname f) fs
+        with Not_found -> compile_error (Printf.sprintf "no field %s" (shortname f)) e.e_loc)
+     | _ -> compile_error "not a struct" e.e_loc)
   | Eapp ({ a_op = Efield_update;
             a_params = [{ e_desc = Econst { se_desc = Sfield f } }] },
           [e1;e2]) ->
-    let rec replace e1s e2s n =
-      (match e1s, e2s, n with
-      | [], _, _ -> []
-      | e1s, [], _ -> e1s
-      | _::e1s, e2::e2s, 0 -> e2::replace e1s e2s 0
-      | e1::e1s, e2s, n -> e1::replace e1s e2s (n - 1))
-    in replace (exp env e1) (exp env e2) (fst (find_record_index env (shortname f)))
-  | Eapp ({ a_op = Earray }, es) -> List.concat_map (exp env) es
+    (match exp env e1 with
+     | Struct fs ->
+       Struct (replace_assoc (shortname f) (exp env e2) fs)
+     | _ -> compile_error "not a struct" e.e_loc)
+  | Eapp ({ a_op = Earray }, es) ->
+    Array (List.map (exp env) es)
   | Eapp ({ a_op = Earray_fill;
             a_params = [esize] },
           [e]) ->
-    let es = exp env e in
     let size = const_int_exp env esize in
-    List.flatten (List.init size (fun _ -> es))
+    let es = exp env e in
+    Array (List.init size (fun _ -> es))
   | Eapp ({ a_op = Eselect;
             a_params = [eidx] },
-         [e]) ->
-    let es = exp env e in
+         [e1]) ->
     let idx = const_int_exp env eidx in
-    [List.nth es idx] (* Attention la longeur *)
+    (match exp env e1 with
+     | Array es ->
+       (try List.nth es idx
+        with Not_found -> compile_error (Printf.sprintf "array index %d out of bound" idx) e.e_loc)
+     | _ -> compile_error "not an array" e.e_loc)
   | Eapp ({ a_op = _ }, _) -> unsupported "app"
   | Eiterator _ -> unsupported "iterators"
-  | Ewhen (e, c, x) -> [WHEN (exp env e, name x, constructor c, location e.e_loc)]
-  | Emerge (x, brs) -> [MERGE (name x, List.map (fun (c, e) -> (constructor c, exp env e)) brs, location e.e_loc)]
+  | Ewhen (e, c, x) ->
+    let e = exp env e and c = constructor c and x = name x and loc = location e.e_loc in
+    struct_map (fun es -> [WHEN (es, x, c, loc)]) e
+  | Emerge (x, brs) ->
+    let x = name x
+    and cstrs = List.map (fun (c, _) -> constructor c) brs
+    and es = List.map (fun (_, e) -> exp env e) brs
+    and loc = location e.e_loc in
+    struct_mapn (fun es -> [MERGE (x, List.map2 (fun c e -> (c, e)) cstrs es, loc)]) es
   | Esplit _ -> unsupported "split"
+
+and flat_exp env e = struct_flatten (exp env e)
 
 and const_int_exp env e =
   match exp env e with
-  | [CONSTANT (CONST_INT s, _)] -> int_of_string s
+  | Simple [CONSTANT (CONST_INT s, _)] -> int_of_string s
   | _ -> unsupported "Array with non-constant size"
 
 (** Decompose a variable [n] with type [ty] *)
 and decomp_type env n ty =
   match ty with
   | Tprod tys ->
-    List.flatten
-      (List.mapi (fun i -> decomp_type env (postfix n (string_of_int i))) tys)
+    (* List.flatten *)
+    (*   (List.mapi (fun i -> decomp_type env (postfix n (string_of_int i))) tys) *)
+    failwith "TODO: decomp prod"
   | Tarray (ty, e) ->
     let size = const_int_exp env e in
-    List.flatten (List.init size (fun i -> decomp_type env (postfix n (string_of_int i)) ty))
+    Array (List.init size (fun i -> decomp_type env (postfix n (string_of_int i)) ty))
   | Tinvalid -> failwith "Invalid type ?"
   | Tid tn ->
     match Env.find_opt (shortname tn) env.types with
     | Some (Type_alias ty) -> decomp_type env n ty
     | Some (Type_struct fs) ->
-      List.concat_map (fun (f, ty) -> decomp_type env (postfix n f) ty) fs
-    | _ -> [name n]
+      Struct (List.map (fun (f, ty) -> (f, decomp_type env (postfix n f) ty)) fs)
+    | _ -> Simple [name n]
 
 (** Number of scalar values represented by [ty] *)
 and size_type env ty =
@@ -299,11 +374,13 @@ and find_record_index env f =
   in aux (find_record env f) 0
 
 let escape env esc =
-  ((exp env esc.e_cond, (name esc.e_next_state, esc.e_reset)), location esc.e_cond.e_loc)
+  ((flat_exp env esc.e_cond,
+    (name esc.e_next_state, esc.e_reset)),
+   location esc.e_cond.e_loc)
 
 let last_decl env vd =
   match vd.v_last with
-  | Last (Some e) -> Some (name vd.v_name, exp env e, location vd.v_loc)
+  | Last (Some e) -> Some (name vd.v_name, flat_exp env e, location vd.v_loc)
   | _ -> None
 
 let rec ty env ((n, (clock, loc)) as decl) = function
@@ -327,18 +404,19 @@ let var_dec env vd =
 let rec pat env = function
   | Etuplepat pats -> List.concat_map (pat env) pats
   | Evarpat n ->
-    decomp_type env n (find_var n env.venv)
+    struct_flatten (decomp_type env n (find_var n env.venv))
 
 let rec eq env eq =
   match eq.eq_desc with
   | Eautomaton sts -> BAUTO (([], name (List.hd sts).s_state),
                              List.map (state_handler env) sts,
                              location eq.eq_loc)
-  | Eswitch (e, brs) -> BSWITCH (exp env e, List.map (switch_handler env) brs, location eq.eq_loc)
+  | Eswitch (e, brs) -> BSWITCH (flat_exp env e,
+                                 List.map (switch_handler env) brs, location eq.eq_loc)
   | Epresent _ -> unsupported "present"
-  | Ereset (blk, e) -> BRESET ([block env [] blk], exp env e, location eq.eq_loc)
+  | Ereset (blk, e) -> BRESET ([block env [] blk], flat_exp env e, location eq.eq_loc)
   | Eblock blk -> block env [] blk
-  | Eeq (p, _, e) -> BEQ ((pat env p, exp env e), location eq.eq_loc)
+  | Eeq (p, _, e) -> BEQ ((pat env p, flat_exp env e), location eq.eq_loc)
 
 and block env lasts1 blk =
   let env' = add_decls env blk.b_local in

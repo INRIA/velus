@@ -9,11 +9,28 @@ let
 tel
 
 const p1 : point = { x = 1; y = 2 }
-const p2 : point = { y = 1; x = 2 }
+const p2 : point = { y = 4; x = 3 }
 
 node p1_or_p2(b : bool) returns (p : point)
 let
     p = if b then p1 else p2
+tel
+
+node distr(b : bool) returns (z : int)
+let
+    z = (if b then p1 else p2).x
+tel
+
+node distr2(b : bool) returns (z : int)
+let
+    z = (p1 fby p2).y
+tel
+
+type t = A | B | C
+
+node distr_merge(b : t) returns (y : int)
+let
+    y = (merge b (A -> p1) (B -> p2) (C -> p1)).y;
 tel
 
 node copy_point(p1 : point) returns (p2 : point)
