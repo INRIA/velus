@@ -115,11 +115,20 @@ let parse toks =
 
 open Hept_parser
 
+let interface = ref []
+
+(* TODO improve error messagin (also for Velus parser) *)
 let parse_heptc source_name =
   let chan = open_in source_name in
   let hept_ast = Hept_parser.program Hept_lexer.token (Lexing.from_channel chan) in
   close_in chan;
-  Hept_to_velus.program hept_ast
+  Hept_to_velus.program !interface hept_ast
+
+let add_heptc_interface source_name =
+  let chan = open_in source_name in
+  let hept_ast = Hept_parser.interface Hept_lexer.token (Lexing.from_channel chan) in
+  close_in chan;
+  interface := !interface@(Hept_to_velus.interface hept_ast)
 
 (** Compiler entry point *)
 
@@ -173,17 +182,18 @@ let compile source_name out_name =
     close_out oc
 
 let process file =
-  let filename =
-    if Filename.check_suffix file ".ept"
-      then Filename.chop_suffix file ".ept"
-      else if Filename.check_suffix file ".lus"
-      then Filename.chop_suffix file ".lus"
-      else raise (Arg.Bad ("don't know what to do with " ^ file))
-  in let out_name =
+  let out_name =
     match !output_file with
     | Some f -> f
-    | None -> filename
-  in compile file (Filename.remove_extension out_name)
+    | None -> file in
+  let out_name = Filename.remove_extension out_name in
+    if Filename.check_suffix file ".lus"
+    then compile file out_name
+    else if Filename.check_suffix file ".ept" && !heptagon_parser
+    then compile file out_name
+    else if Filename.check_suffix file ".epi" && !heptagon_parser
+    then add_heptc_interface file
+    else raise (Arg.Bad ("don't know what to do with " ^ file))
 
 let set_fullclocks () =
   Interfacelib.PrintLustre.print_fullclocks := true;

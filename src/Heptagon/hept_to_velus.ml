@@ -378,11 +378,6 @@ let escape env esc =
     (name esc.e_next_state, esc.e_reset)),
    location esc.e_cond.e_loc)
 
-let last_decl env vd =
-  match vd.v_last with
-  | Last (Some e) -> Some (name vd.v_name, flat_exp env e, location vd.v_loc)
-  | _ -> None
-
 let rec ty env ((n, (clock, loc)) as decl) = function
   | Tprod _ -> unsupported "product types"
   | Tid (ToQ tn) ->
@@ -400,6 +395,15 @@ let rec ty env ((n, (clock, loc)) as decl) = function
 let var_dec env vd =
   let decl = (vd.v_name, (opt_ck vd.v_clock, location vd.v_loc)) in
   ty env decl vd.v_type
+
+let last_decl env vd =
+  match vd.v_last with
+  | Last (Some e) ->
+    let xs = struct_flatten (decomp_type env vd.v_name vd.v_type)
+    and es = flat_exp env e
+    and loc = location vd.v_loc in
+    List.map2 (fun x e -> (x, [e], loc)) xs es
+  | _ -> []
 
 let rec pat env = function
   | Etuplepat pats -> List.concat_map (pat env) pats
@@ -420,7 +424,7 @@ let rec eq env eq =
 
 and block env lasts1 blk =
   let env' = add_decls env blk.b_local in
-  let lasts2 = List.filter_map (last_decl env') blk.b_local in
+  let lasts2 = List.concat_map (last_decl env') blk.b_local in
   BLOCAL (List.concat_map (var_dec env) blk.b_local,
           List.map (eq env') blk.b_equs@
           List.map (fun (x, e, loc) -> BLAST (x, e, loc)) (lasts1@lasts2),
@@ -431,7 +435,7 @@ and switch_handler env br =
 
 and state_handler env st =
   let env' = add_decls env st.s_block.b_local in
-  let lasts = List.filter_map (last_decl env') st.s_block.b_local in
+  let lasts = List.concat_map (last_decl env') st.s_block.b_local in
   (name st.s_state,
    (((List.concat_map (var_dec env) st.s_block.b_local,
       List.map (eq env') st.s_block.b_equs@
@@ -440,7 +444,7 @@ and state_handler env st =
     List.map (escape env') st.s_unless))
 
 let node_dec env nd =
-  let lasts = List.filter_map (last_decl env) nd.n_output in
+  let lasts = List.concat_map (last_decl env) nd.n_output in
   let env = add_decls env (nd.n_params@nd.n_input@nd.n_output) in
   NODE (name nd.n_name, nd.n_stateful,
         List.concat_map (var_dec env) (nd.n_params@nd.n_input),
@@ -469,7 +473,38 @@ let program_desc env = function
   | Pconst cd -> { env with consts = Env.add cd.c_name (exp env cd.c_value) env.consts }
   | Pnode n -> { env with decls = (node_dec env n)::env.decls }
 
-let program (p : program) : declaration list =
+let program iface (p : program) : declaration list =
   let init_env = { consts = Env.empty; types = Env.empty; decls = []; venv = Env.empty } in
-  let env =  List.fold_left program_desc init_env p.p_desc in
+  let env = List.fold_left program_desc init_env p.p_desc in
+  iface@List.rev env.decls
+
+(** Interface *)
+
+let rec scalar_ty = function
+  | Tid (ToQ tn) -> type_name tn
+  | _ -> invalid_arg "scalar_ty"
+
+let arg a = scalar_ty a.a_type
+
+let external_sig s =
+  let ins = List.map arg s.sig_inputs in
+  let out =
+    match s.sig_outputs with
+    | [out] -> arg out
+    | _ -> unsupported "external signature with multiple outputs"
+  in
+  EXTERNAL (name s.sig_name,
+            ins, out,
+            location s.sig_loc)
+
+let interface_desc env = function
+  | Itypedef ty -> type_dec env ty
+  | Iconstdef cd -> unsupported "constant declaration in signature"
+  | Isignature s when s.sig_external ->
+    { env with decls = (external_sig s)::env.decls }
+  | _ -> unsupported "signature declaration"
+
+let interface (i : interface) : declaration list =
+  let init_env = { consts = Env.empty; types = Env.empty; decls = []; venv = Env.empty } in
+  let env = List.fold_left interface_desc init_env i.i_desc in
   List.rev env.decls
