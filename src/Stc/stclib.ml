@@ -280,7 +280,7 @@ module SchedulerFun
 
     (** Add dependencies between trconstrs *)
 
-    let add_clock_deps add_dep =
+    let add_clock_deps (add_dep: ident -> unit) =
       let rec go = function
         | Cbase          -> ()
         | Con (ck, x, _) -> add_dep x; go ck
@@ -722,7 +722,14 @@ module SchedulerFun
       let equal = (=)
     end
 
-    module G = Persistent.Digraph.Concrete(V)
+    module E = struct
+      type t = Obligatory | CanCopy
+      let default = CanCopy
+
+      let compare e1 e2 = if e1 < e2 then -1 else if e1 > e2 then 1 else 0
+    end
+
+    module G = Persistent.Digraph.ConcreteLabeled(V)(E)
     module Viz = Graphviz.Dot(struct
         include G
 
@@ -732,14 +739,21 @@ module SchedulerFun
         let vertex_attributes _ = []
         let get_subgraph _ = None
         let default_edge_attributes _ = []
-        let edge_attributes _ = []
-
+        let edge_attributes e =
+          match G.E.label e with
+          | Obligatory -> [`Label "obligatory"]
+          | _ -> []
       end)
+
+    (* let obligatory = ref Env.t unit *)
 
     module Fashwo = Cycles.Fashwo(struct
         module G = G
         include G
-        let weight _ = Cycles.Normal 1
+        let weight e =
+          match E.label e with
+          | Obligatory -> Cycles.Obligatory 1
+          | CanCopy -> Cycles.Normal 1
         let empty () = G.empty
         let copy g = g (* Its persistent right ? *)
       end)
@@ -755,65 +769,49 @@ module SchedulerFun
     (** - After(last x) = { x } *)
     (** all other cases are morphisms *)
     (** The dependencies are computed as follow: *)
-    (** reset _ : { } *)
-    (** update y = e : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) } *)
-    (** next y = e : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) } *)
-    (** _ = e : { x -> y | x in Bef(e), y in Aft(e) } *)
-    (** _ = f(es) : { x -> y | x in Bef(es), y in Aft(es) } *)
-    (** In the last two cases, we induce dependencies to treat the case where *)
-    (** `x` and `last x` both appear in the same expression *)
-    (** (in which case a copy must be added for `last x`) *)
+    (** reset x every ckr : { x -> y | x in Bef(ckr) } u { y -> x | x in Aft(ckr) } *)
+    (** update y = e, next y = e : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) } *)
+    (** y = e, ys = f(es) : { x -> y | x in Bef(e) } u { y -> x | x in Aft(e) *)
+    (** Only the arcs going to a state variable may be cut *)
 
     let add_tc_dep nexts gr tc =
+      let gr = ref gr in
 
-      let add_dep = G.add_edge in
-      let add_dep_if_diff gr x y =
-        if x <> y then add_dep gr x y else gr
-      in
+      let add_dep_var x y = (* (next|update) x := f(y) *)
+        if PM.mem y nexts then
+          gr := G.add_edge !gr x y
+        else
+          gr := G.add_edge !gr y x
 
-      let rec free_exp acc = function
-        | Econst _ | Eenum _ -> acc
-        | Evar (x, _) ->
-          if PM.mem x nexts then fst acc, x::snd acc else x::fst acc, snd acc
-        | Elast (x, _) -> fst acc, x::snd acc
-        | Eunop (_, e, _) -> free_exp acc e
-        | Ebinop (_, e1, e2, _) ->
-          free_exp (free_exp acc e1) e2
-        | Ewhen (e, _, _) -> free_exp acc e
-      in
+      and add_obl_dep_var x y = (* x := f(y) *)
+        if PM.mem y nexts then
+          gr := G.add_edge_e !gr (G.E.create x Obligatory y)
+        else
+          gr := G.add_edge_e !gr (G.E.create y Obligatory x)
 
-      let free_exps = List.fold_left free_exp in
+      and add_dep_last x y = (* x := f(last y) *)
+        gr := G.add_edge !gr x y
 
-      let rec free_cexp acc = function
-        | Emerge (_, es, _) -> List.fold_left free_cexp acc es
-        | Ecase (e, es, d) ->
-          List.fold_left
-            (fun acc -> Option.fold ~none:acc ~some:(free_cexp acc))
-            (free_cexp (free_exp acc e) d) es
-        | Eexp e -> free_exp acc e
-      in
+      in (match tc with
+          | TcDef (ck, x, ce) ->
+            add_clock_deps (add_obl_dep_var x) ck;
+            add_rhs_deps (add_obl_dep_var x) (add_dep_last x) ce
+          | TcReset (ckr, (ResState (x, _, _))) ->
+            add_clock_deps (add_obl_dep_var x) ckr
+          | TcReset (ckr, (ResInst _)) -> ()
+          | TcUpdate (ck, _, UpdLast (x, ce)) ->
+            add_clock_deps (add_dep_var x) ck;
+            add_cexp_deps (add_dep_var x) (add_dep_last x) ce
+          | TcUpdate (ck, _, UpdNext (x, e)) ->
+            add_clock_deps (add_dep_var x) ck;
+            add_exp_deps (add_dep_var x) (add_dep_last x) e
+          | TcUpdate (ck, _, UpdInst (i, xs, _, es)) ->
+            let add_obl_dep_vars y = List.iter (fun x -> add_obl_dep_var x y) xs
+            and add_dep_lasts y = List.iter (fun x -> add_dep_last x y) xs in
+            add_clock_deps add_obl_dep_vars ck;
+            List.iter (add_exp_deps add_obl_dep_vars add_dep_lasts) es);
 
-      let rec free_rhs acc = function
-        | Eextcall (_, es, _) -> free_exps acc es
-        | Ecexp e -> free_cexp acc e
-      in
-
-      match tc with
-      | TcReset _ -> gr
-      | TcDef (_, y, e) ->
-        let (bef, aft) = free_rhs ([], []) e in
-        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
-      | TcUpdate (_, _, UpdInst (_, _, _, es)) ->
-        let (bef, aft) = free_exps ([], []) es in
-        List.fold_left (fun gr x -> List.fold_left (fun gr -> add_dep gr x) gr aft) gr bef
-      | TcUpdate (_, _, UpdLast (x, ce)) ->
-        let (bef, aft) = free_cexp ([], []) ce in
-        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
-        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
-      | TcUpdate (_, _, UpdNext (x, e)) ->
-        let (bef, aft) = free_exp ([], []) e in
-        let gr = List.fold_left (fun gr y -> add_dep_if_diff gr y x) gr bef in
-        List.fold_left (fun gr y -> add_dep_if_diff gr x y) gr aft
+      !gr
 
     let cutting_points _ nexts trconstrs =
       let nexts = List.fold_left (fun nexts x -> PM.add x () nexts) PM.empty nexts in
@@ -822,6 +820,9 @@ module SchedulerFun
       (* Viz.fprint_graph Format.std_formatter graph; *)
       (* Format.fprintf Format.std_formatter "\n"; *)
       let args = Fashwo.feedback_arc_set graph in
-      List.map fst args
+      let tocut = List.map (fun (_, _, x) -> x) args in
+      (* List.iter (fun x -> print_string (extern_atom x); print_string " ") tocut; *)
+      (* print_newline (); *)
+      tocut
 
   end

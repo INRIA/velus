@@ -1,0 +1,19 @@
+node thisoneisharder(x : int) returns (y, z : int)
+var y1 : int;
+let
+  last y1 = 0;
+  y1 = 42;
+  y = y1;
+  z = last y1 + y
+tel
+
+node oof(x : int) returns (t : bool)
+var y, z : int;
+let
+  last y = 1;
+  y = last y + 1;
+  reset
+    z = 0 fby (z + last y);
+  every y > 10;
+  t = z > 5;
+tel
