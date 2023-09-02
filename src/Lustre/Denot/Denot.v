@@ -46,12 +46,17 @@ Definition global := @global nolocal Prefs.
 Definition mem_nth := mem_nth ident ident_eq_dec.
 
 Definition errTy : DS (sampl value) := DS_const (err error_Ty).
+Definition abss  : DS (sampl value) := DS_const abs.
+
 
 (** ** Denotational environments (local & program-wide) *)
 Section Denot_env.
 
 Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
+
+Definition err_env : DS_prod SI := fun _ => errTy.
+Definition abs_env : DS_prod SI := fun _ => abss.
 
 (** build an environment from a tuple of streams, with names given in [l] *)
 Definition env_of_np (l : list ident) {n} : nprod n -C-> DS_prod SI :=
@@ -246,7 +251,7 @@ Section Denot_exps.
     Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
     @nprod (DS (sampl value)) (list_sum (List.map numstreams es)).
     induction es as [|a].
-    + exact (CTE _ _ errTy).
+    + exact (CTE _ _ abss).
     + exact ((nprod_app @2_ (denot_exp_ a)) IHes).
   Defined.
 
@@ -373,7 +378,7 @@ Definition denot_exp_ (ins : list ident)
       (* condition, branches *)
       refine ((_ @2_ (denot_exp_ e0)) ses).
       destruct (numstreams e0) as [|[]].
-      1,3: apply CTE, CTE, (nprod_const (DS_const (err error_Ty))).
+      1,3: apply CTE, CTE, (nprod_const errTy).
       exact (lift_nprod @_ (scasev (List.map fst ies))).
   - (* Eapp *)
     rename l into es, l0 into er, l1 into anns.
@@ -501,7 +506,7 @@ Qed.
 
 Lemma denot_exps_nil :
   forall ins envG envI bs env,
-    denot_exps ins [] envG envI bs env = errTy.
+    denot_exps ins [] envG envI bs env = abss.
 Proof.
   trivial.
 Qed.
@@ -917,8 +922,6 @@ Proof.
   unfold denot_block; intros; cases.
 Qed.
 
-Definition err_env : DS_prod SI := fun _ => errTy.
-
 (* un genre de (fold denot_block) sur blks *)
 Definition denot_blocks (ins : list ident) (blks : list block) :
   (*  envG -> envI -> bs -> env -> env *)
@@ -926,16 +929,14 @@ Definition denot_blocks (ins : list ident) (blks : list block) :
   apply curry, curry, curry.
   revert blks; fix denot_blocks 1.
   intros [| blk blks].
-  - (* TEST: partir d'un environnement d'erreur
-       pour faciliter la preuve d'infinité *)
-    apply (CTE _ _ err_env).
+  - apply (CTE _ _ abs_env).
   - refine ((ID _ @2_ uncurry (uncurry (uncurry (denot_block ins blk)))) (denot_blocks blks)).
 Defined.
 
 Lemma denot_blocks_eq :
   forall ins envG envI bs env blks,
     denot_blocks ins blks envG envI bs env
-    = fold_right (fun blk => denot_block ins blk envG envI bs env) err_env blks.
+    = fold_right (fun blk => denot_block ins blk envG envI bs env) abs_env blks.
 Proof.
   induction blks; simpl; auto.
   unfold denot_blocks at 1.
@@ -1030,13 +1031,11 @@ Ltac gen_sub_exps :=
 
 Section Global.
 
-  Definition env_err_ty : DS_prod SI := fun _ => errTy.
-
   Definition denot_global_ (G : global) : Dprodi FI -C-> Dprodi FI.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
     - exact (curry (FIXP _ @_ (denot_node G n @2_ FST _ _) (SND _ _))).
-    - apply CTE, CTE, env_err_ty.
+    - apply CTE, CTE, err_env.
   Defined.
 
   Lemma denot_global_eq :
@@ -1044,7 +1043,7 @@ Section Global.
       denot_global_ G envG f envI =
         match find_node f G with
         | Some n => FIXP _ (denot_node G n envG envI)
-        | None => env_err_ty
+        | None => err_env
         end.
   Proof.
     intros.

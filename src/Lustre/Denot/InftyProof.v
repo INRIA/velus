@@ -884,7 +884,7 @@ Module Type LDENOTINF
         intros f' ndf' envI' Hfind'.
         eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
         rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-    - unfold P_var, env_err_ty.
+    - unfold P_var, err_env.
       cbn; eauto using is_ncons_DS_const.
   Qed.
 
