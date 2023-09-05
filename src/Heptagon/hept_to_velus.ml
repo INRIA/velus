@@ -29,9 +29,14 @@ type 'a struct_exp =
   | Struct of (string * 'a struct_exp) list
   | Array of 'a struct_exp list
 
+let sort_struct fs =
+  List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs
+
 let rec struct_flatten = function
   | Simple es -> es
-  | Struct fs -> List.concat_map (fun (_, e) -> struct_flatten e) fs
+  | Struct fs ->
+    (* We order fields by lexicographic order *)
+    List.concat_map (fun (_, e) -> struct_flatten e) (sort_struct fs)
   | Array es -> List.concat_map struct_flatten es
 
 let rec struct_map f = function
@@ -44,7 +49,8 @@ let rec struct_map2 f e1 e2 =
   match e1, e2 with
   | Simple es1, Simple es2 -> Simple (f es1 es2)
   | Struct fs1, Struct fs2 ->
-    Struct (List.map2 (fun (s, e1) (_, e2) -> (s, struct_map2 f e1 e2)) fs1 fs2)
+    Struct (List.map2 (fun (s, e1) (_, e2) -> (s, struct_map2 f e1 e2))
+              (sort_struct fs1) (sort_struct fs2))
   | Array es1, Array es2 ->
     Array (List.map2 (struct_map2 f) es1 es2)
   | _, _ -> invalid_arg "struct_map2: incompatible structures"
@@ -62,7 +68,7 @@ let struct_distrn es =
     match e1, e2 with
     | Simple es1, Simple es2 -> Simple (es1::es2)
     | Struct fs1, Struct fs2 ->
-      Struct (List.map2 (fun (f, e1) (_, e2) -> (f, go2 e1 e2)) fs1 fs2)
+      Struct (List.map2 (fun (f, e1) (_, e2) -> (f, go2 e1 e2)) (sort_struct fs1) (sort_struct fs2))
     | Array es1, Array es2 ->
       Array (List.map2 go2 es1 es2)
     | _, _ -> invalid_arg "struct_distrn: incompatible structures"
@@ -161,19 +167,6 @@ let opt_ck = function
   | None -> FULLCK BASE
   | Some ck -> pre_ck ck
 
-(** Find the record definition with field [f] *)
-let find_record env f =
-  match
-    Env.fold
-      (fun _ td acc ->
-         if Option.is_some acc then acc else
-           match td with
-           | Type_struct fs ->
-             if List.mem_assoc f fs then Some fs else None
-           | _ -> None)
-      env.types None
-  with Some fs -> fs | None -> invalid_arg "find_record"
-
 (** Application of node or operator *)
 let app f es loc =
   match f, es with
@@ -232,7 +225,7 @@ let rec static_exp (env: cenv) se =
       integer_FI = Some i;
       fraction_FI = Some f;
       exponent_FI = None;
-      suffix_FI = None;
+      suffix_FI = Some "f"; (* TODO recognize single from double precision *)
     }, location se.se_loc)]
   | Sbool true -> [CONSTANT (CONST_ENUM Ident.Ids.true_id, location se.se_loc)]
   | Sbool false -> [CONSTANT (CONST_ENUM Ident.Ids.false_id, location se.se_loc)]
@@ -263,7 +256,6 @@ let rec exp (env: cenv) e : LustreAst.expression struct_exp =
     struct_map2 (fun e1 e2 -> [FBY (e1, e2, location e.e_loc)]) e1 e2
   | Estruct fs ->
     let fs = List.map (fun (s, e) -> (shortname s, exp env e)) fs in
-    let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
     Struct fs
   | Eapp ({ a_op = Etuple }, es) -> (* List.concat_map (exp env) es *)
     failwith "TODO: tuple"
@@ -348,31 +340,6 @@ and decomp_type env n ty =
       Struct (List.map (fun (f, ty) -> (f, decomp_type env (postfix n f) ty)) fs)
     | _ -> Simple [name n]
 
-(** Number of scalar values represented by [ty] *)
-and size_type env ty =
-  match ty with
-  | Tprod tys ->
-    List.fold_left (fun acc ty -> acc + size_type env ty) 0 tys
-  | Tarray (ty, e) ->
-    let size = const_int_exp env e in
-    size * (size_type env ty)
-  | Tinvalid -> failwith "Invalid type ?"
-  | Tid tn ->
-    match Env.find_opt (shortname tn) env.types with
-    | Some (Type_alias ty) -> size_type env ty
-    | Some (Type_struct fs) ->
-      List.fold_left (fun acc (f, ty) -> acc + size_type env ty) 0 fs
-    | _ -> 1
-
-(** Find the record definition with field [f] and its index *)
-and find_record_index env f =
-  let rec aux fs n =
-    match fs with
-    | [] -> invalid_arg "find_record_index"
-    | (f', ty)::_ when f' = f -> n, size_type env ty
-    | (_, ty)::fs -> aux fs (n + size_type env ty)
-  in aux (find_record env f) 0
-
 let escape env esc =
   ((flat_exp env esc.e_cond,
     (name esc.e_next_state, esc.e_reset)),
@@ -384,7 +351,8 @@ let rec ty env ((n, (clock, loc)) as decl) = function
     (match Env.find_opt tn env.types with
      | Some (Type_alias t) -> ty env decl t
      | Some (Type_struct fs) ->
-       List.concat_map (fun (f, t) -> ty env (postfix n f, (clock, loc)) t) fs
+       List.concat_map (fun (f, t) -> ty env (postfix n f, (clock, loc)) t)
+         (sort_struct fs)
      | _ -> [(name n, ((type_name tn, clock), loc))])
   | Tid _ -> unsupported "qualified names"
   | Tarray (t, e) ->
@@ -463,8 +431,6 @@ let type_dec env ty =
   | Type_alias _ ->
     { env with types = Env.add ty.t_name ty.t_desc env.types }
   | Type_struct fs ->
-    (* We order fields by lexicographic order *)
-    let fs = List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) fs in
     { env with types = Env.add ty.t_name (Type_struct fs) env.types }
 
 let program_desc env = function

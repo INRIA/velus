@@ -1,0 +1,81 @@
+node everyn (n : int32) returns (v : bool)
+var x : int32;
+let
+  v = x = 0;
+  x = 0 fby (x + 1) % n;
+tel
+
+type led_state = {
+    led_blue_l   : bool;
+    led_green_l  : bool;
+    led_red_l    : bool;
+    led_green_r  : bool;
+    led_red_r    : bool;
+    led_blue_nrf : bool
+}
+
+const null_state: led_state = {
+    led_blue_l   = false;
+    led_green_l  = false;
+    led_red_l    = false;
+    led_green_r  = false;
+    led_red_r    = false;
+    led_blue_nrf = false
+}
+
+node led_on_every_n_tick (n: int)
+returns (led_state: bool);
+var last clock: int = 0;
+let
+    automaton
+        state ON
+            do led_state = true
+            unless ((last clock) > 0) then OFF
+        state OFF
+            do led_state = false
+            unless ((last clock) = 0) then ON
+    end;
+    clock = ((last clock) + 1) % n;
+tel
+
+node led_seq_everyn(n: int)
+returns (led_state: led_state);
+var last clock: int = 0;
+    led_on: bool;
+let
+    led_on = led_on_every_n_tick(n);
+    automaton
+        state BLUE_L
+            do led_state = {null_state with .led_blue_l = led_on};
+            unless ((last clock) > 20) then GREEN_L
+        state GREEN_L
+            do led_state = {null_state with .led_green_l = led_on};
+            unless ((last clock) > 40) then RED_L
+        state RED_L
+            do led_state = {null_state with .led_red_l = led_on};
+            unless ((last clock) > 60) then GREEN_R
+        state GREEN_R
+            do led_state = {null_state with .led_green_r = led_on};
+            unless ((last clock) > 80) then RED_R
+        state RED_R
+            do led_state = {null_state with .led_red_r = led_on};
+            unless ((last clock) > 100) then BLUE_R
+        state BLUE_R
+            do led_state = {null_state with .led_blue_nrf = led_on};
+            unless ((last clock) = 0) then BLUE_L
+    end;
+    clock = ((last clock) + 1) % 120;
+tel
+
+node ledseq_task(dum : int)
+returns (last led_state: led_state = null_state);
+var led_freq: bool;
+let
+    led_freq = everyn<<100>>();
+
+    switch (led_freq)
+    | true do
+        led_state = led_seq_everyn(2);
+    | false do
+    end;
+tel
