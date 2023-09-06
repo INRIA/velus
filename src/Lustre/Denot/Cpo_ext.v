@@ -2687,19 +2687,18 @@ Context {D1 D2 : cpo}.
 *)
 Definition lift_nprod {n m} :
   (@nprod D1 n -C-> D2) -C-> @nprod (@nprod D1 m) n -C-> @nprod D2 m.
-  induction m as [|[]].
+  induction m.
   - apply ID.
-  - apply ID.
-  - apply curry.
-    refine ((PAIR _ _ @2_ _) _).
-    + exact ((AP _ _ @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
-    + exact ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
+  - refine (curry ((nprod_cons @2_ _) _)).
+    + exact ((AP _ _ @2_ FST _ _) (lift nprod_hd @_ SND _ _)).
+    + exact ((IHm @2_ FST _ _) (lift nprod_tl @_ SND _ _)).
 Defined.
 
-(* FIXME: hard to formulate for (S m) *)
 Lemma lift_nprod_simpl :
-  forall n m F (np : @nprod (@nprod D1 (S (S m))) n),
-    lift_nprod F np = (F (lift nprod_hd np), lift_nprod F (lift nprod_tl np)).
+  forall n m F (np : @nprod (@nprod D1 (S m)) n),
+    lift_nprod F np = nprod_cons
+                        (F (lift nprod_hd np))
+                        (lift_nprod F (lift nprod_tl np)).
 Proof.
   trivial.
 Qed.
@@ -2710,8 +2709,6 @@ Lemma hd_lift_nprod :
 Proof.
   intros.
   destruct m; auto.
-  cbn.
-  now rewrite lift_ID.
 Qed.
 
 Lemma tl_lift_nprod :
@@ -2720,8 +2717,6 @@ Lemma tl_lift_nprod :
 Proof.
   intros.
   destruct m; auto.
-  cbn.
-  now rewrite lift_ID.
 Qed.
 
 Lemma lift_nprod_nth :
@@ -2730,11 +2725,12 @@ Lemma lift_nprod_nth :
     get_nth k d2 (lift_nprod F np) = F (lift (get_nth k d1) np).
 Proof.
   induction m as [|[|m]]; intros * Hk; try lia.
-  - destruct k; simpl; try lia.
-    rewrite lift_ID; auto.
-  - destruct k; auto.
-    setoid_rewrite (IHm k (lift nprod_tl np)); try lia.
-    now rewrite lift_lift.
+  - destruct k; try lia; now cbn.
+  - rewrite lift_nprod_simpl.
+    destruct k.
+    + now setoid_rewrite nprod_hd_cons.
+    + setoid_rewrite IHm; auto with arith.
+      now rewrite lift_lift.
 Qed.
 
 (** If ∀ i, (Q xi1 ∧ Q xi2 ∧ ... ∧ Q xin) implies P (F (xi1, ... xin))
@@ -2749,11 +2745,10 @@ Lemma forall_lift_nprod :
       @forall_nprod _ P m (lift_nprod F np).
 Proof.
   intros * QP.
-  induction m as [|[|m]]; intros * Hq.
+  induction m; intros * Hq.
   - now simpl.
-  - apply QP, Hq.
   - rewrite lift_nprod_simpl.
-    constructor.
+    apply forall_nprod_cons.
     + eapply QP, forall_nprod_lift, forall_nprod_impl; eauto.
       now apply forall_nprod_hd.
     + eapply IHm, forall_nprod_lift, forall_nprod_impl; eauto.
