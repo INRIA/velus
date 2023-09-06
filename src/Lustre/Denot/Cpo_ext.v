@@ -1847,12 +1847,8 @@ Qed.
 
 Fixpoint nprod_const (c : D) n {struct n} : nprod n :=
   match n with
-  | O => 0
-  | S n =>
-      match n return nprod n -> nprod (S n) with
-      | O => fun _ => c
-      | S m => fun np => (c, np)
-      end (nprod_const c n)
+  | O => c
+  | S n => nprod_cons c (nprod_const c n)
   end.
 
 Lemma get_nth_const :
@@ -1860,11 +1856,11 @@ Lemma get_nth_const :
     k < n ->
     get_nth k d (nprod_const c n) = c.
 Proof.
-  induction n as [|[]]; intros * Hk.
+  induction n; intros * Hk.
   - inversion Hk.
-  - destruct k; auto; lia.
-  - destruct k; auto.
-    rewrite get_nth_tl, IHn; auto with arith.
+  - destruct k; simpl.
+    + now setoid_rewrite nprod_hd_cons.
+    + destruct n; [|apply IHn]; lia.
 Qed.
 
 Lemma get_nth_err :
@@ -2291,6 +2287,15 @@ Proof.
     inversion Hf.
     constructor; auto.
     now apply IHn.
+Qed.
+
+Lemma lift_nprod_const :
+  forall F c n,
+    lift F (nprod_const c n) = nprod_const (F c) n.
+Proof.
+  induction n; auto.
+  simpl (nprod_const _ _).
+  now rewrite lift_cons, IHn.
 Qed.
 
 Definition llift {A} (F : D1 -C-> A -C-> D2) {n} :

@@ -948,7 +948,7 @@ Proof.
   { unfold all_infinite, denot_var in *. intro. cases; eauto. }
   induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
   (* cas restreints : *)
-  all: try (simpl; now eauto using forall_nprod_const, DS_const_inf).
+  all: eauto; try apply forall_nprod_const; try apply DS_const_inf.
   - (* Econst *)
     apply sconst_inf; auto.
   - (* Eunop *)
