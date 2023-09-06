@@ -26,6 +26,7 @@ let rec replace_assoc f v = function
 
 type 'a struct_exp =
   | Simple of 'a list
+  | Tuple of 'a struct_exp list
   | Struct of (string * 'a struct_exp) list
   | Array of 'a struct_exp list
 
@@ -34,6 +35,7 @@ let sort_struct fs =
 
 let rec struct_flatten = function
   | Simple es -> es
+  | Tuple es -> List.concat_map struct_flatten es
   | Struct fs ->
     (* We order fields by lexicographic order *)
     List.concat_map (fun (_, e) -> struct_flatten e) (sort_struct fs)
@@ -41,6 +43,7 @@ let rec struct_flatten = function
 
 let rec struct_map f = function
   | Simple es -> Simple (f es)
+  | Tuple es -> Tuple (List.map (struct_map f) es)
   | Struct fs -> Struct (List.map (fun (s, e) -> (s, struct_map f e)) fs)
   | Array es -> Array (List.map (struct_map f) es)
 
@@ -48,6 +51,8 @@ let rec struct_map f = function
 let rec struct_map2 f e1 e2 =
   match e1, e2 with
   | Simple es1, Simple es2 -> Simple (f es1 es2)
+  | Tuple es1, Tuple es2 ->
+    Tuple (List.map2 (struct_map2 f) es1 es2)
   | Struct fs1, Struct fs2 ->
     Struct (List.map2 (fun (s, e1) (_, e2) -> (s, struct_map2 f e1 e2))
               (sort_struct fs1) (sort_struct fs2))
@@ -60,18 +65,8 @@ let struct_distrn es =
     | [] -> invalid_arg "struct_distrn: empty"
     | [e] -> go1 e
     | e1::tl -> go2 e1 (go tl)
-  and go1 = function
-    | Simple es -> Simple [es]
-    | Struct fs -> Struct (List.map (fun (f, e) -> (f, go1 e)) fs)
-    | Array es -> Array (List.map go1 es)
-  and go2 e1 e2 =
-    match e1, e2 with
-    | Simple es1, Simple es2 -> Simple (es1::es2)
-    | Struct fs1, Struct fs2 ->
-      Struct (List.map2 (fun (f, e1) (_, e2) -> (f, go2 e1 e2)) (sort_struct fs1) (sort_struct fs2))
-    | Array es1, Array es2 ->
-      Array (List.map2 go2 es1 es2)
-    | _, _ -> invalid_arg "struct_distrn: incompatible structures"
+  and go1 = struct_map (fun e -> [e])
+  and go2 = struct_map2 (fun e1 e2 -> e1::e2)
   in go es
 
 let rec struct_mapn f e =
@@ -257,8 +252,8 @@ let rec exp (env: cenv) e : LustreAst.expression struct_exp =
   | Estruct fs ->
     let fs = List.map (fun (s, e) -> (shortname s, exp env e)) fs in
     Struct fs
-  | Eapp ({ a_op = Etuple }, es) -> (* List.concat_map (exp env) es *)
-    failwith "TODO: tuple"
+  | Eapp ({ a_op = Etuple }, es) ->
+    Tuple (List.map (exp env) es)
   | Eapp ({ a_op = Enode f | Efun f; a_params }, es) ->
     (* TODO This is not ideal, as it means we cannot write f(x).[0] *)
     Simple [app f (List.concat_map (flat_exp env) (a_params@es)) (location e.e_loc)]
