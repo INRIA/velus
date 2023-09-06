@@ -266,7 +266,7 @@ Section Denot_exps.
     + exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
     + destruct (Nat.eq_dec (list_sum (List.map numstreams es)) n) as [<-|].
       * exact ((nprod_cons @2_ (denot_exps_ es)) IHess).
-      * exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
+      * exact (CTE _ _ (nprod_const (nprod_const abss _) _)).
   Defined.
 
 End Denot_exps.
@@ -442,7 +442,7 @@ Lemma denot_expss_eq :
           nprod_cons
             (eq_rect _ nprod (denot_exps ins es envG envI bs env) _ eqn)
             (denot_expss ins ess n envG envI bs env)
-      | _ => nprod_const (nprod_const errTy _) _
+      | _ => nprod_const (nprod_const abss _) _
       end.
 Proof.
   intros.
@@ -459,7 +459,7 @@ Lemma forall_denot_expss :
               match Nat.eq_dec (list_sum (List.map numstreams es)) n with
               | left eqn =>
                   P (eq_rect _ nprod (denot_exps ins es envG envI bs env) n eqn)
-              | _ => P (nprod_const errTy n)
+              | _ => P (nprod_const abss n)
               end) (List.map snd ess) ->
     forall_nprod P (denot_expss ins ess n envG envI bs env).
 Proof.
@@ -472,7 +472,7 @@ Qed.
 
 Lemma forall_forall_denot_expss :
   forall A ins (ess : list (A * list exp)) n envG envI bs env (P : DS (sampl value) -> Prop),
-    P errTy ->
+    P abss ->
     Forall (fun es => forall_nprod P (denot_exps ins (snd es) envG envI bs env)) ess ->
     forall_nprod (forall_nprod P) (denot_expss ins ess n envG envI bs env).
 Proof.
