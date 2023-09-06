@@ -263,7 +263,7 @@ Section Denot_exps.
     Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
     @nprod (@nprod (DS (sampl value)) n) (length ess).
     induction ess as [|[? es]].
-    + exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
+    + exact (CTE _ _ (nprod_const (nprod_const abss _) _)).
     + destruct (Nat.eq_dec (list_sum (List.map numstreams es)) n) as [<-|].
       * exact ((nprod_cons @2_ (denot_exps_ es)) IHess).
       * exact (CTE _ _ (nprod_const (nprod_const abss _) _)).
