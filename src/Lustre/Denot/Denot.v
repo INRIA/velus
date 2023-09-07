@@ -92,6 +92,17 @@ Proof.
   destruct (mem_nth l x); auto.
 Qed.
 
+Lemma env_of_np_nth :
+  forall l n (np : nprod n) k x,
+    mem_nth l x = Some k ->
+    env_of_np l np x = get_nth k errTy np.
+Proof.
+  unfold env_of_np.
+  intros.
+  setoid_rewrite Dprodi_DISTR_simpl.
+  cases. now inv H. congruence.
+Qed.
+
 Lemma env_of_np_inf :
   forall l n (np : nprod n),
     forall_nprod (@infinite _) np ->
@@ -106,37 +117,6 @@ Proof.
   - apply DS_const_inf.
 Qed.
 
-(** extract a tuple from an environment  *)
-Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
-  induction l as [| x []].
-  - apply CTE, errTy.
-  - apply (PROJ _ x).
-  - apply ((PAIR _ _ @2_ PROJ _ x) IHl).
-Defined.
-
-Lemma env_of_np_nth :
-  forall l n (np : nprod n) k x,
-    mem_nth l x = Some k ->
-    env_of_np l np x = get_nth k errTy np.
-Proof.
-  unfold env_of_np.
-  intros.
-  setoid_rewrite Dprodi_DISTR_simpl.
-  cases. now inv H. congruence.
-Qed.
-
-Lemma nth_np_of_env :
-  forall d d' l env k,
-    k < length l ->
-    get_nth k d' (np_of_env l env) = env (nth k l d).
-Proof.
-  induction l as [|? []]; intros * Hl.
-  - inv Hl.
-  - destruct k; auto. simpl in *; lia.
-  - destruct k; simpl; auto.
-    setoid_rewrite IHl; now auto with arith.
-Qed.
-
 Lemma forall_env_of_np :
   forall (P : DS (sampl value) -> Prop) l {n} (ss : nprod n),
     P errTy ->
@@ -149,6 +129,26 @@ Proof.
   destruct (Nat.lt_ge_cases n0 n).
   - apply forall_nprod_k; auto.
   - rewrite get_nth_err; auto.
+Qed.
+
+(** extract a tuple from an environment  *)
+Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
+  induction l as [| x []].
+  - apply CTE, abss.
+  - apply (PROJ _ x).
+  - apply ((PAIR _ _ @2_ PROJ _ x) IHl).
+Defined.
+
+Lemma nth_np_of_env :
+  forall d d' l env k,
+    k < length l ->
+    get_nth k d' (np_of_env l env) = env (nth k l d).
+Proof.
+  induction l as [|? []]; intros * Hl.
+  - inv Hl.
+  - destruct k; auto. simpl in *; lia.
+  - destruct k; simpl; auto.
+    setoid_rewrite IHl; now auto with arith.
 Qed.
 
 Lemma forall_np_of_env :
