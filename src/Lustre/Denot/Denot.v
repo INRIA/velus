@@ -63,7 +63,7 @@ Definition env_of_np (l : list ident) {n} : nprod n -C-> DS_prod SI :=
   Dprodi_DISTR _ _ _
     (fun x => match mem_nth l x with
            | Some n => get_nth n errTy
-           | None => CTE _ _ errTy
+           | None => CTE _ _ abss
            end).
 
 Lemma env_of_np_eq :
@@ -71,7 +71,7 @@ Lemma env_of_np_eq :
     env_of_np l ss x =
       match mem_nth l x with
       | Some n => get_nth n errTy ss
-      | None => errTy
+      | None => abss
       end.
 Proof.
   unfold env_of_np.
@@ -120,6 +120,7 @@ Qed.
 Lemma forall_env_of_np :
   forall (P : DS (sampl value) -> Prop) l {n} (ss : nprod n),
     P errTy ->
+    P abss ->
     forall_nprod P ss ->
     forall x, P (env_of_np l ss x).
 Proof.
@@ -133,10 +134,9 @@ Qed.
 
 (** extract a tuple from an environment  *)
 Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
-  induction l as [| x []].
+  induction l as [| x l].
   - apply CTE, abss.
-  - apply (PROJ _ x).
-  - apply ((PAIR _ _ @2_ PROJ _ x) IHl).
+  - exact ((nprod_cons @2_ PROJ _ x) IHl).
 Defined.
 
 Lemma nth_np_of_env :
