@@ -344,21 +344,6 @@ Module Type LTYPING
     apply equiv_program_types in Hequiv; auto.
   Qed.
 
-  Lemma find_node_uncons {PSyn prefs} :
-    forall f tys (nd ndf : @node PSyn prefs) nds exts,
-      wt_global (Global tys exts (nd :: nds)) ->
-      find_node f (Global tys exts nds) = Some ndf ->
-      find_node f (Global tys exts (nd :: nds)) = Some ndf.
-  Proof.
-    intros * Hwt Hfind.
-    inv Hwt.
-    apply CommonTyping.wt_program_NoDup in H0.
-    inv H0.
-    destruct (ident_eq_dec (n_name nd) f); subst.
-    - apply find_node_name in Hfind. exfalso. auto.
-    - setoid_rewrite find_node_other; auto.
-  Qed.
-
   Lemma wt_clock_add:
     forall x v types env ck,
       ~InMembers x env ->

@@ -163,6 +163,19 @@ Module Type LORDERED
       eauto.
     Qed.
 
+    Lemma find_node_uncons {PSyn prefs} :
+      forall f tys (nd ndf : @node PSyn prefs) nds exts,
+        Ordered_nodes (Global tys exts (nd :: nds)) ->
+        find_node f (Global tys exts nds) = Some ndf ->
+        find_node f (Global tys exts (nd :: nds)) = Some ndf.
+    Proof.
+      intros * Hord%ordered_nodes_NoDup Hfind.
+      destruct (ident_eq_dec (n_name nd) f); subst.
+      - apply find_node_name in Hfind.
+        inv Hord; contradiction.
+      - rewrite find_node_other; auto.
+    Qed.
+
     Lemma Ordered_nodes_nin {PSyn prefs} :
       forall tys exts nds (n nd : @node PSyn prefs),
         Ordered_nodes (Global tys exts (nd :: nds)) ->
