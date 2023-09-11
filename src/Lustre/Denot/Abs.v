@@ -567,7 +567,7 @@ Theorem abs_indep_global :
       denot_global G f (APP_env abs_env envI)
       <= APP_env abs_env (denot_global G f envI).
 Proof.
-  intros * Hr Hwt f envI Hfind.
+  intros * Hr Hwt f envI.
   apply wt_global_wl_global in Hwt as Hwl.
   apply wl_global_Ordered_nodes in Hwl as Hord.
   destruct (find_node f G) eqn:Hfind.
