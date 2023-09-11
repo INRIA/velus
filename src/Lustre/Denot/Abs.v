@@ -47,13 +47,30 @@ Proof.
   trivial.
 Qed.
 
+(* XXXXXXXXXXXXXXXXXXXXXXXXX *)
+
+(** ** Résultats généraux sur l'indépendance aux absences *)
+
+Lemma abs_abs_abs : abs_env == APP_env abs_env abs_env.
+Proof.
+  unfold abs_env.
+  apply Oprodi_eq_intro; intro x.
+  rewrite APP_env_eq.
+  setoid_rewrite DS_const_eq at 1 2.
+  now rewrite APP_simpl, app_cons.
+Qed.
+
+Lemma rem_abs_env : REM_env (abs_env) == abs_env.
+Proof.
+  unfold abs_env, abss.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite REM_env_eq, DS_const_eq, rem_cons at 1.
+Qed.
+
 Lemma all_cons_abs_env : all_cons abs_env.
 Proof.
   intro; eauto using is_cons_DS_const.
 Qed.
-(* XXXXXXXXXXXXXXXXXXXXXXXXX *)
-
-(** ** Résultats généraux sur l'indépendance aux absences*)
 
 Lemma np_of_env_abs :
   forall l env,
@@ -547,13 +564,18 @@ Theorem abs_indep_global :
     restr_global G ->
     wt_global G ->
     forall f envI,
-      find_node f G <> None ->
       denot_global G f (APP_env abs_env envI)
       <= APP_env abs_env (denot_global G f envI).
 Proof.
   intros * Hr Hwt f envI Hfind.
   apply wt_global_wl_global in Hwt as Hwl.
   apply wl_global_Ordered_nodes in Hwl as Hord.
+  destruct (find_node f G) eqn:Hfind.
+  2:{ (* si find_node = None, c'est gagné *)
+    unfold denot_global.
+    rewrite <- PROJ_simpl, 2 FIXP_eq, PROJ_simpl,
+      2 denot_global_eq, Hfind, <- abs_abs_abs.
+    reflexivity. }
   (* TODO: ce schéma (set envG, HenvG, etc. semble récurrent, en faire une tactique ? *)
   remember (denot_global G) as envG eqn:HG.
   assert (forall f nd envI,
@@ -564,10 +586,10 @@ Proof.
     now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
   clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
   revert Hfind.
-  revert f envI.
+  revert f envI n.
   destruct G as [tys exts nds].
   induction nds as [|a nds]; intros.
-  { contradict Hfind; auto. }
+  { inv Hfind. }
   destruct (ident_eq_dec (n_name a) f); subst.
   - (* cas qui nous intéresse *)
     rewrite 2 HenvG; auto using find_node_now.
@@ -587,13 +609,13 @@ Proof.
       (* reste l'hypothèse de récurrence sur les nœuds *)
       clear dependent envI.
       intros f2 n2 envI2 Hfind2.
-      eapply IHnds; auto; try congruence; [ now eauto using Ordered_nodes_cons |].
+      eapply IHnds; auto; [ now eauto using Ordered_nodes_cons | | eassumption ].
       (* et que HenvG tient toujours *)
       intros f' ndf' envI' Hfind'.
       rewrite HenvG, <- denot_node_cons;
         eauto using find_node_uncons, find_node_later_not_Is_node_in.
   - rewrite find_node_other in Hfind; auto.
-    apply IHnds; auto.
+    eapply IHnds; auto.
     + inv Hr; auto.
     + apply wt_global_cons in Hwt; auto.
     + inv Hwl; auto.
@@ -601,6 +623,7 @@ Proof.
     + intros f' ndf' envI' Hfind'.
       eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + apply Hfind.
 Qed.
 
 End ABS_INDEP.

@@ -1035,7 +1035,7 @@ Section Global.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
     - exact (curry (FIXP _ @_ (denot_node G n @2_ FST _ _) (SND _ _))).
-    - apply CTE, CTE, err_env.
+    - apply CTE, CTE, abs_env.
   Defined.
 
   Lemma denot_global_eq :
@@ -1043,7 +1043,7 @@ Section Global.
       denot_global_ G envG f envI =
         match find_node f G with
         | Some n => FIXP _ (denot_node G n envG envI)
-        | None => err_env
+        | None => abs_env
         end.
   Proof.
     intros.
