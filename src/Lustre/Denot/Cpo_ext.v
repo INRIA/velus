@@ -59,6 +59,21 @@ Qed.
 
 Global Hint Rewrite fcont_comp4_simpl fcont_comp5_simpl : cpodb.
 
+(* TODO: comprendre pourquoi c'est si laborieux *)
+Lemma fcont_le_compat3 :
+  forall (D1 D2 D3 D4:cpo) (f : D1-C->D2-C->D3-C->D4)
+    (a b : D1) (c d : D2) (x y : D3),
+    a <= b -> c <= d -> x <= y -> f a c x <= f b d y.
+Proof.
+  intros.
+  apply Ole_trans with (f a c y); auto.
+  apply fcont_le_elim.
+  apply Ole_trans with (f a d).
+  - now apply (@fcont_monotonic _ _ (f a) c d).
+  - apply (@fcont_le_elim _ _ (f a) (f b)).
+    now apply (@fcont_monotonic _ _ f a b).
+Qed.
+
 (* sub-typing of continuous functions *)
 Definition fcont_sub : forall (D1 D2 D3 D4:cpo),
     (D2 -C-> D4) -> (D3 -C-> D1) -> (D1 -C-> D2) -C-> (D3 -C-> D4).
@@ -287,27 +302,6 @@ Add Parametric Morphism (D1 D2 D3 : cpo) : (uncurry (D1:=D1) (D2:=D2) (D3:=D3))
 Qed.
 
 (** ** Cpo_streams_type.v  *)
-
-Definition all_infinite {I} {SI : I -> Type} (p : DS_prod SI) : Prop :=
-  forall x, infinite (p x).
-
-Lemma all_infinite_Oeq_compat :
-  forall I (SI : I -> Type) (env env' : DS_prod SI),
-    all_infinite env ->
-    env == env' ->
-    all_infinite env'.
-Proof.
-  unfold all_infinite.
-  intros * Hi Heq x.
-  now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
-Qed.
-
-Global Add Parametric Morphism I SI : all_infinite
-    with signature @Oeq (@DS_prod I SI) ==> iff
-      as all_inf_morph.
-Proof.
-  split; intros; eapply all_infinite_Oeq_compat; eauto.
-Qed.
 
 Lemma bot_not_cons :
   forall D (x : D) s, 0 == cons x s -> False.
@@ -752,6 +746,26 @@ Proof.
   auto.
 Qed.
 
+Lemma map_ext :
+  forall D D' (f g : D -> D'),
+    (forall d, f d = g d) ->
+    forall x, map f x == map g x.
+Proof.
+  intros * Hfg x.
+  apply DS_bisimulation_allin1
+    with (R := fun U V => exists x, U == map f x /\ V == map g x); eauto 3.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    auto. }
+  clear - Hfg; intros U V Hc (xs & Hu & Hv).
+  destruct (@is_cons_elim _ xs) as (x & xs' & Hxs).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%map_is_cons|?%map_is_cons]. }
+  rewrite Hxs, map_eq_cons in *.
+  split;[|exists xs']; now rewrite Hu, Hv, ?first_cons, ?rem_cons, ?Hfg.
+Qed.
+
 Lemma map_inf :
   forall A B (f : A -> B) xs,
     infinite xs ->
@@ -933,60 +947,365 @@ Proof.
 Qed.
 
 
-(** ** Lifting stream functions to environment of streams *)
+(** *** Take the prefix of length min(n,length(s)) from a stream s *)
+Fixpoint take {A} (n : nat) (s : DS A) : DS A :=
+  match n with
+  | O => 0
+  | S n => app s (take n (rem s))
+  end.
 
-Section ENV_funs.
+Global Add Parametric Morphism A n : (take n)
+       with signature @Oeq (DS A) ==> @Oeq (DS A)
+         as take_morph.
+Proof.
+  induction n; auto; intros ?? Heq; simpl.
+  rewrite Heq at 1.
+  rewrite (IHn _ (rem y)); auto.
+Qed.
 
-  Context {I : Type}.
-  Context {SI : I -> Type}.
 
-  Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
+(** ** Lifting stream predicates & functions to environment of streams *)
 
-  Lemma REM_env_eq :
-    forall env i, REM_env env i = rem (env i).
+Section ENV.
+
+Context {I : Type}.
+Context {SI : I -> Type}.
+
+
+Definition all_cons (env : DS_prod SI) : Prop :=
+  forall x, is_cons (env x).
+
+Lemma all_cons_eq_compat :
+  forall (env env' : DS_prod SI),
+    all_cons env ->
+    env == env' ->
+    all_cons env'.
+Proof.
+  unfold all_cons.
+  intros * Hi Heq x.
+  now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
+Qed.
+
+Global Add Parametric Morphism : all_cons
+       with signature @Oeq (@DS_prod I SI) ==> iff
+         as all_cons_morph.
+Proof.
+  split; intros; eapply all_cons_eq_compat; eauto.
+Qed.
+
+Definition all_infinite (env : DS_prod SI) : Prop :=
+  forall x, infinite (env x).
+
+Lemma all_infinite_eq_compat :
+  forall (env env' : DS_prod SI),
+    all_infinite env ->
+    env == env' ->
+    all_infinite env'.
+Proof.
+  unfold all_infinite.
+  intros * Hi Heq x.
+  now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
+Qed.
+
+Global Add Parametric Morphism : all_infinite
+       with signature @Oeq (@DS_prod I SI) ==> iff
+         as all_inf_morph.
+Proof.
+  split; intros; eapply all_infinite_eq_compat; eauto.
+Qed.
+
+Lemma all_infinite_all_cons :
+  forall env, all_infinite env -> all_cons env.
+Proof.
+  intros env Inf x; specialize (Inf x); now inversion Inf.
+Qed.
+
+Lemma all_infinite_le_eq :
+  forall env env', env <= env' -> all_infinite env -> env == env'.
+Proof.
+  intros * Hle Inf; apply Oprodi_eq_intro; intro i.
+  apply infinite_le_eq; auto; apply Hle.
+Qed.
+
+(** Couper la tête d'un environnement *)
+Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
+
+Lemma REM_env_eq :
+  forall env i, REM_env env i = rem (env i).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma REM_env_bot : REM_env 0 == 0.
+Proof.
+  apply Oprodi_eq_intro; intro.
+  apply rem_eq_bot.
+Qed.
+
+Lemma REM_env_inf :
+  forall env,
+    all_infinite env ->
+    all_infinite (REM_env env).
+Proof.
+  intros * Hinf x.
+  rewrite REM_env_eq.
+  specialize (Hinf x).
+  now inversion Hinf.
+Qed.
+
+Lemma rem_env_eq_compat :
+  forall X Y, X == Y -> REM_env X == REM_env Y.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite 2 REM_env_eq, <- 2 PROJ_simpl, H.
+Qed.
+
+(** Prendre la tête dans env1, la queue dans env2 *)
+Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
+  apply curry, Dprodi_DISTR; intro i.
+  exact ((APP _ @2_ (PROJ _ i @_ FST _ _)) (PROJ _ i @_ SND _ _)).
+Defined.
+
+Lemma APP_env_eq :
+  forall env1 env2 i,
+    APP_env env1 env2 i = APP _ (env1 i) (env2 i).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma app_rem_env :
+  forall s, APP_env s (REM_env s) == s.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
+Qed.
+
+Lemma rem_app_env :
+  forall X Y, all_cons X -> REM_env (APP_env X Y) == Y.
+Proof.
+  intros * Hc.
+  apply Oprodi_eq_intro; intro x.
+  rewrite REM_env_eq, APP_env_eq, APP_simpl, rem_app; auto.
+Qed.
+
+Lemma app_app_env :
+  forall X Y Z, APP_env (APP_env X Y) Z == APP_env X Z.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  rewrite 2 APP_env_eq, 2 APP_simpl, app_app; auto.
+Qed.
+
+Lemma APP_env_bot : APP_env 0 0 == 0.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro.
+  now rewrite APP_env_eq, APP_simpl, app_eq_bot.
+Qed.
+
+Lemma all_cons_app :
+  forall X Y, all_cons X -> all_cons (APP_env X Y).
+Proof.
+  intros * Hc i.
+  apply is_cons_app, Hc.
+Qed.
+
+(** Couper les queues *)
+Definition FIRST_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => FIRST _).
+
+Lemma FIRST_env_eq :
+  forall X x, (FIRST_env X) x = first (X x).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma first_env_eq_compat :
+  forall X Y, X == Y -> FIRST_env X == FIRST_env Y.
+Proof.
+  intros * Heq.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite 2 FIRST_env_eq, <- 2 PROJ_simpl, Heq.
+Qed.
+
+Lemma first_app_env :
+  forall X Y, FIRST_env (APP_env X Y) == FIRST_env X.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  now rewrite FIRST_env_eq, APP_env_eq, APP_simpl, first_app_first.
+Qed.
+
+Lemma app_app_first_env :
+  forall X Y, APP_env (FIRST_env X) Y == APP_env X Y.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro i.
+  rewrite APP_env_eq, FIRST_env_eq.
+  apply app_app_first.
+Qed.
+
+
+(** Un prédicat co-inductif pour décrire l'égalité d'environnements.
+    Plus facile à manipuler dans les preuves mais nécessite souvent
+    une hypothèse [all_infinite X] *)
+Section Env_eq.
+
+  CoInductive env_eq : DS_prod SI -> DS_prod SI -> Prop :=
+  | Ee :
+    forall X Y,
+      env_eq (REM_env X) (REM_env Y) ->
+      FIRST_env X == FIRST_env Y ->
+      env_eq X Y.
+
+  Lemma Oeq_env_eq : forall X Y, X == Y -> env_eq X Y.
   Proof.
-    trivial.
+    cofix Cof; intros.
+    apply Ee; auto.
+    - apply Cof.
+      now rewrite H.
+    - now rewrite H.
   Qed.
 
-  Lemma REM_env_bot : REM_env 0 == 0.
+  Lemma env_eq_Oeq : forall X Y, env_eq X Y -> X == Y.
   Proof.
-    apply Oprodi_eq_intro; intro.
-    apply rem_eq_bot.
+    intros * Heq.
+    apply Oprodi_eq_intro; intro i.
+    apply DS_bisimulation_allin1
+      with (R := fun U V => exists X Y, env_eq X Y
+                                /\ U == X i /\ V == Y i).
+    3: eauto.
+    { intros * ? Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      auto. }
+    clear.
+    intros U V Hc (X & Y & Heq & Hu & Hv).
+    inversion_clear Heq as [?? He Hf Eq1 Eq2].
+    (* rewrite Eq1, Eq2 in Hf. *)
+    split.
+    - apply Oprodi_eq_elim with (i := i) in Hf.
+      now rewrite Hu, Hv, <- 2 FIRST_env_eq.
+    - exists (REM_env X), (REM_env Y); split; auto.
+      now rewrite Hu, Hv.
   Qed.
 
-  Lemma REM_env_inf :
-    forall env,
-      all_infinite env ->
-      all_infinite (REM_env env).
+  Lemma env_eq_ok : forall X Y, X == Y <-> env_eq X Y.
   Proof.
-    intros * Hinf x.
-    rewrite REM_env_eq.
-    specialize (Hinf x).
-    now inversion Hinf.
+    split; auto using Oeq_env_eq, env_eq_Oeq.
   Qed.
 
-  (* prendre la tête dans env1, la queue dans env2 *)
-  Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
-    apply curry, Dprodi_DISTR; intro i.
-    exact ((APP _ @2_ (PROJ _ i @_ FST _ _)) (PROJ _ i @_ SND _ _)).
-  Defined.
-
-  Lemma APP_env_eq :
-    forall env1 env2 i,
-      APP_env env1 env2 i = APP _ (env1 i) (env2 i).
+  Global Add Parametric Morphism : env_eq
+         with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> iff
+           as env_eq_morph.
   Proof.
-    trivial.
+    intros * Eq1 * Eq2.
+    split; intros Heq%env_eq_ok; apply env_eq_ok; eauto.
   Qed.
 
-  Lemma app_rem_env :
-    forall s, APP_env s (REM_env s) == s.
-  Proof.
-    intros.
-    apply Oprodi_eq_intro; intro x.
-    now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
-  Qed.
+End Env_eq.
 
-End ENV_funs.
+
+(** Extract a (min(n, length s))-prefix of all streams s *)
+Fixpoint take_env n (env : DS_prod SI) : DS_prod SI :=
+  match n with
+  | O => 0
+  | S n => APP_env env (take_env n (REM_env env))
+  end.
+
+Global Add Parametric Morphism n : (take_env n)
+       with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI)
+         as take_env_morph.
+Proof.
+  induction n; auto; intros ?? Heq; simpl.
+  rewrite Heq at 1.
+  rewrite (IHn _ (REM_env y)); auto.
+  now rewrite Heq.
+Qed.
+
+Lemma take_env_1 : forall X, take_env 1 X = FIRST_env X.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma take_1 : forall A (x : DS A), take 1 x = first x.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma take_env_eq :
+  forall n X x, take_env n X x = take n (X x).
+Proof.
+  induction n; simpl; intros; auto.
+  now rewrite APP_env_eq, IHn, REM_env_eq.
+Qed.
+
+Lemma take_env_Oeq :
+  forall X Y, (forall n, take_env n X == take_env n Y) -> X == Y.
+Proof.
+  intros * Ht.
+  apply Oprodi_eq_intro; intro i.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V => forall n, take n U == take n V).
+  3: now intro n; rewrite <- 2 take_env_eq, <- 2 PROJ_simpl, Ht.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear; intros U V Hc Ht.
+  split.
+  - rewrite <- 2 take_1; auto.
+  - intro n.
+    destruct (@is_cons_elim _ U) as (u & U' & Hu).
+    { destruct Hc; auto.
+      apply first_is_cons.
+      rewrite <- take_1, Ht, take_1.
+      now apply is_cons_first. }
+    destruct (@is_cons_elim _ V) as (v & V' & Hv).
+    { destruct Hc; auto.
+      apply first_is_cons.
+      rewrite <- take_1, <- Ht, take_1.
+      now apply is_cons_first. }
+    specialize (Ht (S n)); simpl in Ht.
+    rewrite Hu, Hv, 2 rem_cons, 2 app_cons in *.
+    now apply Con_eq_simpl in Ht as [].
+Qed.
+
+(** on peut éliminer [REM_env (APP_env X Y)] s'il est sous un [APP_env X] *)
+Lemma app_rem_take_env :
+  forall n X Y,
+    APP_env X (take_env n (REM_env (APP_env X Y))) == APP_env X (take_env n Y).
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro i.
+  repeat rewrite ?APP_env_eq, ?REM_env_eq, ?take_env_eq.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            U == V
+            \/ exists X Y,
+              U == app X (take n (rem (app X Y)))
+              /\ V == app X (take n Y)).
+  3: right; exists (X i), (Y i); auto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc [Heq | (X & Y & Hu & Hv)].
+  { setoid_rewrite Heq; auto. }
+  destruct (@is_cons_elim _ X) as (x & X' & Hx).
+  { destruct Hc; eapply app_is_cons; [rewrite <- Hu| rewrite <- Hv]; auto. }
+  rewrite Hx, app_cons, rem_app in Hu; auto.
+  rewrite Hx, app_cons in Hv.
+  split.
+  - rewrite Hu, Hv; auto.
+  - setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    auto.
+Qed.
+
+End ENV.
 
 
 (** ** First definition of zip using three functions *)
@@ -1333,6 +1652,18 @@ Section Zip.
       now rewrite Ht, rem_cons.
   Qed.
 
+  Lemma inf_zip :
+    forall s t,
+      infinite (ZIP s t) ->
+      infinite s /\ infinite t.
+  Proof.
+    intros * Hf.
+    split; revert Hf; revert s t.
+    all: cofix Cof; intros * Hf; inversion_clear Hf as [Hc Hinf].
+    all: apply zip_is_cons in Hc as [(?&?& Hs)%is_cons_elim (?&?&Ht)%is_cons_elim].
+    all: rewrite rem_zip in Hinf; constructor; eauto using cons_is_cons.
+  Qed.
+
   Lemma zip_const :
     forall a V,
       ZIP (DS_const a) V == MAP (bop a) V.
@@ -1364,6 +1695,29 @@ Section Zip.
 End Zip.
 
 Global Hint Rewrite @zip_cons @zip_bot1 @zip_bot2 : cpodb.
+
+Lemma zip_ext :
+  forall A B C (f g : A -> B -> C),
+    (forall a b, f a b = g a b) ->
+    forall x y, ZIP f x y == ZIP g x y.
+Proof.
+  intros * Hfg x y.
+  apply DS_bisimulation_allin1
+    with (R := fun U V => exists x y, U == ZIP f x y /\ V == ZIP g x y); eauto 4.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    auto. }
+  clear - Hfg; intros U V Hc (xs & ys & Hu & Hv).
+  destruct (@is_cons_elim _ xs) as (x & xs' & Hxs).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%zip_is_cons|?%zip_is_cons]. }
+  destruct (@is_cons_elim _ ys) as (y & ys' & Hys).
+  { rewrite Hu, Hv in Hc.
+    now destruct Hc as [?%zip_is_cons|?%zip_is_cons]. }
+  rewrite Hxs, Hys, zip_cons in *.
+  split;[|exists xs', ys']; now rewrite Hu, Hv, ?first_cons, ?rem_cons, ?Hfg.
+Qed.
 
 
 (** ** Facts about zip, map  *)
@@ -1581,7 +1935,8 @@ Section Zip3.
 End Zip3.
 
 
-Section Take.
+(** Une ancienne version de take, avec prédicat d'infinité *)
+Module Inf_Take.
 
 Context {A : Type}.
 
@@ -1682,7 +2037,7 @@ Proof.
       exists I1, I2. setoid_rewrite <- rem_take; auto.
 Qed.
 
-End Take.
+End Inf_Take.
 
 
 (** *** Extract the [n] first elements (Con/Eps) of a stream *)
@@ -1694,6 +2049,7 @@ Fixpoint take_list {A} (n : nat) (xs : DS A) : list (option A) :=
            | Con x xs => Some x :: take_list n xs
            end
   end.
+
 
 
 (** ** The cpo of n-uplets. *)
@@ -1736,6 +2092,15 @@ Definition nprod_cons {n} : D -C-> nprod n -C-> nprod (S n) :=
    | S _ => PAIR _ _
    end.
 
+Lemma nprod_cons_Oeq_compat :
+  forall (d1 d2 : D) n (np1 np2 : nprod n),
+    d1 == d2 ->
+    np1 == np2 ->
+    nprod_cons d1 np1 == nprod_cons d2 np2.
+Proof.
+  destruct n; auto.
+Qed.
+
 Lemma nprod_hd_tl : forall {n} (np : nprod (S n)),
     np = nprod_cons (nprod_hd np) (nprod_tl np).
 Proof.
@@ -1766,6 +2131,13 @@ Fixpoint nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p) :=
 Lemma nprod_hd_app :
   forall m n (mp : nprod (S m)) (np : nprod n),
     nprod_hd (nprod_app mp np) = nprod_hd mp.
+Proof.
+  destruct m, n; auto.
+Qed.
+
+Lemma nprod_tl_app :
+  forall m n (mp : nprod (S (S m))) (np : nprod n),
+    nprod_tl (nprod_app mp np) = nprod_app (nprod_tl mp) np.
 Proof.
   destruct m, n; auto.
 Qed.
@@ -1804,6 +2176,33 @@ Lemma get_nth_tl :
     get_nth (S k) d np = get_nth k d (nprod_tl np).
 Proof.
   induction k; auto.
+Qed.
+
+(** independence wrt. the default value *)
+Lemma get_nth_indep :
+  forall n (np : nprod n) k d d',
+    k < n ->
+    get_nth k d np = get_nth k d' np.
+Proof.
+  induction n; intros * Hk.
+  - inversion Hk.
+  - destruct k; auto; simpl.
+    rewrite fcont_comp_simpl, IHn with (d' := d'); auto with arith.
+Qed.
+
+(** condition d'égalité pour les nprod *)
+Lemma nprod_eq :
+  forall n (np1 np2 : nprod (S n)),
+    (forall k d, k < (S n) -> get_nth k d np1 == get_nth k d np2) ->
+    np1 == np2.
+Proof.
+  induction n; simpl; intros * Heq.
+  - apply (Heq O np1); auto.
+  - destruct np1 as [d1 np1], np2 as [d2 np2].
+    apply Dprod_eq_pair.
+    + apply (Heq O d1); lia.
+    + apply IHn; intros.
+      rewrite (Heq (S k) d); auto; lia.
 Qed.
 
 Lemma nprod_app_nth1 :
@@ -2267,6 +2666,39 @@ Lemma lift_cons :
       nprod_cons (f x) (lift f np).
 Proof.
   destruct n; auto.
+Qed.
+
+Lemma lift_app :
+  forall f n1 (np1 : nprod n1) n2 (np2 : nprod n2),
+    lift f (nprod_app np1 np2) = nprod_app (lift f np1) (lift f np2).
+Proof.
+  induction n1 as [|[]]; intros; auto.
+  - destruct n2; auto.
+  - rewrite nprod_hd_tl, nprod_tl_app, (nprod_hd_app _ _ (lift f np1)).
+    now rewrite lift_tl, <- IHn1.
+Qed.
+
+Lemma nth_lift :
+  forall F n (np : nprod n) k d1 d2,
+    k < n ->
+    get_nth k d2 (lift F np) = F (get_nth k d1 np).
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - inversion Hk.
+  - now destruct k; try lia.
+  - destruct k; auto.
+    rewrite 2 get_nth_tl, lift_tl.
+    erewrite IHn; auto; lia.
+Qed.
+
+Lemma lift_ext :
+  forall (f g : D1 -C-> D2) n (np : nprod n),
+    (forall x, f x == g x) ->
+    lift f np == lift g np.
+Proof.
+  induction n; intros * Heq; simpl; auto.
+  autorewrite with cpodb.
+  now rewrite Heq, IHn.
 Qed.
 
 Lemma forall_nprod_lift :
@@ -2814,4 +3246,12 @@ Qed.
 
 End Lift_nprod.
 
-
+Lemma lift_lift_nprod :
+  forall D1 D2 D3,
+  forall (F : D2 -C-> D3) n m G np,
+    lift F (@lift_nprod D1 D2 n m G np)
+    = lift_nprod (F @_ G) np.
+Proof.
+  induction m; intros; auto.
+  now rewrite 2 lift_nprod_simpl, <- IHm, lift_cons.
+Qed.

@@ -288,6 +288,13 @@ Proof.
   induction n; simpl; auto.
 Qed.
 
+Lemma repeat_map :
+  forall {A} (a : A) n,
+    repeat a n = map (fun _ => a) (repeat a n).
+Proof.
+  induction n; simpl; auto.
+Qed.
+
 Lemma nth_repeat_in :
   forall {A} (a d : A) (m n : nat),
     (n < m)%nat ->
