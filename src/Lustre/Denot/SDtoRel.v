@@ -2712,7 +2712,14 @@ Hypothesis (Wcg : wc_global G).
 Hypothesis (Hrg : restr_global G).
 
 Hypothesis InfG :
-  forall envI f, all_infinite envI -> all_infinite (envG f envI).
+  forall envI f,
+    all_infinite envI ->
+    all_infinite (envG f envI).
+
+Hypothesis AbsG :
+  forall f X,
+    all_infinite X ->
+    envG f (APP_env abs_env X) == APP_env abs_env (envG f X).
 
 Hypothesis Wfg :
     forall f n envI,
@@ -2832,17 +2839,6 @@ Import Cpo_streams_type.
 
 Section MASK_RESET.
 
-(* TODO: move to Denot *)
-Lemma abs_abs_abs :
-  abs_env == APP_env abs_env abs_env.
-Proof.
-  clear.
-  unfold abs_env.
-  apply Oprodi_eq_intro; intro x.
-  rewrite APP_env_eq.
-  setoid_rewrite DS_const_eq at 1 2.
-  now rewrite APP_simpl, app_cons.
-Qed.
 
 (* TODO: move to Denot *)
 Lemma rem_abs_env : REM_env (abs_env) == abs_env.
@@ -2878,52 +2874,39 @@ Proof.
   rewrite 2 smask_env_eq; auto.
 Qed.
 
+(* Tactic Notation "remember_ds" uconstr(s) "as" ident(x) "in" simple_intropattern(hh) := *)
+(*   let Hx := fresh "H"x in *)
+(*   remember s as x eqn:Hx in hh; *)
+(*   apply Oeq_refl_eq in Hx. *)
 
-(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx les hypthèses !! *)
-
-(* à importer de Abs.v *)
-Axiom abs_indep :
-  forall f X,
-    envG f (APP_env abs_env X)
-    == APP_env abs_env (envG f X).
-
-(* à prouver à partir de abs_indep_global et InfG *)
-(* Theorem abs_indep_global_eq : *)
-(*   forall (G : global) *)
-(*     restr_global G -> *)
-(*     wt_global G -> *)
-(*     forall f envI, *)
-(*       find_node f G <> None -> *)
-(*       all_infinite envI -> *)
-(*       denot_global G f (APP_env abs_env envI) *)
-(*       == APP_env abs_env (denot_global G f envI). *)
-(* Proof. *)
-(*   intros. *)
-(*   apply all_infinite_le_eq; auto using abs_indep_global. *)
-(*   apply InfG. *)
-(*   Search APP_env. *)
-(* Qed. *)
-
-Corollary forever_abs :
-  forall f,
-    envG f abs_env == abs_env.
+(* TODO: move *)
+Lemma abs_env_inf : all_infinite abs_env.
 Proof.
-  clear.
+  exact (fun _ => DS_const_inf _).
+Qed.
+(* TODO: move *)
+Lemma forever_abs :
+  forall f, envG f abs_env == abs_env.
+Proof.
+  clear - AbsG.
   intro f.
   apply env_eq_Oeq.
-  remember_ds abs_env as X.
+  (* FIXME: un sélecteur dans remember_ds ?? *)
+  remember abs_env as X eqn:HX in |-*; apply Oeq_refl_eq in HX.
   remember_ds (envG f X) as Y.
   revert HX HY.
   revert X Y.
   cofix Cof; intros.
   rewrite abs_abs_abs in HX.
-  rewrite HX, abs_indep in HY.
+  rewrite HX, AbsG in HY; auto using abs_env_inf.
   constructor.
   - apply Cof.
     + rewrite HX, rem_app_env; auto using all_cons_abs_env.
     + rewrite HY, HX, 2 rem_app_env; auto using all_cons_abs_env.
   - now rewrite HX, HY, first_app_env, <- abs_abs_abs.
 Qed.
+
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx / hypthèses *)
 
 (* à prouver par induction sur le programme?  *)
 Axiom lp :
@@ -3108,7 +3091,7 @@ Lemma smask_sreset :
     all_infinite X ->
     envG f (smask_env k R X) == smask_env k R (sreset (envG f) R X).
 Proof.
-  clear - InfG.
+  clear - InfG AbsG.
   intros * Infr Infx.
   rewrite sreset_eq.
   destruct k.
@@ -3153,7 +3136,7 @@ Proof.
     rewrite Hsm, sreset_aux_eq, 2 app_app_env; auto.
     2: rewrite <- Hxn; auto.
     apply Oeq_env_eq, reflexivity. }
-  all: rewrite abs_indep in HU.
+  all: rewrite AbsG in HU; auto using smask_env_inf, nrem_env_inf, REM_env_inf.
   all: constructor; [| rewrite HU, HV, 2 first_app_env; auto].
   - eapply Cof; rewrite ?HU, ?HV, ?rem_app_env;
       eauto using all_cons_abs_env, nrem_env_inf, all_infinite_all_cons, REM_env_inf.
@@ -3933,6 +3916,20 @@ Qed.
 
 End Ok_node.
 
+    (* TOOD: move to Cpo_ext.v *)
+    Lemma app_env_inf :
+      forall I SI (X Y : @DS_prod I SI),
+        all_cons X ->
+        all_infinite Y ->
+        all_infinite (APP_env X Y).
+    Proof.
+      intros * Hc Hinf i.
+      rewrite APP_env_eq, APP_simpl.
+      eapply is_cons_elim in Hc as (?&?& ->).
+      rewrite app_cons.
+      constructor; auto.
+      now rewrite rem_cons.
+    Qed.
 
 Theorem _ok_global :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
@@ -3963,6 +3960,12 @@ Proof.
              all_infinite envI ->
              all_infinite (envG f envI)).
   { subst envG. eauto using denot_inf. }
+  assert (AbsG : forall f envI,
+             all_infinite envI ->
+             envG f (APP_env abs_env envI) == APP_env abs_env (envG f envI)).
+  { intros * Hinf; subst.
+    apply all_infinite_le_eq; auto using abs_indep_global.
+    apply InfG, app_env_inf; auto using all_cons_abs_env. }
   assert (HenvG : forall f nd envI,
              find_node f G = Some nd ->
              envG f envI == FIXP _ (denot_node G nd envG envI)).
@@ -4114,6 +4117,6 @@ Module SdtorelFun
        (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
        (Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
-<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe.
+<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs.
   Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs.
 End SdtorelFun.
