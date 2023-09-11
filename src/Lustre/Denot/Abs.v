@@ -72,6 +72,11 @@ Proof.
   intro; eauto using is_cons_DS_const.
 Qed.
 
+Lemma abs_env_inf : all_infinite abs_env.
+Proof.
+  exact (fun _ => DS_const_inf _).
+Qed.
+
 Lemma np_of_env_abs :
   forall l env,
     np_of_env l (APP_env abs_env env) == lift (CONS abs) (np_of_env l env).

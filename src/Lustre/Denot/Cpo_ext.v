@@ -1105,11 +1105,22 @@ Proof.
   now rewrite APP_env_eq, APP_simpl, app_eq_bot.
 Qed.
 
-Lemma all_cons_app :
+Lemma app_env_cons :
   forall X Y, all_cons X -> all_cons (APP_env X Y).
 Proof.
   intros * Hc i.
   apply is_cons_app, Hc.
+Qed.
+
+Lemma app_env_inf :
+  forall X Y, all_cons X -> all_infinite Y -> all_infinite (APP_env X Y).
+Proof.
+  intros * Hc Hinf i.
+  rewrite APP_env_eq, APP_simpl.
+  eapply is_cons_elim in Hc as (?&?& ->).
+  rewrite app_cons.
+  constructor; auto.
+  now rewrite rem_cons.
 Qed.
 
 (** Couper les queues *)

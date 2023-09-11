@@ -2874,16 +2874,6 @@ Proof.
   rewrite 2 smask_env_eq; auto.
 Qed.
 
-(* Tactic Notation "remember_ds" uconstr(s) "as" ident(x) "in" simple_intropattern(hh) := *)
-(*   let Hx := fresh "H"x in *)
-(*   remember s as x eqn:Hx in hh; *)
-(*   apply Oeq_refl_eq in Hx. *)
-
-(* TODO: move *)
-Lemma abs_env_inf : all_infinite abs_env.
-Proof.
-  exact (fun _ => DS_const_inf _).
-Qed.
 (* TODO: move *)
 Lemma forever_abs :
   forall f, envG f abs_env == abs_env.
@@ -3916,20 +3906,6 @@ Qed.
 
 End Ok_node.
 
-    (* TOOD: move to Cpo_ext.v *)
-    Lemma app_env_inf :
-      forall I SI (X Y : @DS_prod I SI),
-        all_cons X ->
-        all_infinite Y ->
-        all_infinite (APP_env X Y).
-    Proof.
-      intros * Hc Hinf i.
-      rewrite APP_env_eq, APP_simpl.
-      eapply is_cons_elim in Hc as (?&?& ->).
-      rewrite app_cons.
-      constructor; auto.
-      now rewrite rem_cons.
-    Qed.
 
 Theorem _ok_global :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
