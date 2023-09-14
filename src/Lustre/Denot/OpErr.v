@@ -2,7 +2,7 @@ From Coq Require Import List.
 Import ListNotations.
 
 From Velus Require Import Common Operators Clocks StaticEnv LSyntax Denot LOrdered.
-From Velus Require Import Cpo Cpo_ext SDfuns CommonDS.
+From Velus Require Import Cpo SDfuns CommonDS.
 
 (** * Operators failure
 

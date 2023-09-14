@@ -2,7 +2,6 @@ From Coq Require Import BinPos List.
 Import List ListNotations.
 From Velus Require Import CommonTactics.
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import Cpo_ext.
 
 (** * Streams operations for the Lustre synchronous semantics *)
 

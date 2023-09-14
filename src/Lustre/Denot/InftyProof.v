@@ -13,7 +13,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import Cpo_ext SDfuns Denot Infty CommonList2.
+Require Import SDfuns Denot Infty CommonList2.
 
 Import List.
 

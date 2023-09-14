@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs CommonList2.
+Require Import CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs CommonList2.
 
 Import List ListNotations.
 
@@ -2481,7 +2481,7 @@ Proof.
     rewrite 2 smask_eq; cases; unfold AC.
     { setoid_rewrite DS_const_eq.
       now rewrite 2 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot. }
-    1,2: rewrite 2 first_app_first, 3 MAP_map, 2 first_map, 2 map_comp, Cpo_ext.map_ext;
+    1,2: rewrite 2 first_app_first, 3 MAP_map, 2 first_map, 2 map_comp, DS_ext.map_ext;
          eauto 1; intros; cases.
     all: rewrite 2 first_cons, MAP_map, 2 map_eq_cons, 2 map_bot; auto.
   - (* rem *)

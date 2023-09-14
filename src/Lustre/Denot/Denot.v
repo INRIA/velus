@@ -2,13 +2,12 @@ From Coq Require Import BinPos List.
 
 From Velus Require Import Common Ident Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LSemantics Lustre.LOrdered.
-
 From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 Import ListNotations.
 
-Require Import Cpo_ext CommonList2.
+Require Import CommonList2.
 Require Import SDfuns.
 
 Module Type LDENOT

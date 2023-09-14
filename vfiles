@@ -86,9 +86,11 @@ src/Lustre/NormFby/LNormFby.v
 src/Lustre/Denot/Cpo/Cpo_def.v
 src/Lustre/Denot/Cpo/Cpo_streams_type.v
 src/Lustre/Denot/Cpo/Systems.v
+src/Lustre/Denot/Cpo_ext/Cpo_def_ext.v
+src/Lustre/Denot/Cpo_ext/DS_ext.v
+src/Lustre/Denot/Cpo_ext/Nprod.v
 src/Lustre/Denot/Cpo.v
 
-src/Lustre/Denot/Cpo_ext.v
 src/Lustre/Denot/CommonList2.v
 src/Lustre/Denot/CommonDS.v
 src/Lustre/Denot/SDfuns.v

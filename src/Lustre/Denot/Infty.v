@@ -1,6 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import Cpo_ext SDfuns CommonDS.
+Require Import SDfuns CommonDS.
 
 (** * Infinity of streams defined in SDfuns  *)
 

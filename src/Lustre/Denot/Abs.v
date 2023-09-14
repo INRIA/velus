@@ -10,7 +10,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import Cpo_ext CommonDS SDfuns Denot CommonList2.
+Require Import CommonDS SDfuns Denot CommonList2.
 
 
 (** ** Pas de réaction et pas de changement d'état en cas d'absence, soit
