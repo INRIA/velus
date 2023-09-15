@@ -657,17 +657,28 @@ Qed.
 
 
 (** *** Take the prefix of length min(n,length(s)) from a stream s *)
-Fixpoint take {A} (n : nat) (s : DS A) : DS A :=
+Fixpoint take {A} (n : nat) : DS A -C-> DS A :=
   match n with
-  | O => 0
-  | S n => app s (take n (rem s))
+  | O => CTE _ _ 0
+  | S n => (APP _ @2_ ID _) (take n @_ REM _)
   end.
+
+Lemma take_eq :
+  forall {A} n (s : DS A),
+    take n s = match n with
+               | O => 0
+               | S n => app s (take n (rem s))
+               end.
+Proof.
+  destruct n; reflexivity.
+Qed.
 
 Global Add Parametric Morphism A n : (take n)
        with signature @Oeq (DS A) ==> @Oeq (DS A)
          as take_morph.
 Proof.
   induction n; auto; intros ?? Heq; simpl.
+  autorewrite with cpodb.
   rewrite Heq at 1.
   rewrite (IHn _ (rem y)); auto.
 Qed.
@@ -986,8 +997,8 @@ Proof.
       apply first_is_cons.
       rewrite <- take_1, <- Ht, take_1.
       now apply is_cons_first. }
-    specialize (Ht (S n)); simpl in Ht.
-    rewrite Hu, Hv, 2 rem_cons, 2 app_cons in *.
+    specialize (Ht (S n)).
+    rewrite 2 (take_eq (S n)), Hu, Hv, 2 rem_cons, 2 app_cons in *.
     now apply Con_eq_simpl in Ht as [].
 Qed.
 

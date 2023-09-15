@@ -2970,11 +2970,11 @@ Proof.
     right.
     exists O; simpl.
     rewrite Hr, first_cons; auto with arith.
-  - simpl.
+  - rewrite 2 (take_eq (S n)).
     rewrite DS_const_eq, 2 rem_cons, 2 app_cons.
     destruct (IHn R' Infr') as [Ht|(m & Hlt & Ht & Hf)].
     + rewrite Ht; auto.
-    + right; exists (S m); simpl.
+    + right; exists (S m); rewrite 2 (take_eq (S m)); simpl.
       rewrite Hr, 2 rem_cons, 2 app_cons, Ht, Hf.
       auto with arith.
 Qed.
@@ -2985,12 +2985,12 @@ Lemma take_smask_false :
     take_env n (smask_env O R X) == take_env n X.
 Proof.
   clear.
-  induction n; simpl; intros * Heq; auto.
-  rewrite DS_const_eq, app_cons, rem_cons in Heq.
+  induction n; intros * Heq; auto.
+  rewrite 2 (take_eq (S n)), DS_const_eq, app_cons, rem_cons in Heq.
   destruct (@is_cons_elim _ R) as (r & R' & Hr).
   { eapply app_is_cons; now rewrite Heq. }
   rewrite Hr, app_cons, rem_cons, smask_env_eq in *.
-  apply Con_eq_simpl in Heq as []; subst.
+  apply Con_eq_simpl in Heq as []; subst; simpl.
   rewrite app_app_env, <- (IHn R' (REM_env X)), app_rem_take_env; auto.
 Qed.
 
@@ -3000,12 +3000,12 @@ Lemma take_sreset_aux_false :
     take_env n (sreset_aux f R X Y) == take_env n Y.
 Proof.
   clear.
-  induction n; simpl; intros * Heq; auto.
-  rewrite DS_const_eq, app_cons, rem_cons in Heq.
+  induction n; intros * Heq; auto.
+  rewrite 2 (take_eq (S n)), DS_const_eq, app_cons, rem_cons in Heq.
   destruct (@is_cons_elim _ R) as (r & R' & Hr).
   { eapply app_is_cons; now rewrite Heq. }
   rewrite Hr, app_cons, rem_cons, sreset_aux_eq in *.
-  apply Con_eq_simpl in Heq as []; subst.
+  apply Con_eq_simpl in Heq as []; subst; simpl.
   rewrite app_app_env.
   setoid_rewrite <- (IHn f R' (REM_env X)) at 2; auto.
   now rewrite app_rem_take_env.
@@ -3032,17 +3032,18 @@ Proof.
     generalize (envG f (smask_env O R X)); intro Z.
     revert Hr Hf Infr Infx Hle.
     revert R X Y Z n.
-    induction m; simpl; intros;
+    induction m; intros;
       inversion_clear Infr as [Cr InfR];
       destruct (is_cons_elim Cr) as (r & R' & Hr').
-    + rewrite Hr', first_cons, smask_env_eq in *.
+    + simpl in *.
+      rewrite Hr', first_cons, smask_env_eq in *.
       apply Con_eq_simpl in Hf as []; subst.
       apply abs_align_abs in Habs as ->; auto.
     + destruct n;[lia|].
       inv Habs.
-      rewrite Hr', rem_cons, smask_env_eq in *.
+      rewrite 2 (take_eq (S m)), Hr', rem_cons, smask_env_eq in *.
       rewrite DS_const_eq, 2 app_cons in Hr.
-      apply Con_eq_simpl in Hr as []; subst; simpl.
+      apply Con_eq_simpl in Hr as []; subst; simpl in *.
       rewrite rem_cons, sreset_aux_eq, 3 app_app_env, 2 rem_app_env in *.
       apply first_env_eq_compat in Ht as Hft.
       apply rem_env_eq_compat in Ht as Hrt.
