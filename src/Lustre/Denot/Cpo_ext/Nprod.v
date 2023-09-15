@@ -200,16 +200,16 @@ Proof.
   induction n; auto.
 Qed.
 
-Fixpoint nprod_const (c : D) n {struct n} : nprod n :=
+Fixpoint nprod_const n : D -C-> nprod n :=
   match n with
-  | O => c
-  | S n => nprod_cons c (nprod_const c n)
+  | O => ID _
+  | S n => (nprod_cons @2_ ID _) (nprod_const n)
   end.
 
 Lemma get_nth_const :
   forall c n k d,
     k < n ->
-    get_nth k d (nprod_const c n) = c.
+    get_nth k d (nprod_const n c) = c.
 Proof.
   induction n; intros * Hk.
   - inversion Hk.
@@ -399,7 +399,7 @@ Qed.
 Lemma forall_nprod_const :
   forall {n} c,
     P c ->
-    forall_nprod (nprod_const c n).
+    forall_nprod (nprod_const n c).
 Proof.
   intros.
   apply k_forall_nprod; intros.
@@ -679,10 +679,11 @@ Qed.
 
 Lemma lift_nprod_const :
   forall F c n,
-    lift F (nprod_const c n) = nprod_const (F c) n.
+    lift F (nprod_const n c) = nprod_const n (F c).
 Proof.
   induction n; auto.
   simpl (nprod_const _ _).
+  autorewrite with cpodb.
   now rewrite lift_cons, IHn.
 Qed.
 

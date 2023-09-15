@@ -262,10 +262,10 @@ Section Denot_exps.
     Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
     @nprod (@nprod (DS (sampl value)) n) (length ess).
     induction ess as [|[? es]].
-    + exact (CTE _ _ (nprod_const (nprod_const abss _) _)).
+    + exact (CTE _ _ (nprod_const _ (nprod_const _ abss))).
     + destruct (Nat.eq_dec (list_sum (List.map numstreams es)) n) as [<-|].
       * exact ((nprod_cons @2_ (denot_exps_ es)) IHess).
-      * exact (CTE _ _ (nprod_const (nprod_const abss _) _)).
+      * exact (CTE _ _ (nprod_const _ (nprod_const _ abss))).
   Defined.
 
 End Denot_exps.
@@ -329,12 +329,12 @@ Definition denot_exp_ (ins : list ident)
                 (length anns)
              ) as [Heq2|].
     (* si les tailles ne correspondent pas : *)
-    2,3: apply CTE, (nprod_const errTy).
+    2,3: apply CTE, (nprod_const _ errTy).
     rewrite Heq1 in ss.
     rewrite <- Heq2.
     exact ((lift2 (SDfuns.fby) @2_ s0s) ss).
   - (* Earrow *)
-    apply CTE, (nprod_const errTy).
+    apply CTE, (nprod_const _ errTy).
   - (* Ewhen *)
     rename l into es.
     destruct l0 as (tys,ck).
@@ -343,7 +343,7 @@ Definition denot_exp_ (ins : list ident)
                 (list_sum (List.map numstreams es))
                 (length tys)
              ) as [<-|].
-    2: apply CTE, (nprod_const errTy).
+    2: apply CTE, (nprod_const _ errTy).
     pose (ss := denot_exps_ denot_exp_ es).
     exact ((llift (swhenv e0) @2_ ss) (denot_var i)).
   - (* Emerge *)
@@ -367,24 +367,24 @@ Definition denot_exp_ (ins : list ident)
                   (list_sum (List.map numstreams d_es))
                   (length tys)
                ) as [<-|].
-      2: apply CTE, CTE, (nprod_const errTy).
+      2: apply CTE, CTE, (nprod_const _ errTy).
       intro ses.
       refine ((_ @2_ (denot_exp_ e0)) ((nprod_cons @2_ denot_exps_ denot_exp_ d_es) ses)).
       destruct (numstreams e0) as [|[]].
-      1,3: apply CTE, CTE, (nprod_const errTy).
+      1,3: apply CTE, CTE, (nprod_const _ errTy).
       exact (lift_nprod @_ scase_defv (List.map fst ies)).
     + (* case total *)
       (* condition, branches *)
       refine ((_ @2_ (denot_exp_ e0)) ses).
       destruct (numstreams e0) as [|[]].
-      1,3: apply CTE, CTE, (nprod_const errTy).
+      1,3: apply CTE, CTE, (nprod_const _ errTy).
       exact (lift_nprod @_ (scasev (List.map fst ies))).
   - (* Eapp *)
     rename l into es, l0 into er, l1 into anns.
     clear He.
     destruct (find_node i G) as [n|].
     destruct (Nat.eq_dec (length (List.map fst n.(n_out))) (length anns)) as [<-|].
-    2,3: apply CTE, (nprod_const errTy).
+    2,3: apply CTE, (nprod_const _ errTy).
     (* dénotation du nœud *)
     pose (f := PROJ _ i @_ FST _ _ @_ FST _ _ @_ FST _ _ : ctx -C-> FI i).
     pose (ss := denot_exps_ denot_exp_ es).
@@ -441,7 +441,7 @@ Lemma denot_expss_eq :
           nprod_cons
             (eq_rect _ nprod (denot_exps ins es envG envI bs env) _ eqn)
             (denot_expss ins ess n envG envI bs env)
-      | _ => nprod_const (nprod_const abss _) _
+      | _ => nprod_const _ (nprod_const _ abss)
       end.
 Proof.
   intros.
@@ -458,7 +458,7 @@ Lemma forall_denot_expss :
               match Nat.eq_dec (list_sum (List.map numstreams es)) n with
               | left eqn =>
                   P (eq_rect _ nprod (denot_exps ins es envG envI bs env) n eqn)
-              | _ => P (nprod_const abss n)
+              | _ => P (nprod_const n abss)
               end) (List.map snd ess) ->
     forall_nprod P (denot_expss ins ess n envG envI bs env).
 Proof.
@@ -562,7 +562,7 @@ Lemma denot_exp_eq :
           match Nat.eq_dec m n, Nat.eq_dec n (length an) with
           | left eqm, left eqan =>
               eq_rect _ nprod (lift2 (SDfuns.fby) s0s (eq_rect _ nprod ss _ eqm)) _ eqan
-          | _, _ => nprod_const errTy _
+          | _, _ => nprod_const _ errTy
           end
       (* | Earrow _ e0 e => *)
       (*     lift2 s (@arrow) _ (denot_exp e0 genv env bs) (denot_exp e genv env bs) *)
@@ -573,7 +573,7 @@ Lemma denot_exp_eq :
           match Nat.eq_dec (list_sum (List.map numstreams es)) (length tys) with
           | left eqn =>
               eq_rect _ nprod (llift (swhenv k) ss (denot_var ins envI env x)) _ eqn
-          | _ => nprod_const errTy _
+          | _ => nprod_const _ errTy
           end
       | Emerge (x,_) ies (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI bs env in
@@ -585,7 +585,7 @@ Lemma denot_exp_eq :
           let cs := denot_exp ins ec envG envI bs env in
           match numstreams ec as n return nprod n -> _ with
           | 1 => fun cs => lift_nprod (scasev (List.map fst ies) cs) ss
-          | _ => fun _ => nprod_const errTy _
+          | _ => fun _ => nprod_const _ errTy
           end cs
       | Ecase ec ies (Some eds) (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI bs env in
@@ -596,7 +596,7 @@ Lemma denot_exp_eq :
           | 1, left eqm =>
               fun cs => lift_nprod (scase_defv (List.map fst ies) cs)
                        (nprod_cons (eq_rect _ nprod ds _ eqm) ss)
-          | _,_ => fun _ => nprod_const errTy _
+          | _,_ => fun _ => nprod_const _ errTy
           end cs
       | Eapp f es er an =>
           let ss := denot_exps ins es envG envI bs env in
@@ -608,9 +608,9 @@ Lemma denot_exp_eq :
                   eq_rect _ nprod
                     (np_of_env (List.map fst n.(n_out)) (sreset (envG f) (sbools_of rs) (env_of_np (idents n.(n_in)) ss)))
                     _ eqan
-              | _ => nprod_const errTy _
+              | _ => nprod_const _ errTy
               end
-          | _ => nprod_const errTy _
+          | _ => nprod_const _ errTy
           end
       (* | Emerge _ x vd eT eF => *)
       (*     llift2 s _ (@merge) _ (denot_var s thisd x vd env) *)
@@ -621,7 +621,7 @@ Lemma denot_exp_eq :
       (* | Ereset _ _ f fd e er => *)
       (*     reset (denot_app s gd f fd genv) *)
                           (*       (denot_exp er genv env bs) (denot_exp e genv env bs) *)
-      | _ => nprod_const errTy _
+      | _ => nprod_const _ errTy
       end.
 Proof.
   (* Le système se sent obligé de dérouler deux fois [denot_exp_] lors
