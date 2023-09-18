@@ -2968,13 +2968,6 @@ Section Node_safe.
 
   End wf_var.
 
-  (** [REM_env] itéré *)
-  Fixpoint nrem_env (n : nat) : DS_prod SI -C-> DS_prod SI :=
-    match n with
-    | O => ID _
-    | S n => REM_env @_ nrem_env n
-    end.
-
 
   (** FIXME: on voudrait généraliser (envG f) pour sortir de la section
       Node_safe, se concentrer sur la fonction de reset (sans Hnode, Γ, etc.)

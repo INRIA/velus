@@ -780,6 +780,22 @@ Proof.
   now rewrite 2 REM_env_eq, <- 2 PROJ_simpl, H.
 Qed.
 
+(** [REM_env] itéré *)
+Fixpoint nrem_env (n : nat) : DS_prod SI -C-> DS_prod SI :=
+  match n with
+  | O => ID _
+  | S n => REM_env @_ nrem_env n
+  end.
+
+Lemma nrem_env_inf :
+  forall n X,
+    all_infinite X ->
+    all_infinite (nrem_env n X).
+Proof.
+  induction n; simpl; intros * HH; auto.
+  apply REM_env_inf, IHn, HH.
+Qed.
+
 (** Prendre la tête dans env1, la queue dans env2 *)
 Definition APP_env : DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry, Dprodi_DISTR; intro i.
