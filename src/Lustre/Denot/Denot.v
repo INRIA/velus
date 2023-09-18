@@ -45,8 +45,6 @@ Definition global := @global nolocal Prefs.
 Definition mem_nth := mem_nth ident ident_eq_dec.
 
 Definition errTy : DS (sampl value) := DS_const (err error_Ty).
-Definition abss  : DS (sampl value) := DS_const abs.
-
 
 (** ** Denotational environments (local & program-wide) *)
 Section Denot_env.
@@ -55,7 +53,6 @@ Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
 
 Definition err_env : DS_prod SI := fun _ => errTy.
-Definition abs_env : DS_prod SI := fun _ => abss.
 
 (** build an environment from a tuple of streams, with names given in [l] *)
 Definition env_of_np (l : list ident) {n} : nprod n -C-> DS_prod SI :=

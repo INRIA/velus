@@ -51,32 +51,6 @@ Qed.
 
 (** ** Résultats généraux sur l'indépendance aux absences *)
 
-Lemma abs_abs_abs : abs_env == APP_env abs_env abs_env.
-Proof.
-  unfold abs_env.
-  apply Oprodi_eq_intro; intro x.
-  rewrite APP_env_eq.
-  setoid_rewrite DS_const_eq at 1 2.
-  now rewrite APP_simpl, app_cons.
-Qed.
-
-Lemma rem_abs_env : REM_env (abs_env) == abs_env.
-Proof.
-  unfold abs_env, abss.
-  apply Oprodi_eq_intro; intro x.
-  now rewrite REM_env_eq, DS_const_eq, rem_cons at 1.
-Qed.
-
-Lemma all_cons_abs_env : all_cons abs_env.
-Proof.
-  intro; eauto using is_cons_DS_const.
-Qed.
-
-Lemma abs_env_inf : all_infinite abs_env.
-Proof.
-  exact (fun _ => DS_const_inf _).
-Qed.
-
 Lemma np_of_env_abs :
   forall l env,
     np_of_env l (APP_env abs_env env) == lift (CONS abs) (np_of_env l env).
@@ -264,7 +238,7 @@ Proof.
 Qed.
 
 Lemma abs_indep_sreset_aux :
-  forall f bs X Y,
+  forall f bs (X Y : DS_prod SI),
     sreset_aux f (cons false bs) (APP_env abs_env X) (APP_env abs_env Y)
     == APP_env abs_env (sreset_aux f bs X Y).
 Proof.
@@ -277,7 +251,7 @@ Proof.
 Qed.
 
 Lemma bss_app_abs :
-  forall l env,
+  forall l (env : DS_prod SI),
     bss l (APP_env abs_env env) == cons false (bss l env).
 Proof.
   induction l as [| x l]; intro env.

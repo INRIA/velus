@@ -37,6 +37,44 @@ Local Hint Rewrite
   : localdb.
 
 
+(** *** Repeated absences *)
+Section Abs.
+
+  Context {A I : Type}.
+
+  (** infinity of absences *)
+  Definition abss : DS (sampl A) := DS_const abs.
+  Definition abs_env : DS_prod (fun _ : I => sampl A) := fun _ => abss.
+
+  Lemma abs_abs_abs : abs_env == APP_env abs_env abs_env.
+  Proof.
+    unfold abs_env.
+    apply Oprodi_eq_intro; intro x.
+    rewrite APP_env_eq.
+    setoid_rewrite DS_const_eq at 1 2.
+    now rewrite APP_simpl, app_cons.
+  Qed.
+
+  Lemma all_cons_abs_env : all_cons abs_env.
+  Proof.
+    intro; eauto using is_cons_DS_const.
+  Qed.
+
+  Lemma abs_env_inf : all_infinite abs_env.
+  Proof.
+    exact (fun _ => DS_const_inf _).
+  Qed.
+
+  Lemma rem_abs_env : REM_env (abs_env) == abs_env.
+  Proof.
+    unfold abs_env, abss.
+    apply Oprodi_eq_intro; intro x.
+    now rewrite REM_env_eq, DS_const_eq, rem_cons at 1.
+  Qed.
+
+End Abs.
+
+
 (** *** abstract_clock as defined in Vélus, considering errors as absences *)
 Section Abstract_clock.
 
@@ -499,7 +537,7 @@ Section SStream_functions.
     intros.
     unfold fbys.
     assert (Heq:=FIXP_eq fbysf).
-    pose proof (ford_eq_elim (ford_eq_elim Heq false) (cons x xs)) as ->.
+    eapply ford_eq_elim, fcont_eq_elim in Heq as ->.
     now rewrite <- fbyf_eq.
   Qed.
 
@@ -514,7 +552,7 @@ Section SStream_functions.
     intros.
     unfold fbys.
     assert (Heq:=FIXP_eq fbysf).
-    pose proof (ford_eq_elim (ford_eq_elim Heq true) xs) as ->.
+    eapply ford_eq_elim, fcont_eq_elim in Heq as ->.
     now rewrite <- fbyAf_eq.
   Qed.
 
