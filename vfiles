@@ -99,6 +99,7 @@ src/Lustre/Denot/Infty.v
 src/Lustre/Denot/InftyProof.v
 src/Lustre/Denot/OpErr.v
 src/Lustre/Denot/Abs.v
+src/Lustre/Denot/Reset.v
 src/Lustre/Denot/Safe.v
 src/Lustre/Denot/SDtoRel.v
 
