@@ -1,8 +1,6 @@
 From Velus Require Import Common.CommonTactics.
 Require Import Cpo.
-(* Infty peut-être abusé, on a juste besoin de nrem ?  TODO: bouger nrem dans DS_ext *)
-Require Import SDfuns Infty.
-
+Require Import SDfuns.
 
 (* TODO: où mettre ça joliment ? *)
 Ltac revert_all :=
