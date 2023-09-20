@@ -693,13 +693,13 @@ Module Type LDENOTINF
      alors [denot_blocks] l'associe à [errTy]. *)
   Lemma P_var_outside_blocks :
     forall ins envI bs env blks x n,
-      P_vars n envI ins ->
+      (forall x, P_var n envI x) ->
       ~ (Exists (Syn.Is_defined_in (Var x)) blks)  ->
       P_var n (denot_blocks G ins blks envG envI bs env) x.
   Proof.
     intros * Hins Hnex; revert dependent blks.
     induction blks as [| blk blks]; simpl; intros.
-    - apply is_ncons_DS_const.
+    - apply Hins.
     - rewrite denot_blocks_eq_cons, denot_block_eq.
       cases.
       unfold P_var; rewrite PROJ_simpl, env_of_np_ext_eq.
@@ -790,7 +790,7 @@ Module Type LDENOTINF
       + rewrite Perm3 in Hnin.
         eapply not_var_not_defined in Hnin; eauto.
         unfold env; rewrite FIXP_eq; fold env.
-        eapply P_var_outside_blocks; auto using P_vars_weaken.
+        eapply P_var_outside_blocks; auto.
     - constructor.
     - intros x ys _ Hys Hdep.
       constructor; auto.
@@ -805,7 +805,7 @@ Module Type LDENOTINF
         intros y Hex.
         eapply P_vars_In, Hdep; auto.
         constructor; rewrite Hnd; constructor; econstructor; eauto.
-      + eapply P_var_outside_blocks; eauto using P_vars_weaken.
+      + eapply P_var_outside_blocks; auto.
   Qed.
 
   Theorem denot_n :

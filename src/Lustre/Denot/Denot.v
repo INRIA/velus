@@ -925,14 +925,14 @@ Definition denot_blocks (ins : list ident) (blks : list block) :
   apply curry, curry, curry.
   revert blks; fix denot_blocks 1.
   intros [| blk blks].
-  - apply (CTE _ _ abs_env).
+  - refine (SND _ _ @_ FST _ _ @_ FST _ _).
   - refine ((ID _ @2_ uncurry (uncurry (uncurry (denot_block ins blk)))) (denot_blocks blks)).
 Defined.
 
 Lemma denot_blocks_eq :
   forall ins envG envI bs env blks,
     denot_blocks ins blks envG envI bs env
-    = fold_right (fun blk => denot_block ins blk envG envI bs env) abs_env blks.
+    = fold_right (fun blk => denot_block ins blk envG envI bs env) envI blks.
 Proof.
   induction blks; simpl; auto.
   unfold denot_blocks at 1.
