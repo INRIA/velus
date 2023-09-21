@@ -525,45 +525,51 @@ Proof.
 Qed.
 
 
+(* TODO: move !! *)
+Lemma nrem_rem_env :
+  forall k (X : DS_prod SI),
+    nrem_env k (REM_env X) == REM_env (nrem_env k X).
+Proof.
+  induction k; auto; intros; simpl.
+  autorewrite with cpodb.
+  rewrite IHk; auto.
+Qed.
+
 (* XXXXXXXXXXXXXXXXXX TODO mutualiser, où foutre ça ?? *)
 
-(** Entrées absentes -> sorties absentes *)
-(* TODO: toutes les entrées ou seulement ins ? *)
-CoInductive abs_align : DS_prod SI -> DS_prod SI -> Prop :=
-| Aa :
-  forall X Y,
-    abs_align (REM_env X) (REM_env Y) ->
-    (FIRST_env X == (fun _ => cons abs 0) -> FIRST_env Y == (fun _ => cons abs 0)) ->
-    abs_align X Y.
+(** *** Entrées absentes -> sorties absentes *)
+
+(** Propriété qui découle de la correction des horloges (cf. wf_align).
+    Dans une forme un peu plus faible (absences à l'infini) mais ça
+    suffit pour la correction du reset. *)
+Definition abs_align (X Y : DS_prod SI) : Prop :=
+  forall n, nrem_env n X == abs_env -> nrem_env n Y <= abs_env.
+
+Lemma abs_align_abs :
+  forall X, abs_align abs_env X -> X <= abs_env.
+Proof.
+  intros * Hal.
+  apply (Hal O); reflexivity.
+Qed.
+
+Lemma abs_align_rem :
+  forall X Y, abs_align X Y -> abs_align (REM_env X) (REM_env Y).
+Proof.
+  unfold abs_align.
+  intros * Hal n.
+  specialize (Hal (S n)).
+  now rewrite 2 nrem_rem_env.
+Qed.
 
 Global Add Parametric Morphism : abs_align
        with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> Basics.impl
          as abs_align_morph.
 Proof.
-  clear.
-  cofix Cof; intros * Eq1 * Eq2 Habs; inv Habs; constructor.
-  - eapply Cof; try eassumption; now rewrite ?Eq1, ?Eq2.
-  - now rewrite <- Eq1, <- Eq2.
-Qed.
-
-Lemma abs_align_abs :
-  forall X, abs_align abs_env X ->
-       X == abs_env.
-Proof.
-  clear; intros.
-  apply env_eq_Oeq.
-  remember_ds abs_env as a.
-  revert_all; cofix Cof; intros * Ha Habs.
-  inversion_clear Habs as [?? Hab Hf].
-  constructor.
-  - apply Cof; auto.
-    unfold SI. (* WFF *)
-    now rewrite Ha, rem_abs_env.
-  - assert (FIRST_env (@abs_env A I) == (fun _ => cons abs 0)).
-    { unfold abs_env, abss.
-      apply Oprodi_eq_intro; intro x.
-      now rewrite FIRST_env_eq, DS_const_eq, first_cons. }
-    rewrite Hf; rewrite Ha; auto.
+  unfold abs_align.
+  intros * Eq1 * Eq2 Habs.
+  setoid_rewrite <- Eq1.
+  setoid_rewrite <- Eq2.
+  auto.
 Qed.
 
 (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
@@ -585,11 +591,6 @@ Hypothesis AbsG :
   forall X,
     all_infinite X ->
     f (APP_env abs_env X) == APP_env abs_env (f X).
-
-(** à prouver avec la correction des horloges *)
-Hypothesis Halign :
-  forall X,
-    abs_align X (f X).
 
 (* FIXME: en fonction de ce qu'on arrive à prouver dans Lp.v,
    établir une version plus simple de ce prédicat *)
@@ -652,31 +653,33 @@ Lemma smask_sreset0 :
   forall R X,
     all_infinite X ->
     infinite R ->
+    abs_align (smask_env O R X) (f (smask_env O R X)) ->
     f (smask_env O R X) == smask_env O R (sreset_aux f R X (f X)).
 Proof.
-  clear - InfG Hlp Halign.
-  intros * Infx Infr.
+  clear - InfG Hlp.
+  intros * Infx Infr Habs.
   apply take_env_Oeq; intro n.
   destruct (take_bool_dec n R Infr) as [Hr | (m & Hle & Hr & Hf)].
   - rewrite take_smask_false, (take_sreset_aux_false _ f _ _), Hlp; auto.
     now apply take_smask_false.
   - pose proof (Ht := Hlp (smask_env O R X) X m (take_smask_false m R X Hr)).
-    pose proof (Habs := Halign (smask_env O R X)).
     specialize (InfG X Infx) as Infy.
     revert Ht Habs Infy.
     generalize (f X); intros Y.
-    generalize (f (smask_env O R X)); intro Z.
+    specialize (InfG (smask_env O R X) (smask_env_inf _ _ _ Infr Infx)) as Infz.
+    revert Infz.
+    generalize (f (smask_env O R X)); intros Z.
     revert Hr Hf Infr Infx Hle.
     revert R X Y Z n.
     induction m; intros;
       inversion_clear Infr as [Cr InfR];
       destruct (is_cons_elim Cr) as (r & R' & Hr').
-    + simpl in *.
+    + simpl in Hf.
       rewrite Hr', first_cons, smask_env_eq in *.
       apply Con_eq_simpl in Hf as []; subst.
-      apply abs_align_abs in Habs as ->; auto.
+      apply abs_align_abs, all_infinite_le_eq in Habs as ->; auto.
     + destruct n;[lia|].
-      inv Habs.
+      apply abs_align_rem in Habs.
       rewrite 2 (take_eq (S m)), Hr', rem_cons, smask_env_eq in *.
       rewrite DS_const_eq, 2 app_cons in Hr.
       apply Con_eq_simpl in Hr as []; subst; simpl in *.
@@ -687,27 +690,6 @@ Proof.
       rewrite 2 rem_app_env in Hrt; auto using all_infinite_all_cons.
       rewrite <- (app_app_first_env Y), <- (app_app_first_env Z), Hft, IHm; auto with arith.
       all: auto using all_infinite_all_cons, REM_env_inf.
-      (* reste [all_cons Z] *)
-      intro x; apply first_is_cons.
-      rewrite <- FIRST_env_eq, <- PROJ_simpl, Hft, PROJ_simpl, FIRST_env_eq.
-      apply is_cons_first.
-      now destruct (Infy x).
-Qed.
-
-(* le cas de base rencontré dans smask_sreset, à inliner ??? *)
-Lemma smask_sreset1 :
-  forall R X,
-    all_infinite X ->
-    infinite R ->
-    f (smask_env 1 (cons true R) X)
-    == smask_env 1 (cons true R) (sreset_aux f (cons false R) X (f X)).
-Proof.
-  clear - InfG Halign Hlp.
-  intros * Infx Infr.
-  pose proof (Hm := smask_sreset0 (cons false R) X).
-  rewrite 2 smask_env_eq, sreset_aux_eq, app_app_env, rem_app_env, Hm in *; auto.
-  constructor; rewrite ?rem_cons; auto.
-  all: apply all_infinite_all_cons, InfG, Infx.
 Qed.
 
 (** Caractérisation fondamentale de la fonction de reset *)
@@ -715,20 +697,14 @@ Lemma smask_sreset :
   forall k R X,
     infinite R ->
     all_infinite X ->
+    abs_align (smask_env k R X) (f (smask_env k R X)) ->
     f (smask_env k R X) == smask_env k R (sreset f R X).
 Proof.
-  intros * Infr Infx.
+  intros * Infr Infx Hal.
   rewrite sreset_eq.
   destruct k.
   (* k = 0, cas de base *)
-  { inversion_clear Infr as [Cr InfR].
-    destruct (is_cons_elim Cr) as (r & R' & Hr).
-    rewrite Hr, rem_cons in *.
-    destruct r.
-    - rewrite 2 smask_env_eq.
-      apply forever_abs.
-    - rewrite <- 2 smask_env_eq_1.
-      apply smask_sreset1; auto. }
+  { apply smask_sreset0; auto. }
   (* on va raisonner par co-induction grâce à [env_eq] *)
   remember_ds X as Xn.
   remember (_ f Xn) as Y eqn:HH.
@@ -741,28 +717,29 @@ Proof.
   apply env_eq_ok.
   remember_ds (f _) as U.
   remember_ds (smask_env _ _ (_ _)) as V.
-  revert HV HU Infr Infx Hy.
+  revert HV HU Infr Infx Hy Hal.
   revert k R Xn Y U V.
   cofix Cof; intros.
   inversion_clear Infr as [Cr InfR].
   destruct (is_cons_elim Cr) as (r & R' & Hr).
-  rewrite Hr in HU, HV.
+  rewrite Hr in HU, HV, Hal.
   rewrite Hr, rem_cons in InfR.
   destruct Hy as (X & n & Hxn & Hy & InfX).
   rewrite Hxn in HU, HV.
   rewrite Hy in HV.
   rewrite sreset_aux_eq in HV.
-  rewrite smask_env_eq in HU, HV.
+  rewrite smask_env_eq in HU, HV, Hal.
   cases.
   (* encore le cas de base... *)
-  { rewrite HV, HU.
-    pose proof (Hsm := smask_sreset1 R' (nrem_env n X)).
-    rewrite sreset_aux_eq, 2 smask_env_eq in Hsm.
-    rewrite Hsm, sreset_aux_eq, 2 app_app_env; auto.
-    2: rewrite <- Hxn; auto.
-    apply Oeq_env_eq, reflexivity. }
+  { rewrite HV, HU, Hxn in *; clear HU HV Hxn.
+    pose proof (Hsm := smask_sreset0 (cons false R') (nrem_env n X)).
+    rewrite smask_env_eq in Hsm at 3.
+    rewrite Hsm, smask_env_eq; auto using infinite_cons, Oeq_env_eq.
+    now rewrite smask_env_eq. }
   all: rewrite AbsG in HU; auto using smask_env_inf, nrem_env_inf, REM_env_inf.
   all: constructor; [| rewrite HU, HV, 2 first_app_env; auto].
+  all: apply abs_align_rem in Hal.
+  all: rewrite HU, 2 rem_app_env, Hxn in Hal; eauto 1 using all_cons_abs_env.
   - eapply Cof; rewrite ?HU, ?HV, ?rem_app_env;
       eauto using all_cons_abs_env, nrem_env_inf, all_infinite_all_cons, REM_env_inf.
     exists X, (S n); eauto.
