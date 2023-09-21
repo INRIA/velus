@@ -936,6 +936,14 @@ Fixpoint nrem_env (n : nat) : DS_prod SI -C-> DS_prod SI :=
   | S n => REM_env @_ nrem_env n
   end.
 
+Lemma nrem_rem_env :
+  forall k X, nrem_env k (REM_env X) == REM_env (nrem_env k X).
+Proof.
+  induction k; auto; intros; simpl.
+  autorewrite with cpodb.
+  rewrite IHk; auto.
+Qed.
+
 Lemma nrem_env_inf :
   forall n X,
     all_infinite X ->

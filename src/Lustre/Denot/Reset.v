@@ -318,6 +318,7 @@ Definition smask_envf : (nat -O-> DS bool -C-> DS_prod SI -C-> DS_prod SI) -C->
 Defined.
 
 (* FIXME: changer les Dprodi dans la définition aussi  *)
+(* FIXME: comprendre le FIXME ci-dessus *)
 Lemma smask_envf_eq : forall F k r R X,
     smask_envf F k (cons r R) X
     == match k with
@@ -489,24 +490,6 @@ apply AC_smask.
     apply smask_or_ad_hoc.
 Qed.
 
-(* TODO: à terme, mettre np_of_env dans Nprod ?? *)
-(* TODO: de toute façon, ça n'a pas l'air utilisé *)
-(* Lemma lift_smask : *)
-(*   forall k rs l env, *)
-(*     0 < length l -> *)
-(*     lift (smask k rs) (np_of_env l env) *)
-(*     == np_of_env l (smask_env k rs env). *)
-(* Proof. *)
-(*   intros * Hl. *)
-(*   destruct l as [|x l]. inv Hl. *)
-(*   apply nprod_eq. *)
-(*   intros n d Hn. *)
-(*   erewrite (nth_np_of_env x d (x :: l) _ n); auto. *)
-(*   unshelve erewrite nth_lift, smask_env_proj_eq, nth_np_of_env; eauto. *)
-(* Qed. *)
-
-(* End Smask_env. *)
-
 (* TODO: déplacer dans SDfuns *)
 Lemma take_sreset_aux_false :
   forall n f R (X Y : DS_prod SI),
@@ -524,16 +507,6 @@ Proof.
   now rewrite app_rem_take_env.
 Qed.
 
-
-(* TODO: move !! *)
-Lemma nrem_rem_env :
-  forall k (X : DS_prod SI),
-    nrem_env k (REM_env X) == REM_env (nrem_env k X).
-Proof.
-  induction k; auto; intros; simpl.
-  autorewrite with cpodb.
-  rewrite IHk; auto.
-Qed.
 
 (* XXXXXXXXXXXXXXXXXX TODO mutualiser, où foutre ça ?? *)
 
