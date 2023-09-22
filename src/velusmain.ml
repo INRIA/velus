@@ -117,11 +117,41 @@ open Hept_parser
 
 let interface = ref []
 
-(* TODO improve error messagin (also for Velus parser) *)
+let lexical_error err loc =
+  let open Hept_lexer in
+  Format.eprintf (match err with
+    | Illegal_character -> "%aIllegal character.@."
+    | Unterminated_comment -> "%aUnterminated comment.@."
+    | Bad_char_constant -> "%aBad char constant.@."
+    | Unterminated_string -> "%aUnterminated string.@."
+     ) Location.print_location loc;
+  raise Error
+
+let syntax_error loc =
+  Format.eprintf "%aSyntax error.@." Location.print_location loc;
+  raise Error
+
+let lexbuf_from_file file_name =
+  let ic = open_in file_name in
+  let lexbuf = Lexing.from_channel ic in
+  lexbuf.Lexing.lex_curr_p <-
+      { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = file_name };
+  ic, lexbuf
+
 let parse_heptc source_name =
-  let chan = open_in source_name in
-  let hept_ast = Hept_parser.program Hept_lexer.token (Lexing.from_channel chan) in
-  close_in chan;
+  let source_file, lexbuf = lexbuf_from_file source_name in
+  let hept_ast =
+    try
+      Hept_parser.program Hept_lexer.token lexbuf
+    with
+    | Hept_lexer.Lexical_error(err,l) -> lexical_error err l
+    | Hept_parser.Error ->
+        let pos1 = Lexing.lexeme_start_p lexbuf
+        and pos2 = Lexing.lexeme_end_p lexbuf in
+        let l = Location.Loc(pos1,pos2) in
+        syntax_error l
+  in
+  close_in source_file;
   Hept_to_velus.program !interface hept_ast
 
 let add_heptc_interface source_name =

@@ -258,6 +258,7 @@ let rec exp (env: cenv) e : LustreAst.expression struct_exp =
     (* TODO This is not ideal, as it means we cannot write f(x).[0] *)
     Simple [app f (List.concat_map (flat_exp env) (a_params@es)) (location e.e_loc)]
   | Eapp ({ a_op = Eifthenelse }, [ec; et; ef]) ->
+    (* TODO this is stupid, the condition is duplicated *)
     let ec = flat_exp env ec and et = exp env et and ef = exp env ef in
     struct_map2
       (fun et ef -> [CASE (ec, [(Ident.Ids.true_id, et); (Ident.Ids.false_id, ef)], [], location e.e_loc)])
