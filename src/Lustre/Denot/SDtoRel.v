@@ -1983,7 +1983,20 @@ Proof.
 Qed.
 
 (* TODO: move ?? *)
-(* on pourait faire sauter restr_node en n'utilisant pas get_defined_in_defined *)
+(* on pourait faire sauter restr_node en n'utilisant pas get_defined_in_defined mais plutôt ça : *)
+
+Lemma get_defined_is_defined_in :
+  forall x blk,
+    In x (get_defined blk) ->
+    Syn.Is_defined_in (Var x) blk.
+Proof.
+  induction blk using block_ind2; simpl; intros Hin; try tauto.
+  - destruct eq as (xs,es).
+    now constructor.
+  - constructor; constructor.
+    (* ???????????? *)
+Abort.
+
 Lemma ins_not_defined :
   forall (nd : node) x,
     restr_node nd ->
