@@ -778,7 +778,8 @@ module SchedulerFun
       let gr = ref gr in
 
       let add_dep_var x y = (* (next|update) x := f(y) *)
-        if PM.mem y nexts then
+        if x = y then ()
+        else if PM.mem y nexts then
           gr := G.add_edge !gr x y
         else
           gr := G.add_edge !gr y x
@@ -790,7 +791,8 @@ module SchedulerFun
           gr := G.add_edge_e !gr (G.E.create y Obligatory x)
 
       and add_dep_last x y = (* x := f(last y) *)
-        gr := G.add_edge !gr x y
+        if x = y then ()
+        else gr := G.add_edge !gr x y
 
       in (match tc with
           | TcDef (ck, x, ce) ->
