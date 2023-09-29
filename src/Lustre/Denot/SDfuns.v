@@ -364,8 +364,10 @@ Section SStream_functions.
   Proof.
     intros.
     unfold fby1sf.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    destruct ov,y; auto.
+    rewrite 2 ford_fcont_shift_simpl, 2 curry_Curry, 2 Curry_simpl.
+    rewrite fcont_comp2_simpl, DSCASE_simpl, SND_simpl, Snd_simpl.
+    simpl (snd _); rewrite  DScase_cons.
+    destruct ov,y; reflexivity.
   Qed.
 
   Lemma fby1f_eq : forall F ov x xs ys,
@@ -379,8 +381,11 @@ Section SStream_functions.
   Proof.
     intros.
     unfold fby1sf.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    destruct ov,x; auto.
+    rewrite 2 ford_fcont_shift_simpl, 2 curry_Curry, 2 Curry_simpl.
+    rewrite fcont_comp2_simpl, fcont_comp_simpl.
+    rewrite DSCASE_simpl, FST_simpl, Fst_simpl, SND_simpl, Snd_simpl.
+    simpl (snd _); rewrite DScase_cons.
+    destruct ov,x; reflexivity.
   Qed.
 
   Definition fby1s : (bool -O-> option A -O-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) :=
@@ -403,7 +408,7 @@ Section SStream_functions.
     assert (Heq:=FIXP_eq fby1sf).
     pose proof (ford_eq_elim (ford_eq_elim Heq true)) as ->.
     rewrite fby1APf_eq.
-    unfold fby1, fby1s; auto.
+    unfold fby1, fby1s; reflexivity.
   Qed.
 
   Lemma fby1_eq : forall ov x xs ys,
@@ -446,6 +451,17 @@ Section SStream_functions.
     2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
     now apply DScase_is_cons in Hc.
   Qed.
+
+  Lemma fby1_bot1 : forall o ys, fby1 o 0 ys == 0.
+  Proof.
+    intros o ys.
+    unfold fby1, fby1s.
+    rewrite ford_eq_elim with (n := o).
+    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
+    apply DScase_bot_eq.
+  Qed.
+
+  Opaque fby1AP fby1.
 
   (* pour définir fbyA/fby mutuellement récursives on utilise un
      commutateur booléen *)
@@ -502,8 +518,10 @@ Section SStream_functions.
   Proof.
     intros.
     unfold fbysf.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    destruct y; auto.
+    rewrite ford_fcont_shift_simpl, 2 curry_Curry, 2 Curry_simpl.
+    rewrite fcont_comp2_simpl, DSCASE_simpl, SND_simpl, Snd_simpl.
+    simpl (snd _); rewrite  DScase_cons.
+    destruct y; reflexivity.
   Qed.
 
   Lemma fbyf_eq : forall F x xs ys,
@@ -516,11 +534,11 @@ Section SStream_functions.
   Proof.
     intros.
     unfold fbysf.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    setoid_rewrite fcont_comp_simpl.
-    destruct x. 1,3: auto.
-    (* TODO: pourquoi auto ne fonctionne pas ici ?? *)
-    now autorewrite with localdb using (simpl (snd _); simpl (fst _)).
+    rewrite ford_fcont_shift_simpl, 2 curry_Curry, 2 Curry_simpl.
+    rewrite fcont_comp2_simpl, ford_fcont_shift_simpl.
+    rewrite fcont_comp_simpl, SND_simpl, Snd_simpl.
+    simpl (snd _); rewrite DSCASE_simpl, DScase_cons.
+    destruct x; reflexivity.
   Qed.
 
   Definition fbys : (bool -O-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) :=
@@ -612,7 +630,25 @@ Section SStream_functions.
     2: rewrite FIXP_eq; reflexivity.
     now apply DScase_is_cons in Hc.
   Qed.
-  (* TODO: lemmes ici !! *)
+
+  Lemma is_cons_fby :
+    forall (xs ys : DS (sampl A)),
+      is_cons xs ->
+      is_cons (fby xs ys).
+  Proof.
+    intros * Hx.
+    apply is_cons_elim in Hx as (?&?&->).
+    rewrite fby_eq; cases.
+  Qed.
+
+  Lemma fby_bot1 : forall ys, fby 0 ys == 0.
+  Proof.
+    intros.
+    unfold fby, fbys.
+    rewrite ford_eq_elim with (n := false).
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_bot_eq.
+  Qed.
 
   Section When_Case.
 
@@ -681,11 +717,10 @@ Section SStream_functions.
     intros.
     unfold swhenf.
     rewrite curry_Curry, Curry_simpl.
-    setoid_rewrite DSCASE_simpl.
-    setoid_rewrite DScase_cons.
-    destruct x, c; simpl; auto.
-    destruct (tag_of_val _); auto.
-    destruct (tag_eqb _ _); auto.
+    rewrite fcont_comp2_simpl, DSCASE_simpl.
+    rewrite SND_simpl, Snd_simpl, ford_fcont_shift_simpl.
+    simpl (snd _); rewrite DScase_cons.
+    cases.
   Qed.
 
   Definition swhen (k : enumtag) : DS (sampl A) -C-> DS (sampl B) -C-> DS (sampl A) :=
@@ -708,10 +743,10 @@ Section SStream_functions.
         end.
   Proof.
     intros.
-    unfold swhen.
+    unfold swhen at 1.
+    rewrite (FIXP_eq (swhenf k)).
     autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    rewrite FIXP_eq at 1.
-    now rewrite swhenf_eq.
+    rewrite swhenf_eq; reflexivity.
   Qed.
 
   Lemma swhen_cons :
@@ -1448,81 +1483,81 @@ Section SStream_functions.
       choix justifie-t-il la production d'erreurs dans le merge/case ?
       -> "pour faire pareil" n'est sans doute pas un bon argument
    *)
-  Section Case_Noerr.
+  (* Section Case_Noerr. *)
 
-  (* a [case] operator for exactly one stream per tag *)
-  Definition scase1_noerrf :
-    (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)) -C->
-    (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)).
-    apply curry, curry.
-    eapply (fcont_comp2 (DSCASE _ _)).
-    2: exact (SND _ _ @_ FST _ _).
-    apply ford_fcont_shift; intro b.
-    apply curry.
-    match goal with
-    | |- _ (_ (Dprod ?pl ?pr) _) =>
-        pose (f := (FST _ _ @_ FST _ _ @_ (FST pl pr)))
-        ; pose (XB := SND pl pr)
-        ; pose (ENV := SND _ _ @_ FST pl pr)
-    end.
-    refine match b with
-    | abs => CONS abs @_ (f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV)
-    | pres vb =>
-        match tag_of_val vb with
-        | None => CTE _ _ (DS_const (err error_Ty))
-        | Some t => (APP _ @2_ PROJ _ t @_ ENV) ((f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV))
-        end
-    | err e => CTE _ _ (DS_const (err e))
-      end.
-  Defined.
+  (* (* a [case] operator for exactly one stream per tag *) *)
+  (* Definition scase1_noerrf : *)
+  (*   (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)) -C-> *)
+  (*   (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)). *)
+  (*   apply curry, curry. *)
+  (*   eapply (fcont_comp2 (DSCASE _ _)). *)
+  (*   2: exact (SND _ _ @_ FST _ _). *)
+  (*   apply ford_fcont_shift; intro b. *)
+  (*   apply curry. *)
+  (*   match goal with *)
+  (*   | |- _ (_ (Dprod ?pl ?pr) _) => *)
+  (*       pose (f := (FST _ _ @_ FST _ _ @_ (FST pl pr))) *)
+  (*       ; pose (XB := SND pl pr) *)
+  (*       ; pose (ENV := SND _ _ @_ FST pl pr) *)
+  (*   end. *)
+  (*   refine match b with *)
+  (*   | abs => CONS abs @_ (f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV) *)
+  (*   | pres vb => *)
+  (*       match tag_of_val vb with *)
+  (*       | None => CTE _ _ (DS_const (err error_Ty)) *)
+  (*       | Some t => (APP _ @2_ PROJ _ t @_ ENV) ((f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV)) *)
+  (*       end *)
+  (*   | err e => CTE _ _ (DS_const (err e)) *)
+  (*     end. *)
+  (* Defined. *)
 
-  Lemma scase1_noerrf_eq : forall f c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
-      scase1_noerrf f (cons c C) env
-      = match c with
-        | abs => cons abs (f C (DMAPi (fun _ => @REM (sampl A)) env))
-        | pres b =>
-            match tag_of_val b with
-            | None => DS_const (err error_Ty)
-            | Some t => app (env t) (f C (DMAPi (fun _ => @REM (sampl A)) env))
-            end
-        | err e => DS_const (err e)
-        end.
-  Proof.
-    intros.
-    unfold scase1_noerrf.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    destruct c; auto.
-    destruct (tag_of_val a); auto.
-  Qed.
+  (* Lemma scase1_noerrf_eq : forall f c C (env : Dprodi (fun _ : enumtag => DS (sampl A))), *)
+  (*     scase1_noerrf f (cons c C) env *)
+  (*     = match c with *)
+  (*       | abs => cons abs (f C (DMAPi (fun _ => @REM (sampl A)) env)) *)
+  (*       | pres b => *)
+  (*           match tag_of_val b with *)
+  (*           | None => DS_const (err error_Ty) *)
+  (*           | Some t => app (env t) (f C (DMAPi (fun _ => @REM (sampl A)) env)) *)
+  (*           end *)
+  (*       | err e => DS_const (err e) *)
+  (*       end. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold scase1_noerrf. *)
+  (*   autorewrite with localdb using (simpl (snd _); simpl (fst _)). *)
+  (*   destruct c; auto. *)
+  (*   destruct (tag_of_val a); auto. *)
+  (* Qed. *)
 
-  Definition scase1_noerr : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) :=
-    FIXP _ scase1_noerrf.
+  (* Definition scase1_noerr : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) := *)
+  (*   FIXP _ scase1_noerrf. *)
 
-  Lemma scase1_noerr_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
-      scase1_noerr (cons c C) env
-      == match c with
-        | abs => cons abs (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env))
-        | pres b =>
-            match tag_of_val b with
-            | None => DS_const (err error_Ty)
-            | Some t => app (env t) (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env))
-            end
-        | err e => DS_const (err e)
-        end.
-  Proof.
-    intros.
-    assert (Heq:=FIXP_eq scase1_noerrf).
-    pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) env) as HH.
-    now rewrite <- scase1_noerrf_eq.
-  Qed.
+  (* Lemma scase1_noerr_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))), *)
+  (*     scase1_noerr (cons c C) env *)
+  (*     == match c with *)
+  (*       | abs => cons abs (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env)) *)
+  (*       | pres b => *)
+  (*           match tag_of_val b with *)
+  (*           | None => DS_const (err error_Ty) *)
+  (*           | Some t => app (env t) (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env)) *)
+  (*           end *)
+  (*       | err e => DS_const (err e) *)
+  (*       end. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   assert (Heq:=FIXP_eq scase1_noerrf). *)
+  (*   pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) env) as HH. *)
+  (*   now rewrite <- scase1_noerrf_eq. *)
+  (* Qed. *)
 
-  (* now we lift it to exactly [n] streams per tag *)
-  Definition scase_noerr {n} :
-    DS (sampl B) -C-> Dprodi (fun _ => @nprod (DS (sampl A)) n)
-                 -C-> @nprod (DS (sampl A)) n :=
-    curry ((llift_env scase1_noerr @2_ FST _ _) (SND _ _)).
+  (* (* now we lift it to exactly [n] streams per tag *) *)
+  (* Definition scase_noerr {n} : *)
+  (*   DS (sampl B) -C-> Dprodi (fun _ => @nprod (DS (sampl A)) n) *)
+  (*                -C-> @nprod (DS (sampl A)) n := *)
+  (*   curry ((llift_env scase1_noerr @2_ FST _ _) (SND _ _)). *)
 
-  End Case_Noerr.
+  (* End Case_Noerr. *)
 
   End When_Case.
 
@@ -1899,11 +1934,15 @@ Section Sreset.
     intros.
     apply Oprodi_eq_intro; intro i.
     unfold sresetf_aux.
-    autorewrite with localdb.
-    setoid_rewrite Dprodi_DISTR_simpl.
-    setoid_rewrite DSCASE_simpl.
-    setoid_rewrite DScase_cons.
-    destruct r; cbn; now autorewrite with localdb.
+    rewrite 4 curry_Curry, 4 Curry_simpl.
+    rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)).
+    rewrite fcont_comp2_simpl, ford_fcont_shift_simpl.
+    rewrite 2 fcont_comp_simpl.
+    rewrite 2 FST_simpl, 2 Fst_simpl.
+    rewrite SND_simpl, Snd_simpl.
+    simpl (snd _); simpl (fst _).
+    rewrite DSCASE_simpl, DScase_cons.
+    cases; cbn; now rewrite DScase_cons.
   Qed.
 
   Lemma is_cons_sresetf_aux :
