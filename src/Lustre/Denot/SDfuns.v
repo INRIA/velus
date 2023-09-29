@@ -328,8 +328,8 @@ Section SStream_functions.
       refine match ov, y with
         | Some v, abs
         | None, pres v => (fcont_ford_shift _ _ _ fby1 (Some v) @3_ ID _) xs ys'
-        | _, err _ => CTE _ _ (DS_const y)
-        | _, _ => CTE _ _ (DS_const (err error_Cl))
+        | _, err _ => (fcont_ford_shift _ _ _ fby1 ov @3_ ID _) (MAP (fun _ => y) @_ xs) ys'
+        | _, _ => (fcont_ford_shift _ _ _ fby1 ov @3_ ID _) (MAP (fun _ => err error_Cl) @_ xs) ys'
       end.
     - (* false : fby1 *)
       apply ford_fcont_shift. intro ov.
@@ -348,8 +348,8 @@ Section SStream_functions.
       refine match ov, x with
         | Some v, pres _ => CONS (pres v) @_ ((fcont_ford_shift _ _ _ fby1AP None @3_ ID _) xs' ys)
         | Some v, abs => CONS abs @_ ((fcont_ford_shift _ _ _ fby1AP (Some v) @3_ ID _) xs' ys)
-        | _, err _ => CTE _ _ (DS_const x)
-        | _, _ => CTE _ _ (DS_const (err error_Cl))
+        | _, err _ => CONS x @_ MAP (fun _ => x) @_ xs'
+        | _, _ => CONS (err error_Cl) @_ MAP (fun _ => err error_Cl) @_ xs'
       end.
   Defined.
 
@@ -358,8 +358,8 @@ Section SStream_functions.
       == match ov, y with
          | Some v, abs
          | None, pres v => F false (Some v) xs ys
-         | _, err _ => DS_const y
-         | _, _ => DS_const (err error_Cl)
+         | _, err _ => F false ov (map (fun _ => y) xs) ys
+         | _, _ => F false ov (map (fun _ => err error_Cl) xs) ys
          end.
   Proof.
     intros.
@@ -373,8 +373,8 @@ Section SStream_functions.
       == match ov, x with
          | Some v, pres _ => cons (pres v) (F true None xs ys)
          | Some v, abs => cons abs (F true (Some v) xs ys)
-         | _, err _ => DS_const x
-         | _, _ => DS_const (err error_Cl)
+         | _, err _ => cons x (map (fun _ => x) xs)
+         | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) xs)
          end.
   Proof.
     intros.
@@ -394,8 +394,8 @@ Section SStream_functions.
       == match ov,y with
          | Some v, abs
          | None, pres v => fby1 (Some v) xs ys
-         | _, err _ => DS_const y
-         | _, _ => DS_const (err error_Cl)
+         | _, err _ => fby1 ov (map (fun _ => y) xs) ys
+         | _, _ => fby1 ov (map (fun _ => err error_Cl) xs) ys
          end.
   Proof.
     intros.
@@ -411,8 +411,8 @@ Section SStream_functions.
       == match ov, x with
          | Some v, abs => cons abs (fby1AP (Some v) xs ys)
          | Some v, pres _ => cons (pres v) (fby1AP None xs ys)
-         | _, err _ => DS_const x
-         | _, _ => DS_const (err error_Cl)
+         | _, err _ => cons x (map (fun _ => x) xs)
+         | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) xs)
          end.
   Proof.
     intros.
@@ -469,8 +469,8 @@ Section SStream_functions.
       end.
       refine match x with
         | abs => (fby @3_ ID _) xs ys'
-        | err _ => CTE _ _ (DS_const x)
-        | pres _ => CTE _ _ (DS_const (err error_Cl))
+        | err _ => (fby @3_ ID _) (MAP (fun _ => x) @_ xs) ys'
+        | pres _ => (fby @3_ ID _) (MAP (fun _ => err error_Cl) @_ xs) ys'
       end.
     - (* false : fby *)
       apply curry, curry.
@@ -488,7 +488,7 @@ Section SStream_functions.
       refine match x with
         | abs => CONS abs @_ ((fbyA @3_ ID _) xs' ys)
         | pres v => CONS (pres v) @_ ((fby1AP None @2_ xs') ys)
-        | err _ => CTE _ _ (DS_const x)
+        | err _ => CONS x @_ MAP (fun _ => x) @_ xs'
       end.
   Defined.
 
@@ -496,8 +496,8 @@ Section SStream_functions.
       fbysf F true xs (cons y ys)
       == match y with
          | abs => F false xs ys
-         | err _ => DS_const y
-         | pres _ => DS_const (err error_Cl)
+         | err _ => F false (map (fun _ => y) xs) ys
+         | pres _ => F false (map (fun _ => err error_Cl) xs) ys
          end.
   Proof.
     intros.
@@ -511,7 +511,7 @@ Section SStream_functions.
       == match x with
          | abs => cons abs (F true xs ys)
          | pres v => cons x (fby1AP None xs ys)
-         | err _ => DS_const x
+         | err _ => cons x (map (fun _ => x) xs)
          end.
   Proof.
     intros.
@@ -531,7 +531,7 @@ Section SStream_functions.
       == match x with
          | abs => cons abs (fbys true xs ys)
          | pres v => cons x (fby1AP None xs ys)
-         | err _ => DS_const x
+         | err _ => cons x (map (fun _ => x) xs)
          end.
   Proof.
     intros.
@@ -545,8 +545,8 @@ Section SStream_functions.
       fbys true xs (cons y ys)
       == match y with
          | abs => fbys false xs ys
-         | err _ => DS_const y
-         | pres _ => DS_const (err error_Cl)
+         | err _ => fbys false (map (fun _ => y) xs) ys
+         | pres _ => fbys false (map (fun _ => err error_Cl) xs) ys
          end.
   Proof.
     intros.
@@ -563,8 +563,8 @@ Section SStream_functions.
       fbyA xs (cons y ys)
       == match y with
          | abs => fby xs ys
-         | err _ => DS_const y
-         | pres _ => DS_const (err error_Cl)
+         | err _ => fby (map (fun _ => y) xs) ys
+         | pres _ => fby (map (fun _ => err error_Cl) xs) ys
          end.
   Proof.
     intros.
@@ -579,7 +579,7 @@ Section SStream_functions.
       == match x with
          | abs => cons abs (fbyA xs ys)
          | pres v => cons x (fby1AP None xs ys)
-         | err _ => DS_const x
+         | err _ => cons x (map (fun _ => x) xs)
          end.
   Proof.
     intros.
@@ -612,7 +612,7 @@ Section SStream_functions.
     2: rewrite FIXP_eq; reflexivity.
     now apply DScase_is_cons in Hc.
   Qed.
-
+  (* TODO: lemmes ici !! *)
 
   Section When_Case.
 
