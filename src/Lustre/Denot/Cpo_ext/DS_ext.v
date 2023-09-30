@@ -786,6 +786,14 @@ Proof.
   now apply IHn, rem_is_cons.
 Qed.
 
+Lemma is_ncons_cons :
+  forall n x (xs : DS A),
+    is_ncons n xs ->
+    is_ncons (S n) (cons x xs).
+Proof.
+  destruct n; simpl; intros * Hc; rewrite ?rem_cons; auto.
+Qed.
+
 Lemma nrem_eq_compat : forall n (s t:DS A), s==t -> nrem n s == nrem n t.
 Proof.
   induction n; simpl; auto.
@@ -803,6 +811,32 @@ Proof.
   unfold is_ncons.
   intros * H.
   destruct n; now rewrite ?H.
+Qed.
+
+Lemma is_ncons_elim :
+  forall n (xs : DS A),
+    is_ncons (S n) xs ->
+    exists x1 xs', xs == cons x1 xs' /\ is_ncons n xs'.
+Proof.
+  intros * Hc.
+  apply is_ncons_is_cons in Hc as HH.
+  apply is_cons_elim in HH as (x & xs' & Hx).
+  exists x, xs'; split; auto.
+  destruct n; simpl; auto.
+  now simpl in Hc; rewrite Hx, rem_cons in Hc.
+Qed.
+
+Lemma is_ncons_elim2 :
+  forall n (xs : DS A),
+    is_ncons (S (S n)) xs ->
+    exists x1 x2 xs', xs == cons x1 (cons x2 xs') /\ is_ncons (S n) (cons x2 xs') /\ is_ncons n xs'.
+Proof.
+  intros * Hc.
+  apply is_ncons_elim in Hc as (x1 & xx & Hx & Hc).
+  apply is_ncons_elim in Hc as HH; destruct HH as (x2 & xs' & Hx' & Hc').
+  rewrite Hx' in Hc.
+  exists x1,x2,xs'.
+  rewrite Hx, Hx'; auto.
 Qed.
 
 End Nrem.
