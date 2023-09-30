@@ -728,40 +728,37 @@ Section SDfuns_safe.
       ty_DS ty ys ->
       ty_DS ty (fby1s b ov xs ys).
   Proof.
+    clear.
     intros * Wtv Wt0 Wt.
     unfold ty_DS, DSForall_pres in *.
     remember_ds (fby1s _ _ _ _) as t.
-    revert dependent ys.
-    revert dependent xs.
-    revert dependent ov.
-    revert t b.
-    cofix Cof; intros.
+    revert_all; cofix Cof; intros.
     destruct t.
     { constructor; rewrite <- eqEps in *; now eauto 2. }
     assert (is_cons (fby1s b ov xs ys)) as Hc by (rewrite <- Ht; auto).
     destruct b.
     - (* fby1AP *)
-      apply fby1AP_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      apply fby1AP_cons, is_cons_elim in Hc as (y & ys' & Hy); rewrite Hy in *.
       fold (fby1AP ov) in Ht.
       rewrite fby1AP_eq in Ht.
-      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: assert (is_cons xs) as Hc by (eapply fby1_cons; now rewrite <- Ht).
-      all: apply is_cons_elim in Hc as (?&?&Hy); rewrite Hy in *.
-      all: rewrite fby1_eq in Ht.
-      all: cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
-      all: inv Wt; inv Wt0; constructor; auto.
-      (*  serait plus joli mais ralentit beaucoup le Qed :
-          all: unfold fby1AP in Ht; apply Cof in Ht; auto. *)
-      all: eapply Cof; rewrite ?Ht; unfold fby1AP; now auto.
+      destruct (@is_cons_elim _ xs) as (x & xs' & Hx).
+      { cases; apply symmetry, cons_is_cons, fby1_cons in Ht; eauto using map_is_cons. }
+      cases; rewrite Hx, ?map_eq_cons, fby1_eq in Ht; cases.
+      (* cas d'erreur (regarder Ht) *)
+      3,4,5,6,9,10: rewrite Ht, ?map_comp; constructor; auto; now apply DSForall_map, DSForall_all.
+      (* les autres *)
+      all: apply Con_eq_simpl in Ht as [? Ht]; subst.
+      all: rewrite Hx in Wt0; inv Wt0; inv Wt; constructor; auto.
+      all: unfold fby1AP in Ht; eapply Cof in Ht; eauto.
     - (* fby1 *)
-      apply fby1_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      apply fby1_cons, is_cons_elim in Hc as (x & xs' & Hx); rewrite Hx in *.
       fold (fby1 ov) in Ht.
       rewrite fby1_eq in Ht.
-      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
-      all: inv Wt0; constructor; auto.
-      all: eapply Cof; rewrite ?Ht; unfold fby1AP; now auto.
+      cases; apply Con_eq_simpl in Ht as [? Ht]; subst.
+      (* cas d'erreur (regarder Ht) *)
+      3-6: rewrite Ht; constructor; auto; now apply DSForall_map, DSForall_all.
+      (* les autres *)
+      all: inv Wt0; constructor; auto; eapply Cof in Ht; eauto.
   Qed.
 
   Lemma ty_fby :
@@ -770,40 +767,40 @@ Section SDfuns_safe.
       ty_DS ty ys ->
       ty_DS ty (fby xs ys).
   Proof.
+    clear.
     intros * Wt0 Wt.
     unfold ty_DS, DSForall_pres, fby in *.
     generalize false as b; intro.
     remember_ds (fbys _ _ _) as t.
-    revert dependent ys.
-    revert dependent xs.
-    revert t b.
-    cofix Cof; intros.
+    revert_all; cofix Cof; intros.
     destruct t.
     { constructor; rewrite <- eqEps in *; now eauto 2. }
     assert (is_cons (fbys b xs ys)) as Hc by (rewrite <- Ht; auto).
     destruct b.
     - (* fbyA *)
-      apply fbyA_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      apply fbyA_cons, is_cons_elim in Hc as (y & ys' & Hy); rewrite Hy in *.
       fold (@fbyA value) in Ht.
       rewrite fbyA_eq in Ht.
-      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: assert (is_cons xs) as Hc by (eapply fby_cons; now rewrite <- Ht).
-      all: apply is_cons_elim in Hc as (?&?&Hy); rewrite Hy in *.
-      all: rewrite fby_eq in Ht.
-      all: cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
-      all: inv Wt; inv Wt0; constructor; auto.
-      + unfold fbyA in Ht; apply Cof in Ht; auto.
-      + rewrite Ht. now apply ty_fby1.
+      destruct (@is_cons_elim _ xs) as (x & xs' & Hx).
+      { cases; apply symmetry, cons_is_cons, fby_cons in Ht; eauto using map_is_cons. }
+      cases; rewrite Hx, ?map_eq_cons, fby_eq in Ht; cases.
+      (* cas d'erreur (regarder Ht) *)
+      3,4,5: rewrite Ht, ?map_comp; constructor; auto; now apply DSForall_map, DSForall_all.
+      all: apply Con_eq_simpl in Ht as [? Ht]; subst.
+      all: rewrite Hx in Wt0; inv Wt0; inv Wt; constructor; auto.
+      + unfold fbyA in Ht; eapply Cof in Ht; eauto.
+      + rewrite Ht; now apply ty_fby1.
     - (* fby *)
       apply fby_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
       fold (@fby value) in Ht.
       rewrite fby_eq in Ht.
-      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
-      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+      cases; apply Con_eq_simpl in Ht as [? Ht]; subst.
+      (* cas d'erreur (regarder Ht) *)
+      3: rewrite Ht; constructor; auto; now apply DSForall_map, DSForall_all.
+      (* les autres *)
       all: inv Wt0; constructor; auto.
-      + unfold fbyA in Ht; apply Cof in Ht; auto.
-      + rewrite Ht. now apply ty_fby1.
+      + unfold fbyA in Ht; eapply Cof in Ht; eauto.
+      + rewrite Ht; now apply ty_fby1.
   Qed.
 
   Lemma cl_fby1 :
