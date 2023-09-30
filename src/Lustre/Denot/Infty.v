@@ -122,7 +122,7 @@ Proof.
   intros * Hx.
   apply is_cons_elim in Hx as (?&?&->).
   rewrite fby_eq.
-  cases; solve_err.
+  cases.
 Qed.
 
 Lemma is_ncons_S_fby1 :
@@ -131,29 +131,15 @@ Lemma is_ncons_S_fby1 :
     is_ncons n ys ->
     is_ncons (S n) (fby1 v xs ys).
 Proof.
-  induction n as [|[]]; intros * Hx Hy.
+  induction n; intros * Hx Hy.
   - apply is_cons_elim in Hx as (?&?&->).
-    rewrite fby1_eq. simpl. cases; solve_err.
-  - simpl in *.
-    apply is_cons_rem in Hx as (?&?&?&->).
-    apply is_cons_elim in Hy as (?&?&->).
-    rewrite fby1_eq.
-    cases; solve_err; rewrite fby1AP_eq.
-    all: cases; solve_err; rewrite fby1_eq.
-    all: cases; solve_err; autorewrite with cpodb; auto.
-  - (* FIXME: pas de simpl sur nrem ici sinon Qed est interminable *)
-    unfold is_ncons in *.
-    repeat rewrite nrem_S in *.
-    setoid_rewrite nrem_S in IHn.
-    apply is_ncons_is_cons in Hx as Hc.
-    apply is_cons_rem in Hc as (x2 & x3 & xs' & Hc).
-    apply rem_eq_cons in Hc as (x1 & Hc).
-    apply is_ncons_is_cons in Hy as Hd.
-    apply is_cons_rem in Hd as (y1 & y2 & ys' & Hd).
-    rewrite Hc, Hd, fby1_eq, 2 rem_cons in *.
-    cases; solve_err; rewrite fby1AP_eq; autorewrite with cpodb.
-    all: cases; solve_err.
-    all: apply IHn; autorewrite with cpodb; auto.
+    rewrite fby1_eq; simpl; cases.
+  - apply is_ncons_elim2 in Hx as (x1 & x2 & xs' & Hx & Hcx' & Hccx').
+    apply is_ncons_elim in Hy as (y1 & ys' & Hy & Hcy').
+    rewrite Hx, Hy, fby1_eq.
+    cases; apply is_ncons_SS; rewrite rem_cons;
+      auto using is_ncons_cons, is_ncons_map, is_ncons_S.
+    all: rewrite fby1AP_eq; cases; auto using is_ncons_cons, is_ncons_map, is_ncons_S.
 Qed.
 
 Lemma is_ncons_S_fby :
@@ -162,31 +148,16 @@ Lemma is_ncons_S_fby :
     is_ncons n ys ->
     is_ncons (S n) (fby xs ys).
 Proof.
-  induction n as [|[]]; intros * Hx Hy.
+  induction n; intros * Hx Hy.
   - apply is_cons_elim in Hx as (?&?&->).
-    rewrite fby_eq. simpl. cases; solve_err.
-  - simpl.
-    apply is_cons_rem in Hx as (?&?&?&->).
-    apply is_cons_elim in Hy as (?&?&->).
-    rewrite fby_eq.
-    cases; solve_err; rewrite ?fbyA_eq, ?fby1AP_eq.
-    all: cases; solve_err; rewrite ?fby_eq, ?fby1_eq.
-    all: cases; solve_err; autorewrite with cpodb; auto.
-  - unfold is_ncons in *.
-    repeat rewrite nrem_S in *.
-    setoid_rewrite nrem_S in IHn.
-    apply is_ncons_is_cons in Hx as Hc.
-    apply is_cons_rem in Hc as (x2 & x3 & xs' & Hc).
-    apply rem_eq_cons in Hc as (x1 & Hc).
-    apply is_ncons_is_cons in Hy as Hd.
-    apply is_cons_rem in Hd as (y1 & y2 & ys' & Hd).
-    rewrite Hc, Hd, fby_eq, 2 rem_cons in *.
-    cases; solve_err; rewrite ?fbyA_eq, ?fby1AP_eq.
-    all: autorewrite with cpodb; cases; solve_err.
-    + apply IHn; autorewrite with cpodb; auto.
-    + rewrite <- nrem_S.
-      apply is_ncons_S_fby1; unfold is_ncons;
-        rewrite ?nrem_S; now autorewrite with cpodb.
+    rewrite fby_eq; simpl; cases.
+  - apply is_ncons_elim2 in Hx as (x1 & x2 & xs' & Hx & Hcx' & Hccx').
+    apply is_ncons_elim in Hy as (y1 & ys' & Hy & Hcy').
+    rewrite Hx, Hy, fby_eq.
+    cases; apply is_ncons_SS; rewrite rem_cons.
+    + rewrite fbyA_eq; cases; auto using is_ncons_cons, is_ncons_map, is_ncons_S.
+    + rewrite fby1AP_eq; cases; auto using is_ncons_S_fby1, is_ncons_cons, is_ncons_map, is_ncons_S.
+    + auto using is_ncons_cons, is_ncons_map, is_ncons_S.
 Qed.
 
 Lemma is_ncons_fby :
