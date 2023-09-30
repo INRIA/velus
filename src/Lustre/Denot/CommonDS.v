@@ -293,13 +293,17 @@ Section DS_Forall.
   Qed.
 
   Lemma DSForall_const :
-    forall c,
-      P c ->
-      DSForall (DS_const c).
+    forall c, P c -> DSForall (DS_const c).
   Proof.
     cofix Cof; intros.
     rewrite DS_inv; simpl.
     constructor; auto.
+  Qed.
+
+  Lemma DSForall_all :
+    (forall x, P x) -> forall xs, DSForall xs.
+  Proof.
+    cofix Cof; intros; destruct xs; constructor; eauto.
   Qed.
 
   Lemma DSForall_eps : forall s, DSForall (Eps s) -> DSForall s.
@@ -314,7 +318,7 @@ Section DS_Forall.
     constructor; auto.
   Qed.
 
-  (* unprovable induction proinciple *)
+  (* unprovable induction principle *)
   Lemma DSForall_ind :
     (forall s, DSForall (rem s) -> DSForall s) ->
     forall s, DSForall s.
