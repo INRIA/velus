@@ -461,7 +461,7 @@ Section SStream_functions.
     apply DScase_bot_eq.
   Qed.
 
-  Opaque fby1AP fby1.
+  Global Opaque fby1s.
 
   (* pour définir fbyA/fby mutuellement récursives on utilise un
      commutateur booléen *)
@@ -650,6 +650,8 @@ Section SStream_functions.
     now apply DScase_bot_eq.
   Qed.
 
+  Global Opaque fbys.
+
   Section When_Case.
 
   Variable enumtag : Type.
@@ -761,6 +763,8 @@ Section SStream_functions.
     setoid_rewrite SND_PAIR_simpl in Hc.
     eapply zip_is_cons; eauto.
   Qed.
+
+  Global Opaque swhen.
 
   (** Le cas du merge/case est plus délicat car il opère sur une liste
       (nprod) de flots. On utilise pour ça [nprod_Foldi], qui effectue
@@ -1028,6 +1032,8 @@ Section SStream_functions.
   Qed.
 
   End fmerge_spec.
+
+  Global Opaque smerge.
 
   (** Le scase ressemble au smerge mais vérifie que tous les flots sont
       sur la même horloge que la condition cf. fcase.
@@ -1468,6 +1474,7 @@ Section SStream_functions.
 
   End fcase_spec.
 
+  Global Opaque scase.
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,
@@ -2005,3 +2012,5 @@ Section Sreset.
   Qed.
 
 End Sreset.
+
+Global Opaque sresetf_aux sreset.
