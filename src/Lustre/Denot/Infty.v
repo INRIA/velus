@@ -4,6 +4,7 @@ Require Import SDfuns CommonDS.
 
 (** * Infinity of streams defined in SDfuns  *)
 
+(* TODO: à terme, virer *)
 Ltac solve_err :=
   try match goal with
     | |- context [ DS_const _ ] =>
@@ -194,7 +195,7 @@ Proof.
   apply is_cons_elim in Hx as (?&?&->).
   apply is_cons_elim in Hc as (?&?&->).
   rewrite swhen_eq.
-  cases; solve_err.
+  cases.
 Qed.
 
 Lemma is_ncons_swhen :
@@ -213,8 +214,9 @@ Proof.
     apply is_cons_rem in Hc' as (?&?&?& Hc').
     rewrite Hx', Hc' in *.
     rewrite swhen_eq.
-    cases; solve_err.
-    all: autorewrite with cpodb in Hx,Hc |- *; auto.
+    cases; rewrite rem_cons in *; auto.
+    (* reste les cas d'erreur *)
+    all: apply (is_ncons_map _ _ _ _ (S n)); auto using is_ncons_zip.
 Qed.
 
 Lemma swhen_inf :

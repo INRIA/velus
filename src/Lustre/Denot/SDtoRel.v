@@ -1339,11 +1339,10 @@ Proof.
   unfold swhenv in *; rewrite Hxs, Hcs, swhen_eq in Hrs.
   cases_eqn HH; simpl in *; subst; try take (Some _ = Some _) and inv it.
   all: try apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
-  (* error cases *)
   all: rewrite Hxs, Hcs in *.
   all: rewrite swhen_eq in Sr, rsi.
-  all: repeat apply DSForall_tl in Sr.
-  all: try (rewrite DS_const_eq in Sr; inv Sr; now exfalso).
+  (* error cases *)
+  all: try (inv Sr; tauto).
   2: assert (k = e) by (now apply Nat.eqb_eq); subst.
   all: econstructor; auto using (proj1 (Nat.eqb_neq _ _)).
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.

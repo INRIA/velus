@@ -688,15 +688,15 @@ Section SStream_functions.
     | abs, abs => CONS abs @_ (f @2_ ID _) XC
     | pres x, pres c =>
         match tag_of_val c with
-        | None => CTE _ _ (DS_const (err error_Ty))
+        | None => CONS (err error_Ty) @_ MAP (fun _ => err error_Ty) @_ XC
         | Some t =>
             if tag_eqb k t
             then CONS (pres x) @_ (f @2_ ID _) XC
             else CONS abs @_ (f @2_ ID _) XC
         end
     | err e, _
-    | _, err e => CTE _ _ (DS_const (err e))
-    | _, _ => CTE _ _ (DS_const (err error_Cl))
+    | _, err e => CONS (err e) @_ MAP (fun _ => err e) @_ XC
+    | _, _ => CONS (err error_Cl) @_ MAP (fun _ => err error_Cl) @_ XC
     end.
   Defined.
 
@@ -706,14 +706,14 @@ Section SStream_functions.
         | abs, abs => cons abs (f XC)
         | pres x, pres c =>
             match tag_of_val c with
-            | None => DS_const (err error_Ty)
+            | None => cons (err error_Ty) (map (fun _ => err error_Ty) XC)
             | Some t =>
                 if tag_eqb k t
                 then cons (pres x) (f XC)
                 else cons abs (f XC)
             end
-        | err e, _ | _, err e => DS_const (err e)
-        | _, _ => DS_const (err error_Cl)
+        | err e, _ | _, err e => cons (err e) (map (fun _ => err e) XC)
+        | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) XC)
         end.
   Proof.
     intros.
@@ -734,14 +734,14 @@ Section SStream_functions.
         | abs, abs => cons abs (swhen k X C)
         | pres x, pres c =>
             match tag_of_val c with
-            | None => DS_const (err error_Ty)
+            | None => cons (err error_Ty) (map (fun _ => err error_Ty) (ZIP pair X C))
             | Some t =>
                 if tag_eqb k t
                 then cons (pres x) (swhen k X C)
                 else cons abs (swhen k X C)
             end
-        | err e, _ | _, err e => DS_const (err e)
-        | _, _ => DS_const (err error_Cl)
+        | err e, _ | _, err e => cons (err e) (map (fun _ => err e) (ZIP pair X C))
+        | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) (ZIP pair X C))
         end.
   Proof.
     intros.

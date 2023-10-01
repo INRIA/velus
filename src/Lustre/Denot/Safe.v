@@ -997,7 +997,9 @@ Section SDfuns_safe.
     rewrite Hx, Hc in *.
     inv Wtx. inv Wtc.
     rewrite swhen_eq in Ht.
-    cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+    cases.
+    (* les cas d'erreur *)
+    2-4,7-11: rewrite Ht; constructor; auto; now apply DSForall_map, DSForall_all.
     all: apply Con_eq_simpl in Ht as (? & Ht); subst.
     all: constructor; auto; eapply Cof; eauto.
   Qed.
