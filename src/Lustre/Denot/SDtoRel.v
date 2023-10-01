@@ -1270,16 +1270,16 @@ Proof.
   apply S_of_DS_Cons in Eqy as (y & ty & Hys & Hyvy & ity & Eqy).
   apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
   subst rs.
-  rewrite Hxs, Hys, fby1_eq in Hrs.
-  destruct x, y; simpl in *; subst.
-  all: try apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
-  (* error cases *)
-  all: rewrite Hxs, Hys in *.
-  all: rewrite fby1_eq, ?fby1AP_eq in Sr, rsi.
-  all: repeat apply DSForall_tl in Sr.
-  all: try (rewrite DS_const_eq in Sr; inv Sr; now exfalso).
-  all: constructor; rewrite fby1AP_eq in Heq.
+  rewrite Hxs, Hys, fby1_eq in Hrs, Sr.
+  destruct x, y; simpl in *; subst; inversion_clear Sr as [|??? Sr']; try tauto.
+  all: apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
+  all: rewrite fby1AP_eq in Heq, Sr'.
+  (* pour les cas d'erreur, il faut un con de plus : *)
+  all: try (clear - Sr' itx;
+            apply infinite_decomp in itx as (?&?& Htx &?);
+            rewrite Htx, Cpo_streams_type.map_eq_cons, fby1_eq in Sr'; now inv Sr').
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
+  all: constructor; eapply Cof; eauto.
 Qed.
 
 Lemma ok_fby :
@@ -1302,16 +1302,16 @@ Proof.
   apply S_of_DS_Cons in Eqy as (y & ty & Hys & Hyvy & ity & Eqy).
   apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
   subst rs.
-  rewrite Hxs, Hys, fby_eq in Hrs.
-  destruct x, y; simpl in *; subst.
-  all: try apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
-  (* error cases *)
-  all: rewrite Hxs, Hys in *.
-  all: rewrite fby_eq, ?fbyA_eq, ?fby1AP_eq in Sr, rsi.
-  all: repeat apply DSForall_tl in Sr.
-  all: try (rewrite DS_const_eq in Sr; inv Sr; now exfalso).
-  all: constructor; rewrite ?fbyA_eq, ?fby1AP_eq in Heq.
+  rewrite Hxs, Hys, fby_eq in Hrs, Sr.
+  destruct x, y; simpl in *; subst; inversion_clear Sr as [|??? Sr']; try tauto.
+  all: apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
+  all: rewrite ?fbyA_eq, ?fby1AP_eq in Heq, Sr'.
+  (* pour les cas d'erreur, il faut un con de plus : *)
+  all: try (clear - Sr' itx;
+            apply infinite_decomp in itx as (?&?& Htx &?);
+            rewrite Htx, Cpo_streams_type.map_eq_cons, ?fby1_eq, ?fby_eq in Sr'; now inv Sr').
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
+  all: constructor; eauto.
   rewrite <- Eqr, <- Eqx, <- Eqy.
   apply ok_fby1; auto.
 Qed.
