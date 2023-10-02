@@ -998,8 +998,6 @@ Section SDfuns_safe.
     inv Wtx. inv Wtc.
     rewrite swhen_eq in Ht.
     cases.
-    (* les cas d'erreur *)
-    2-4,7-11: rewrite Ht; constructor; auto; now apply DSForall_map, DSForall_all.
     all: apply Con_eq_simpl in Ht as (? & Ht); subst.
     all: constructor; auto; eapply Cof; eauto.
   Qed.
@@ -1014,7 +1012,7 @@ Section SDfuns_safe.
       cl_DS (Con ck x (ty, k)) (swhenv k xs cs).
   Proof.
     unfold cl_DS, swhenv.
-    intros * (Tc & Sx & Cx & Sc & Cc); simpl.
+    intros * (Tc & Sx & Cx & Sc & Cc); simpl (denot_clock _).
     eapply DSle_rec_eq with
       (R := fun U V => exists xs cs cks,
                 ty_DS (Tenum tx tn) cs
@@ -1028,22 +1026,23 @@ Section SDfuns_safe.
     { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
     clear.
     intros u U V (xs & cs & cks & Tc & Sc & Sx & Cc & Cx & HU & HV).
-    destruct (@is_cons_elim _ xs) as (?&?&Hx).
+    destruct (@is_cons_elim _ xs) as (x & xs' &Hx).
     { eapply proj1, swhen_cons, AC_is_cons; now rewrite <- HU. }
-    destruct (@is_cons_elim _ cs) as (?&?&Hc).
+    destruct (@is_cons_elim _ cs) as (c & cs' &Hc).
     { eapply proj2, swhen_cons, AC_is_cons; now rewrite <- HU. }
     rewrite Hc, Hx in *. inv Sx. inv Sc. inv Tc.
-    rewrite swhen_eq in HU.
-    rewrite AC_cons in *.
-    cases_eqn HH; try take (Some _ = Some _) and inv it.
-    all: pose proof (Con_le_le _ _ _ _ _ _ Cx Cc); try easy.
-    all: try rewrite DS_const_eq in HU; rewrite AC_cons in HU.
-    all: apply Con_eq_simpl in HU as (?& Hu); subst.
-    all: apply DSle_cons_elim in Cx as (? & Hcx &?).
-    all: rewrite Hcx in *; rewrite zip_cons in HV; simpl in *.
-    all: apply Con_le_simpl in Cc as []; cases_eqn HH.
-    all: try rewrite HH2 in *; simpl in *.
-    all: do 2 esplit; eauto 10.
+    rewrite swhen_eq, AC_cons in *.
+    apply DSle_cons_elim in Cx as HH; destruct HH as (? & Hcs &?).
+    rewrite Hcs, zip_cons in *.
+    apply Con_eq_simpl in HU as (?& Hu); subst.
+    apply Con_le_simpl in Cx as (?& Cx), Cc as (?& Cc); subst.
+    cases_eqn HH; subst; try tauto.
+    all: simpl (sample _ _ _) in HV.
+    all: try take (Some _ = Some _) and inv it.
+    all: try take (err _ = err _) and inv it.
+    all: try take (pres _ = pres _) and inv it.
+    all: try (take ((_ =? _) = _) and rewrite it in * ).
+    all: esplit; split; [ apply HV | exists xs', cs'; eauto 8 ].
   Qed.
 
   Lemma safe_swhenv :

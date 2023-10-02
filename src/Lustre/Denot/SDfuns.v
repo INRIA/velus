@@ -671,84 +671,42 @@ Section SStream_functions.
     - firstorder; intros HHH%tag_eqb_eq; congruence.
   Qed.
 
-  Definition swhenf (k : enumtag) :
-    (DS (sampl A * sampl B) -C-> DS (sampl A)) -C->
-    (DS (sampl A * sampl B) -C-> DS (sampl A)).
-    apply curry.
-    apply (fcont_comp2 (DSCASE (sampl A * sampl B) (sampl A))).
-    2:exact (SND _ _).
-    apply ford_fcont_shift. intros (vx,vc).
-    apply curry.
-    match goal with
-    | |- _ (_ (Dprod ?pl ?pr) _) =>
-        pose (f := (FST _ _ @_ (FST pl pr)));
-        pose (XC := SND pl pr)
-    end.
-    exact match vx, vc with
-    | abs, abs => CONS abs @_ (f @2_ ID _) XC
-    | pres x, pres c =>
-        match tag_of_val c with
-        | None => CONS (err error_Ty) @_ MAP (fun _ => err error_Ty) @_ XC
-        | Some t =>
-            if tag_eqb k t
-            then CONS (pres x) @_ (f @2_ ID _) XC
-            else CONS abs @_ (f @2_ ID _) XC
-        end
-    | err e, _
-    | _, err e => CONS (err e) @_ MAP (fun _ => err e) @_ XC
-    | _, _ => CONS (err error_Cl) @_ MAP (fun _ => err error_Cl) @_ XC
-    end.
-  Defined.
-
-  Lemma swhenf_eq : forall k f x c XC,
-      swhenf k f (cons (x, c) XC)
-      = match x, c with
-        | abs, abs => cons abs (f XC)
-        | pres x, pres c =>
-            match tag_of_val c with
-            | None => cons (err error_Ty) (map (fun _ => err error_Ty) XC)
-            | Some t =>
-                if tag_eqb k t
-                then cons (pres x) (f XC)
-                else cons abs (f XC)
-            end
-        | err e, _ | _, err e => cons (err e) (map (fun _ => err e) XC)
-        | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) XC)
-        end.
-  Proof.
-    intros.
-    unfold swhenf.
-    rewrite curry_Curry, Curry_simpl.
-    rewrite fcont_comp2_simpl, DSCASE_simpl.
-    rewrite SND_simpl, Snd_simpl, ford_fcont_shift_simpl.
-    simpl (snd _); rewrite DScase_cons.
-    cases.
-  Qed.
-
   Definition swhen (k : enumtag) : DS (sampl A) -C-> DS (sampl B) -C-> DS (sampl A) :=
-    curry (FIXP _ (swhenf k) @_ (ZIP pair @2_ FST _ _) (SND _ _ )).
+    ZIP (fun x c =>
+           match x, c with
+           | abs, abs => abs
+           | pres x, pres c =>
+               match tag_of_val c with
+               | None => err error_Ty
+               | Some t =>
+                   if tag_eqb k t
+                   then pres x
+                   else abs
+               end
+           | err e, _ | _, err e => err e
+           | _, _ => err error_Cl
+           end).
 
   Lemma swhen_eq : forall k c C x X,
       swhen k (cons x X) (cons c C)
-      == match x, c with
-        | abs, abs => cons abs (swhen k X C)
-        | pres x, pres c =>
-            match tag_of_val c with
-            | None => cons (err error_Ty) (map (fun _ => err error_Ty) (ZIP pair X C))
-            | Some t =>
-                if tag_eqb k t
-                then cons (pres x) (swhen k X C)
-                else cons abs (swhen k X C)
-            end
-        | err e, _ | _, err e => cons (err e) (map (fun _ => err e) (ZIP pair X C))
-        | _, _ => cons (err error_Cl) (map (fun _ => err error_Cl) (ZIP pair X C))
-        end.
+      == cons match x, c with
+           | abs, abs => abs
+           | pres x, pres c =>
+               match tag_of_val c with
+               | None => err error_Ty
+               | Some t =>
+                   if tag_eqb k t
+                   then pres x
+                   else abs
+               end
+           | err e, _ | _, err e => err e
+           | _, _ => err error_Cl
+           end (swhen k X C).
   Proof.
     intros.
     unfold swhen at 1.
-    rewrite (FIXP_eq (swhenf k)).
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    rewrite swhenf_eq; reflexivity.
+    rewrite zip_cons.
+    reflexivity.
   Qed.
 
   Lemma swhen_cons :
@@ -758,13 +716,8 @@ Section SStream_functions.
   Proof.
     intros *.
     unfold swhen.
-    rewrite FIXP_eq; autorewrite with cpodb; simpl.
-    intros Hc. apply DScase_is_cons in Hc.
-    setoid_rewrite SND_PAIR_simpl in Hc.
-    eapply zip_is_cons; eauto.
+    apply zip_is_cons.
   Qed.
-
-  Global Opaque swhen.
 
   (** Le cas du merge/case est plus délicat car il opère sur une liste
       (nprod) de flots. On utilise pour ça [nprod_Foldi], qui effectue
