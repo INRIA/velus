@@ -449,6 +449,13 @@ Proof.
   destruct e; cases.
 Qed.
 
+Lemma denot_expss_nil :
+  forall A ins n envG envI bs env,
+    @denot_expss A ins [] n envG envI bs env == nprod_const _ (map (fun _ => abs) bs).
+Proof.
+  reflexivity.
+Qed.
+
 Lemma forall_denot_expss :
   forall A ins (ess : list (A * list exp)) n envG envI bs env (P : nprod n -> Prop),
     Forall (fun es =>
