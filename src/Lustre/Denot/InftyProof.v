@@ -303,10 +303,13 @@ Module Type LDENOTINF
   Qed.
 
   Ltac solve_err :=
-    try (
-        repeat (rewrite get_nth_const; [|simpl; cases]);
-        now (apply is_ncons_DS_const || apply is_consn_DS_const)
-      ).
+    try (repeat (rewrite get_nth_const; [|simpl; cases]);
+         match goal with
+         | |- is_cons (nrem _ (Cpo_streams_type.map _ _)) =>
+             apply (is_ncons_map _ _ _ _ (S _)); auto 1
+         | _ => idtac
+         end;
+         now (apply is_ncons_DS_const || apply is_consn_DS_const)).
 
   Lemma exp_n :
     forall Γ n e ins envI bs env k,
@@ -501,9 +504,9 @@ Module Type LDENOTINF
     assert (Hwx' := Hwx).
     revert Hwl Hwx.
     eapply exp_causal_ind with (16 := Hdep); eauto.
-    all: clear dependent e; clear k; intros.
+    all: clear dependent e; clear k; intros; unfold P_exp.
     (* cas restreints : *)
-    all: unfold P_exp; try (rewrite denot_exp_eq; now solve_err).
+    all: try (rewrite denot_exp_eq; now solve_err).
     - (* Econst *)
       rewrite denot_exp_eq.
       now apply is_ncons_sconst.
@@ -977,14 +980,14 @@ Proof.
     apply forall_denot_expss.
     unfold eq_rect.
     simpl_Forall.
-    cases; eauto using forall_nprod_const, DS_const_inf.
+    cases; eauto using forall_nprod_const, map_inf.
     now apply forall_denot_exps.
   - (* Ecase *)
     destruct a as [tys].
     eapply Forall_impl in H.
     2:{ intros ? HH. eapply (proj2 (forall_denot_exps _ _ _ _ _ _ _ _ )), HH. }
     eapply forall_forall_denot_expss with (n := length tys) in H as Hess;
-      eauto using DS_const_inf.
+      eauto using map_inf.
     destruct d.
     + (* défaut *)
       apply forall_denot_exps in H0 as Hd.
@@ -1035,7 +1038,7 @@ Proof.
   induction ess as [| (i,es) ess]; intros.  { now simpl. }
   setoid_rewrite denot_expss_eq.
   unfold eq_rect.
-  cases; eauto using forall_nprod_const, DS_const_inf.
+  cases; eauto using forall_nprod_const, map_inf.
   apply forall_nprod_cons; eauto using infinite_exps.
 Qed.
 

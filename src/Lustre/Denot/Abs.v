@@ -301,9 +301,7 @@ Section Abs_indep_node.
       <= lift (CONS abs) (denot_exps G ins es envG envI bs env).
   Proof.
     induction es; intros * Hf; inv Hf.
-    - rewrite 2 denot_exps_nil.
-      unfold abss.
-      now rewrite DS_const_eq at 1.
+    - now rewrite 2 denot_exps_nil, map_eq_cons.
     - rewrite 2 denot_exps_eq.
       setoid_rewrite lift_app; auto.
   Qed.
@@ -320,8 +318,8 @@ Section Abs_indep_node.
   Proof.
     intros * Hf.
     induction ess as [|(x,es)]; inv Hf.
-    - cbn; unfold abss at 1.
-      now rewrite lift_nprod_const, DS_const_eq.
+    - rewrite 2 denot_expss_nil, map_eq_cons.
+      cbn; now rewrite lift_nprod_const.
     - rewrite 2 denot_expss_eq.
       unfold eq_rect.
       cases; subst.
@@ -329,8 +327,8 @@ Section Abs_indep_node.
           |-_ <= _ (_ (_ ?a) ?b) =>
             setoid_rewrite (lift_cons (lift (CONS abs)) _ a b)
         end; auto using lift_IH.
-      + simpl (length _); unfold abss at 1.
-        now rewrite 2 lift_nprod_const, DS_const_eq.
+      + simpl (length _).
+        now rewrite 2 lift_nprod_const, map_eq_cons.
   Qed.
 
   Lemma var_abs_le :
@@ -480,9 +478,7 @@ Section Abs_indep_node.
       <= lift (CONS abs) (denot_exps G ins es envG envI bs env).
   Proof.
     induction es as [|e es]; intros * Hr Hwt Hwl Le; inv Hr; inv Hwl; inv Hwt.
-    - rewrite 2 denot_exps_nil.
-      unfold abss.
-      now rewrite DS_const_eq at 1.
+    - now rewrite 2 denot_exps_nil, map_eq_cons.
     - rewrite 2 denot_exps_eq.
       match goal with
         |-_ <= _ (_ (_ ?a) ?b) => setoid_rewrite (lift_app (CONS abs) _ a _ b)
