@@ -247,7 +247,7 @@ Section Denot_exps.
     Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
     @nprod (DS (sampl value)) (list_sum (List.map numstreams es)).
     induction es as [|a].
-    + exact (CTE _ _ abss).
+    + exact (MAP (fun _ => abs) @_ SND _ _ @_ FST _ _).
     + exact ((nprod_app @2_ (denot_exp_ a)) IHes).
   Defined.
 
@@ -259,10 +259,10 @@ Section Denot_exps.
     Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
     @nprod (@nprod (DS (sampl value)) n) (length ess).
     induction ess as [|[? es]].
-    + exact (CTE _ _ (nprod_const _ (nprod_const _ abss))).
+    + exact (nprod_const _ @_ MAP (fun _ => abs) @_ SND _ _ @_ FST _ _).
     + destruct (Nat.eq_dec (list_sum (List.map numstreams es)) n) as [<-|].
       * exact ((nprod_cons @2_ (denot_exps_ es)) IHess).
-      * exact (CTE _ _ (nprod_const _ (nprod_const _ abss))).
+      * exact (nprod_const _ @_ nprod_const _ @_ MAP (fun _ => abs) @_ SND _ _ @_ FST _ _).
   Defined.
 
 End Denot_exps.
@@ -406,7 +406,7 @@ Lemma denot_exps_eq :
     denot_exps ins (e :: es) envG envI bs env
     = nprod_app (denot_exp ins e envG envI bs env) (denot_exps ins es envG envI bs env).
 Proof.
-  trivial.
+  reflexivity.
 Qed.
 
 Lemma forall_denot_exps :
@@ -438,7 +438,7 @@ Lemma denot_expss_eq :
           nprod_cons
             (eq_rect _ nprod (denot_exps ins es envG envI bs env) _ eqn)
             (denot_expss ins ess n envG envI bs env)
-      | _ => nprod_const _ (nprod_const _ abss)
+      | _ => nprod_const _ (nprod_const _ (map (fun _ => abs) bs))
       end.
 Proof.
   intros.
@@ -455,7 +455,7 @@ Lemma forall_denot_expss :
               match Nat.eq_dec (list_sum (List.map numstreams es)) n with
               | left eqn =>
                   P (eq_rect _ nprod (denot_exps ins es envG envI bs env) n eqn)
-              | _ => P (nprod_const n abss)
+              | _ => P (nprod_const n (map (fun _ => abs) bs))
               end) (List.map snd ess) ->
     forall_nprod P (denot_expss ins ess n envG envI bs env).
 Proof.
@@ -468,7 +468,7 @@ Qed.
 
 Lemma forall_forall_denot_expss :
   forall A ins (ess : list (A * list exp)) n envG envI bs env (P : DS (sampl value) -> Prop),
-    P abss ->
+    P (map (fun _ => abs) bs) ->
     Forall (fun es => forall_nprod P (denot_exps ins (snd es) envG envI bs env)) ess ->
     forall_nprod (forall_nprod P) (denot_expss ins ess n envG envI bs env).
 Proof.
@@ -502,9 +502,9 @@ Qed.
 
 Lemma denot_exps_nil :
   forall ins envG envI bs env,
-    denot_exps ins [] envG envI bs env = abss.
+    denot_exps ins [] envG envI bs env = map (fun _ => abs) bs.
 Proof.
-  trivial.
+  reflexivity.
 Qed.
 
 Lemma denot_exps_1 :
@@ -654,7 +654,6 @@ Proof.
   - (* Eunop *)
     unfold denot_exp, denot_exp_ at 1.
     fold (denot_exp_ ins e).
-    autorewrite with cpodb using (simpl (fst _); simpl (snd _)).
     generalize (denot_exp_ ins e) as ss.
     generalize (numstreams e) as ne.
     destruct ne as [|[]]; intros; auto.
@@ -662,7 +661,6 @@ Proof.
   - (* Ebinop *)
     unfold denot_exp, denot_exp_ at 1.
     fold (denot_exp_ ins e1) (denot_exp_ ins e2).
-    autorewrite with cpodb using (simpl (fst _); simpl (snd _)).
     generalize (denot_exp_ ins e1) as ss1.
     generalize (denot_exp_ ins e2) as ss2.
     generalize (numstreams e1) as ne1.
@@ -714,9 +712,9 @@ Proof.
     cases.
     generalize (np_of_env (List.map fst (n_out n))); intro.
     unfold eq_rect.
-    autorewrite with cpodb.
     simpl; destruct e.
-    now autorewrite with cpodb.
+    rewrite 3 curry_Curry, 3 Curry_simpl, fcont_comp_simpl.
+    reflexivity.
 Qed.
 
 Global Opaque denot_exp.
@@ -946,7 +944,7 @@ Corollary denot_blocks_eq_cons :
     = denot_block ins blk envG envI bs env
         (denot_blocks ins blks envG envI bs env).
 Proof.
-  trivial.
+  reflexivity.
 Qed.
 
 Definition denot_top_block (ins : list ident) (b : block) :
@@ -984,7 +982,7 @@ Lemma denot_node_eq : forall n envG envI,
     let ins := List.map fst n.(n_in) in
     denot_node n envG envI = denot_top_block ins n.(n_block) envG envI (bss ins envI).
 Proof.
-  trivial.
+  reflexivity.
 Qed.
 
 (* (* inutile en fait ??? *) *)
