@@ -901,6 +901,7 @@ Proof.
   split; eauto using nrem_inf, inf_nrem.
 Qed.
 
+(* TODO: dom_infinite, avec listes de variables *)
 Theorem denot_inf :
   forall (HasCausInj : forall Γ x cx, HasCaus Γ x cx -> x = cx),
   forall (G : global) envI,
