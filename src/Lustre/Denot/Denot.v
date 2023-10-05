@@ -59,7 +59,7 @@ Definition env_of_np (l : list ident) {n} : nprod n -C-> DS_prod SI :=
   Dprodi_DISTR _ _ _
     (fun x => match mem_nth l x with
            | Some n => get_nth n errTy
-           | None => CTE _ _ abss
+           | None => 0
            end).
 
 Lemma env_of_np_eq :
@@ -67,7 +67,7 @@ Lemma env_of_np_eq :
     env_of_np l ss x =
       match mem_nth l x with
       | Some n => get_nth n errTy ss
-      | None => abss
+      | None => 0
       end.
 Proof.
   unfold env_of_np.
@@ -99,24 +99,24 @@ Proof.
   cases. now inv H. congruence.
 Qed.
 
-Lemma env_of_np_inf :
-  forall l n (np : nprod n),
-    forall_nprod (@infinite _) np ->
-    all_infinite (env_of_np l np).
-Proof.
-  clear.
-  unfold env_of_np.
-  intros * ??.
-  setoid_rewrite Dprodi_DISTR_simpl.
-  cases_eqn HH.
-  - apply forall_nprod_k_def; auto. apply DS_const_inf.
-  - apply DS_const_inf.
-Qed.
+(* Lemma env_of_np_inf : *)
+(*   forall l n (np : nprod n), *)
+(*     forall_nprod (@infinite _) np -> *)
+(*     all_infinite (env_of_np l np). *)
+(* Proof. *)
+(*   clear. *)
+(*   unfold env_of_np. *)
+(*   intros * ??. *)
+(*   setoid_rewrite Dprodi_DISTR_simpl. *)
+(*   cases_eqn HH. *)
+(*   - apply forall_nprod_k_def; auto. apply DS_const_inf. *)
+(*   - apply DS_const_inf. *)
+(* Qed. *)
 
 Lemma forall_env_of_np :
   forall (P : DS (sampl value) -> Prop) l {n} (ss : nprod n),
     P errTy ->
-    P abss ->
+    P 0 ->
     forall_nprod P ss ->
     forall x, P (env_of_np l ss x).
 Proof.
@@ -1036,7 +1036,7 @@ Section Global.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
     - exact (curry (FIXP _ @_ (denot_node G n @2_ FST _ _) (SND _ _))).
-    - apply CTE, CTE, abs_env.
+    - apply CTE, CTE, 0.
   Defined.
 
   Lemma denot_global_eq :
@@ -1044,7 +1044,7 @@ Section Global.
       denot_global_ G envG f envI =
         match find_node f G with
         | Some n => FIXP _ (denot_node G n envG envI)
-        | None => abs_env
+        | None => 0
         end.
   Proof.
     intros.
