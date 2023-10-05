@@ -1,5 +1,5 @@
 From Coq Require Import String Morphisms.
-From Coq Require Import List.
+From Coq Require Import List Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -36,7 +36,7 @@ Module Type LDENOTINF
      de sorte à ce que la propritété suivante soit vérifiée pour les nœuds
      sans blocs. En attendant, on la suppose. *)
   Hypothesis HasCausInj :
-    forall Γ x cx, HasCaus Γ x cx -> x = cx.
+    forall Γ x cx, HasCaus Γ x cx -> cx = x.
 
   Lemma HasCausRefl : forall Γ x, IsVar Γ x -> HasCaus Γ x x.
   Proof.
@@ -44,7 +44,7 @@ Module Type LDENOTINF
     inv Hv.
     apply InMembers_In in H as [e Hin].
     econstructor; eauto.
-    erewrite HasCausInj; eauto using HasCaus.
+    erewrite <- HasCausInj; eauto using HasCaus.
   Qed.
 
   (** First we show that a well-formed node receiving streams of
@@ -65,7 +65,7 @@ Module Type LDENOTINF
     rewrite 2 map_map.
     apply map_ext_in_iff.
     intros (x & (ty&c) &cx) Hin; simpl.
-    apply symmetry, HasCausInj with (Γ := senv_of_ins l).
+    apply HasCausInj with (Γ := senv_of_ins l).
     econstructor.
     apply in_map_iff; esplit; split; eauto.
     all: eauto.
@@ -84,7 +84,7 @@ Module Type LDENOTINF
     2: simpl_Forall; subst; auto.
     apply map_ext_in_iff.
     intros (x & ([]&?) &cx) Hin; simpl.
-    apply HasCausInj with (Γ := senv_of_decls l).
+    apply symmetry, HasCausInj with (Γ := senv_of_decls l).
     econstructor.
     apply in_map_iff; esplit; split; eauto.
     all: eauto.
@@ -107,7 +107,7 @@ Module Type LDENOTINF
     is_ncons n (PROJ _ x env).
 
   Definition P_vars (n : nat) (env : DS_prod SI) (cxs : list ident) : Prop :=
-    Forall (P_var n env) cxs.
+    forall x, In x cxs -> P_var n env x.
 
   Definition P_exp (n : nat) ins envI bs env (e : exp) (k : nat) : Prop :=
     let ss := denot_exp G ins e envG envI bs env in
@@ -115,10 +115,10 @@ Module Type LDENOTINF
 
   (* Hypothèse sur les nœuds *)
   Hypothesis Hnode :
-    forall (n : nat) (f : ident) (envI : DS_prod SI),
-      In f (map n_name G.(nodes)) ->
-      (forall x, P_var n envI x) ->
-      (forall x, P_var n (envG f envI) x).
+    forall (n : nat) (f : ident) (nd : node) (envI : DS_prod SI),
+      find_node f G = Some nd ->
+      (P_vars n envI (map fst (n_in nd))) ->
+      (P_vars n (envG f envI) (map fst (n_out nd))).
 
 
   Global Add Parametric Morphism n : (P_var n) with signature
@@ -133,7 +133,6 @@ Module Type LDENOTINF
       Oeq (O := DS_prod SI) ==> eq ==> iff as P_vars_morph.
   Proof.
     unfold P_vars.
-    setoid_rewrite Forall_forall.
     intros ?? H ?.
     now setoid_rewrite H.
   Qed.
@@ -144,8 +143,6 @@ Module Type LDENOTINF
       In x xs ->
       P_var n env x.
   Proof.
-    unfold P_vars.
-    setoid_rewrite Forall_forall.
     auto.
   Qed.
 
@@ -180,16 +177,17 @@ Module Type LDENOTINF
       P_vars n env ys.
   Proof.
     unfold P_vars.
-    eauto using Forall_app_weaken.
+    setoid_rewrite in_app_iff.
+    auto.
   Qed.
 
-  Lemma P_vars_weaken :
-    forall n l env,
-      (forall x, P_var n env x) ->
-      P_vars n env l.
+  Lemma P_vars_app_r :
+    forall n env xs ys,
+      P_vars n env (xs ++ ys) ->
+      P_vars n env xs.
   Proof.
     unfold P_vars.
-    setoid_rewrite Forall_forall.
+    setoid_rewrite in_app_iff.
     auto.
   Qed.
 
@@ -311,6 +309,92 @@ Module Type LDENOTINF
          end;
          now (apply is_ncons_DS_const || apply is_consn_DS_const)).
 
+
+
+      (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
+      Set Nested Proofs Allowed.
+      (* TODO: move, attention au solve_err *)
+      Lemma P_vars_env_of_np :
+          forall n l m (mp : nprod m),
+            forall_nprod (is_ncons n) mp ->
+            P_vars n (env_of_np l mp) l.
+        Proof.
+          clear.
+          unfold P_vars, P_var.
+          intros.
+          rewrite PROJ_simpl.
+          rewrite env_of_np_eq.
+          destruct (mem_nth l x) as [i|] eqn:Hmem.
+          - apply forall_nprod_k_def; auto; solve_err.
+          - apply mem_nth_nin in Hmem; tauto.
+        Qed.
+
+        Lemma P_vars_app :
+          forall n X Y l,
+            P_vars 1 X l ->
+            P_vars n Y l ->
+            P_vars (S n) (APP_env X Y) l.
+        Proof.
+          clear.
+          unfold P_vars, P_var.
+          setoid_rewrite PROJ_simpl.
+          simpl; intros * Px Py x Hin.
+          rewrite APP_env_eq, APP_simpl.
+          destruct n; simpl; auto.
+          rewrite rem_app; auto; apply Py, Hin.
+        Qed.
+        Lemma P_vars_1 :
+          forall n X l,
+            P_vars (S n) X l ->
+            P_vars 1 X l.
+        Proof.
+          induction n; auto using P_vars_S.
+        Qed.
+
+          Lemma is_cons_sreset_aux :
+            forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X Y,
+              (forall envI, P_vars 1 envI ins -> P_vars 1 (f envI) outs) ->
+              is_cons R ->
+              P_vars 1 X ins ->
+              P_vars 1 Y outs ->
+              P_vars 1 (sreset_aux f R X Y) outs.
+          Proof.
+            clear.
+            intros * Cf Cr Cx Cy.
+            apply is_cons_elim in Cr as (vr & R' & Hr).
+            rewrite Hr, sreset_aux_eq.
+            destruct vr; [rewrite sreset_aux_eq |];
+              apply P_vars_app; auto using P_vars_O.
+          Qed.
+
+      Lemma is_ncons_sreset :
+        forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X,
+          (forall n envI, P_vars n envI ins -> P_vars n (f envI) outs) ->
+          forall n,
+            is_ncons n R ->
+            P_vars n X ins ->
+            P_vars n (sreset f R X) outs.
+      Proof.
+        clear.
+        intros * Cf n Cr Cx.
+        rewrite sreset_eq.
+        assert (Hy : P_vars n (f X) outs) by auto.
+        remember (_ f X) as Y eqn:HH; clear HH.
+        revert dependent R.
+        revert dependent X.
+        revert dependent Y.
+        induction n as [|[]]; intros; eauto using is_cons_sreset_aux.
+        apply is_ncons_is_cons in Cr as Hr.
+        apply is_cons_elim in Hr as (vr & R' & Hr).
+        rewrite Hr, sreset_aux_eq in *.
+        simpl in Cr; rewrite rem_cons in Cr.
+        destruct vr; [rewrite sreset_aux_eq |].
+        all: apply P_vars_app; eauto using P_vars_1.
+        apply IHn; auto.
+        now apply (Cf (S (S n))).
+      Qed.
+      (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
+
   Lemma exp_n :
     forall Γ n e ins envI bs env k,
       is_ncons n bs ->
@@ -325,9 +409,7 @@ Module Type LDENOTINF
     intros Hk Hwl Hwx Hn.
     (* cas des variables, mutualisé *)
     assert (forall x, IsVar Γ x -> is_ncons n (denot_var ins envI env x)) as Hvar.
-    { unfold P_vars, P_var in Hins.
-      rewrite Forall_forall in Hins.
-      intros.
+    { unfold P_vars, P_var in Hins; intros.
       unfold denot_var. cases_eqn HH.
       * (* in *)
         rewrite mem_ident_spec in HH.
@@ -442,15 +524,14 @@ Module Type LDENOTINF
       unfold eq_rect.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H, H0; auto.
       inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H, H0; auto.
-      destruct (find_node f G) eqn:Hfind; cases; solve_err.
+      take (find_node _ _ = _) and rewrite it; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_np_of_env; intro.
-      apply is_ncons_sreset; intros.
-      + apply Hnode; eauto using find_node_name.
+      apply forall_np_of_env'; setoid_rewrite <- PROJ_simpl; rewrite <- Forall_forall.
+      eapply Forall_forall, is_ncons_sreset; eauto.
       + apply is_ncons_sbools_of.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         now apply P_exps_k, Forall_P_exps.
-      + apply forall_env_of_np; solve_err.
+      + apply P_vars_env_of_np.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         now apply P_exps_k, Forall_P_exps.
   Qed.
@@ -491,9 +572,8 @@ Module Type LDENOTINF
                P_var (S n) env cx ->
                is_ncons (S n) (denot_var ins envI env x)).
     { unfold P_vars, P_var in Hins.
-      rewrite Forall_forall in Hins.
       intros x cx Hc Hx.
-      unfold denot_var. cases_eqn HH.
+      unfold denot_var; cases_eqn HH.
       + (* in *)
         rewrite mem_ident_spec in HH.
         now apply Hins.
@@ -597,14 +677,14 @@ Module Type LDENOTINF
       inv Hwl; inv Hwx.
       destruct (find_node f G) eqn:?; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_np_of_env; intro.
-      apply is_ncons_sreset with (n := S n); intros.
+      apply forall_np_of_env'; setoid_rewrite <- PROJ_simpl.
+      eapply is_ncons_sreset with (n := S n); intros.
       + apply Hnode; eauto using find_node_name.
       + apply is_ncons_sbools_of.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         rewrite annots_numstreams in *.
         apply P_exps_k; eauto using P_exps_impl.
-      + apply forall_env_of_np; solve_err.
+      + apply P_vars_env_of_np.
         apply k_forall_nprod_def with (d := errTy); intros; solve_err.
         rewrite annots_numstreams in *.
         apply P_exps_k; eauto using P_exps_impl.
@@ -633,22 +713,16 @@ Module Type LDENOTINF
 
   Lemma is_ncons_bss :
     forall n (env : DS_prod SI) l,
-      (forall x, (* on pourrait affiner *)
-          is_ncons n (env x)) ->
+      P_vars n env l ->
       is_ncons n (bss l env).
   Proof.
-    intros * Hx.
-    induction l as [|?[]].
+    unfold P_vars.
+    induction l; intros * Hv.
     - apply is_ncons_DS_const.
-    - simpl. unfold AC. autorewrite with cpodb.
-      unfold is_ncons. cases.
-      rewrite nrem_map.
-      apply is_cons_map, Hx.
-    - simpl. unfold AC. autorewrite with cpodb.
+    - rewrite bss_cons.
+      simpl (In _ _) in *.
       apply is_ncons_zip; auto.
-      unfold is_ncons. cases.
-      rewrite nrem_map.
-      apply is_cons_map, Hx.
+      apply is_ncons_map, Hv; auto.
   Qed.
 
   (* Si une variable est définie dans un bloc et que tous les flots
@@ -661,7 +735,7 @@ Module Type LDENOTINF
       Forall (wx_block Γ) blks ->
       P_vars (S n) envI ins ->
       is_ncons (S n) bs ->
-      (forall y, P_var n env y) ->
+      (forall x cx : ident, HasCaus Γ x cx -> P_var n env cx) ->
       (forall y, Exists (depends_on Γ x y) blks -> P_var (S n) env y) ->
       Exists (Syn.Is_defined_in (Var x)) blks ->
       P_var (S n) (denot_blocks G ins blks envG envI bs env) x.
@@ -682,7 +756,7 @@ Module Type LDENOTINF
       apply mem_nth_error in Hmem.
       rewrite annots_numstreams in *.
       apply P_exps_k.
-      eapply exps_S; eauto using P_vars_weaken; try lia.
+      eapply exps_S; eauto; try lia.
       intros y Hiuil.
       eapply Hdep, Exists_cons_hd, DepOnEq; eauto.
       eapply HasCausRefl, Forall_forall, nth_error_In; eauto.
@@ -692,123 +766,300 @@ Module Type LDENOTINF
       now take (Syn.Is_defined_in _ _) and inv it.
   Qed.
 
-  (* Si une variable n'est pas définie dans les blocs,
-     alors [denot_blocks] l'associe à [errTy]. *)
-  Lemma P_var_outside_blocks :
-    forall ins envI bs env blks x n,
-      (forall x, P_var n envI x) ->
-      ~ (Exists (Syn.Is_defined_in (Var x)) blks)  ->
-      P_var n (denot_blocks G ins blks envG envI bs env) x.
+  (* (* Si une variable n'est pas définie dans les blocs, *)
+  (*    alors [denot_blocks] l'associe à [errTy]. *) *)
+  (* Lemma P_var_outside_blocks : *)
+  (*   forall ins envI bs env blks x n, *)
+  (*     (forall x, P_var n envI x) -> *)
+  (*     ~ (Exists (Syn.Is_defined_in (Var x)) blks)  -> *)
+  (*     P_var n (denot_blocks G ins blks envG envI bs env) x. *)
+  (* Proof. *)
+  (*   intros * Hins Hnex; revert dependent blks. *)
+  (*   induction blks as [| blk blks]; simpl; intros. *)
+  (*   - apply Hins. *)
+  (*   - rewrite denot_blocks_eq_cons, denot_block_eq. *)
+  (*     cases. *)
+  (*     unfold P_var; rewrite PROJ_simpl, env_of_np_ext_eq. *)
+  (*     cases_eqn Hmem. *)
+  (*     + contradict Hnex; left. *)
+  (*       apply mem_nth_In in Hmem. *)
+  (*       now constructor. *)
+  (*     + apply IHblks; auto. *)
+  (* Qed. *)
+
+  (* (* FIXME: c'est trop ad hoc mais je ne sais pas comment faire autrement *) *)
+  (* Lemma not_var_not_defined : *)
+  (*   forall x (nd : node) locs blks, *)
+  (*     n_block nd = Blocal (Scope locs blks) -> *)
+  (*     ~ In x (map snd (idcaus (n_in nd) ++ idcaus_of_decls (n_out nd) ++ idcaus_of_locals (n_block nd))) -> *)
+  (*     ~ Exists (Syn.Is_defined_in (FunctionalEnvironment.Var x)) blks. *)
+  (* Proof. *)
+  (*   intros * Hnd Hnin; contradict Hnin. *)
+  (*   pose proof (n_defd nd) as (vars & Vd & Perm). *)
+  (*   pose proof (n_syn nd) as Noloc. *)
+  (*   pose proof (n_nodup nd) as (_ & Ndl). *)
+  (*   rewrite Hnd in *. *)
+  (*   inv Vd. *)
+  (*   take (VarsDefinedScope _ _ _) and inversion_clear it as [II JJ ? (vars' & Vd' & Perm2)]. *)
+  (*   clear II JJ. *)
+  (*   inversion_clear Noloc as [??? Noloc2 (?&? &?)]; inv Noloc2. *)
+  (*   inv Ndl. Syn.inv_scope. *)
+  (*   rewrite 2 map_app, idcaus_map; simpl. *)
+  (*   rewrite map_app, <- 2 idcaus_of_decls_map; auto. *)
+  (*   eapply Exists_VarsDefined_spec in Hnin; eauto. *)
+  (*   2:{ simpl_Forall. eapply NoDupLocals_incl; eauto. *)
+  (*       rewrite Perm2, Perm, map_app, 2 map_fst_senv_of_decls. *)
+  (*       solve_incl_app. } *)
+  (*   rewrite Perm2, Perm, fst_InMembers, map_app, 2 map_fst_senv_of_decls in Hnin. *)
+  (*   rewrite 3 in_app_iff in *; tauto. *)
+  (* Qed. *)
+
+  (* Lemma Is_defined_in_dec : *)
+  (*   forall x blk, *)
+  (*     restr_block blk -> *)
+  (*     Decidable.decidable (Syn.Is_defined_in x blk). *)
+  (* Proof. *)
+  (*   intros * Hr; inv Hr. *)
+  (*   - (* Beq *) *)
+  (*     destruct x. *)
+  (*     + (* Var *) *)
+  (*       destruct (ListDec.In_decidable decidable_eq_ident x xs) as [Hin|Hnin]. *)
+  (*       * left; constructor; auto. *)
+  (*       * right; contradict Hnin; now inv Hnin. *)
+  (*     + (* Last *) *)
+  (*       right; intro HH; inv HH. *)
+  (* Qed. *)
+
+  Section COMMUN_SAFE.
+
+  Lemma NoDup_senv_loc :
+    forall (nd : node) vars blks,
+      n_block nd = Blocal (Scope vars blks) ->
+      NoDupMembers (senv_of_ins (n_in nd) ++ senv_of_decls (n_out nd) ++ senv_of_decls vars).
   Proof.
-    intros * Hins Hnex; revert dependent blks.
-    induction blks as [| blk blks]; simpl; intros.
-    - apply Hins.
-    - rewrite denot_blocks_eq_cons, denot_block_eq.
-      cases.
-      unfold P_var; rewrite PROJ_simpl, env_of_np_ext_eq.
-      cases_eqn Hmem.
-      + contradict Hnex; left.
-        apply mem_nth_In in Hmem.
-        now constructor.
-      + apply IHblks; auto.
+    intros * Hn.
+    pose proof (n_nodup nd) as [Nd Ndl].
+    rewrite Hn in Ndl; inv Ndl.
+    take (NoDupScope _ _ _) and inversion_clear it as [???? ndm Hf].
+    rewrite fst_NoDupMembers, 2 map_app, map_fst_senv_of_ins, 2 map_fst_senv_of_decls.
+    rewrite app_assoc.
+    apply fst_NoDupMembers in ndm.
+    apply NoDup_app'_iff; repeat split; auto.
+    setoid_rewrite fst_InMembers in Hf.
+    simpl_Forall.
+    contradict Hf; eauto.
   Qed.
 
-  (* FIXME: c'est trop ad hoc mais je ne sais pas comment faire autrement *)
-  Lemma not_var_not_defined :
-    forall x (nd : node) locs blks,
-      n_block nd = Blocal (Scope locs blks) ->
-      ~ In x (map snd (idcaus (n_in nd) ++ idcaus_of_decls (n_out nd) ++ idcaus_of_locals (n_block nd))) ->
-      ~ Exists (Syn.Is_defined_in (FunctionalEnvironment.Var x)) blks.
+    (* TODO: définition un peu foireuse, qui doit correspondre aux
+     inversions de wt_block... *)
+  Definition get_locals (blk : block) : static_env :=
+    match blk with
+    | Blocal (Scope vars _) => senv_of_decls vars
+    | _ => []
+    end.
+
+  Corollary NoDup_iol :
+    forall (n : node),
+      NoDupMembers (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n)).
   Proof.
-    intros * Hnd Hnin; contradict Hnin.
-    pose proof (n_defd nd) as (vars & Vd & Perm).
-    pose proof (n_syn nd) as Noloc.
-    pose proof (n_nodup nd) as (_ & Ndl).
-    rewrite Hnd in *.
-    inv Vd.
-    take (VarsDefinedScope _ _ _) and inversion_clear it as [II JJ ? (vars' & Vd' & Perm2)].
-    clear II JJ.
-    inversion_clear Noloc as [??? Noloc2 (?&? &?)]; inv Noloc2.
-    inv Ndl. Syn.inv_scope.
-    rewrite 2 map_app, idcaus_map; simpl.
-    rewrite map_app, <- 2 idcaus_of_decls_map; auto.
-    eapply Exists_VarsDefined_spec in Hnin; eauto.
-    2:{ simpl_Forall. eapply NoDupLocals_incl; eauto.
-        rewrite Perm2, Perm, map_app, 2 map_fst_senv_of_decls.
-        solve_incl_app. }
-    rewrite Perm2, Perm, fst_InMembers, map_app, 2 map_fst_senv_of_decls in Hnin.
-    rewrite 3 in_app_iff in *; tauto.
+    intro.
+    pose proof (node_NoDupMembers n) as ND.
+    destruct (n_block n) eqn:Hn; simpl; try rewrite app_nil_r; auto.
+    destruct s.
+    apply NoDup_senv_loc in Hn; auto.
   Qed.
 
-  Lemma Is_defined_in_dec :
-    forall x blk,
-      restr_block blk ->
-      Decidable.decidable (Syn.Is_defined_in x blk).
+  Fixpoint get_defined (blk : block) : list ident :=
+    match blk with
+    | Beq (xs,es) => xs
+    | Blocal (Scope vars blks) => flat_map get_defined blks
+    | _ => []
+    end.
+
+  Lemma NoDup_vars_ins :
+    forall (nd : node) vars blks,
+      Forall restr_block blks ->
+      n_block nd = Blocal (Scope vars blks) ->
+      NoDup (flat_map get_defined blks ++ List.map fst (n_in nd)).
   Proof.
-    intros * Hr; inv Hr.
-    - (* Beq *)
-      destruct x.
-      + (* Var *)
-        destruct (ListDec.In_decidable decidable_eq_ident x xs) as [Hin|Hnin].
-        * left; constructor; auto.
-        * right; contradict Hnin; now inv Hnin.
-      + (* Last *)
-        right; intro HH; inv HH.
+    intros * Hr Hn.
+    apply NoDup_senv_loc in Hn as ndm.
+    pose proof (n_defd nd) as (outs & Vd & Perm).
+    rewrite Hn in Vd.
+    inv Vd. Syn.inv_scope.
+    rewrite Perm in H0.
+    assert (Permutation (List.map fst (concat x)) (flat_map get_defined blks)) as <-.
+    { clear - H Hr.
+      induction H; inv Hr; simpl; auto.
+      rewrite map_app.
+      apply Permutation_app; auto.
+      take (restr_block _) and inv it.
+      inv H; simpl in *; subst.
+      reflexivity.
+    }
+    rewrite Permutation_app_comm, H0, <- map_fst_senv_of_ins, <- map_app.
+    now rewrite <- fst_NoDupMembers.
   Qed.
+
+  Lemma nin_defined :
+    forall (n : node) vars blks x,
+      n_block n = Blocal (Scope vars blks) ->
+      In x (List.map fst (senv_of_decls (n_out n) ++ senv_of_decls vars)) ->
+      List.Exists (Syn.Is_defined_in (Var x)) blks.
+  Proof.
+    intros * Hn Hxin.
+    pose proof (n_nodup n) as (Nd & Ndl).
+    pose proof (n_defd n) as (?& Vd & Perm).
+    rewrite Hn in Vd, Ndl.
+    inv Ndl; take (NoDupScope _ _ _) and inv it.
+    inv Vd; Syn.inv_scope.
+    eapply Forall_VarsDefined_Is_defined; eauto.
+    + take (Permutation (concat _) _) and rewrite it.
+      take (Permutation x0 _) and rewrite it.
+      rewrite map_app, 2 map_fst_senv_of_decls.
+      simpl_Forall.
+      eapply NoDupLocals_incl; eauto.
+      solve_incl_app.
+    + take (Permutation (concat _) _) and rewrite it.
+      take (Permutation x0 _) and rewrite it.
+      rewrite fst_InMembers; auto.
+  Qed.
+  End COMMUN_SAFE.
+
+  (* TODO: généraliser, bouger dans Denot ? *)
+  Lemma denot_node_input :
+    forall G nd envG envI env x,
+      restr_node nd ->
+      In x (List.map fst nd.(n_in)) ->
+      denot_node G nd envG envI env x = envI x.
+  Proof.
+    clear.
+    intros * Hr Hin.
+    rewrite denot_node_eq, denot_top_block_eq.
+    inversion Hr as [?? Hfr Hnd].
+    apply symmetry, NoDup_vars_ins in Hnd; auto.
+    rewrite denot_blocks_eq.
+    induction blks; simpl in *; inv Hfr; auto.
+    rewrite denot_block_eq.
+    rewrite <- app_assoc in Hnd.
+    cases; eauto using NoDup_app_r.
+    rewrite env_of_np_ext_eq.
+    cases_eqn Hmem; eauto using NoDup_app_r.
+    apply mem_nth_In in Hmem.
+    contradict Hnd; simpl; intro.
+    eapply NoDup_app_In in Hin; eauto.
+    rewrite Permutation_app_comm; solve_NoDup_app.
+  Qed.
+  (* TODO: move *)
+  Lemma P_vars_cons :
+    forall n env x l,
+      P_var n env x ->
+      P_vars n env l ->
+      P_vars n env (x :: l).
+  Proof.
+    unfold P_vars.
+    simpl; intros * ??? []; subst; eauto.
+  Qed.
+
+  (* TODO: move *)
+  Lemma locals_restr_blocks :
+    forall (blks : list block),
+      Forall restr_block blks ->
+      flat_map idcaus_of_locals blks = [].
+  Proof.
+    induction 1 as [|?? Hr]; auto; now inv Hr.
+  Qed.
+
+
+  (* TODO: move *)
+  Lemma get_idcaus_locals :
+    forall (nd : node),
+      restr_node nd ->
+      map fst (get_locals (n_block nd)) = map snd (idcaus_of_locals (n_block nd)).
+  Proof.
+    intros * Hr.
+    pose proof (n_syn nd) as Noloc; inv Noloc.
+    inversion Hr as [?? Hrb Hnd]; rewrite <- Hnd in *; simpl.
+    rewrite locals_restr_blocks, app_nil_r; auto.
+    take (nolocal_top_block _) and inv it.
+    rewrite <- idcaus_of_decls_map, map_fst_senv_of_decls; auto.
+  Qed.
+          Lemma HasCaus_In :
+          forall x cx Γ,
+            HasCaus Γ x cx ->
+            In x (map fst Γ).
+          Proof.
+            intros * Hc.
+            inv Hc.
+            now apply (in_map fst) in H.
+          Qed.
 
   (** L'étape d'induction pour P_var sur les nœuds, qui utilise [exp_S].
       On le prouve direcement pour toute variable et pas seulement
       dans [n_out nd], grâce à [denot_blocks] qui initialise son
       accumulateur avec des flots infinis. *)
+  (* TODO: màj du commentaire s'il n'est plus vrai *)
   Lemma denot_S :
     forall nd envI n,
-      (forall x, P_var (S n) envI x) ->
       restr_node nd ->
       wl_node G nd ->
       wx_node nd ->
       node_causal nd ->
-      (forall x, P_var n (FIXP _ (denot_node G nd envG envI)) x) ->
-      forall x, P_var (S n) (FIXP _ (denot_node G nd envG envI)) x.
+      P_vars (S n) envI (map fst (n_in nd)) ->
+      P_vars n (FIXP _ (denot_node G nd envG envI)) (map fst (n_out nd) ++ map fst (get_locals (n_block nd))) ->
+      P_vars (S n) (FIXP _ (denot_node G nd envG envI)) (map fst (n_out nd) ++ map fst (get_locals (n_block nd))).
   Proof.
-    unfold restr_node.
-    intros * Hins Hr Hwl Hwx Hcaus.
-    pose proof (n_defd nd) as (outs & Vd & Perm).
-    take (wx_node _) and inv it.
-    take (wl_node _ _) and inv it.
-    destruct nd.(n_block) eqn:Hnd; inv Hr.
-    unfold denot_node, denot_top_block, denot_block.
-    rewrite Hnd.
-    autorewrite with cpodb; simpl (fst _); simpl (snd _).
+    intros * Hr Hwl Hwx Hcaus Hins.
     set (ins := map fst (n_in nd)) in *.
     set (env := FIXP _ _).
     intro Hn.
     eapply node_causal_ind
       with (P_vars := P_vars (S n) env)
       in Hcaus as (lord & Perm3 & Hlord).
-    - intro x.
-      (* on regarde où est x *)
-      edestruct (ListDec.In_decidable decidable_eq_ident x lord) as [Hin|Hnin].
-      + unfold P_vars in Hlord.
-        eapply Forall_In in Hin; eauto.
-      + rewrite Perm3 in Hnin.
-        eapply not_var_not_defined in Hnin; eauto.
+    - intros x Hin; apply Hlord.
+      (* puis on prouve l'inclusion : *)
+      pose proof (n_syn nd) as Noloc; inv Noloc.
+      rewrite Perm3, 2 map_app, <- idcaus_of_decls_map, <- get_idcaus_locals; auto.
+      rewrite 2 in_app_iff in *; tauto.
+    - inversion 1.
+    - intros x ys Hxin Hys Hdep.
+      apply P_vars_cons; auto.
+      (* utile dans plusieurs points par la suite : *)
+      assert (HinsS : P_vars (S n) env ins). {
+        intros y Hin.
+        unfold P_var, env; rewrite FIXP_eq, PROJ_simpl, denot_node_input; auto.
+        eapply P_vars_In; eauto.
+      }
+      rewrite <- in_app_iff, map_app, <- app_assoc, in_app_iff in Hxin.
+      destruct Hxin as [Hxin|Hxin].
+      + (* x est une entrée, sa valeur est prise dans envI *)
+        rewrite idcaus_map in Hxin; auto.
+      + (* x est une sortie ou une locale, on utilise laborieusement P_var_inside_blocks *)
+        inv Hwx; inv Hwl.
+        inversion Hr as [??? Hnd].
+        rewrite <- Hnd in *; simpl in Hxin, Hn.
+        rewrite locals_restr_blocks, app_nil_r in Hxin; auto.
         unfold env; rewrite FIXP_eq; fold env.
-        eapply P_var_outside_blocks; auto.
-    - constructor.
-    - intros x ys _ Hys Hdep.
-      constructor; auto.
-      unfold env; rewrite FIXP_eq; fold env.
-      destruct (decidable_Exists (Syn.Is_defined_in (FunctionalEnvironment.Var x)) blks).
-      + intros; apply Is_defined_in_dec; now simpl_Forall.
-      + take (wl_block _ _) and inv it.
+        rewrite denot_node_eq, denot_top_block_eq, <- Hnd.
+        take (wl_block _ _) and inv it.
         take (wl_scope _ _ _) and inv it.
         take (wx_block _ _) and inv it.
         take (wx_scope _ _ _) and inv it.
-        eapply P_var_inside_blocks; eauto using P_vars_weaken, is_ncons_bss.
-        intros y Hex.
-        eapply P_vars_In, Hdep; auto.
-        constructor; rewrite Hnd; constructor; econstructor; eauto.
-      + eapply P_var_outside_blocks; auto.
+        eapply P_var_inside_blocks; eauto using is_ncons_bss.
+        * subst Γ' Γ; intros y cy Hin.
+          apply HasCausInj in Hin as ?; subst.
+          apply HasCaus_In in Hin.
+          rewrite 2 map_app, 2 map_fst_senv_of_decls, map_fst_senv_of_ins, <- app_assoc in *.
+          apply in_app_or in Hin as []; eauto using P_vars_In, P_vars_S.
+        * intros y Hex.
+          eapply P_vars_In, Hdep; auto.
+          constructor; rewrite <- Hnd; constructor; econstructor; eauto.
+        * pose proof (n_syn nd) as Noloc; inv Noloc.
+          rewrite <- Hnd in *; inv H0.
+          (* TODO: faire des idcaus_of_decls_map spécialisés aux nœuds, là c'est vraiment trop chiant *)
+          rewrite <- 2 idcaus_of_decls_map in Hxin; auto.
+          eapply nin_defined; eauto.
+          now rewrite map_app, 2 map_fst_senv_of_decls.
   Qed.
 
   Theorem denot_n :
@@ -817,12 +1068,18 @@ Module Type LDENOTINF
       wl_node G nd ->
       wx_node nd ->
       node_causal nd ->
-      (forall x, P_var n envI x) ->
-      forall x, P_var n (FIXP _ (denot_node G nd envG envI)) x.
+      P_vars n envI (map fst (n_in nd)) ->
+      (* TODO: on peut aussi prouver les locales, mais ça sert à rien ? *)
+      P_vars n (FIXP _ (denot_node G nd envG envI)) (map fst (n_out nd)).
   Proof.
-    induction n; intros Hr Hwl Hwx Hcaus Hins.
-    - tauto.
-    - apply denot_S; auto using is_ncons_S, P_var_S.
+    intros * Hr Hwl Hwx Hcaus Hins.
+    apply P_vars_app_r with (ys := map fst (get_locals (n_block nd))).
+    revert Hr Hwl Hwx Hcaus Hins.
+    revert nd envI.
+    induction n; intros.
+    - apply P_vars_O.
+    - apply denot_S; auto.
+      apply IHn; auto using P_vars_S.
   Qed.
 
   End Node_n.
@@ -832,87 +1089,90 @@ Module Type LDENOTINF
       receiving streams of length n outputs streams of length n. *)
 
   Theorem denot_global_n :
-    forall n G envI,
+    forall n G f nd envI,
       restr_global G ->
       wt_global G ->
       Forall node_causal (nodes G) ->
-      (forall x, P_var n envI x) ->
-      forall f x, P_var n (denot_global G f envI) x.
+      find_node f G = Some nd ->
+      P_vars n envI (map fst (n_in nd)) ->
+      P_vars n (denot_global G f envI) (map fst (n_out nd)).
   Proof.
-    intros * Hr Hwt Hcaus Hins f x.
+    intros * Hr Hwt Hcaus Hfind Hins.
     assert (Ordered_nodes G) as Hord.
     now apply wl_global_Ordered_nodes, wt_global_wl_global.
     unfold denot_global.
     rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq.
-    destruct (find_node f G) as [nd|] eqn:Hfind.
-    - remember (FIXP (Dprodi FI) (denot_global_ G)) as envG eqn:HF.
-      (* pour réussir l'induction sur (nodes G), on doit relâcher la
+    rewrite Hfind.
+    remember (FIXP (Dprodi FI) (denot_global_ G)) as envG eqn:HF.
+    (* pour réussir l'induction sur (nodes G), on doit relâcher la
          contrainte sur envG : en gardant la définition HF actuelle, on
          ne peut pas espérer réécrire denot_node2_cons sous le point fixe *)
-      assert (forall f nd envI,
-          find_node f G = Some nd ->
-          envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
-      { intros * Hf; subst.
-        now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
-      (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
-      clear HF.
-      (* il faut généraliser à tous les nœuds *)
-      revert Hins HenvG Hfind. revert envI envG n f x nd.
-      destruct G as [tys exts nds]; simpl in *.
-      induction nds as [|a nds]; simpl; intros. inv Hfind.
-      inv Hcaus. inv Hr.
-      destruct (ident_eq_dec (n_name a) f); subst.
-      + (* cas intéressant, où on utilise denot_n_all_vars *)
-        rewrite find_node_now in Hfind; inv Hfind; auto.
-        rewrite <- denot_node_cons;
-          eauto using find_node_not_Is_node_in, find_node_now.
-        apply denot_n; eauto using wt_global_uncons, wt_node_wl_node, wt_node_wx_node.
-        intros m f envI2 Hin HI2 y.
-        apply name_find_node in Hin as (ndf & Hfind).
-        eapply find_node_uncons with (nd := nd) in Hfind as ?; auto.
-        rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-        apply IHnds with (f := f); auto.
-        eauto using wt_global_cons.
-        eauto using Ordered_nodes_cons.
-        (* montrons que HenvG tient toujours *)
-        intros f' ndf' envI' Hfind'.
-        eapply find_node_uncons with (nd := nd) in Hfind' as ?; auto.
-        rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-      + rewrite find_node_other in Hfind; auto.
-        rewrite <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-        apply IHnds with (f := f); auto.
-        eauto using wt_global_cons.
-        eauto using Ordered_nodes_cons.
-        (* montrons que HenvG tient toujours *)
-        intros f' ndf' envI' Hfind'.
-        eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
-        rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-    - unfold P_var, err_env.
-      cbn; eauto using is_ncons_DS_const.
+    assert (forall f nd envI,
+               find_node f G = Some nd ->
+               envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
+    { intros * Hf; subst.
+      now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
+    (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
+    clear HF.
+    (* il faut généraliser à tous les nœuds *)
+    revert Hins HenvG Hfind. revert envI envG n f nd.
+    destruct G as [tys exts nds]; simpl in *.
+    induction nds as [|a nds]; simpl; intros. inv Hfind.
+    inv Hcaus. inv Hr.
+    destruct (ident_eq_dec (n_name a) f); subst.
+    + (* cas intéressant *)
+      rewrite find_node_now in Hfind; inv Hfind; auto.
+      rewrite <- denot_node_cons;
+        eauto using find_node_not_Is_node_in, find_node_now.
+      apply denot_n; eauto using wt_global_uncons, wt_node_wl_node, wt_node_wx_node.
+      intros m f nd2 envI2 Hfind2 HI2.
+      eapply find_node_uncons with (nd := nd) in Hfind2 as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+      apply IHnds with (f := f); auto.
+      eauto using wt_global_cons.
+      eauto using Ordered_nodes_cons.
+      (* montrons que HenvG tient toujours *)
+      intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := nd) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + rewrite find_node_other in Hfind; auto.
+      rewrite <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+      apply IHnds with (f := f); auto.
+      eauto using wt_global_cons.
+      eauto using Ordered_nodes_cons.
+      (* montrons que HenvG tient toujours *)
+      intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
   Qed.
 
   End Top.
 
 (** Maintenant on passe à l'infini *)
 
+(* TODO : changer l'autre infinite_dom ? *)
+Definition infinite_dom (env : DS_prod SI) (l : list ident) : Prop :=
+  forall x, In x l -> infinite (env x).
+
 Lemma infinite_P_vars :
-  forall env, all_infinite env <-> (forall n x, P_var n env x).
+  forall env l, infinite_dom env l <-> (forall n, P_vars n env l).
 Proof.
   intro env.
-  unfold P_var, all_infinite.
+  unfold P_vars, P_var, infinite_dom.
   setoid_rewrite PROJ_simpl.
   split; eauto using nrem_inf, inf_nrem.
 Qed.
 
-(* TODO: dom_infinite, avec listes de variables *)
 Theorem denot_inf :
-  forall (HasCausInj : forall Γ x cx, HasCaus Γ x cx -> x = cx),
-  forall (G : global) envI,
+  forall (HasCausInj : forall Γ x cx, HasCaus Γ x cx -> cx = x),
+  forall (G : global),
     restr_global G ->
     wt_global G ->
     Forall node_causal (nodes G) ->
-    all_infinite envI ->
-    forall f, all_infinite (denot_global G f envI).
+    forall f nd envI,
+      find_node f G = Some nd ->
+      infinite_dom envI (List.map fst (n_in nd)) ->
+      infinite_dom (denot_global G f envI) (List.map fst (n_out nd)).
 Proof.
   intros.
   rewrite infinite_P_vars in *.
@@ -936,21 +1196,101 @@ Proof.
     + apply (IHn _ Ht).
 Qed.
 
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
+
+
+    (* TODO: utiliser ? *)
+    Lemma P_vars_inf :
+      forall env l, (forall n, P_vars n env l) <-> infinite_dom env l.
+    Proof.
+      unfold P_vars, infinite_dom, P_var.
+      setoid_rewrite <- nrem_inf_iff.
+      setoid_rewrite PROJ_simpl.
+      split; auto.
+    Qed.
+
+Global Add Parametric Morphism : infinite_dom
+       with signature @Oeq (DS_prod SI) ==> eq ==> iff
+         as all_inf_morph.
+Proof.
+  unfold infinite_dom.
+  intros ?? Eq.
+  setoid_rewrite <- PROJ_simpl.
+  now setoid_rewrite Eq.
+Qed.
+Lemma REM_env_inf_dom :
+  forall env l,
+    infinite_dom env l ->
+    infinite_dom (REM_env env) l.
+Proof.
+  intros * Hinf x Hin.
+  rewrite REM_env_eq.
+  specialize (Hinf x).
+  now destruct Hinf.
+Qed.
+      Lemma inf_dom_env_of_np :
+          forall  l m (mp : nprod m),
+            forall_nprod (@infinite _) mp ->
+            infinite_dom (env_of_np l mp) l.
+        Proof.
+          unfold infinite_dom.
+          intros.
+          rewrite env_of_np_eq.
+          destruct (mem_nth l x) as [i|] eqn:Hmem.
+          - apply forall_nprod_k_def; auto; apply DS_const_inf.
+          - apply mem_nth_nin in Hmem; tauto.
+        Qed.
+
+
+    (* on ne peut pas utiliser [is_ncons_sreset], l'hypothèse sur les nœuds
+       est trop forte *)
+Import CommonDS.
+      Lemma sreset_inf :
+        forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X,
+          (forall envI, infinite_dom envI ins -> infinite_dom (f envI) outs) ->
+          infinite R ->
+          infinite_dom X ins ->
+          infinite_dom (sreset f R X) outs.
+      Proof.
+        intros * If Ir Ix.
+        rewrite sreset_eq.
+        assert (infinite_dom (f X) outs) as Iy by auto.
+        remember (_ f X) as Y eqn:HH; clear HH.
+        intros x Hin.
+        remember_ds (sreset_aux _ _ _ _ _) as t.
+        revert Ir Ix Iy Ht Hin.
+        revert R X Y x t.
+        cofix Cof; intros.
+        apply infinite_decomp in Ir as (r & R' & Hr & Ir').
+        rewrite <- PROJ_simpl, Hr, sreset_aux_eq in Ht.
+        apply REM_env_inf_dom in Ix as Irx, Iy as Iry.
+        destruct (Iy x), (If X Ix x); auto. (* pour plus tard *)
+        apply If, REM_env_inf_dom in Ix as Ifx.
+        constructor.
+        - cases; rewrite Ht, ?sreset_aux_eq, PROJ_simpl, APP_env_eq, APP_simpl;
+            eauto using app_is_cons.
+        - apply rem_eq_compat in Ht.
+          destruct r; [rewrite sreset_aux_eq in Ht|];
+            rewrite PROJ_simpl, APP_env_eq, APP_simpl, rem_app in Ht; eauto 2.
+      Qed.
+      (* XXXXXXXXXXxxxxxxxxxxxxxxxxxxxxxxxx *)
+
+
 (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour
     prouver l'infinité des expressions. *)
 Lemma infinite_exp :
   forall G ins envI (envG : Dprodi FI) bs env,
-    (forall envI f, all_infinite envI -> all_infinite (envG f envI)) ->
+    (forall f nd envI,
+        find_node f G = Some nd ->
+        infinite_dom envI (List.map fst (n_in nd)) ->
+        infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
     infinite bs ->
-    all_infinite envI ->
-    all_infinite env ->
-    forall e,
+    forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
+    forall e, wx_exp Γ e -> wl_exp G e ->
     forall_nprod (@infinite _) (denot_exp G ins e envG envI bs env).
 Proof.
-  intros * HG Hbs Hins Hinf.
-  assert (forall x, infinite (denot_var ins envI env x)) as Hvar.
-  { unfold all_infinite, denot_var in *. intro. cases; eauto. }
-  induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
+  intros * HG Hbs ? Hvar e Hwx Hwl.
+  induction e using exp_ind2; inv Hwx; inv Hwl; simpl; setoid_rewrite denot_exp_eq.
   (* cas restreints : *)
   all: eauto; try apply forall_nprod_const; try apply DS_const_inf.
   - (* Econst *)
@@ -958,85 +1298,106 @@ Proof.
   - (* Eunop *)
     revert IHe.
     gen_sub_exps.
-    intros; cases; simpl; eauto using sunop_inf, DS_const_inf.
+    intros; cases; simpl in *; eauto using sunop_inf, DS_const_inf.
   - (* Ebinop *)
     revert IHe1 IHe2.
     gen_sub_exps.
-    intros; cases; simpl; eauto using sbinop_inf, DS_const_inf.
+    intros; cases; simpl in *; eauto using sbinop_inf, DS_const_inf.
   - (* Efby *)
+    apply Forall_impl_inside with (P := wx_exp _) in H0,H; auto.
+    apply Forall_impl_inside with (P := wl_exp _) in H0,H; auto.
     apply forall_denot_exps in H, H0.
     unfold eq_rect.
     cases; eauto using forall_nprod_const, DS_const_inf.
     eapply forall_nprod_lift2; eauto using fby_inf; cases.
   - (* Ewhen *)
+    apply Forall_impl_inside with (P := wx_exp _) in H; auto.
+    apply Forall_impl_inside with (P := wl_exp _) in H; auto.
     apply forall_denot_exps in H.
     unfold eq_rect.
     cases; eauto using forall_nprod_const, DS_const_inf.
     eapply forall_nprod_llift; eauto using swhen_inf; cases.
   - (* Emerge *)
-    destruct x, a.
     eapply forall_lift_nprod; eauto using smerge_inf.
     unfold eq_rect_r, eq_rect, eq_sym; cases.
     apply forall_denot_expss.
     unfold eq_rect.
     simpl_Forall.
+    apply Forall_impl_inside with (P := wx_exp _) in H; auto.
+    apply Forall_impl_inside with (P := wl_exp _) in H; auto.
     cases; eauto using forall_nprod_const, map_inf.
     now apply forall_denot_exps.
   - (* Ecase *)
-    destruct a as [tys].
-    eapply Forall_impl in H.
-    2:{ intros ? HH. eapply (proj2 (forall_denot_exps _ _ _ _ _ _ _ _ )), HH. }
+    eapply Forall_impl_In in H.
+    2:{ intros ? Hin HH.
+        apply Forall_impl_inside with (P := wx_exp _) in HH;[| now simpl_Forall].
+        apply Forall_impl_inside with (P := wl_exp _) in HH;[| now simpl_Forall].
+        eapply (proj2 (forall_denot_exps _ _ _ _ _ _ _ _ )), HH. }
     eapply forall_forall_denot_expss with (n := length tys) in H as Hess;
       eauto using map_inf.
     destruct d.
     + (* défaut *)
+      apply Forall_impl_inside with (P := wx_exp _) in H0; auto.
+      apply Forall_impl_inside with (P := wl_exp _) in H0; auto.
       apply forall_denot_exps in H0 as Hd.
       revert Hess IHe Hd.
       gen_sub_exps.
       unfold eq_rect_r, eq_rect, eq_sym; cases; intros;
         eauto using forall_nprod_const, DS_const_inf.
+      simpl in *|-.
       eapply forall_lift_nprod; eauto using scase_def_inf, forall_nprod_cons.
     + (* total *)
       revert Hess IHe.
       gen_sub_exps.
       unfold eq_rect_r; cases; intros; eauto using forall_nprod_const, DS_const_inf.
+      simpl in *|-.
       eapply forall_lift_nprod; eauto using scase_inf.
       unfold eq_rect, eq_sym; cases.
   - (* Eapp *)
+    apply Forall_impl_inside with (P := wx_exp _) in H, H0; auto.
+    apply Forall_impl_inside with (P := wl_exp _) in H, H0; auto.
     apply forall_denot_exps in H, H0.
     unfold eq_rect.
+    take (find_node _ _ = _) and rewrite it.
     cases; eauto using forall_nprod_const, DS_const_inf.
-    apply forall_np_of_env; intro.
-    apply sreset_inf; auto.
+    apply forall_np_of_env'; intros x Hxout.
+    eapply sreset_inf; eauto.
     + apply sbools_ofs_inf; auto.
-    + intro; apply forall_env_of_np; eauto using DS_const_inf.
+    + apply inf_dom_env_of_np; auto.
 Qed.
 
 Corollary infinite_exps :
   forall G ins (envG : Dprodi FI) envI bs env,
-    (forall envI f, all_infinite envI -> all_infinite (envG f envI)) ->
+    (forall f nd envI,
+        find_node f G = Some nd ->
+        infinite_dom envI (List.map fst (n_in nd)) ->
+        infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
     infinite bs ->
-    all_infinite envI ->
-    all_infinite env ->
-    forall es,
+    forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
+    forall es, Forall (wx_exp Γ) es -> Forall (wl_exp G) es ->
     forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env).
 Proof.
-  induction es; simpl; auto.
+  induction es; simpl; auto; intros; simpl_Forall.
   setoid_rewrite denot_exps_eq.
-  auto using forall_nprod_app, infinite_exp.
+  eauto using forall_nprod_app, infinite_exp.
 Qed.
 
 Corollary infinite_expss :
   forall G ins (envG : Dprodi FI) envI bs env,
-    (forall envI f, all_infinite envI -> all_infinite (envG f envI)) ->
+    (forall f nd envI,
+        find_node f G = Some nd ->
+        infinite_dom envI (List.map fst (n_in nd)) ->
+        infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
     infinite bs ->
-    all_infinite envI ->
-    all_infinite env ->
+    forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
     forall I (ess : list (I * list exp)) n,
-      forall_nprod (forall_nprod (@infinite _)) (denot_expss G ins ess n envG envI bs env).
+    Forall (fun es => Forall (wx_exp Γ) (snd es)) ess ->
+    Forall (fun es => Forall (wl_exp G) (snd es)) ess ->
+    forall_nprod (forall_nprod (@infinite _)) (denot_expss G ins ess n envG envI bs env).
 Proof.
-  induction ess as [| (i,es) ess]; intros.  { now simpl. }
+  induction ess as [| (i,es) ess]; intros * Hwx Hwl. { now simpl. }
   setoid_rewrite denot_expss_eq.
+  inv Hwx; inv Hwl.
   unfold eq_rect.
   cases; eauto using forall_nprod_const, map_inf.
   apply forall_nprod_cons; eauto using infinite_exps.
@@ -1058,3 +1419,4 @@ Module LDenotInfFun
 <: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
   Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
 End LDenotInfFun.
+ 
