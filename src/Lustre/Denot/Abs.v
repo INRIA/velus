@@ -67,18 +67,14 @@ Qed.
 
 Lemma env_of_np_abs :
   forall l (np : nprod (length l)),
-    env_of_np l (lift (CONS abs) np) == APP_env abs_env (env_of_np l np).
+    env_of_np l (lift (CONS abs) np) <= APP_env abs_env (env_of_np l np).
 Proof.
-  intros; subst.
-  apply Oprodi_eq_intro; intro x.
+  intros; subst; intro x.
   rewrite APP_env_eq, 2 env_of_np_eq.
   cases_eqn HH.
-  - apply mem_nth_Some with (d := xH) in HH as []; subst.
-    unfold abs_env, abss.
-    erewrite DS_const_eq, APP_simpl, app_cons, nth_lift; auto.
-  - unfold abs_env, abss.
-    rewrite DS_const_eq at 1 2.
-    now rewrite APP_simpl, app_cons at 1.
+  apply mem_nth_Some with (d := xH) in HH as []; subst.
+  unfold abs_env, abss.
+  erewrite DS_const_eq, APP_simpl, app_cons, nth_lift; auto.
 Qed.
 
 Lemma env_of_np_ext_abs :
@@ -288,6 +284,7 @@ Section Abs_indep_node.
 
   Hypothesis Hnode :
     forall f n envI,
+      (* TODO: hypothèse qui va sauter avec une induction sur le point fixe global ? *)
       find_node f G = Some n ->
       envG f (APP_env abs_env envI) <= APP_env abs_env (envG f envI).
 
@@ -462,10 +459,9 @@ Section Abs_indep_node.
       unfold eq_rect; cases; try (rewrite map_length in *; tauto).
       intros t1 t2 t3 t4 Le1 Le2.
       rewrite 2 sreset_eq, <- np_of_env_abs.
-      rewrite <- abs_indep_sreset_aux, <- sbools_of_abs, <- env_of_np_abs.
-      apply fcont_monotonic, fcont_le_compat3; auto.
-      eapply Ole_trans, (Hnode _ n); auto.
-      rewrite <- env_of_np_abs; auto.
+      rewrite <- abs_indep_sreset_aux, <- sbools_of_abs.
+      apply fcont_monotonic, fcont_le_compat3; eauto 3 using env_of_np_abs.
+      eapply Ole_trans, (Hnode _ n); eauto 4 using env_of_np_abs.
   Qed.
 
   Corollary abs_indep_exps :
@@ -549,8 +545,8 @@ Proof.
   2:{ (* si find_node = None, c'est gagné *)
     unfold denot_global.
     rewrite <- PROJ_simpl, 2 FIXP_eq, PROJ_simpl,
-      2 denot_global_eq, Hfind, <- abs_abs_abs.
-    reflexivity. }
+      2 denot_global_eq, Hfind.
+    apply Dbot. }
   (* TODO: ce schéma (set envG, HenvG, etc. semble récurrent, en faire une tactique ? *)
   remember (denot_global G) as envG eqn:HG.
   assert (forall f nd envI,
