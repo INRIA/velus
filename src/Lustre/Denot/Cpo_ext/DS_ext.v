@@ -274,6 +274,32 @@ Proof.
   apply app_first_rem.
 Qed.
 
+Lemma rem_app_app_rem :
+  forall A (x y : DS A), rem (app x (app (rem x) y)) == app (rem x) y.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V => exists x y, U == V
+                         \/ (U == rem (app x (app (rem x) y))
+                            /\ V == app (rem x) y)).
+  3: eauto.
+  - intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto.
+  - clear.
+    intros U V Hc (x & y & [Huv|[Hu Hv]]).
+    { setoid_rewrite Huv. unshelve eauto; auto. }
+    edestruct (@is_cons_elim _ x) as (vx & xs & Hx).
+    { destruct Hc as [Hc|Hc].
+      - rewrite Hu in Hc.
+        now apply rem_is_cons, app_is_cons in Hc.
+      - rewrite Hv in Hc.
+        now apply app_is_cons, rem_is_cons in Hc. }
+    rewrite Hx, app_cons, 2 rem_cons, <- Hu in *.
+    setoid_rewrite Hv; unshelve eauto; auto.
+Qed.
+
 Lemma infinite_rem :
   forall D (s : DS D),
     infinite (rem s) -> infinite s.
@@ -673,6 +699,11 @@ Proof.
   destruct n; reflexivity.
 Qed.
 
+Lemma take_bot : forall A n, @take A n 0 == 0.
+Proof.
+  destruct n; rewrite take_eq; auto.
+Qed.
+
 Global Add Parametric Morphism A n : (take n)
        with signature @Oeq (DS A) ==> @Oeq (DS A)
          as take_morph.
@@ -1005,20 +1036,34 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma app_rem_env :
-  forall s, APP_env s (REM_env s) == s.
+Lemma app_rem_env : forall s, APP_env s (REM_env s) == s.
 Proof.
   intros.
   apply Oprodi_eq_intro; intro x.
   now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
 Qed.
 
-Lemma rem_app_env :
-  forall X Y, all_cons X -> REM_env (APP_env X Y) == Y.
+Lemma rem_app_env : forall X Y, all_cons X -> REM_env (APP_env X Y) == Y.
 Proof.
   intros * Hc.
   apply Oprodi_eq_intro; intro x.
   rewrite REM_env_eq, APP_env_eq, APP_simpl, rem_app; auto.
+Qed.
+
+Lemma rem_app_env_le : forall X Y, REM_env (APP_env X Y) <= Y.
+Proof.
+  intros * i.
+  rewrite REM_env_eq, APP_env_eq, APP_simpl.
+  apply rem_app_le.
+Qed.
+
+Lemma rem_app_app_rem_env :
+  forall X Y, REM_env (APP_env X (APP_env (REM_env X) Y)) == APP_env (REM_env X) Y.
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro i.
+  repeat rewrite ?REM_env_eq, ?APP_env_eq, ?APP_simpl.
+  apply rem_app_app_rem.
 Qed.
 
 Lemma app_app_env :
@@ -1029,7 +1074,7 @@ Proof.
   rewrite 2 APP_env_eq, 2 APP_simpl, app_app; auto.
 Qed.
 
-Lemma APP_env_bot : APP_env 0 0 == 0.
+Lemma APP_env_bot : forall s, APP_env 0 s == 0.
 Proof.
   intros.
   apply Oprodi_eq_intro; intro.
@@ -1150,20 +1195,44 @@ End Env_eq.
 
 
 (** Extract a (min(n, length s))-prefix of all streams s *)
-Fixpoint take_env n (env : DS_prod SI) : DS_prod SI :=
+Fixpoint take_env n : DS_prod SI -C-> DS_prod SI :=
   match n with
-  | O => 0
-  | S n => APP_env env (take_env n (REM_env env))
+  | O => CTE _ _ 0
+  | S n => (APP_env @2_ ID _) (take_env n @_ REM_env)
   end.
+
+Lemma take_env_eq :
+  forall n X, take_env n X = match n with
+                        | O => 0
+                        | S n => APP_env X (take_env n (REM_env X))
+                        end.
+Proof.
+  destruct n; reflexivity.
+Qed.
+
+Global Opaque take_env.
+
+Lemma take_env_le : forall n env, take_env n env <= env.
+Proof.
+  induction n; intros; rewrite take_env_eq.
+  - apply Dbot.
+  - apply Ole_trans with (APP_env env (REM_env env)); auto.
+    now rewrite app_rem_env.
+Qed.
+
+Lemma take_env_proj :
+  forall n X x, take_env n X x = take n (X x).
+Proof.
+  induction n; intros; rewrite take_env_eq; auto.
+  now rewrite APP_env_eq, IHn, REM_env_eq.
+Qed.
 
 Global Add Parametric Morphism n : (take_env n)
        with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI)
          as take_env_morph.
 Proof.
-  induction n; auto; intros ?? Heq; simpl.
-  rewrite Heq at 1.
-  rewrite (IHn _ (REM_env y)); auto.
-  now rewrite Heq.
+  induction n; intros * H; rewrite take_env_eq; auto.
+  now rewrite H.
 Qed.
 
 Lemma take_env_1 : forall X, take_env 1 X = FIRST_env X.
@@ -1176,13 +1245,6 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma take_env_eq :
-  forall n X x, take_env n X x = take n (X x).
-Proof.
-  induction n; simpl; intros; auto.
-  now rewrite APP_env_eq, IHn, REM_env_eq.
-Qed.
-
 Lemma take_env_Oeq :
   forall X Y, (forall n, take_env n X == take_env n Y) -> X == Y.
 Proof.
@@ -1190,7 +1252,7 @@ Proof.
   apply Oprodi_eq_intro; intro i.
   eapply DS_bisimulation_allin1 with
     (R := fun U V => forall n, take n U == take n V).
-  3: now intro n; rewrite <- 2 take_env_eq, <- 2 PROJ_simpl, Ht.
+  3: now intro n; rewrite <- 2 take_env_proj, <- 2 PROJ_simpl, Ht.
   { intros * ? Eq1 Eq2.
     setoid_rewrite <- Eq1.
     setoid_rewrite <- Eq2.
@@ -1214,6 +1276,17 @@ Proof.
     now apply Con_eq_simpl in Ht as [].
 Qed.
 
+Lemma take_rem_env :
+  forall n X, take_env n (REM_env X) == REM_env (take_env (S n) X).
+Proof.
+  split.
+  - induction n; rewrite take_env_eq; auto.
+    rewrite (take_env_eq (S (S n))).
+    rewrite (take_env_eq (S n)).
+    now rewrite rem_app_app_rem_env.
+  - now rewrite take_env_eq, rem_app_env_le.
+Qed.
+
 (** on peut éliminer [REM_env (APP_env X Y)] s'il est sous un [APP_env X] *)
 Lemma app_rem_take_env :
   forall n X Y,
@@ -1221,7 +1294,7 @@ Lemma app_rem_take_env :
 Proof.
   intros.
   apply Oprodi_eq_intro; intro i.
-  repeat rewrite ?APP_env_eq, ?REM_env_eq, ?take_env_eq.
+  repeat rewrite ?APP_env_eq, ?REM_env_eq, ?take_env_proj.
   apply DS_bisimulation_allin1 with
     (R := fun U V =>
             U == V

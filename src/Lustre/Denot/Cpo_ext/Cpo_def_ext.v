@@ -52,6 +52,13 @@ Qed.
 
 Global Hint Rewrite fcont_comp4_simpl fcont_comp5_simpl : cpodb.
 
+Lemma fcont_app_le_compat : forall (D1 D2:cpo) (f g : D1 -c> D2) (x y : D1),
+    f <= g -> x <= y -> f x <= g y.
+Proof.
+  intros.
+  apply Ole_trans with (f y); auto.
+Qed.
+
 (* TODO: comprendre pourquoi c'est si laborieux *)
 Lemma fcont_le_compat3 :
   forall (D1 D2 D3 D4:cpo) (f : D1-C->D2-C->D3-C->D4)
