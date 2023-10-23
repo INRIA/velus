@@ -1031,7 +1031,7 @@ Defined.
 
 Lemma APP_env_eq :
   forall env1 env2 i,
-    APP_env env1 env2 i = APP _ (env1 i) (env2 i).
+    APP_env env1 env2 i = app (env1 i) (env2 i).
 Proof.
   reflexivity.
 Qed.
@@ -1040,20 +1040,20 @@ Lemma app_rem_env : forall s, APP_env s (REM_env s) == s.
 Proof.
   intros.
   apply Oprodi_eq_intro; intro x.
-  now rewrite APP_env_eq, REM_env_eq, APP_simpl, app_rem.
+  now rewrite APP_env_eq, REM_env_eq, app_rem.
 Qed.
 
 Lemma rem_app_env : forall X Y, all_cons X -> REM_env (APP_env X Y) == Y.
 Proof.
   intros * Hc.
   apply Oprodi_eq_intro; intro x.
-  rewrite REM_env_eq, APP_env_eq, APP_simpl, rem_app; auto.
+  rewrite REM_env_eq, APP_env_eq, rem_app; auto.
 Qed.
 
 Lemma rem_app_env_le : forall X Y, REM_env (APP_env X Y) <= Y.
 Proof.
   intros * i.
-  rewrite REM_env_eq, APP_env_eq, APP_simpl.
+  rewrite REM_env_eq, APP_env_eq.
   apply rem_app_le.
 Qed.
 
@@ -1062,7 +1062,7 @@ Lemma rem_app_app_rem_env :
 Proof.
   intros.
   apply Oprodi_eq_intro; intro i.
-  repeat rewrite ?REM_env_eq, ?APP_env_eq, ?APP_simpl.
+  repeat rewrite ?REM_env_eq, ?APP_env_eq.
   apply rem_app_app_rem.
 Qed.
 
@@ -1071,14 +1071,14 @@ Lemma app_app_env :
 Proof.
   intros.
   apply Oprodi_eq_intro; intro x.
-  rewrite 2 APP_env_eq, 2 APP_simpl, app_app; auto.
+  rewrite 2 APP_env_eq, app_app; auto.
 Qed.
 
 Lemma APP_env_bot : forall s, APP_env 0 s == 0.
 Proof.
   intros.
   apply Oprodi_eq_intro; intro.
-  now rewrite APP_env_eq, APP_simpl, app_eq_bot.
+  now rewrite APP_env_eq, app_eq_bot.
 Qed.
 
 Lemma app_env_cons :
@@ -1092,7 +1092,7 @@ Lemma app_env_inf :
   forall X Y, all_cons X -> all_infinite Y -> all_infinite (APP_env X Y).
 Proof.
   intros * Hc Hinf i.
-  rewrite APP_env_eq, APP_simpl.
+  rewrite APP_env_eq.
   eapply is_cons_elim in Hc as (?&?& ->).
   rewrite app_cons.
   constructor; auto.
@@ -1121,7 +1121,7 @@ Lemma first_app_env :
 Proof.
   intros.
   apply Oprodi_eq_intro; intro x.
-  now rewrite FIRST_env_eq, APP_env_eq, APP_simpl, first_app_first.
+  now rewrite FIRST_env_eq, APP_env_eq, first_app_first.
 Qed.
 
 Lemma app_app_first_env :
