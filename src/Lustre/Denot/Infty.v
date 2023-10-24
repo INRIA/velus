@@ -358,7 +358,7 @@ Proof.
   rewrite <- PROJ_simpl, sreset_eq, Hr, sreset_aux_eq.
   cases; try apply is_cons_DS_const.
   rewrite sreset_aux_eq.
-  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+  all: rewrite PROJ_simpl, APP_env_eq; auto using is_cons_app.
 Qed.
 
 Lemma is_cons_sreset_aux :
@@ -375,7 +375,7 @@ Proof.
   rewrite <- PROJ_simpl, Hr, sreset_aux_eq.
   cases; try apply is_cons_DS_const.
   rewrite sreset_aux_eq.
-  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+  all: rewrite PROJ_simpl, APP_env_eq; auto using is_cons_app.
 Qed.
 
 Lemma is_ncons_sreset :
@@ -403,7 +403,7 @@ Proof.
   simpl in Cr; rewrite rem_cons in Cr.
   cases; solve_err.
   rewrite sreset_aux_eq.
-  all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, is_ncons_SS, rem_app;
+  all: rewrite PROJ_simpl, APP_env_eq, is_ncons_SS, rem_app;
     eauto using is_ncons_is_cons.
   all: apply IHn; auto.
   intros; rewrite REM_env_eq.
@@ -439,12 +439,12 @@ Proof.
   - rewrite Htx.
     cases.
     rewrite sreset_aux_eq.
-    all: rewrite PROJ_simpl, APP_env_eq, APP_simpl; auto using is_cons_app.
+    all: rewrite PROJ_simpl, APP_env_eq; auto using is_cons_app.
   - apply rem_eq_compat in Htx.
     destruct (Iy x), (If X Ix x). (* pour plus tard *)
     cases.
     rewrite sreset_aux_eq in Htx.
-    all: rewrite PROJ_simpl, APP_env_eq, APP_simpl, rem_app in Htx; auto.
+    all: rewrite PROJ_simpl, APP_env_eq, rem_app in Htx; auto.
     all: eapply Cof in Htx; eauto using REM_env_inf.
 Qed.
 
