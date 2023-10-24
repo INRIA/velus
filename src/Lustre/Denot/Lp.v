@@ -864,7 +864,8 @@ Section LP_node.
     intro Hwt; inv Hwt; take (wt_scope _ _ _ _) and inv it.
     intro Hwl; inv Hwl; take (wl_scope _ _ _) and inv it.
     rewrite 2 denot_blocks_eq.
-    induction blks as [|b blks]; simpl (fold_right _ _ _); auto.
+    induction blks as [|b blks]; simpl (fold_right _ _ _).
+    { apply symmetry, take_env_bot. }
     do 3 take (Forall _ (_::_)) and inv it.
     rewrite take_bss.
     - rewrite <- lp_block; auto; eauto.
@@ -873,12 +874,6 @@ Section LP_node.
   Qed.
 
 End LP_node.
-
-(* TODO: move *)
-Lemma take_env_bot : forall n, take_env n (0:DS_prod SI) == 0.
-Proof.
-  destruct n; rewrite take_env_eq; auto using APP_env_bot.
-Qed.
 
 (* TODO: check hypotheses *)
 Theorem lp_global :

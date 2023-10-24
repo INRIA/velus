@@ -62,7 +62,7 @@ Proof.
     setoid_rewrite (lift_cons (CONS abs) _ (env a) (np_of_env l env)).
     apply nprod_cons_Oeq_compat; auto.
     unfold abs_env, abss.
-    now rewrite DS_const_eq, APP_env_eq, APP_simpl, app_cons.
+    now rewrite DS_const_eq, APP_env_eq, app_cons.
 Qed.
 
 Lemma env_of_np_abs :
@@ -74,7 +74,7 @@ Proof.
   cases_eqn HH.
   apply mem_nth_Some with (d := xH) in HH as []; subst.
   unfold abs_env, abss.
-  erewrite DS_const_eq, APP_simpl, app_cons, nth_lift; auto.
+  erewrite DS_const_eq, app_cons, nth_lift; auto.
 Qed.
 
 Lemma env_of_np_ext_abs :
@@ -89,7 +89,7 @@ Proof.
   cases_eqn HH.
   apply mem_nth_Some with (d := xH) in HH as []; subst.
   unfold abs_env, abss.
-  erewrite DS_const_eq, APP_simpl, app_cons, nth_lift; auto.
+  erewrite DS_const_eq, app_cons, nth_lift; auto.
 Qed.
 
 
@@ -243,7 +243,7 @@ Proof.
   rewrite 2 rem_app_env; try apply all_cons_abs_env.
   apply Oprodi_eq_intro; intro x.
   unfold abs_env, abss.
-  now rewrite DS_const_eq, 3 APP_env_eq, 3 APP_simpl, 3 app_cons.
+  now rewrite DS_const_eq, 3 APP_env_eq, 3 app_cons.
 Qed.
 
 Lemma bss_app_abs :
@@ -256,7 +256,7 @@ Proof.
     now rewrite <- DS_const_eq.
   - unfold abs_env, abss.
     now rewrite 2 bss_cons, IHl, APP_env_eq, DS_const_eq,
-      APP_simpl, app_cons, AC_cons, zip_cons.
+      app_cons, AC_cons, zip_cons.
 Qed.
 
 Lemma sbools_of_abs :
@@ -337,7 +337,7 @@ Section Abs_indep_node.
     intros * Hle.
     specialize (Hle x).
     revert Hle; unfold denot_var, abs_env, abss.
-    rewrite 2 APP_env_eq, 2 APP_simpl, DS_const_eq, 2 app_cons; cases.
+    rewrite 2 APP_env_eq, DS_const_eq, 2 app_cons; cases.
   Qed.
 
   Lemma abs_indep_exp :
@@ -519,9 +519,7 @@ Section Abs_indep_node.
     intro Hwl; inv Hwl; take (wl_scope _ _ _) and inv it.
     rewrite 2 denot_blocks_eq.
     induction blks as [|b blks]; simpl (fold_right _ _ _).
-    - intro x.
-      unfold abs_env, abss at 1 2.
-      now rewrite APP_env_eq, DS_const_eq, APP_simpl, app_cons.
+    - apply Dbot.
     - do 3 take (Forall _ (_::_)) and inv it.
       rewrite bss_app_abs.
       eapply abs_indep_block; eauto 2.

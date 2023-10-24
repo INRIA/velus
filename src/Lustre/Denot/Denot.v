@@ -930,14 +930,14 @@ Definition denot_blocks (ins : list ident) (blks : list block) :
   apply curry, curry, curry.
   revert blks; fix denot_blocks 1.
   intros [| blk blks].
-  - refine (SND _ _ @_ FST _ _ @_ FST _ _).
+  - apply CTE, 0.
   - refine ((ID _ @2_ uncurry (uncurry (uncurry (denot_block ins blk)))) (denot_blocks blks)).
 Defined.
 
 Lemma denot_blocks_eq :
   forall ins envG envI bs env blks,
     denot_blocks ins blks envG envI bs env
-    = fold_right (fun blk => denot_block ins blk envG envI bs env) envI blks.
+    = fold_right (fun blk => denot_block ins blk envG envI bs env) 0 blks.
 Proof.
   induction blks; simpl; auto.
   unfold denot_blocks at 1.
@@ -959,7 +959,7 @@ Definition denot_top_block (ins : list ident) (b : block) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
   match b with
   | Blocal (Scope _ blks) => denot_blocks ins blks
-  | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
+  | _ => 0
   end.
 
 Lemma denot_top_block_eq :
@@ -967,7 +967,7 @@ Lemma denot_top_block_eq :
     denot_top_block ins blk envG envI bs env
     = match blk with
       | Blocal (Scope _ blks) => denot_blocks ins blks envG envI bs env
-      | _ => envI
+      | _ => 0
       end.
 Proof.
   intros.
