@@ -448,4 +448,35 @@ Proof.
     all: eapply Cof in Htx; eauto using REM_env_inf.
 Qed.
 
+Lemma sreset_inf_dom :
+  forall I,
+  forall (f : DS_prod (fun _ : I => sampl A) -C-> DS_prod (fun _ : I => sampl A)) R X,
+  forall ins outs,
+    (forall envI, infinite_dom envI ins -> infinite_dom (f envI) outs) ->
+    infinite R ->
+    infinite_dom X ins ->
+    infinite_dom (sreset f R X) outs.
+Proof.
+  intros * If Ir Ix.
+  rewrite sreset_eq.
+  assert (infinite_dom (f X) outs) as Iy by auto.
+  remember (_ f X) as Y eqn:HH; clear HH.
+  intros x Hin.
+  remember_ds (sreset_aux _ _ _ _ _) as t.
+  revert Ir Ix Iy Ht Hin.
+  revert R X Y x t.
+  cofix Cof; intros.
+  apply infinite_decomp in Ir as (r & R' & Hr & Ir').
+  rewrite <- PROJ_simpl, Hr, sreset_aux_eq in Ht.
+  apply REM_env_inf_dom in Ix as Irx, Iy as Iry.
+  destruct (Iy x), (If X Ix x); auto. (* pour plus tard *)
+  apply If, REM_env_inf_dom in Ix as Ifx.
+  constructor.
+  - cases; rewrite Ht, ?sreset_aux_eq, PROJ_simpl, APP_env_eq;
+      eauto using app_is_cons.
+  - apply rem_eq_compat in Ht.
+    destruct r; [rewrite sreset_aux_eq in Ht|];
+      rewrite PROJ_simpl, APP_env_eq, rem_app in Ht; eauto 2.
+Qed.
+
 End Ncons_ops.
