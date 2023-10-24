@@ -2701,7 +2701,7 @@ Section Node_safe.
     destruct (Co1 _ _ _ Hty Hck) as (Ty1 & Cl1 & Sf1).
     destruct (Co2 _ _ _ Hty Hck) as (Ty2 & Cl2 & Sf2).
     unfold denot_var in *.
-    rewrite 2 APP_env_eq, 2 APP_simpl.
+    rewrite 2 APP_env_eq.
     repeat split.
     - (* ty *)
       unfold ty_DS, DSForall_pres in *.
