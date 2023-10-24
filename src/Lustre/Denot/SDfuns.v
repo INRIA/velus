@@ -52,7 +52,7 @@ Section Abs.
     apply Oprodi_eq_intro; intro x.
     rewrite APP_env_eq.
     setoid_rewrite DS_const_eq at 1 2.
-    now rewrite APP_simpl, app_cons.
+    now rewrite app_cons.
   Qed.
 
   Lemma all_cons_abs_env : all_cons abs_env.
