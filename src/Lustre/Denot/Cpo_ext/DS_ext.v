@@ -960,6 +960,22 @@ Proof.
   apply infinite_le_eq; auto; apply Hle.
 Qed.
 
+(** Infinité sur un domaine *)
+(* TODO : les autres 0 ????? *)
+Definition infinite_dom (env : DS_prod SI) (l : list I) : Prop :=
+  forall x, In x l -> infinite (env x).
+
+Global Add Parametric Morphism : infinite_dom
+       with signature @Oeq (DS_prod SI) ==> eq ==> iff
+         as inf_dom_morph.
+Proof.
+  unfold infinite_dom.
+  intros ?? Eq.
+  setoid_rewrite <- PROJ_simpl.
+  now setoid_rewrite Eq.
+Qed.
+
+
 (** Couper la tête d'un environnement *)
 Definition REM_env : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => REM _).
 
@@ -984,6 +1000,17 @@ Proof.
   rewrite REM_env_eq.
   specialize (Hinf x).
   now inversion Hinf.
+Qed.
+
+Lemma REM_env_inf_dom :
+  forall env l,
+    infinite_dom env l ->
+    infinite_dom (REM_env env) l.
+Proof.
+  intros * Hinf x Hin.
+  rewrite REM_env_eq.
+  specialize (Hinf x).
+  now destruct Hinf.
 Qed.
 
 Lemma rem_env_eq_compat :
