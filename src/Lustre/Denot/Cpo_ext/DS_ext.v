@@ -1239,6 +1239,11 @@ Qed.
 
 Global Opaque take_env.
 
+Lemma take_env_bot : forall n, take_env n (0:DS_prod SI) == 0.
+Proof.
+  destruct n; rewrite take_env_eq; auto using APP_env_bot.
+Qed.
+
 Lemma take_env_le : forall n env, take_env n env <= env.
 Proof.
   induction n; intros; rewrite take_env_eq.
