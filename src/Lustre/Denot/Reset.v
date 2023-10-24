@@ -442,16 +442,16 @@ Proof.
     exists O, (cons true 0), 0.
     rewrite Hu, Hv, PROJ_simpl, DS_const_eq, rem_cons.
     now rewrite <- PROJ_simpl, smask_env_eq, smask_eq, PROJ_simpl. }
-  all: rewrite Hu, Hv, PROJ_simpl, APP_env_eq, PROJ_simpl, APP_simpl in Hc.
+  all: rewrite Hu, Hv, PROJ_simpl, APP_env_eq, PROJ_simpl in Hc.
   all: try assert (is_cons (X x)) by
     (destruct Hc as [Hc|Hc]; now apply app_is_cons in Hc).
   all: split; [
       (* first *)
-      rewrite Hu, Hv, PROJ_simpl, APP_env_eq, ?first_cons, APP_simpl, first_app_first
+      rewrite Hu, Hv, PROJ_simpl, APP_env_eq, ?first_cons, first_app_first
       ; auto; (* puis les autres *) now rewrite DS_const_eq, first_cons
     |].
   all: eexists _, R', (REM_env X).
-  all: rewrite Hu, Hv, 2 PROJ_simpl, APP_env_eq, APP_simpl, ?rem_app;
+  all: rewrite Hu, Hv, 2 PROJ_simpl, APP_env_eq, ?rem_app;
     auto using is_cons_DS_const.
 Qed.
 
@@ -466,6 +466,7 @@ Proof.
   { eapply app_is_cons; now rewrite Heq. }
   rewrite Hr, app_cons, rem_cons, smask_env_eq in *.
   apply Con_eq_simpl in Heq as []; subst; simpl.
+  rewrite 2 (take_env_eq (S n)).
   rewrite app_app_env, <- (IHn R' (REM_env X)), app_rem_take_env; auto.
 Qed.
 
@@ -502,7 +503,7 @@ Proof.
   { eapply app_is_cons; now rewrite Heq. }
   rewrite Hr, app_cons, rem_cons, sreset_aux_eq in *.
   apply Con_eq_simpl in Heq as []; subst; simpl.
-  rewrite app_app_env.
+  rewrite 2 (take_env_eq (S n)), app_app_env.
   setoid_rewrite <- (IHn f R' (REM_env X)) at 2; auto.
   now rewrite app_rem_take_env.
 Qed.
@@ -656,9 +657,11 @@ Proof.
       rewrite 2 (take_eq (S m)), Hr', rem_cons, smask_env_eq in *.
       rewrite DS_const_eq, 2 app_cons in Hr.
       apply Con_eq_simpl in Hr as []; subst; simpl in *.
+      rewrite 2 (take_env_eq (S n)).
       rewrite rem_cons, sreset_aux_eq, 3 app_app_env, 2 rem_app_env in *.
       apply first_env_eq_compat in Ht as Hft.
       apply rem_env_eq_compat in Ht as Hrt.
+      rewrite 2 (take_env_eq (S m)) in Hft, Hrt.
       rewrite 2 first_app_env in Hft.
       rewrite 2 rem_app_env in Hrt; auto using all_infinite_all_cons.
       rewrite <- (app_app_first_env Y), <- (app_app_first_env Z), Hft, IHm; auto with arith.
