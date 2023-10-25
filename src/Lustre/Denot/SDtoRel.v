@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs Reset.
+Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs Lp Reset.
 
 Import List ListNotations.
 
@@ -29,7 +29,8 @@ Module Type SDTOREL
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
        (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
-       (Import Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den).
+       (Import Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
+       (Import Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den).
 
 
 (* TODO: ajouter à Vélus *)
@@ -1943,18 +1944,18 @@ Proof.
   now erewrite get_nth_indep.
 Qed.
 
-(* TODO: move *)
-Lemma env_of_np_inf :
-  forall l n (np : nprod n),
-    forall_nprod (@infinite _) np ->
-    all_infinite (env_of_np l np).
-Proof.
-  clear.
-  intros * Hf x.
-  rewrite env_of_np_eq.
-  cases_eqn Hmem; try apply DS_const_inf.
-  apply forall_nprod_k_def; auto; apply DS_const_inf.
-Qed.
+(* (* TODO: move *) *)
+(* Lemma env_of_np_inf : *)
+(*   forall l n (np : nprod n), *)
+(*     forall_nprod (@infinite _) np -> *)
+(*     all_infinite (env_of_np l np). *)
+(* Proof. *)
+(*   clear. *)
+(*   intros * Hf x. *)
+(*   rewrite env_of_np_eq. *)
+(*   cases_eqn Hmem; try apply DS_const_inf. *)
+(*   apply forall_nprod_k_def; auto; apply DS_const_inf. *)
+(* Qed. *)
 
 (* TODO: move ?? *)
 (* TODO: pour enlever le restr, faire un get_locals récursif  *)
@@ -2176,9 +2177,10 @@ Corollary map_mask :
 Proof.
   intros.
   unshelve (esplit; apply map_mask_); auto.
-  apply forall_np_of_env; intros.
+  (* FIXME : forall_np_of_env est trop faible en général ?? *)
+  apply forall_np_of_env'; intros x Hin.
   rewrite smask_env_proj_eq.
-  apply smask_inf, env_of_np_inf; auto.
+  apply smask_inf, inf_dom_env_of_np; auto.
 Qed.
 
 
@@ -2282,7 +2284,7 @@ Proof.
       apply wf_env_APP_; eauto using wf_env_abs_ins.
 Qed.
 
-(* TODO: le résultat est suffisant mais pas très satisfaisant... *)
+(* TODO: move, utiliser ailleurs ?? Propriété importante du modèle *)
 Lemma not_out_abs :
   forall G f n,
     find_node f G = Some n ->
@@ -2290,8 +2292,7 @@ Lemma not_out_abs :
     forall envI x,
       ~ In x (List.map fst (n_out n)) ->
       ~ In x (List.map fst (get_locals (n_block n))) ->
-      denot_global G f envI x == DS_const abs
-      \/ denot_global G f envI x == envI x.
+      denot_global G f envI x == 0.
 Proof.
   intros * Hfind Hr * Nout Nloc.
   assert (Hnin: ~ In x (get_defined (n_block n)))
@@ -2322,7 +2323,7 @@ Lemma denot_in :
     restr_node n ->
     forall envI x,
       In x (List.map fst (n_in n)) ->
-      denot_global G f envI x == envI x.
+      denot_global G f envI x == 0.
 Proof.
   intros * Hfind Hr * Hin.
   pose proof (Hnin := ins_not_defined n x Hr Hin).
@@ -2343,7 +2344,7 @@ Proof.
   apply mem_nth_In in Hmem; auto.
 Qed.
 
-(*** Ici: tout ce qu'il nous faut pour prouver abs_align, et ça en fait pas mal... *)
+(** Ici: tout ce qu'il nous faut pour prouver abs_align, et ça en fait pas mal... *)
 
 Lemma bss_abs :
   forall I A l,
@@ -2427,7 +2428,7 @@ Proof.
     destruct (mem_ident x ins) eqn:Hmem.
     { (* si x est dans ins *)
       apply mem_ident_spec in Hmem.
-      rewrite Hin, <- PROJ_simpl, Hk; auto. }
+      rewrite Hin; auto. }
     destruct (mem_ident x (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n)))) eqn:Hmem2.
     { (* si x est dans out ou vars, seul cas intéressant *)
       assert (exists ty ck, HasType Γ x ty /\ HasClock Γ x ck) as (ty & ck & Hty & Hck).
@@ -2446,14 +2447,14 @@ Proof.
     { (* sinon *)
       apply mem_ident_false in Hmem2.
       rewrite in_app_iff in Hmem2.
-      destruct (Hout x) as [-> | ->]; eauto.
+      destruct (Hout x) as [->]; eauto.
     }
   - apply wf_env_rem in Hwf; rewrite rem_bss in Hwf.
     apply IHk in Hwf; auto.
     + now rewrite nrem_rem_env in Hwf.
-    + intros; rewrite REM_env_eq, Hin; auto.
+    + intros; rewrite REM_env_eq, Hin, rem_eq_bot; auto.
     + intros; rewrite REM_env_eq.
-      destruct (Hout x) as [-> | ->]; rewrite ?rem_DS_const; auto.
+      rewrite (Hout x), rem_eq_bot; auto.
     + now rewrite nrem_rem_env.
 Qed.
 
@@ -2589,20 +2590,21 @@ Hypothesis (Wcg : wc_global G).
 Hypothesis (Hrg : restr_global G).
 
 Hypothesis InfG :
-  forall envI f,
-    all_infinite envI ->
-    all_infinite (envG f envI).
+  forall f nd envI,
+    find_node f G = Some nd ->
+    infinite_dom envI (List.map fst (n_in nd)) ->
+    infinite_dom (envG f envI) (List.map fst (n_out nd)).
 
 Hypothesis AbsG :
   forall f X,
-    all_infinite X ->
-    envG f (APP_env abs_env X) == APP_env abs_env (envG f X).
+    envG f (APP_env abs_env X) <= APP_env abs_env (envG f X).
 
-(* FIXME: update statement *)
 Hypothesis Hlp :
-  forall f X Y n,
-    take_env n X == take_env n Y ->
-    take_env n (envG f X) == take_env n (envG f Y).
+  (* forall f X Y n, *)
+  (*   take_env n X == take_env n Y -> *)
+  (*   take_env n (envG f X) == take_env n (envG f Y). *)
+  forall f X n,
+    envG f (take_env n X) == take_env n (envG f X).
 
 Hypothesis Wfg :
   forall f n envI,
@@ -2630,7 +2632,7 @@ Hypothesis Hnode :
     let xs := np_of_env ins envI in
     let os := np_of_env outs (envG f envI) in
     wf_ins n envI (bss ins envI) ->
-    all_infinite envI ->
+    (* all_infinite envI -> *)
     (* on peut obtenir Infi et Info comme suit :
        set (Infi := forall_np_of_env _ _ _ infI)
        set (Info := forall_np_of_env _ _ _ (InfG _ _ infI)) *)
@@ -2680,20 +2682,21 @@ Proof.
     subst os nf.
     fold nout in Onnil, Ndo|- *.
     apply _Ss_of_nprod_eq.
-    rewrite (smask_sreset (envG f)); auto using env_of_np_inf.
-    2: apply (Halign f n), Wfg, wf_env_0_ext; now auto.
-    destruct nout as [| x nout]; auto.
-    apply nprod_eq; intros m d Hm.
-    rewrite 2 (nth_np_of_env x d (x :: nout)); auto.
-    rewrite 2 smask_env_proj_eq.
-    erewrite env_of_np_nth; eauto 2 using mem_nth_nth.
-    rewrite (nth_np_of_env x _ (x :: nout)); auto.
-  - (* all_infinite *)
-    apply smask_env_inf; auto using env_of_np_inf.
-  Unshelve.
-  apply forall_np_of_env; intro.
-  apply InfG, smask_env_inf, env_of_np_inf; auto.
-Qed.
+    admit.
+    (* rewrite (smask_sreset (envG f)); auto using env_of_np_inf. *)
+    (* 2: apply (Halign f n), Wfg, wf_env_0_ext; now auto. *)
+    (* destruct nout as [| x nout]; auto. *)
+    (* apply nprod_eq; intros m d Hm. *)
+    (* rewrite 2 (nth_np_of_env x d (x :: nout)); auto. *)
+    (* rewrite 2 smask_env_proj_eq. *)
+    (* erewrite env_of_np_nth; eauto 2 using mem_nth_nth. *)
+    (* rewrite (nth_np_of_env x _ (x :: nout)); auto. *)
+  (* - (* all_infinite *) *)
+  (*   apply smask_env_inf; auto using env_of_np_inf. *)
+  (* Unshelve. *)
+  (* apply forall_np_of_env; intro. *)
+  (* apply InfG, smask_env_inf, env_of_np_inf; auto. *)
+Admitted.
 
 
 (** Deux tactiques bien pratiques pour la suite *)
