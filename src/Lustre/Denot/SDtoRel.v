@@ -3914,7 +3914,7 @@ Module SdtorelFun
        (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
        (Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
-       (Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den).
+       (Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den)
 <: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
   Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
 End SdtorelFun.
