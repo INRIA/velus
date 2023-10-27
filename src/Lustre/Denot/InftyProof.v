@@ -1074,11 +1074,9 @@ Module Type LDENOTINF
       wx_node nd ->
       node_causal nd ->
       P_vars n envI (map fst (n_in nd)) ->
-      (* TODO: on peut aussi prouver les locales, mais ça sert à rien ? *)
-      P_vars n (FIXP _ (denot_node G nd envG envI)) (map fst (n_out nd)).
+      P_vars n (FIXP _ (denot_node G nd envG envI)) (map fst (n_out nd) ++ map fst (get_locals (n_block nd))).
   Proof.
     intros * Hr Hwl Hwx Hcaus Hins.
-    apply P_vars_app_r with (ys := map fst (get_locals (n_block nd))).
     revert Hr Hwl Hwx Hcaus Hins.
     revert nd envI.
     induction n; intros.
@@ -1100,7 +1098,7 @@ Module Type LDENOTINF
       Forall node_causal (nodes G) ->
       find_node f G = Some nd ->
       P_vars n envI (map fst (n_in nd)) ->
-      P_vars n (denot_global G f envI) (map fst (n_out nd)).
+      P_vars n (denot_global G f envI) (map fst (n_out nd) ++ map fst (get_locals (n_block nd))).
   Proof.
     intros * Hr Hwt Hcaus Hfind Hins.
     assert (Ordered_nodes G) as Hord.
@@ -1133,6 +1131,7 @@ Module Type LDENOTINF
       intros m f nd2 envI2 Hfind2 HI2.
       eapply find_node_uncons with (nd := nd) in Hfind2 as ?; auto.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+      eapply P_vars_app_r.
       apply IHnds with (f := f); auto.
       eauto using wt_global_cons.
       eauto using Ordered_nodes_cons.
@@ -1191,7 +1190,7 @@ Theorem denot_inf :
     forall f nd envI,
       find_node f G = Some nd ->
       infinite_dom envI (List.map fst (n_in nd)) ->
-      infinite_dom (denot_global G f envI) (List.map fst (n_out nd)).
+      infinite_dom (denot_global G f envI) (List.map fst (n_out nd) ++ map fst (get_locals (n_block nd))).
 Proof.
   intros.
   rewrite infinite_P_vars in *.
