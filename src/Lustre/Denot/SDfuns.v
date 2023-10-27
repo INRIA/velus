@@ -217,8 +217,7 @@ Section Sunop_binop.
 
   Definition sbinop (bop : A -> B -> option D) :
     DS (sampl A) -C-> DS (sampl B) -C-> DS (sampl D) :=
-    curry
-      (MAP (fun '(va,vb) =>
+    ZIP (fun va vb =>
            match va, vb with
            | err e, _ => err e
            | _, err e => err e
@@ -229,7 +228,7 @@ Section Sunop_binop.
                | None => err error_Op
                end
            | _, _ => err error_Cl
-           end) @_ (ZIP pair @2_ FST _ _) (SND _ _ )).
+           end).
 
   Lemma sbinop_eq : forall bop u U v V,
       sbinop bop (cons u U) (cons v V)
@@ -247,9 +246,7 @@ Section Sunop_binop.
   Proof.
     intros.
     unfold sbinop.
-    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-    rewrite MAP_map, map_eq_cons.
-    destruct u; auto.
+    now rewrite zip_cons.
   Qed.
 
   Lemma is_cons_sbinop : forall bop U V,
@@ -257,8 +254,7 @@ Section Sunop_binop.
       is_cons (sbinop bop U V).
   Proof.
     intros * []; unfold sbinop.
-    autorewrite with cpodb.
-    now apply is_cons_map, is_cons_zip.
+    now apply is_cons_zip.
   Qed.
 
   Lemma sbinop_is_cons : forall bop U V,
@@ -266,8 +262,7 @@ Section Sunop_binop.
       is_cons U /\ is_cons V.
   Proof.
     unfold sbinop; intros *.
-    autorewrite with cpodb; intros.
-    now apply map_is_cons, zip_is_cons in H.
+    now apply zip_is_cons.
   Qed.
 
 End Sunop_binop.

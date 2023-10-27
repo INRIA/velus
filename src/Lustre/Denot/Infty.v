@@ -100,8 +100,7 @@ Lemma is_ncons_sbinop :
 Proof.
   intros.
   unfold sbinop.
-  autorewrite with cpodb; simpl.
-  now apply is_ncons_map, is_ncons_zip.
+  now apply is_ncons_zip.
 Qed.
 
 Lemma sbinop_inf :
@@ -113,6 +112,15 @@ Proof.
   setoid_rewrite <- nrem_inf_iff.
   intros.
   auto using is_ncons_sbinop.
+Qed.
+
+Lemma inf_sbinop :
+  forall (f : A -> B -> option D) s1 s2,
+    infinite (sbinop f s1 s2) ->
+    infinite s1 /\ infinite s2.
+Proof.
+  unfold sbinop.
+  now intros * H%inf_zip.
 Qed.
 
 Lemma is_cons_fby :

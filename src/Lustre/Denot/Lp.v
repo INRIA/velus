@@ -228,8 +228,7 @@ Lemma take_sbinop :
 Proof.
   intros.
   unfold sbinop.
-  autorewrite with cpodb; simpl.
-  now rewrite take_map, take_zip.
+  now rewrite take_zip.
 Qed.
 
 (** pour fby/fby1, c'est compliqué, on le fait en deux temps *)

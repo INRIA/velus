@@ -3076,13 +3076,6 @@ Proof.
   inv Hf; rewrite rem_map in *.
   constructor; eauto using map_is_cons.
 Qed.
-(* TODO: move *)
-(* TODO: remplacer sbinop par un simple ZIP ????? *)
-Lemma inf_sbinop :
-      forall {A B D : Type} (f : A -> B -> option D) (s1 : DS (sampl A)) (s2 : DS (sampl B)),
-        infinite (sbinop f s1 s2) -> infinite s1 /\ infinite s2.
-  clear.
-Admitted.
 
 (** On redéfinit [Safe.safe_exp], qui a une hypothèse de [wf_env] un peu
     différente que [Wfg] présente dans cette section : son Γ n'inclut
@@ -3921,6 +3914,7 @@ Module SdtorelFun
        (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
        (Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
-<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs.
-  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs.
+       (Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den).
+<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
+  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
 End SdtorelFun.

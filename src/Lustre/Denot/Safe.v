@@ -609,8 +609,6 @@ Section SDfuns_safe.
   Proof.
     intros * Hop Hwt1 Hwt2.
     unfold ty_DS, DSForall_pres, sbinop in *.
-    autorewrite with cpodb; simpl.
-    apply DSForall_map.
     eapply DSForall_zip; intros; eauto.
     cases_eqn HH; inv HH; eauto using pres_sem_binop.
   Qed.
@@ -623,8 +621,6 @@ Section SDfuns_safe.
   Proof.
     intros * Hsf1 Hsf2.
     unfold ty_DS, safe_ty, safe_DS, sbinop in *.
-    autorewrite with cpodb; simpl.
-    apply DSForall_map.
     eapply DSForall_zip; intros; eauto.
     cases_eqn HH.
   Qed.
@@ -639,9 +635,7 @@ Section SDfuns_safe.
   Proof.
     intros * Hsf1 Hsf2 Hcl1 Hcl2.
     unfold cl_DS, safe_cl, sbinop in *.
-    autorewrite with cpodb; simpl.
-    apply DSForall_map.
-    remember_ds (ZIP pair s1 s2) as t.
+    remember_ds (ZIP _ s1 s2) as t.
     revert Hsf1 Hsf2 Hcl1 Hcl2 Ht.
     generalize (denot_clock ck) as C.
     revert s1 s2 t.
@@ -671,9 +665,7 @@ Section SDfuns_safe.
   Proof.
     intros * Hsf1 Hsf2 Hop.
     unfold safe_op, sbinop in *.
-    autorewrite with cpodb; simpl.
-    apply DSForall_map.
-    remember_ds (ZIP pair s1 s2) as t.
+    remember_ds (ZIP (fun _ _ => _) s1 s2) as t.
     revert Hsf1 Hsf2 Hop Ht.
     revert s1 s2 t.
     cofix Cof; intros.
@@ -681,7 +673,7 @@ Section SDfuns_safe.
     - constructor. apply (Cof s1 s2 t); eauto 1;
         now rewrite <- eqEps in *.
     - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
-      rewrite Hs1, Hs2 in *.
+      rewrite Hs1, Hs2, zip_cons in *.
       inv Hsf1. inv Hsf2. inv Hop.
       constructor; eauto 2; cases_eqn HH.
   Qed.
@@ -3132,7 +3124,7 @@ Section Node_safe.
       take (typeof e2 = _) and rewrite it.
       take (numstreams e1 = _) and rewrite it.
       take (numstreams e2 = _) and rewrite it.
-      simpl; intros s1 s2; autorewrite with cpodb.
+      simpl; intros s1 s2; rewrite 3 ID_simpl, 3 Id_simpl.
       intros (Wte1 & Wce1 & Efe1) (Wte2 & Wce2 & Efe2) Hop.
       apply DSForall_2pres_impl in Hop.
       repeat split. all: simpl_Forall; auto.
