@@ -12,13 +12,16 @@ Proof.
   cases.
 Qed.
 
+Module TEST1CC.
 
 (* Définition concrète de check_unop *)
 
 Definition check_unop (op : unop) (ty : type) : bool :=
   match op, ty with
   | UnaryOp Cop.Onotbool, Tprimitive _ => true
-  | UnaryOp Cop.Onotint, (Tprimitive (Tint _ _ | Tlong _)) => true
+  (* | UnaryOp Cop.Onotint, (Tprimitive (Tint _ _ | Tlong _)) => true *)
+  | UnaryOp Cop.Onotint, Tprimitive ty =>
+      match Cop.classify_notint (cltype ty) with Cop.notint_default => false | _ => true end
   | UnaryOp Cop.Oneg, Tprimitive _ => true
   | UnaryOp Cop.Oabsfloat, Tprimitive _ => true
   | _, _ => false
@@ -51,3 +54,107 @@ Proof.
     cases_eqn HH; subst; try congruence; inv Hwt.
     all: inv H1; simpl in *; try congruence; cases.
 Qed.
+
+
+(* Définition concrète de check_binop *)
+Definition check_binop (op : binop) (ty1 ty2 : type) : bool :=
+  match op, ty1, ty2 with
+  | Cop.Oadd, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_add (cltype ty1) (cltype ty2) with Cop.add_default => false | _ => true end
+  | Cop.Osub, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_sub (cltype ty1) (cltype ty2) with Cop.sub_default => false | _ => true end
+  (* mul semble impossible ? à cause d'un cast_float_int qui peut échouer selon une valeur *)
+  | Cop.Omul, Tprimitive ty1, Tprimitive ty2 =>
+      false
+  (* idem : impossible *)
+  | Cop.Odiv, _, _ =>
+      false
+  (* idem : impossible *)
+  | Cop.Omod, Tprimitive ty1, Tprimitive ty2 =>
+      false
+  (* | Oand : binary_operation             (**r bitwise and ([&]) *) *)
+  (* | Oor : binary_operation              (**r bitwise or ([|]) *) *)
+  (* | Oxor : binary_operation             (**r bitwise xor ([^]) *) *)
+  (* | Oshl : binary_operation             (**r left shift ([<<]) *) *)
+  (* | Oshr : binary_operation             (**r right shift ([>>]) *) *)
+  | Cop.Oeq, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | Cop.One, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | Cop.Olt, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | Cop.Ogt, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | Cop.Ole, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | Cop.Oge, Tprimitive ty1, Tprimitive ty2 =>
+      match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end
+  | _, _, _ => false
+  end.
+
+Theorem check_binop_correct :
+  forall op ty1 ty2,
+    check_binop op ty1 ty2 = true ->
+    forall v1 v2, wt_value v1 ty1 ->
+             wt_value v2 ty2 ->
+             sem_binop op v1 ty1 v2 ty2 <> None.
+Proof.
+  unfold check_binop, sem_binop, option_map.
+  unfold Cop.sem_binary_operation.
+  intros * Hck v1 v2 Hwt1 Hwt2.
+  destruct op; try congruence.
+  - (* Oadd *)
+    revert Hck.
+    unfold Cop.classify_add; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Osub *)
+    revert Hck.
+    unfold Cop.classify_sub; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Omul *)
+    cases.
+  - (* Omod *)
+    cases.
+  - (* Oeq *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* One *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Olt *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Ogt *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Ole *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+  - (* Oge *)
+    revert Hck.
+    unfold Cop.classify_cmp; intros.
+    cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2.
+    all: simpl in *; try congruence.
+    all: inv H1; inv H2; simpl in *; try congruence; cases.
+Qed.
+
+End TEST1CC.
