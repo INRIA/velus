@@ -63,9 +63,9 @@ Definition check_binop (op : binop) (ty1 ty2 : type) : bool :=
       match Cop.classify_add (cltype ty1) (cltype ty2) with Cop.add_default => false | _ => true end
   | Cop.Osub, Tprimitive ty1, Tprimitive ty2 =>
       match Cop.classify_sub (cltype ty1) (cltype ty2) with Cop.sub_default => false | _ => true end
-  (* mul semble impossible ? à cause d'un cast_float_int qui peut échouer selon une valeur *)
-  | Cop.Omul, Tprimitive ty1, Tprimitive ty2 =>
-      false
+  (* (* mul général semble impossible ? à cause d'un cast_float_int qui peut échouer selon une valeur *) *)
+  | Cop.Omul, Tprimitive (Tint _ _), Tprimitive (Tint _ _) =>
+      true
   (* idem : impossible *)
   | Cop.Odiv, _, _ =>
       false
@@ -116,7 +116,11 @@ Proof.
     all: simpl in *; try congruence.
     all: inv H1; inv H2; simpl in *; try congruence; cases.
   - (* Omul *)
-    cases.
+    cases_eqn HH; subst; simpl in *; try congruence; inv Hwt1; inv Hwt2.
+    inv H1; inv H2.
+    revert HH6.
+    unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast.
+    simpl; cases_eqn HH; subst; congruence.
   - (* Omod *)
     cases.
   - (* Oeq *)
