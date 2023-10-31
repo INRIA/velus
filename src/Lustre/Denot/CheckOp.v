@@ -310,8 +310,7 @@ Proof.
       apply DSForall_all; intros [| v |]; auto.
       (* intro Wtv. *)
       apply check_unop_any_correct; auto.
-
-Qed.
+Abort.
 
 
 Theorem check_exp_correct :
@@ -323,36 +322,26 @@ Proof.
   induction e using exp_ind2; simpl; intro Hchk; try now inv Hchk.
   - (* Econst *)
     constructor.
-  - (* Evar *)
-    constructor.
   - (* Eunop *)
     destruct (typeof e) as [|ty []] eqn:Hty; try now inv Hchk.
     destruct (check_exp e) as [|v []] eqn:Hv; try now inv Hchk.
     inv Hchk.
     constructor.
     + apply IHe; constructor; auto.
-      intro; subst; rewrite check_unop_err in *; contradiction.
-    + intros ty' Hty'.
-      apply check_unop_correct in H1.
-
-
-
-
-
-      apply nprod_forall_Forall, Forall_forall.
-      intros s Hin.
-
-
-      apply andb_prop in Hchk as [F1 F2].
-    constructor; auto.
-    intros ty' Hty'.
-    rewrite Hty' in Hty; inv Hty.
-    (* c'est très très simple *)
-    apply nprod_forall_Forall, Forall_forall.
-    intros s Hin.
-
-
-Qed.
+    (*   intro; subst; rewrite check_unop_err in *; contradiction. *)
+    (* + intros ty' Hty'. *)
+    (*   apply check_unop_correct in H1. *)
+    (*   apply nprod_forall_Forall, Forall_forall. *)
+    (*   intros s Hin. *)
+    (*   apply andb_prop in Hchk as [F1 F2]. *)
+    (* constructor; auto. *)
+    (* intros ty' Hty'. *)
+    (* rewrite Hty' in Hty; inv Hty. *)
+    (* (* c'est très très simple *) *)
+    (* apply nprod_forall_Forall, Forall_forall. *)
+    (* intros s Hin. *)
+(* Qed. *)
+Abort.
 
 End TEST2.
 
