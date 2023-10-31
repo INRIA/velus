@@ -53,7 +53,11 @@ Parameter check_unop : unop -> res -> type -> res.
 Conjecture check_unop_correct :
   forall op r ty,
     check_unop op r ty <> Err ->
-    sem_unop op r ty <> None.
+    match r with
+    | Val v => sem_unop op v ty <> None
+    | _ =>  forall v, wt_value v ty ->
+                sem_unop op v ty <> None
+    end.
 
 Parameter check_binop : binop -> res -> type -> res -> type -> res.
 
