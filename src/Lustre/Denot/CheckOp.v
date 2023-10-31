@@ -146,6 +146,154 @@ Qed.
 End TEST1.
 
 
+
+(* Analyse qui gère les opérateurs aux arguments constants *)
+Module TEST1ETDEMI.
+
+(* pour les unop on fait comme dans l'analyse simple *)
+Parameter check_unop : unop -> type -> bool.
+Conjecture check_unop_correct :
+  forall op ty,
+    check_unop op ty = true ->
+    forall v, wt_value v ty ->
+         sem_unop op v ty <> None.
+
+(* Pour les opérateurs binaires, il y a deux possibilités :
+   - on connaît la valeur du membre droit, on peut essayer
+     de vérifier que le calcul ne plantera jamais avec cette valeur
+   - on ne la connaît pas, seules quelques opérations fonctionnent
+     pour toutes les valeurs
+ *)
+
+(* premier cas *)
+Parameter check_binop_val : binop -> type -> value -> type -> bool.
+Conjecture check_binop_val_correct :
+  forall op ty1 v2 ty2,
+    check_binop_val op ty1 v2 ty2 = true ->
+    forall v1, wt_value v1 ty1 ->
+          wt_value v2 ty2 ->
+          sem_binop op v1 ty1 v2 ty2 <> None.
+
+
+(* second cas *)
+Parameter check_binop_any : binop -> type -> type -> bool.
+Conjecture check_binop_any_correct :
+  forall op ty1 ty2,
+    check_binop_any op ty1 ty2 = true ->
+    forall v1 v2, wt_value v1 ty1 ->
+             wt_value v2 ty2 ->
+             sem_binop op v1 ty1 v2 ty2 <> None.
+
+(* true -> cannot fail
+ * false -> we don't know *)
+Fixpoint check_exp (e : exp) : bool :=
+  match e with
+  | Econst _ => true
+  | Eenum _ _ => false (* TODO ?! *)
+  | Evar _ _ => true
+  | Elast _ _ => false (* restr *)
+  | Eunop op e ann =>
+      match typeof e with
+      | [ty] => check_unop op ty && check_exp e
+      | _ => false
+      end
+  | Ebinop op e1 (Econst c) ann => (* TODO: Enum aussi ? *)
+      let ty2 := Tprimitive (ctype_cconst c) in
+      match typeof e1 with
+      | [ty1] => check_binop_val op ty1 (Vscalar (sem_cconst c)) ty2 && check_exp e1
+      | _ => false
+      end
+  | Ebinop op e1 e2 ann =>
+      match typeof e1, typeof e2 with
+      | [ty1], [ty2] => check_binop_any op ty1 ty2 && check_exp e1 && check_exp e2
+      | _,_ => false
+      end
+  | Eextcall _ _ _ => false (* restr *)
+  | Efby e0s es ann => forallb check_exp e0s && forallb check_exp es
+  | Earrow e0s es ann => false (* restr *)
+  | Ewhen es _ t ann => forallb check_exp es
+  | Emerge _ ess ann => forallb (fun '(t,es) => forallb check_exp es) ess
+  | Ecase e ess None ann => check_exp e && forallb (fun '(t,es) => forallb check_exp es) ess
+  | Ecase e ess (Some des) ann => check_exp e && forallb (fun '(t,es) => forallb check_exp es) ess && forallb check_exp des
+  | Eapp f es er ann => forallb check_exp es && forallb check_exp er
+  end.
+
+Theorem check_exp_correct :
+  forall G ins envG envI bs env,
+  forall e, check_exp e = true ->
+       op_correct_exp G ins envG envI bs env e.
+Proof.
+  intros *.
+  induction e using exp_ind2; simpl; intro Hchk; try congruence.
+  - (* Econst *)
+    constructor.
+  - (* Evar *)
+    constructor.
+  - (* Eunop *)
+    destruct (typeof e) as [|ty []] eqn:Hty; try congruence.
+    apply andb_prop in Hchk as [F1 F2].
+    constructor; auto.
+    intros ty' Hty'.
+    rewrite Hty' in Hty; inv Hty.
+    (* c'est très très simple *)
+    apply nprod_forall_Forall, Forall_forall.
+    intros s Hin.
+    apply DSForall_all; intros [| v |]; auto.
+    intro Wtv.
+    now apply check_unop_correct.
+  - (* Ebinop *)
+    destruct (typeof e1) as [|ty1 []] eqn:Hty1; try (cases; congruence).
+    constructor.
+    (* récurrence pour e1, e2 *)
+    1,2: cases; repeat rewrite Bool.andb_true_iff in *; tauto.
+    intros ty1' ty2' Hty1' Hty2' ss1 ss2.
+    rewrite Hty1' in Hty1; inv Hty1.
+    (* cas sur la tête de e2 *)
+    cases; inv Hty2'; repeat rewrite Bool.andb_true_iff in *.
+    (* membre droit constant *)
+    { subst ss2; rewrite denot_exp_eq.
+      simpl.
+      unfold sconst, DSForall_2pres.
+      rewrite ID_simpl, Id_simpl, MAP_map, zip_map.
+      eapply DSForall_zip with (P := fun _ => True) (Q := fun _ => True); auto using DSForall_all.
+      intros [] [] _ _; auto.
+      intros Wt1 Wt2.
+      apply check_binop_val_correct; tauto. }
+    (* autre cas *)
+    all: apply DSForall_all.
+    all: intros [[|v1|] [|v2|]]; auto; intros Wt1 Wt2.
+    all: apply check_binop_any_correct; auto; tauto.
+  - (* Efby *)
+    apply andb_prop in Hchk as [F1 F2].
+    apply forallb_Forall in F1, F2.
+    constructor; simpl_Forall; auto.
+  - (* Ewhen *)
+    apply forallb_Forall in Hchk.
+    constructor; simpl_Forall; auto.
+  - (* Emerge *)
+    apply forallb_Forall in Hchk.
+    constructor; simpl_Forall.
+    eapply forallb_Forall, Forall_forall in Hchk; eauto.
+  - (* Ecase *)
+    destruct d; simpl in H0.
+    + apply andb_prop in Hchk as [F1 F3].
+      apply andb_prop in F1 as [F1 F2].
+      apply forallb_Forall in F2,F3.
+      constructor; simpl_Forall; auto.
+      eapply forallb_Forall, Forall_forall in F2; eauto.
+    + apply andb_prop in Hchk as [F1 F2].
+      apply forallb_Forall in F2.
+      constructor; simpl_Forall; auto.
+      eapply forallb_Forall, Forall_forall in F2; eauto.
+  - (* Eapp *)
+    apply andb_prop in Hchk as [F1 F2].
+    apply forallb_Forall in F1, F2.
+    constructor; simpl_Forall; auto.
+Qed.
+
+End TEST1ETDEMI.
+
+
 Module TEST2.
 
   (* TODO: 2 résultats
