@@ -294,6 +294,7 @@ Qed.
 End TEST1ETDEMI.
 
 
+(* Analyse plus précise, mais qui risque d'être très compliquée *)
 Module TEST2.
 
   (* TODO: 2 résultats
