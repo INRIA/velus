@@ -23,6 +23,7 @@ Definition check_unop (op : unop) (ty : type) : bool :=
   | UnaryOp Cop.Onotint, Tprimitive ty =>
       match Cop.classify_notint (cltype ty) with Cop.notint_default => false | _ => true end
   | UnaryOp Cop.Oneg, Tprimitive _ => true
+  (* | UnaryOp Cop.Oneg, Tenum t _ => EquivDec.equiv_decb  t  Ident.Ids.bool_id *)
   | UnaryOp Cop.Oabsfloat, Tprimitive _ => true
   | _, _ => false
   end.
@@ -67,6 +68,8 @@ Definition check_binop (op : binop) (ty1 ty2 : type) : bool :=
   | Cop.Omul, Tprimitive (Tint _ _ | Tlong  _), Tprimitive (Tint _ _ | Tlong _) =>
       true
   | Cop.Omul, Tprimitive (Tfloat _), Tprimitive (Tfloat _) =>
+      true
+  | Cop.Odiv, Tprimitive (Tfloat _), Tprimitive (Tfloat _) =>
       true
   (* idem : impossible *)
   | Cop.Odiv, _, _ =>
@@ -138,6 +141,12 @@ Proof.
     { inv H1; inv H2.
       all: revert HH6.
       all: unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast.
+      all: simpl; cases_eqn HH; subst; congruence. }
+  - (* Odiv flottants *)
+    cases_eqn HH; subst; simpl in *; try congruence; inv Hwt1; inv Hwt2.
+    { inv H1; inv H2.
+      all: revert HH6.
+      all: unfold Cop.sem_div, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast.
       all: simpl; cases_eqn HH; subst; congruence. }
   - (* Omod *)
     cases.
