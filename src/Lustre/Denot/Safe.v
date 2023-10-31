@@ -17,6 +17,10 @@ From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import CommonDS SDfuns Denot OpErr CommonList2.
 
+(* TODO: peut-être qu'il faudra prouver la sûreté du typage indépendamment
+   des autres propriétés cl_DS et safe_op. Ça pourrait être utile dans une
+   analyse statique plus fine pour obtenir op_correct. cf. CheckOp.v
+ *)
 
 Module Type LDENOTSAFE
        (Import Ids   : IDS)
