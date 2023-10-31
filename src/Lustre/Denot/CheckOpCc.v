@@ -12,8 +12,6 @@ Proof.
   cases.
 Qed.
 
-Module TEST1CC.
-
 (* Définition concrète de check_unop *)
 
 Definition check_unop (op : unop) (ty : type) : bool :=
@@ -57,8 +55,8 @@ Proof.
 Qed.
 
 
-(* Définition concrète de check_binop *)
-Definition check_binop (op : binop) (ty1 ty2 : type) : bool :=
+(* Définition concrète de check_binop_any *)
+Definition check_binop_any (op : binop) (ty1 ty2 : type) : bool :=
   match op, ty1, ty2 with
   | Cop.Oadd, Tprimitive ty1, Tprimitive ty2 =>
       match Cop.classify_add (cltype ty1) (cltype ty2) with Cop.add_default => false | _ => true end
@@ -97,14 +95,14 @@ Definition check_binop (op : binop) (ty1 ty2 : type) : bool :=
   | _, _, _ => false
   end.
 
-Theorem check_binop_correct :
+Theorem check_binop_any_correct :
   forall op ty1 ty2,
-    check_binop op ty1 ty2 = true ->
+    check_binop_any op ty1 ty2 = true ->
     forall v1 v2, wt_value v1 ty1 ->
              wt_value v2 ty2 ->
              sem_binop op v1 ty1 v2 ty2 <> None.
 Proof.
-  unfold check_binop, sem_binop, option_map.
+  unfold check_binop_any, sem_binop, option_map.
   unfold Cop.sem_binary_operation.
   intros * Hck v1 v2 Hwt1 Hwt2.
   destruct op; try congruence.
@@ -188,4 +186,46 @@ Proof.
     all: inv H1; inv H2; simpl in *; try congruence; cases.
 Qed.
 
-End TEST1CC.
+
+(* Définition concrète de check_binop_val (v2 = valeur du membre droit)
+ *)
+Definition check_binop_val (op : binop) (ty1 : type) (v2 : value) (ty2 : type) : bool :=
+  match op, ty1, v2, ty2 with
+  (* | Cop.Odiv, Tprimitive (Tint _ _), Vscalar (Values.Vint n), Tprimitive (Tint _ _) => *)
+  | Cop.Odiv, Tprimitive _, Vscalar (Values.Vint n), Tprimitive _ =>
+      negb (Integers.Int.eq n Integers.Int.zero)
+      && negb (Integers.Int.eq n Integers.Int.mone)
+  | _, _, _, _ => false
+  end.
+
+Require Import String. (* pour type_binop *)
+
+Theorem check_binop_val_correct :
+  forall op ty1 v2 ty2,
+    type_binop op ty1 ty2 <> None -> (* si besoin, l'ajouter à op_correct ?? *)
+    check_binop_val op ty1 v2 ty2 = true ->
+    forall v1, wt_value v1 ty1 ->
+          wt_value v2 ty2 ->
+          sem_binop op v1 ty1 v2 ty2 <> None.
+Proof.
+  unfold type_binop, check_binop_val, sem_binop, option_map.
+  unfold Cop.sem_binary_operation.
+  intros * Hck Hwt v1 Hwt1 Hwt2.
+  destruct op; try congruence.
+  - (* Odiv *)
+    cases_eqn HH; subst; simpl in *; try congruence; inv Hwt1; inv Hwt2.
+    revert HH4.
+    unfold Ctyping.binarith_type.
+    (* cases_eqn HH; subst; intros Hi; inv Hi. *)
+    (* all: simpl in *; take (Some _ = Some _) and inv it. *)
+    (* all: clear Hck. *)
+    (* all: inv H2; inv H1. *)
+    (* all: try destruct c; simpl in *. *)
+    (* all: repeat (cases_eqn HH; subst; try inv HH; simpl in * ). *)
+    (* all: simpl in *. *)
+    (* all: unfold Cop.sem_div, Cop.sem_binarith in *. *)
+    (* all: cases_eqn HH; subst. *)
+    (* all: simpl in *; try congruence. *)
+    (* all: unfold Cop.sem_cast in *; cases_eqn HH; subst. *)
+    (* simpl in *. *)
+Qed.
