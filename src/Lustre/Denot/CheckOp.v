@@ -147,7 +147,7 @@ End TEST1.
 
 
 
-(* Analyse qui gère les opérateurs aux arguments constants *)
+(* Analyse qui gère les opérateurs binaires aux arguments droits constants *)
 Module TEST1ETDEMI.
 
 (* pour les unop on fait comme dans l'analyse simple *)
@@ -200,7 +200,11 @@ Fixpoint check_exp (e : exp) : bool :=
   | Ebinop op e1 (Econst c) ann => (* TODO: Enum aussi ? *)
       let ty2 := Tprimitive (ctype_cconst c) in
       match typeof e1 with
-      | [ty1] => check_binop_val op ty1 (Vscalar (sem_cconst c)) ty2 && check_exp e1
+      | [ty1] => check_exp e1
+                (* soit on arrive à décider avec la valeur c,
+                   soit on vérifie pour toute valeur de type ty2 *)
+                && (check_binop_val op ty1 (Vscalar (sem_cconst c)) ty2
+                    || check_binop_any op ty1 ty2)
       | _ => false
       end
   | Ebinop op e1 e2 ann =>
@@ -249,7 +253,7 @@ Proof.
     intros ty1' ty2' Hty1' Hty2' ss1 ss2.
     rewrite Hty1' in Hty1; inv Hty1.
     (* cas sur la tête de e2 *)
-    cases; inv Hty2'; repeat rewrite Bool.andb_true_iff in *.
+    cases; inv Hty2'; repeat rewrite Bool.andb_true_iff, ?Bool.orb_true_iff in *.
     (* membre droit constant *)
     { subst ss2; rewrite denot_exp_eq.
       simpl.
@@ -258,7 +262,9 @@ Proof.
       eapply DSForall_zip with (P := fun _ => True) (Q := fun _ => True); auto using DSForall_all.
       intros [] [] _ _; auto.
       intros Wt1 Wt2.
-      apply check_binop_val_correct; tauto. }
+      destruct Hchk as [? []].
+      - apply check_binop_val_correct; auto.
+      - apply check_binop_any_correct; auto. }
     (* autre cas *)
     all: apply DSForall_all.
     all: intros [[|v1|] [|v2|]]; auto; intros Wt1 Wt2.
