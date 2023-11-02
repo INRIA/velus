@@ -483,29 +483,29 @@ Section SDfuns_safe.
   Qed.
 
   Lemma ty_sconst :
-    forall c, ty_DS (Tprimitive (ctype_cconst c)) (sconst (Vscalar (sem_cconst c)) bs).
+    forall v ty,
+      wt_value v ty ->
+      ty_DS ty (sconst v bs).
   Proof.
-    intro.
+    intros * Hty.
     unfold ty_DS, DSForall_pres, sconst.
     apply DSForall_map.
-    clear; revert bs.
+    revert bs.
     cofix Cof.
     destruct bs; constructor; auto.
-    cases_eqn HH; subst. inv HH.
-    constructor.
-    apply wt_cvalue_cconst.
+    destruct b; auto.
   Qed.
 
   Lemma safe_sconst :
-    forall c, safe_DS (sconst (Vscalar (sem_cconst c)) bs).
+    forall A (c:A), safe_DS (sconst c bs).
   Proof.
-    intro.
+    intros.
     unfold safe_DS, sconst.
     apply DSForall_map.
-    clear; revert bs.
+    revert bs.
     cofix Cof.
     destruct bs; constructor; auto.
-    cases_eqn HH.
+    destruct b; auto.
   Qed.
 
   (** ** Faits sur sunop *)
@@ -3074,6 +3074,7 @@ Section Node_safe.
       | [ v : _ |- _ ] => specialize (H v)
       end.
 
+
   Lemma safe_exp_ :
     forall Γ ins envI bs env,
     wf_env Γ ins envI bs env ->
@@ -3090,8 +3091,15 @@ Section Node_safe.
     intros ????  env Safe.
     induction e using exp_ind2; intros Hr Hwt Hwc Hoc; inv Hr.
     - (* Econst *)
+      inv Hwt.
       rewrite denot_exp_eq; simpl; autorewrite with cpodb.
-      auto using ty_sconst, cl_sconst, safe_sconst.
+      repeat split; auto using ty_sconst, wt_value,
+        wt_cvalue_cconst, cl_sconst, safe_sconst.
+    - (* Eenum *)
+      inv Hwt.
+      rewrite denot_exp_eq; simpl; autorewrite with cpodb.
+      repeat split; auto using ty_sconst, wt_value,
+        wt_cvalue_cconst, cl_sconst, safe_sconst.
     - (* Evar *)
       inv Hwt. inv Hwc.
       edestruct Safe as (?&?&?); eauto.

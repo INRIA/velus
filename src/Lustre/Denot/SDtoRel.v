@@ -554,6 +554,10 @@ Proof.
     constructor.
     apply ntheq_eqst; intro.
     now rewrite const_nth', 2 const_nth.
+  - (* Eenum *)
+    constructor.
+    apply ntheq_eqst; intro.
+    now rewrite enum_nth', 2 const_nth.
   - (* Evar *)
     constructor; econstructor; now eauto.
   - (* Eunop *)
@@ -1184,6 +1188,27 @@ Proof.
   intros.
   remember_st (S_of_DSv _ Hinf) as xs.
   remember_st (const bs c) as ys.
+  revert_all.
+  cofix Cof; intros * Eqx ? Eqy.
+  destruct xs as [vx xs], ys as [vy ys], bs as [b bs].
+  apply S_of_DS_Cons in Eqx as (x & tx & Hxs & Hxvx & itx & Eqx).
+  setoid_rewrite unfold_Stream in Eqy.
+  setoid_rewrite DS_inv in Hxs at 2; simpl in *.
+  unfold sconst in *.
+  rewrite MAP_map, Cpo_streams_type.map_eq_cons in Hxs.
+  apply Con_eq_simpl in Hxs as [? Heq]; subst; simpl.
+  inv Eqy; simpl in *; subst.
+  constructor; simpl; cases.
+  rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqx; eauto.
+Qed.
+
+Lemma ok_enum :
+  forall c bs Hinf,
+    S_of_DSv (sconst (Venum c) (DS_of_S bs)) Hinf ≡ enum bs c.
+Proof.
+  intros.
+  remember_st (S_of_DSv _ Hinf) as xs.
+  remember_st (enum bs c) as ys.
   revert_all.
   cofix Cof; intros * Eqx ? Eqy.
   destruct xs as [vx xs], ys as [vy ys], bs as [b bs].
@@ -3116,6 +3141,13 @@ Proof.
     edestruct S_of_DSv_eq as [Infe' ->].
     { setoid_rewrite denot_exp_eq. reflexivity. }
     unshelve rewrite <- ok_const; auto using sconst_inf, DS_of_S_inf.
+    apply _S_of_DS_eq.
+    now rewrite DS_of_S_of_DS.
+  - (* Eenum *)
+    constructor.
+    edestruct S_of_DSv_eq as [Infe' ->].
+    { setoid_rewrite denot_exp_eq. reflexivity. }
+    unshelve rewrite <- ok_enum; auto using sconst_inf, DS_of_S_inf.
     apply _S_of_DS_eq.
     now rewrite DS_of_S_of_DS.
   - (* Evar *)

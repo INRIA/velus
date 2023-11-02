@@ -355,6 +355,10 @@ Section Abs_indep_node.
       rewrite 2 denot_exp_eq.
       unfold sconst.
       rewrite MAP_map, map_eq_cons; auto.
+    - (* Eenum *)
+      rewrite 2 denot_exp_eq.
+      unfold sconst.
+      rewrite MAP_map, map_eq_cons; auto.
     - (* Evar *)
       rewrite 2 denot_exp_eq.
       now apply var_abs_le.

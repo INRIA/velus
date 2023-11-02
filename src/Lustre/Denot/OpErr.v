@@ -83,6 +83,9 @@ Inductive op_correct_exp : exp -> Prop :=
 | opc_Econst :
   forall c,
     op_correct_exp (Econst c)
+| opc_Eenum :
+  forall c ty,
+    op_correct_exp (Eenum c ty)
 | opc_Evar :
   forall x ann,
     op_correct_exp (Evar x ann)

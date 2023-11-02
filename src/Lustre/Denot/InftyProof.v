@@ -426,6 +426,10 @@ Module Type LDENOTINF
       assert (k = O) by lia; subst.
       rewrite denot_exp_eq.
       now apply is_ncons_sconst.
+    - (* Eenum *)
+      assert (k0 = O) by lia; subst.
+      rewrite denot_exp_eq.
+      now apply is_ncons_sconst.
     - (* Evar *)
       assert (k = O) by lia; subst.
       rewrite denot_exp_eq.
@@ -591,6 +595,9 @@ Module Type LDENOTINF
     (* cas restreints : *)
     all: try (rewrite denot_exp_eq; now solve_err).
     - (* Econst *)
+      rewrite denot_exp_eq.
+      now apply is_ncons_sconst.
+    - (* Eenum *)
       rewrite denot_exp_eq.
       now apply is_ncons_sconst.
     - (* Evar *)
@@ -1233,6 +1240,8 @@ Proof.
   (* cas restreints : *)
   all: eauto; try apply forall_nprod_const; try apply DS_const_inf.
   - (* Econst *)
+    apply sconst_inf; auto.
+  - (* Eenum *)
     apply sconst_inf; auto.
   - (* Eunop *)
     revert IHe.

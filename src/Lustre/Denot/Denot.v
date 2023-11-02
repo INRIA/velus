@@ -286,7 +286,7 @@ Definition denot_exp_ (ins : list ident)
   - (* Econst *)
     apply (sconst (Vscalar (sem_cconst c)) @_ SND _ _ @_ FST _ _).
   - (* Eenum *)
-    apply CTE, errTy.
+    apply (sconst (Venum e0) @_ SND _ _ @_ FST _ _).
   - (* Evar *)
     exact (denot_var i).
   - (* Elast *)
@@ -535,6 +535,7 @@ Lemma denot_exp_eq :
     denot_exp ins e envG envI bs env =
       match e return nprod (numstreams e) with
       | Econst c => sconst (Vscalar (sem_cconst c)) bs
+      | Eenum c _ => sconst (Venum c) bs
       | Evar x _ => denot_var ins envI env x
       | Eunop op e an =>
           let se := denot_exp ins e envG envI bs env in
@@ -1065,6 +1066,9 @@ Inductive restr_exp : exp -> Prop :=
 | restr_Econst :
   forall c,
     restr_exp (Econst c)
+| restr_Eenum :
+  forall c ty,
+    restr_exp (Eenum c ty)
 | restr_Evar :
   forall x ann,
     restr_exp (Evar x ann)

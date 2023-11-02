@@ -700,6 +700,10 @@ Section LP_node.
       rewrite 2 denot_exp_eq.
       unfold sconst.
       rewrite 2 MAP_map, <- take_map; auto.
+    - (* Eenum *)
+      rewrite 2 denot_exp_eq.
+      unfold sconst.
+      rewrite 2 MAP_map, <- take_map; auto.
     - (* Evar *)
       rewrite 2 denot_exp_eq.
       now rewrite take_var.

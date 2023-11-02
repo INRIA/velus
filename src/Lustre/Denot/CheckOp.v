@@ -55,7 +55,7 @@ Conjecture check_binop_correct :
 Fixpoint check_exp (e : exp) : bool :=
   match e with
   | Econst _ => true
-  | Eenum _ _ => false (* TODO ?! *)
+  | Eenum _ _ => true
   | Evar _ _ => true
   | Elast _ _ => false (* restr *)
   | Eunop op e ann =>
@@ -86,6 +86,8 @@ Proof.
   intros *.
   induction e using exp_ind2; simpl; intro Hchk; try congruence.
   - (* Econst *)
+    constructor.
+  - (* Eenum *)
     constructor.
   - (* Evar *)
     constructor.
@@ -189,7 +191,7 @@ Conjecture check_binop_any_correct :
 Fixpoint check_exp (e : exp) : bool :=
   match e with
   | Econst _ => true
-  | Eenum _ _ => false (* TODO ?! *)
+  | Eenum _ _ => true
   | Evar _ _ => true
   | Elast _ _ => false (* restr *)
   | Eunop op e ann =>
@@ -230,6 +232,8 @@ Proof.
   intros *.
   induction e using exp_ind2; simpl; intro Hchk; try congruence.
   - (* Econst *)
+    constructor.
+  - (* Eenum *)
     constructor.
   - (* Evar *)
     constructor.
@@ -365,7 +369,7 @@ Parameter check_binop : binop -> res -> type -> res -> type -> res.
 Fixpoint check_exp (e : exp) : list res :=
   match e with
   | Econst c => [ Val (Vscalar (sem_cconst c)) ]
-  | Eenum _ _ => [ Err ] (* TODO ?? *)
+  | Eenum c _ => [ Val (Venum c) ] (* TODO ?? *)
   | Evar _ _ => [ Err ]
   | Elast _ _ => [ Err ] (* restr *)
   | Eunop op e ann =>
@@ -443,6 +447,10 @@ Proof.
     intro; cases_eqn HH.
   - (* Eenum *)
     constructor; auto.
+    rewrite denot_exp_eq.
+    unfold DSForall_pres, sconst.
+    apply DSForall_map, DSForall_all.
+    intro; cases_eqn HH.
   - (* Evar *)
     (* TODO: plus de boulôt ici si on veut supposer Any *)
     constructor; auto.
@@ -476,6 +484,8 @@ Proof.
   intros *.
   induction e using exp_ind2; simpl; intro Hchk; try now inv Hchk.
   - (* Econst *)
+    constructor.
+  - (* Eenum *)
     constructor.
   - (* Eunop *)
     destruct (typeof e) as [|ty []] eqn:Hty; try now inv Hchk.
