@@ -50,3 +50,6 @@ Module Stc2Obc     := TranslationFun     Ids Op OpAux        Cks     CE.Syn Stc.
 Module Stc2ObcInvariants := Stc2ObcInvariantsFun Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc.
 Module Stc2ObcTyping     := Stc2ObcTypingFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc.
 Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc Stc2ObcTyping.
+
+From Velus Require Import Lustre.Denot.Restr.
+Module Restr := RestrFun  Ids Op OpAux Cks L.Senv L.Syn.
