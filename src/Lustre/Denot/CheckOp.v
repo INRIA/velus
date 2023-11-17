@@ -224,7 +224,26 @@ Fixpoint check_exp (e : exp) : bool :=
   | Eapp f es er ann => forallb check_exp es && forallb check_exp er
   end.
 
-Theorem check_exp_correct :
+Definition check_block b :=
+  match b with
+  | Beq (_, es) => forallb check_exp es
+  | _ => false
+  end.
+
+Definition check_top_block b :=
+  match b with
+  | Blocal (Scope locs blks) => forallb check_block blks
+  | _ => false
+  end.
+
+Definition check_node (n : node) :=
+  check_top_block (n_block n).
+
+Definition check_global (G : global) := forallb check_node (nodes G).
+
+(** Correction de la procédure *)
+
+Theorem check_exp_ok :
   forall G ins envG envI bs env,
   forall e, check_exp e = true ->
        op_correct_exp G ins envG envI bs env e.
@@ -299,6 +318,30 @@ Proof.
     apply andb_prop in Hchk as [F1 F2].
     apply forallb_Forall in F1, F2.
     constructor; simpl_Forall; auto.
+Qed.
+
+Lemma check_block_ok :
+  forall G ins envG envI bs env,
+  forall b, check_block b = true ->
+       op_correct_block G ins envG envI bs env b.
+Proof.
+  destruct b; simpl; intros * Hc; try congruence.
+  destruct e.
+  eapply forallb_Forall in Hc.
+  simpl_Forall; auto using check_exp_ok.
+Qed.
+
+Lemma check_node_ok :
+  forall G ins envG envI bs env,
+  forall (n : node),
+    check_node n = true ->
+    op_correct G ins envG envI bs env n.
+Proof.
+  unfold check_node, check_top_block, op_correct.
+  intros * Hc.
+  cases.
+  apply forallb_Forall in Hc.
+  simpl_Forall; eauto using check_block_ok.
 Qed.
 
 End TEST1ETDEMI.
