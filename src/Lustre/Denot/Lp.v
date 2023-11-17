@@ -688,14 +688,13 @@ Section LP_node.
 
   Lemma lp_exp :
     forall Γ ins e n envI bs env,
-      restr_exp e ->
       wt_exp G Γ e ->
       wl_exp G e ->
       denot_exp G ins e envG (take_env n envI) (take n bs) (take_env n env)
       == lift (take n) (denot_exp G ins e envG envI bs env).
   Proof.
-    intros * Hr Hwt Hwl.
-    induction e using exp_ind2; inv Hr.
+    intros * Hwt Hwl.
+    induction e using exp_ind2.
     - (* Econst *)
       rewrite 2 denot_exp_eq.
       unfold sconst.
@@ -707,6 +706,9 @@ Section LP_node.
     - (* Evar *)
       rewrite 2 denot_exp_eq.
       now rewrite take_var.
+    - (* Elast *)
+      rewrite 2 denot_exp_eq.
+      now setoid_rewrite take_bot.
     - (* Eunop *)
       inv Hwt. inv Hwl.
       rewrite 2 (denot_exp_eq _ _ (Eunop _ _ _)).
@@ -726,9 +728,11 @@ Section LP_node.
       do 2 (take (typeof _ = _) and rewrite it; clear it).
       cbv zeta; intros t1 t2 t3 t4 IHe1 IHe2.
       setoid_rewrite take_sbinop; auto.
+    - (* Eextcall *)
+      rewrite 2 denot_exp_eq.
+      now setoid_rewrite take_bot.
     - (* Efby *)
       inv Hwt. inv Hwl.
-      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wl_exp _ ) in H, H0; auto.
       apply lift_IH in H, H0; revert H H0.
@@ -738,9 +742,15 @@ Section LP_node.
       simpl; unfold eq_rect; cases; try congruence.
       intros t1 t2 t3 t4 Eq1 Eq2.
       rewrite take_lift_fby; auto.
+    - (* Earrow *)
+      rewrite 2 denot_exp_eq.
+      simpl; induction (length a) as [|[]].
+      + now setoid_rewrite take_bot.
+      + now setoid_rewrite take_bot.
+      + apply Dprod_eq_pair; auto.
+        now setoid_rewrite take_bot.
     - (* Ewhen *)
       inv Hwt. inv Hwl.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wl_exp _ ) in H; auto.
       apply lift_IH in H; revert H.
@@ -759,20 +769,10 @@ Section LP_node.
       gen_sub_exps; intros t1 t2 Eq.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
       rewrite lift_lift_nprod, take_lift_smergev, take_var; auto.
-    - (* Ecase total *)
-      inv Hwt. inv Hwl.
-      rewrite 2 (denot_exp_eq _ _ (Ecase _ _ _ _)).
-      pose proof (IH := lift_IHs ins es (length tys) envG envI bs env n).
-      eassert (Heq: _ == _); [apply IH; simpl_Forall; auto|clear IH].
-      cbv zeta; revert IHe Heq; gen_sub_exps.
-      take (numstreams e = 1) and rewrite it.
-      unfold eq_rect_r, eq_rect, eq_sym; cases.
-      intros t1 t2 t3 t4 Eq1 Eq2.
-      rewrite lift_lift_nprod, take_lift_scasev, Eq1; auto.
-    - (* Ecase défaut *)
+    - destruct d as [des|].
+      { (* Ecase défaut *)
       inv Hwt. inv Hwl.
       set (typesof des) as tys.
-      apply Forall_impl_inside with (P := restr_exp) in H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
       apply Forall_impl_inside with (P := wl_exp _ ) in H0; auto.
       apply lift_IH in H0.
@@ -787,9 +787,18 @@ Section LP_node.
       unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence.
       intros t1 t2 t3 t4 t5 t6 Eq1 Eq2 Eq3.
       rewrite take_lift_scase_defv, Eq1; auto.
+      }{ (* Ecase total *)
+      inv Hwt. inv Hwl.
+      rewrite 2 (denot_exp_eq _ _ (Ecase _ _ _ _)).
+      pose proof (IH := lift_IHs ins es (length tys) envG envI bs env n).
+      eassert (Heq: _ == _); [apply IH; simpl_Forall; auto|clear IH].
+      cbv zeta; revert IHe Heq; gen_sub_exps.
+      take (numstreams e = 1) and rewrite it.
+      unfold eq_rect_r, eq_rect, eq_sym; cases.
+      intros t1 t2 t3 t4 Eq1 Eq2.
+      rewrite lift_lift_nprod, take_lift_scasev, Eq1; auto. }
     - (* Eapp *)
       inv Hwt. inv Hwl.
-      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wl_exp _ ) in H, H0; auto.
       apply lift_IH in H, H0; revert H H0.
@@ -819,13 +828,12 @@ Section LP_node.
 
   Corollary lp_exps :
     forall Γ ins es n envI bs env,
-      Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wl_exp G) es ->
       denot_exps G ins es envG (take_env n envI) (take n bs) (take_env n env)
       == lift (take n) (denot_exps G ins es envG envI bs env).
   Proof.
-    induction es as [|e es]; intros * Hr Hwt Hwl; inv Hr; inv Hwl; inv Hwt.
+    induction es as [|e es]; intros * Hwt Hwl; inv Hwl; inv Hwt.
     - now rewrite 2 denot_exps_nil, <- take_map.
     - rewrite 2 denot_exps_eq.
       match goal with
@@ -836,14 +844,13 @@ Section LP_node.
 
   Lemma lp_block :
     forall Γ ins blk n envI bs env acc,
-      restr_block blk ->
       wt_block G Γ blk ->
       wl_block G blk ->
       denot_block G ins blk envG (take_env n envI) (take n bs) (take_env n env) (take_env n acc)
       == take_env n (denot_block G ins blk envG envI bs env acc).
   Proof.
-    intros * Hr Hwt Hwl.
-    rewrite 2 denot_block_eq; cases; inv Hr.
+    intros * Hwt Hwl.
+    rewrite 2 denot_block_eq; cases.
     inv Hwl; take (wl_equation _ _) and inv it.
     inv Hwt; take (wt_equation _ _ _) and inv it.
     rewrite annots_numstreams in *.
@@ -852,24 +859,23 @@ Section LP_node.
 
   Lemma lp_node :
     forall n nd envI env,
-      restr_node nd ->
       wt_node G nd ->
       denot_node G nd envG (take_env n envI) (take_env n env)
       == take_env n (denot_node G nd envG envI env).
   Proof.
-    intros n nd envI env Hr Hwt.
+    intros n nd envI env Hwt.
     rewrite 2 denot_node_eq.
     rewrite 2 denot_top_block_eq.
     apply wt_node_wl_node in Hwt as Hwl.
     inversion_clear Hwl as [? HH]; revert HH.
     inversion_clear Hwt as [????? HH]; revert HH.
-    inversion_clear Hr as [?? Hfr].
-    intro Hwt; inv Hwt; take (wt_scope _ _ _ _) and inv it.
-    intro Hwl; inv Hwl; take (wl_scope _ _ _) and inv it.
+    destruct (n_block nd); intros Hwt Hwl; try now rewrite take_env_bot.
+    inv Hwt; take (wt_scope _ _ _ _) and inv it.
+    inv Hwl; take (wl_scope _ _ _) and inv it.
     rewrite 2 denot_blocks_eq.
     induction blks as [|b blks]; simpl (fold_right _ _ _).
     { apply symmetry, take_env_bot. }
-    do 3 take (Forall _ (_::_)) and inv it.
+    do 2 take (Forall _ (_::_)) and inv it.
     rewrite take_bss.
     - rewrite <- lp_block; auto; eauto.
     - pose proof (n_ingt0 nd).
@@ -881,12 +887,11 @@ End LP_node.
 (* TODO: check hypotheses *)
 Theorem lp_global :
   forall (G : global),
-    restr_global G ->
     wt_global G ->
     forall f n envI,
       denot_global G f (take_env n envI) == take_env n (denot_global G f envI).
 Proof.
-  intros * Hr Hwt f n envI.
+  intros * Hwt f n envI.
   apply wt_global_wl_global in Hwt as Hwl.
   apply wl_global_Ordered_nodes in Hwl as Hord.
   destruct (find_node f G) as [nd|] eqn:Hfind.
@@ -913,7 +918,6 @@ Proof.
   - (* cas qui nous intéresse *)
     rewrite 2 HenvG; auto using find_node_now.
     rewrite <- denot_node_cons; eauto 3 using find_node_not_Is_node_in, find_node_now.
-    inv Hr.
     apply wt_global_uncons in Hwt as Wt.
     apply wt_global_cons in Hwt.
     inversion_clear Hwl as [|?? [Wl]]; simpl in Wl.
@@ -958,7 +962,6 @@ Proof.
       rewrite FIXP_eq, <- lp_node; auto.
   - rewrite find_node_other in Hfind; auto.
     eapply IHnds; auto.
-    + inv Hr; auto.
     + apply wt_global_cons in Hwt; auto.
     + inv Hwl; auto.
     + inv Hord; auto.

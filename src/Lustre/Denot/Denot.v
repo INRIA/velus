@@ -19,26 +19,140 @@ Module Type LDENOT
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn).
 
-Context {Prefs : PS.t}.
+Context {PSyn : list decl -> block -> Prop} {Prefs : PS.t}.
+Definition node := @node PSyn Prefs.
+Definition global := @global PSyn Prefs.
 
-(* [nolocal] pour des variables locales à top-level seulement
-   et pas de last dans les variables de sortie
-   FIXME: c'est ce qu'il y avait dans Vélus avant le commit 2370699a
- *)
-Inductive nolocal_top_block : block -> Prop :=
-| NLtop : forall locs blks,
-    Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
-    Forall nolocal_block blks ->
-    nolocal_top_block (Blocal (Scope locs blks)).
-Inductive nolocal : list decl -> block -> Prop :=
-  | NLnode : forall out blk,
-      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
-      nolocal_top_block blk ->
-      (exists xs, VarsDefinedComp blk xs /\ Permutation.Permutation xs (List.map fst out)) ->
-      nolocal out blk.
+(* TODO: move somewhere else? *)
+Section LSyntax_facts.
 
-Definition node := @node nolocal Prefs.
-Definition global := @global nolocal Prefs.
+(* TODO: définition un peu foireuse, qui doit correspondre aux
+   inversions de wt_block... *)
+Definition get_locals (blk : block) : static_env :=
+  match blk with
+  | Blocal (Scope vars _) => senv_of_decls vars
+  | _ => []
+  end.
+
+Lemma NoDup_senv_loc :
+  forall (nd : node) vars blks,
+    n_block nd = Blocal (Scope vars blks) ->
+    NoDupMembers (senv_of_ins (n_in nd) ++ senv_of_decls (n_out nd) ++ senv_of_decls vars).
+Proof.
+  intros * Hn.
+  pose proof (n_nodup nd) as [Nd Ndl].
+  rewrite Hn in Ndl; inv Ndl.
+  take (NoDupScope _ _ _) and inversion_clear it as [???? ndm Hf].
+  rewrite fst_NoDupMembers, 2 map_app, map_fst_senv_of_ins, 2 map_fst_senv_of_decls.
+  rewrite app_assoc.
+  apply fst_NoDupMembers in ndm.
+  apply NoDup_app'_iff; repeat split; auto.
+  setoid_rewrite fst_InMembers in Hf.
+  simpl_Forall.
+  contradict Hf; eauto.
+Qed.
+
+Corollary NoDup_iol :
+  forall (n : node),
+    NoDupMembers (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n)).
+Proof.
+  intros.
+  pose proof (node_NoDupMembers n) as ND.
+  destruct (n_block n) eqn:Hn; simpl; try rewrite app_nil_r; auto.
+  destruct s.
+  apply NoDup_senv_loc in Hn; auto.
+Qed.
+
+(** Chercher les variables à gauche des équations dans les blocks *)
+Definition get_defined (blk : block) : list ident :=
+  match blk with
+  | Beq (xs,es) => xs
+  | _ => []
+  end.
+
+(** Et dans les nœuds  *)
+Definition get_defined_node (n : node) : list ident :=
+  match n_block n with
+  | Blocal (Scope _ blks) => flat_map get_defined blks
+  | _ => []
+  end.
+
+Lemma NoDup_get_defined :
+  forall (nd : node) vars blks,
+    n_block nd = Blocal (Scope vars blks) ->
+    NoDup (flat_map get_defined blks ++ List.map fst (n_in nd)).
+Proof.
+  intros * Hn.
+  apply NoDup_senv_loc in Hn as ndm.
+  pose proof (n_defd nd) as (outs & Vd & Perm).
+  rewrite Hn in Vd.
+  inv Vd. Syn.inv_scope.
+  rename x into xs.
+  rewrite Perm in H0.
+  rewrite <- H0 in ndm.
+  clear - ndm H.
+  apply fst_NoDupMembers in ndm.
+  rewrite Permutation.Permutation_app_comm, map_app, map_fst_senv_of_ins in ndm.
+  induction H; simpl in *; auto.
+  rewrite map_app, <- app_assoc in *.
+  apply NoDup_app'; eauto using NoDup_app_r.
+  - apply NoDup_app_l in ndm.
+    inv H; simpl; auto using NoDup.
+    cases; simpl in *; now subst.
+  - apply Forall_forall; intros i Hin.
+    inv H; simpl in *; auto.
+    cases; simpl in *; subst.
+    eapply NoDup_app_In in ndm; eauto.
+    contradict ndm.
+    clear - ndm H0.
+    induction H0; simpl in *; auto.
+    rewrite map_app, 2 in_app_iff in *.
+    inv H; simpl in *; cases; simpl in *; subst; firstorder.
+Qed.
+
+Corollary NoDup_get_defined_node :
+  forall (nd : node), NoDup (get_defined_node nd ++ List.map fst (n_in nd)).
+Proof.
+  intros.
+  pose proof (Ndin := node_NoDup_in nd).
+  unfold get_defined_node.
+  cases_eqn Hn; subst.
+  eapply NoDup_get_defined; eauto.
+Qed.
+
+Lemma get_defined_node_incl :
+  forall (n : node),
+    incl (get_defined_node n)
+      (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n))).
+Proof.
+  unfold get_defined_node.
+  intro n.
+  pose proof (n_defd n) as (xs & Vd & Perm).
+  cases_eqn Hn; subst; simpl; try now (intros ? []).
+  inv Vd.
+  take (VarsDefinedScope _ _ _) and inversion_clear it as [??? (xs' & Vd' & Perm')].
+  clear Hn.
+  rewrite Perm in Perm'.
+  clear - Vd' Perm'.
+  apply (Permutation.Permutation_map fst) in Perm'.
+  revert Perm'.
+  rewrite map_app, 2 map_fst_senv_of_decls.
+  generalize (List.map fst (n_out n) ++ List.map fst l).
+  intros l' ?; clear l n.
+  assert (Hincl : incl (List.map fst (concat xs')) l').
+  { intros x Hin; rewrite Perm' in Hin; auto. }
+  clear Perm'; revert Hincl; revert l'.
+  induction Vd'; simpl; intros l1. { now intros ? []. }
+  unfold incl in *.
+  rewrite map_app.
+  setoid_rewrite in_app_iff.
+  intros Hincl a [Hin|Hin]; eauto.
+  destruct x; simpl in *; try now inv Hin.
+  destruct e as (xs,es).
+  inv H; simpl in *; subst; auto.
+Qed.
+
+End LSyntax_facts.
 
 (** We always use this specialized version of mem_nth *)
 (* TODO: c'est vraiment une bonne idée de redéfinir des trucs, comme ça ? *)
@@ -181,7 +295,6 @@ Section Denot_node.
 
 Variable (G : global).
 
-
 (* TODO: c'est un test, bouger!! *)
 Section Nprod_Fold.
 
@@ -290,7 +403,7 @@ Definition denot_exp_ (ins : list ident)
   - (* Evar *)
     exact (denot_var i).
   - (* Elast *)
-    apply CTE, errTy.
+    apply CTE, 0.
   - (* Eunop *)
     eapply fcont_comp. 2: apply (denot_exp_ e0).
     destruct (numstreams e0) as [|[]].
@@ -310,7 +423,7 @@ Definition denot_exp_ (ins : list ident)
     1-4,6-9: apply curry, CTE, errTy.
     exact (sbinop (fun v1 v2 => sem_binop b v1 ty1 v2 ty2)).
   - (* Eextcall *)
-    apply CTE, errTy.
+    apply CTE, 0.
   - (* Efby *)
     rename l into e0s, l0 into es, l1 into anns.
     clear He.
@@ -331,7 +444,7 @@ Definition denot_exp_ (ins : list ident)
     rewrite <- Heq2.
     exact ((lift2 (SDfuns.fby) @2_ s0s) ss).
   - (* Earrow *)
-    apply CTE, (nprod_const _ errTy).
+    apply CTE, 0.
   - (* Ewhen *)
     rename l into es.
     destruct l0 as (tys,ck).
@@ -626,7 +739,7 @@ Lemma denot_exp_eq :
       (* | Ereset _ _ f fd e er => *)
       (*     reset (denot_app s gd f fd genv) *)
                           (*       (denot_exp er genv env bs) (denot_exp e genv env bs) *)
-      | _ => nprod_const _ errTy
+      | _ => 0
       end.
 Proof.
   (* Le système se sent obligé de dérouler deux fois [denot_exp_] lors
@@ -1054,84 +1167,65 @@ Section Global.
     cases.
   Qed.
 
-  Definition denot_global (G : global) : Dprodi FI :=
+  Definition denot_global G : Dprodi FI :=
     FIXP _ (denot_global_ G).
 
 End Global.
 
-Section Temp.
 
-(* TODO: pour l'instant on se restreint aux cas suivants *)
-Inductive restr_exp : exp -> Prop :=
-| restr_Econst :
-  forall c,
-    restr_exp (Econst c)
-| restr_Eenum :
-  forall c ty,
-    restr_exp (Eenum c ty)
-| restr_Evar :
-  forall x ann,
-    restr_exp (Evar x ann)
-| restr_Eunop :
-  forall op e ann,
-    restr_exp e ->
-    restr_exp (Eunop op e ann)
-| restr_Binop :
-  forall op e1 e2 ann,
-    restr_exp e1 ->
-    restr_exp e2 ->
-    restr_exp (Ebinop op e1 e2 ann)
-| restr_Efby :
-  forall e0s es anns,
-    Forall restr_exp e0s ->
-    Forall restr_exp es ->
-    restr_exp (Efby e0s es anns)
-| restr_Ewhen :
-  forall es x k anns,
-    Forall restr_exp es ->
-    restr_exp (Ewhen es x k anns)
-| restr_Emerge :
-  forall x ess a,
-    Forall (Forall restr_exp) (List.map snd ess) ->
-    restr_exp (Emerge x ess a)
-| restr_Ecase :
-  forall e ess a,
-    restr_exp e ->
-    Forall (Forall restr_exp) (List.map snd ess) ->
-    restr_exp (Ecase e ess None a)
-| restr_Ecase_def :
-  forall e ess des a,
-    restr_exp e ->
-    Forall (Forall restr_exp) (List.map snd ess) ->
-    Forall restr_exp des ->
-    restr_exp (Ecase e ess (Some des) a)
-| restr_Eapp :
-  forall f es er anns,
-    Forall restr_exp es ->
-    Forall restr_exp er ->
-    restr_exp (Eapp f es er anns)
-.
+Lemma denot_in :
+  forall G f n,
+    find_node f G = Some n ->
+    forall envI x,
+      In x (List.map fst (n_in n)) ->
+      denot_global G f envI x == 0.
+Proof.
+  intros * Hfind * Hin.
+  pose proof (Hnin := NoDup_get_defined_node n).
+  unfold denot_global, get_defined_node in *.
+  rewrite <- PROJ_simpl, <- PROJ_simpl, FIXP_eq, PROJ_simpl, PROJ_simpl.
+  rewrite denot_global_eq, Hfind.
+  rewrite <- PROJ_simpl, FIXP_eq, denot_node_eq, denot_top_block_eq, PROJ_simpl at 1.
+  cases.
+  remember (FIXP _ _) as envG eqn:HH; clear HH.
+  remember (FIXP _ _) as env eqn:HH; clear HH.
+  induction l0 as [| blk blks]; auto.
+  simpl in Hnin; rewrite <- app_assoc in Hnin.
+  rewrite denot_blocks_eq_cons, denot_block_eq.
+  cases; simpl in Hnin.
+  rewrite env_of_np_ext_eq.
+  cases_eqn Hmem; eauto 3 using NoDup_app_r; exfalso.
+  eapply NoDup_app_In; eauto using mem_nth_In, in_or_app.
+Qed.
 
-Inductive restr_block : block -> Prop :=
-| restr_Beq :
-  forall xs es,
-    Forall restr_exp es ->
-    restr_block (Beq (xs,es)).
-
-Inductive restr_top_block : block -> Prop :=
-| restr_Blocal :
-  forall vars blks,
-    Forall restr_block blks ->
-    restr_top_block (Blocal (Scope vars blks)).
-
-Definition restr_node (nd : node) : Prop :=
-  restr_top_block nd.(n_block).
-
-Definition restr_global (g : global) : Prop :=
-  Forall restr_node g.(nodes).
-
-End Temp.
-
+Lemma not_out_bot :
+  forall G f n,
+    find_node f G = Some n ->
+    forall envI x,
+      ~ In x (List.map fst (n_out n)) ->
+      ~ In x (List.map fst (get_locals (n_block n))) ->
+      denot_global G f envI x == 0.
+Proof.
+  intros * Hfind * Nout Nloc.
+  assert (Hnin: ~ In x (get_defined_node n)).
+  { intros Hin%get_defined_node_incl%in_app_iff; tauto. }
+  clear Nout Nloc.
+  unfold get_defined_node, denot_global, get_locals in *.
+  rewrite <- PROJ_simpl, <- PROJ_simpl, FIXP_eq, PROJ_simpl, PROJ_simpl.
+  rewrite denot_global_eq, Hfind.
+  rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+  rewrite denot_node_eq, denot_top_block_eq.
+  cases.
+  remember (FIXP _ _) as envG eqn:HH; clear HH.
+  remember (FIXP _ _) as env eqn:HH; clear HH.
+  induction l0 as [| blk blks']; auto.
+  simpl in Hnin; rewrite in_app_iff in Hnin.
+  rewrite denot_blocks_eq_cons, denot_block_eq.
+  cases_eqn HH; subst.
+  rewrite env_of_np_ext_eq.
+  cases_eqn Hmem; exfalso.
+  apply mem_nth_In in Hmem; auto.
+Qed.
 
 (** *** Here we show that a node can be removed from the environment
     if it is not evaluated during the computations. *)

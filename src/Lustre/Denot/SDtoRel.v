@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs Lp Reset.
+Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs Lp Reset Restr.
 
 Import List ListNotations.
 
@@ -26,7 +26,8 @@ Module Type SDTOREL
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
-       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
+       (Import Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
+       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
        (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
        (Import Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
@@ -806,15 +807,13 @@ Proof.
     rewrite nth_repeat_in; now auto.
   + (* bloc *)
     apply sem_block_cons'; eauto using find_node_not_Is_node_in, find_node_now.
-    inv Hr. take (restr_node _) and inv it.
+    inv Hr. take (restr_node _) and inversion_clear it as [?? Hr (?&?&?)].
+    inversion Hr as [ vars ??? Hn].
     apply wt_global_cons in Hwt as Hwt'.
     apply wt_global_uncons in Hwt. inversion_clear Hwt as [????? Hwt''].
-    pose proof (n_syn n) as Noloc.
-    rewrite <- H in *.
+    rewrite <- Hn in *.
     inv Hwt''.
     take (wt_scope _ _ _ _) and inv it.
-    inv Noloc.
-    take (nolocal_top_block _) and inv it.
     constructor.
     (* scope *)
     apply Sscope with (Hi' := abs_hist_of_vars vars);
@@ -839,7 +838,6 @@ Proof.
     match goal with H:Forall (wt_exp _ ?Γ) _ |- _=> revert H; generalize Γ end.
     intros; clear dependent n.
     clear dependent blks.
-    take (nolocal_block _) and clear it.
     induction es; simpl_Forall; constructor; eauto.
     eapply sem_exp_absent; now eauto.
     (* variables *)
@@ -1029,7 +1027,7 @@ Proof.
   simpl; f_equal; auto.
 Qed.
 
-(*** comment passer de denot_exps à (concat denot_exp) *)
+(** comment passer de denot_exps à (concat denot_exp) *)
 Lemma Ss_exps :
   forall G ins envG envI bs env es Hinf Infe,
     EqSts (Ss_of_nprod (denot_exps G ins es envG envI bs env) Hinf)
@@ -1135,7 +1133,7 @@ Proof.
       now apply forall_nprod_tl.
 Qed.
 
-(*** comment passer de denot_expss à (map _ (concat denot_exp)) *)
+(** comment passer de denot_expss à (map _ (concat denot_exp)) *)
 Lemma Ss_expss :
   forall G ins envG envI bs env (ess : list (enumtag * (list exp))) n Infe Inf,
     Forall (fun es => list_sum (map numstreams (snd es)) = n) ess ->
@@ -1645,6 +1643,7 @@ Qed.
 
 (** ** Fonctions pour passer d'un [DS_prod SI] à un Str.history *)
 
+(* TODO: virer ??? *)
 Definition hist_of_envs
   (ins : list ident)
   (envI : DS_prod SI) (InfI : all_infinite envI)
@@ -1969,96 +1968,6 @@ Proof.
   now erewrite get_nth_indep.
 Qed.
 
-(* (* TODO: move *) *)
-(* Lemma env_of_np_inf : *)
-(*   forall l n (np : nprod n), *)
-(*     forall_nprod (@infinite _) np -> *)
-(*     all_infinite (env_of_np l np). *)
-(* Proof. *)
-(*   clear. *)
-(*   intros * Hf x. *)
-(*   rewrite env_of_np_eq. *)
-(*   cases_eqn Hmem; try apply DS_const_inf. *)
-(*   apply forall_nprod_k_def; auto; apply DS_const_inf. *)
-(* Qed. *)
-
-(* TODO: move ?? *)
-(* TODO: pour enlever le restr, faire un get_locals récursif  *)
-Lemma get_defined_in_defined :
-  forall blk x Γ,
-    restr_top_block blk ->
-    In x (get_defined blk) ->
-    VarsDefined blk Γ ->
-    In x (List.map fst (Γ ++ get_locals blk)).
-Proof.
-  intros * Hr Hin Vd.
-  inv Hr; simpl in *.
-  inv Vd; inv H1; inv_VarsDefined.
-  apply (Permutation_map fst) in Hperm.
-  rewrite <- Hperm; clear Hperm.
-  revert dependent x0.
-  induction blks; simpl in *; intros; try tauto.
-  inv Hvars; simpl.
-  inv H.
-  rewrite map_app, in_app_iff.
-  apply in_app_or in Hin as []; auto.
-  take (restr_block _) and inv it.
-  take (VarsDefined _ _) and inv it; simpl in *; subst.
-  auto.
-Qed.
-
-(* TODO: move ?? *)
-(* on pourait faire sauter restr_node en n'utilisant pas get_defined_in_defined mais plutôt ça : *)
-
-Lemma get_defined_is_defined_in :
-  forall x blk,
-    In x (get_defined blk) ->
-    Syn.Is_defined_in (Var x) blk.
-Proof.
-  induction blk using block_ind2; simpl; intros Hin; try tauto.
-  - destruct eq as (xs,es).
-    now constructor.
-  - constructor; constructor.
-    (* ???????????? *)
-Abort.
-
-Lemma ins_not_defined :
-  forall (nd : node) x,
-    restr_node nd ->
-    In x (List.map fst (n_in nd)) ->
-    forall vars blks,
-    n_block nd = Blocal (Scope vars blks) ->
-    ~ In x (flat_map get_defined blks).
-Proof.
-  intros * Hr Hin * Hnd Hnin.
-  pose proof (n_defd nd) as (Γ & Vd & Perm).
-  apply (Permutation_map fst) in Perm.
-  pose proof (NoDup_iol nd) as Nd.
-  eapply (get_defined_in_defined _ x Γ) in Hr; auto.
-  2: rewrite Hnd; auto.
-  apply fst_NoDupMembers in Nd.
-  rewrite map_app, map_fst_senv_of_ins in Nd.
-  eapply NoDup_app_In; eauto.
-  now rewrite map_app, <- Perm, <- map_app.
-Qed.
-
-(* TODO: move ?? *)
-Lemma defined_out_or_var :
-  forall (n : node) x,
-    restr_node n ->
-    In x (get_defined (n_block n)) ->
-    In x (List.map fst (n_out n))
-    \/ In x (List.map fst (get_locals (n_block n))).
-Proof.
-  unfold restr_node.
-  intros * Hr Hin.
-  pose proof (n_defd n) as (Γ & Vd & Perm).
-  eapply get_defined_in_defined in Vd; eauto; simpl in *.
-  apply (Permutation_map fst) in Perm.
-  rewrite <- map_fst_senv_of_decls, <- Perm; clear Perm.
-  now rewrite <- in_app_iff, <- map_app.
-Qed.
-
 (* TODO: move *)
 Import Cpo.
 Lemma first_DS_const :
@@ -2119,17 +2028,6 @@ Proof.
   reflexivity.
 Qed.
 
-(* TODO: move *)
-Lemma restr_global_find :
-  forall G f n,
-    restr_global G ->
-    find_node f G = Some n ->
-    restr_node n.
-Proof.
-  destruct G as [?? nds].
-  induction nds; simpl; intros * Hr Hf; inv Hf; inv Hr.
-  apply find_node_cons in H0 as [[]|[]]; subst; eauto.
-Qed.
 
 End MOVE_ME.
 
@@ -2309,65 +2207,6 @@ Proof.
       apply wf_env_APP_; eauto using wf_env_abs_ins.
 Qed.
 
-(* TODO: move, utiliser ailleurs ?? Propriété importante du modèle *)
-Lemma not_out_abs :
-  forall G f n,
-    find_node f G = Some n ->
-    restr_node n ->
-    forall envI x,
-      ~ In x (List.map fst (n_out n)) ->
-      ~ In x (List.map fst (get_locals (n_block n))) ->
-      denot_global G f envI x == 0.
-Proof.
-  intros * Hfind Hr * Nout Nloc.
-  assert (Hnin: ~ In x (get_defined (n_block n)))
-    by (intros [|]%defined_out_or_var; auto).
-  unfold denot_global.
-  rewrite <- PROJ_simpl, <- PROJ_simpl, FIXP_eq, PROJ_simpl, PROJ_simpl.
-  rewrite denot_global_eq, Hfind.
-  rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-  rewrite denot_node_eq, denot_top_block_eq.
-  cases.
-  remember (FIXP _ _) as envG eqn:HH; clear HH.
-  remember (FIXP _ _) as env eqn:HH; clear HH.
-  simpl in Nloc, Hnin.
-  induction l0 as [| blk blks]; auto.
-  simpl in Hnin; rewrite in_app_iff in Hnin.
-  rewrite denot_blocks_eq_cons, denot_block_eq.
-  cases.
-  rewrite env_of_np_ext_eq.
-  cases_eqn Hmem; exfalso.
-  apply mem_nth_In in Hmem; auto.
-Qed.
-
-(* TODO: move dans Denot ? C'est une propriété du modèle qu'il faudrait toujours vérifier... *)
-(* FIXME: c'est pas loin d'être vrai sans restr_node ... *)
-Lemma denot_in :
-  forall G f n,
-    find_node f G = Some n ->
-    restr_node n ->
-    forall envI x,
-      In x (List.map fst (n_in n)) ->
-      denot_global G f envI x == 0.
-Proof.
-  intros * Hfind Hr * Hin.
-  pose proof (Hnin := ins_not_defined n x Hr Hin).
-  unfold denot_global.
-  rewrite <- PROJ_simpl, <- PROJ_simpl, FIXP_eq, PROJ_simpl, PROJ_simpl.
-  rewrite denot_global_eq, Hfind.
-  rewrite <- PROJ_simpl, FIXP_eq, denot_node_eq, denot_top_block_eq, PROJ_simpl at 1.
-  cases.
-  specialize (Hnin _ _ eq_refl).
-  remember (FIXP _ _) as envG eqn:HH; clear HH.
-  remember (FIXP _ _) as env eqn:HH; clear HH.
-  induction l0 as [| blk blks]; auto.
-  simpl in Hnin; rewrite in_app_iff in Hnin.
-  rewrite denot_blocks_eq_cons, denot_block_eq.
-  cases.
-  rewrite env_of_np_ext_eq.
-  cases_eqn Hmem; exfalso.
-  apply mem_nth_In in Hmem; auto.
-Qed.
 
 (** Ici: tout ce qu'il nous faut pour prouver abs_align, et ça en fait pas mal... *)
 
@@ -2424,64 +2263,64 @@ Proof.
     rewrite DS_const_eq; auto.
 Qed.
 
-(* commenter : cette propriété a l'air évidente mais
- avec les erreurs c'est hyper chiant *)
-Lemma wf_align :
-  forall G,
-    restr_global G ->
-    forall f n,
-    find_node f G = Some n ->
-    forall envI,
-    let ins := List.map fst (n_in n) in
-    let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
-    wf_env Γ ins envI (bss ins envI) (denot_global G f envI) ->
-    abs_align envI (denot_global G f envI).
-Proof.
-  intros * Hrg ?? Hfind ??? Hwf k.
-  pose proof (Hr := restr_global_find _ _ _ Hrg Hfind).
-  pose proof (Hin := denot_in G f n Hfind Hr envI).
-  pose proof (Hout := not_out_abs G f n Hfind Hr envI).
-  revert Hin Hout Hwf.
-  generalize (denot_global G f envI) as env.
-  revert envI.
-  induction k; intros envI env ??? Hk.
-  - rewrite nrem_env_0 in *.
-    rewrite Hk, bss_abs in Hwf.
-    unfold abs_env; intro x.
-    specialize (Hwf x).
-    unfold denot_var in Hwf.
-    destruct (mem_ident x ins) eqn:Hmem.
-    { (* si x est dans ins *)
-      apply mem_ident_spec in Hmem.
-      rewrite Hin; auto. }
-    destruct (mem_ident x (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n)))) eqn:Hmem2.
-    { (* si x est dans out ou vars, seul cas intéressant *)
-      assert (exists ty ck, HasType Γ x ty /\ HasClock Γ x ck) as (ty & ck & Hty & Hck).
-      { apply mem_ident_spec, in_app_iff in Hmem2 as [Hx|Hx].
-        + apply In_HasClock in Hx as HH1.
-          apply In_HasType' in Hx as HH2.
-          destruct HH1 as (ck, Hck).
-          destruct HH2 as (ty, Hty).
-          eauto 8 using HasClock_app_r,  HasClock_app_l, HasType_app_r, HasType_app_l.
-        + apply in_map_iff in Hx as ([? a]&?&?); simpl in *; subst.
-          exists (typ a), (clo a).
-          split; econstructor; eauto using in_app_weak, in_app_weak'. }
-      specialize (Hwf ty ck Hty Hck); destruct Hwf as (_ & Hcl & Hsf).
-      unfold cl_DS in *.
-      eapply AC_le_abss, Ole_trans, denot_clock_bs_abs; eauto. }
-    { (* sinon *)
-      apply mem_ident_false in Hmem2.
-      rewrite in_app_iff in Hmem2.
-      destruct (Hout x) as [->]; eauto.
-    }
-  - apply wf_env_rem in Hwf; rewrite rem_bss in Hwf.
-    apply IHk in Hwf; auto.
-    + now rewrite nrem_rem_env in Hwf.
-    + intros; rewrite REM_env_eq, Hin, rem_eq_bot; auto.
-    + intros; rewrite REM_env_eq.
-      rewrite (Hout x), rem_eq_bot; auto.
-    + now rewrite nrem_rem_env.
-Qed.
+(* (* commenter : cette propriété a l'air évidente mais *)
+(*  avec les erreurs c'est hyper chiant *) *)
+(* Lemma wf_align : *)
+(*   forall G, *)
+(*     restr_global G -> *)
+(*     forall f n, *)
+(*     find_node f G = Some n -> *)
+(*     forall envI, *)
+(*     let ins := List.map fst (n_in n) in *)
+(*     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in *)
+(*     wf_env Γ ins envI (bss ins envI) (denot_global G f envI) -> *)
+(*     abs_align envI (denot_global G f envI). *)
+(* Proof. *)
+(*   intros * Hrg ?? Hfind ??? Hwf k. *)
+(*   pose proof (Hr := restr_global_find _ _ _ Hrg Hfind). *)
+(*   pose proof (Hin := denot_in G f n Hfind Hr envI). *)
+(*   pose proof (Hout := not_out_abs G f n Hfind Hr envI). *)
+(*   revert Hin Hout Hwf. *)
+(*   generalize (denot_global G f envI) as env. *)
+(*   revert envI. *)
+(*   induction k; intros envI env ??? Hk. *)
+(*   - rewrite nrem_env_0 in *. *)
+(*     rewrite Hk, bss_abs in Hwf. *)
+(*     unfold abs_env; intro x. *)
+(*     specialize (Hwf x). *)
+(*     unfold denot_var in Hwf. *)
+(*     destruct (mem_ident x ins) eqn:Hmem. *)
+(*     { (* si x est dans ins *) *)
+(*       apply mem_ident_spec in Hmem. *)
+(*       rewrite Hin; auto. } *)
+(*     destruct (mem_ident x (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n)))) eqn:Hmem2. *)
+(*     { (* si x est dans out ou vars, seul cas intéressant *) *)
+(*       assert (exists ty ck, HasType Γ x ty /\ HasClock Γ x ck) as (ty & ck & Hty & Hck). *)
+(*       { apply mem_ident_spec, in_app_iff in Hmem2 as [Hx|Hx]. *)
+(*         + apply In_HasClock in Hx as HH1. *)
+(*           apply In_HasType' in Hx as HH2. *)
+(*           destruct HH1 as (ck, Hck). *)
+(*           destruct HH2 as (ty, Hty). *)
+(*           eauto 8 using HasClock_app_r,  HasClock_app_l, HasType_app_r, HasType_app_l. *)
+(*         + apply in_map_iff in Hx as ([? a]&?&?); simpl in *; subst. *)
+(*           exists (typ a), (clo a). *)
+(*           split; econstructor; eauto using in_app_weak, in_app_weak'. } *)
+(*       specialize (Hwf ty ck Hty Hck); destruct Hwf as (_ & Hcl & Hsf). *)
+(*       unfold cl_DS in *. *)
+(*       eapply AC_le_abss, Ole_trans, denot_clock_bs_abs; eauto. } *)
+(*     { (* sinon *) *)
+(*       apply mem_ident_false in Hmem2. *)
+(*       rewrite in_app_iff in Hmem2. *)
+(*       destruct (Hout x) as [->]; eauto. *)
+(*     } *)
+(*   - apply wf_env_rem in Hwf; rewrite rem_bss in Hwf. *)
+(*     apply IHk in Hwf; auto. *)
+(*     + now rewrite nrem_rem_env in Hwf. *)
+(*     + intros; rewrite REM_env_eq, Hin, rem_eq_bot; auto. *)
+(*     + intros; rewrite REM_env_eq. *)
+(*       rewrite (Hout x), rem_eq_bot; auto. *)
+(*     + now rewrite nrem_rem_env. *)
+(* Qed. *)
 
 (** TEST : la même chose mais un peu plus fort, renommer en abs_aligned  *)
 
@@ -2517,6 +2356,7 @@ Proof.
   now apply fcont_app_le_compat.
 Qed.
 
+(* TDOO: sans restr? *)
 Lemma wf_alignLE :
   forall G,
     restr_global G ->
@@ -2529,9 +2369,9 @@ Lemma wf_alignLE :
     abs_alignLE envI (denot_global G f envI).
 Proof.
   intros * Hrg ?? Hfind ??? Hwf k.
-  pose proof (Hr := restr_global_find _ _ _ Hrg Hfind).
-  pose proof (Hin := denot_in G f n Hfind Hr envI).
-  pose proof (Hout := not_out_abs G f n Hfind Hr envI).
+  (* pose proof (Hr := restr_global_find _ _ _ Hrg Hfind). *)
+  pose proof (Hin := denot_in G f n Hfind envI).
+  pose proof (Hout := not_out_bot G f n Hfind envI).
   revert Hin Hout Hwf.
   generalize (denot_global G f envI) as env.
   revert envI.
@@ -2574,7 +2414,6 @@ Proof.
       rewrite (Hout x), rem_eq_bot; auto.
     + now rewrite nrem_rem_env.
 Qed.
-
 
 End WTF.
 
@@ -3677,10 +3516,10 @@ Ltac gen_infinite_exp :=
   match goal with
   | |- context [ infinite_exp ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ] =>
       generalize (infinite_exp H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13) as f
-  | |- context [ infinite_exps ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ] =>
-      generalize (infinite_exps H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13) as f
-  | |- context [ infinite_expss ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ?H14 ?H15 ] =>
-      generalize (infinite_expss H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13 H14 H15) as f
+  | |- context [ infinite_exps ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ?H14 ] =>
+      generalize (infinite_exps H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13 H14) as f
+  | |- context [ infinite_expss ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ?H12 ?H13 ?H14 ?H15 ?H16 ] =>
+      generalize (infinite_expss H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13 H14 H15 H16) as f
   end).
 
 (* Isole un terme [denot_exp ...] dans une égalisé [Hse] afin de pouvoir
@@ -4113,6 +3952,7 @@ Proof.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
     take (Forall restr_exp _) and rewrite map_map in it.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_concat in it.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
     eapply Smerge_alt2 with (d:= (Streams.const absent)) in H0; simpl; eauto.
@@ -4138,6 +3978,7 @@ Proof.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
     take (Forall restr_exp _) and rewrite map_map in it.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_concat in it.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
     revert Infe (* He *) Hs H0. (* TODO: comparer avec HEAD pour voir pourquoi le problème n'apparaissait pas avant *)
@@ -4160,7 +4001,7 @@ Proof.
     apply wt_exp_wx_exp in Hwt as Hwx.
     inv Hwt. inv Hwc. inv Hoc.
     inv Hwl. inv Hwx.
-    take (restr_exp e) and eapply safe_exp_ in it as HH; eauto using wf_env_0_ext, wf_env_loc.
+    take (wt_exp _ _ e) and eapply safe_exp_ in it as HH; eauto using wf_env_0_ext, wf_env_loc.
     destruct HH as (Tye & _&_). (* on en aura besoin pour prouver wt_streams *)
     take (restr_exp e) and unshelve eapply IHe in it as He; eauto using infinite_exp; clear IHe.
     rewrite <- Forall_map, <- Forall_concat in *.
@@ -4170,6 +4011,7 @@ Proof.
     apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0, H1; auto.
     rewrite Forall_concat, Forall_map in H36, H40. (* pour Forall wl & wx... *)
+    apply Forall_concat in H7. (* Forall (Forall restr)) *)
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
     unshelve eapply sem_sub_exps in H1 as (vd & Eqvd & Semd); eauto using infinite_exps.
     revert Infe Hs Tye H0 Semd Eqvd.
@@ -4308,6 +4150,7 @@ Proof.
     eapply ok_vars_equation; eauto.
   Unshelve.
   { eapply infinite_exp; eauto.
+    constructor; auto.
     eapply wt_exp_wx_exp; econstructor; eauto.
     eapply wt_exp_wl_exp; econstructor; eauto. }
   { eapply infinite_exps; eauto.
@@ -4424,25 +4267,23 @@ Proof.
     erewrite nth_np_of_env; auto.
   - (* sem_block *)
     apply sem_block_cons'; eauto using find_node_not_Is_node_in, find_node_now.
-    inv Wc. inv Wt. inv Hr.
+    inv Wc. inv Wt.
+    inversion_clear Hr as [?? Hrtb (? & Vdc & Perm)].
+    inv Hrtb.
     constructor.
-
     unfold op_correct in Hoc.
-    pose proof (n_syn n).
     pose proof (n_nodup n) as [Nd Ndl].
     take (_ = n_block n) and rewrite <- it in *.
     take (wt_block _ _ _) and inv it.
     take (wt_scope _ _ _ _) and inv it.
     take (wc_block _ _ _) and inv it.
     take (wc_scope _ _ _ _) and inv it.
-    take (nolocal _ _) and inversion_clear it as [??? Nl (?& Vdc & Perm)].
-    inv Nl.
     inv Vdc.
     take (VarsDefinedCompScope _ _ _) and inversion_clear it as [??? (?& Vd & Perm2)].
     inv Ndl.
     take (NoDupScope _ _ _) and inversion_clear it as [??????].
 
-    assert (Hdom : dom_lb Hn (senv_of_decls vars)). {
+    assert (Hdom : dom_lb Hn (senv_of_decls locs)). {
       split; intros y Hl.
       - assert (IsVar Γ y)
           by (unfold Γ; rewrite <- it, 2 IsVar_app; simpl; tauto).
@@ -4454,7 +4295,7 @@ Proof.
     }
 
     (* on extrait les variables locales *)
-    apply Sscope with (Hi' := restrict Hn (senv_of_decls vars)).
+    apply Sscope with (Hi' := restrict Hn (senv_of_decls locs)).
     { (* dom *) apply dom_restrict, Hdom. }
     unfold H.
     rewrite union_restrict.
@@ -4478,7 +4319,7 @@ Proof.
     take (_ = n_block n) and rewrite <- it, <- app_assoc in *.
     simpl (get_locals _) in *; intros.
     (* maintenant c'est ok *)
-    eapply ok_sem_blocks in Hco; eauto 2 using NoDup_vars_ins.
+    eapply ok_sem_blocks in Hco; eauto 2 using NoDup_get_defined.
     unfold envn at 1.
     now rewrite FIXP_eq, denot_node_eq, denot_top_block_eq, <- it at 1.
 Qed.
@@ -4517,7 +4358,7 @@ Proof.
   unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
-  pose proof (SafeG := noerrors_prog G Rg Wtg Wcg Ocg).
+  pose proof (SafeG := noerrors_prog G Wtg Wcg Ocg).
   pose proof (Halign := wf_alignLE G Rg).
   remember (denot_global G) as envG eqn:HG.
   assert (InfG : forall f nd envI,
@@ -4692,11 +4533,12 @@ Module SdtorelFun
        (Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
        (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
-       (Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
+       (Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
+       (Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
        (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
        (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
        (Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
        (Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den)
-<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
-  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Inf OpErr Safe Abs Lp.
+<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf OpErr Safe Abs Lp.
+  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf OpErr Safe Abs Lp.
 End SdtorelFun.

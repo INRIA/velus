@@ -14,6 +14,9 @@ From Velus Require Import Cpo SDfuns CommonDS.
     This file introduces the [op_correct] predicate that describes the (minimal?)
     set of assumptions required on a Lustre program for its denotation to be
     free of [error_Op].
+
+
+TODO !!!!!!!!!!! OpErr ne doit pas être un autre restr !!!! faire un truc plus souple
  *)
 
 Module Type OP_ERR

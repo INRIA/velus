@@ -35,34 +35,17 @@ Module Type LDENOTSAFE
        (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
        (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den).
 
-  (* TODO: déjà dans InftyProof *)
-  Lemma Is_defined_in_dec :
-    forall x blk,
-      restr_block blk ->
-      Decidable.decidable (Syn.Is_defined_in x blk).
-  Proof.
-    intros * Hr; inv Hr.
-    - (* Beq *)
-      destruct x.
-      + (* Var *)
-        destruct (ListDec.In_decidable decidable_eq_ident x xs) as [Hin|Hnin].
-        * left; constructor; auto.
-        * right; contradict Hnin; now inv Hnin.
-      + (* Last *)
-        right; intro HH; inv HH.
-  Qed.
-
-  (* TODO: move to Vélus ? *)
-  Lemma typeof_same :
-    forall es ty,
-      Forall (fun e => typeof e = [ty]) es ->
-      Forall (eq ty) (typesof es).
-  Proof.
-    induction es; simpl; intros * Hf; auto.
-    inv Hf.
-    apply Forall_app; split; auto.
-    take (typeof _ = _) and rewrite it; auto.
-  Qed.
+(* TODO: move to Vélus ? *)
+Lemma typeof_same :
+  forall es ty,
+    Forall (fun e => typeof e = [ty]) es ->
+    Forall (eq ty) (typesof es).
+Proof.
+  induction es; simpl; intros * Hf; auto.
+  inv Hf.
+  apply Forall_app; split; auto.
+  take (typeof _ = _) and rewrite it; auto.
+Qed.
 
 Section Static_env_node.
 
@@ -207,99 +190,6 @@ Section Static_env_node.
     exists (x,(ty,ck,i,o)); auto. auto.
   Qed.
 
-  Lemma NoDup_senv_loc :
-    forall (nd : node) vars blks,
-      n_block nd = Blocal (Scope vars blks) ->
-      NoDupMembers (senv_of_ins (n_in nd) ++ senv_of_decls (n_out nd) ++ senv_of_decls vars).
-  Proof.
-    intros * Hn.
-    pose proof (n_nodup nd) as [Nd Ndl].
-    rewrite Hn in Ndl; inv Ndl.
-    take (NoDupScope _ _ _) and inversion_clear it as [???? ndm Hf].
-    rewrite fst_NoDupMembers, 2 map_app, map_fst_senv_of_ins, 2 map_fst_senv_of_decls.
-    rewrite app_assoc.
-    apply fst_NoDupMembers in ndm.
-    apply NoDup_app'_iff; repeat split; auto.
-    setoid_rewrite fst_InMembers in Hf.
-    simpl_Forall.
-    contradict Hf; eauto.
-  Qed.
-
-  (* TODO: définition un peu foireuse, qui doit correspondre aux
-     inversions de wt_block... *)
-  Definition get_locals (blk : block) : static_env :=
-    match blk with
-    | Blocal (Scope vars _) => senv_of_decls vars
-    | _ => []
-    end.
-
-  Corollary NoDup_iol :
-    forall (n : node),
-      NoDupMembers (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n)).
-  Proof.
-    intro.
-    pose proof (node_NoDupMembers n) as ND.
-    destruct (n_block n) eqn:Hn; simpl; try rewrite app_nil_r; auto.
-    destruct s.
-    apply NoDup_senv_loc in Hn; auto.
-  Qed.
-
-  Fixpoint get_defined (blk : block) : list ident :=
-    match blk with
-    | Beq (xs,es) => xs
-    | Blocal (Scope vars blks) => flat_map get_defined blks
-    | _ => []
-    end.
-
-  Lemma NoDup_vars_ins :
-    forall (nd : node) vars blks,
-      Forall restr_block blks ->
-      n_block nd = Blocal (Scope vars blks) ->
-      NoDup (flat_map get_defined blks ++ List.map fst (n_in nd)).
-  Proof.
-    intros * Hr Hn.
-    apply NoDup_senv_loc in Hn as ndm.
-    pose proof (n_defd nd) as (outs & Vd & Perm).
-    rewrite Hn in Vd.
-    inv Vd. Syn.inv_scope.
-    rewrite Perm in H0.
-    assert (Permutation (List.map fst (concat x)) (flat_map get_defined blks)) as <-.
-    { clear - H Hr.
-      induction H; inv Hr; simpl; auto.
-      rewrite map_app.
-      apply Permutation_app; auto.
-      take (restr_block _) and inv it.
-      inv H; simpl in *; subst.
-      reflexivity.
-    }
-    rewrite Permutation_app_comm, H0, <- map_fst_senv_of_ins, <- map_app.
-    now rewrite <- fst_NoDupMembers.
-  Qed.
-
-  Lemma nin_defined :
-    forall (n : node) vars blks x,
-      n_block n = Blocal (Scope vars blks) ->
-      In x (List.map fst (senv_of_decls (n_out n) ++ senv_of_decls vars)) ->
-      List.Exists (Is_defined_in (Var x)) blks.
-  Proof.
-    intros * Hn Hxin.
-    pose proof (n_nodup n) as (Nd & Ndl).
-    pose proof (n_defd n) as (?& Vd & Perm).
-    rewrite Hn in Vd, Ndl.
-    inv Ndl; take (NoDupScope _ _ _) and inv it.
-    inv Vd; Syn.inv_scope.
-    eapply Forall_VarsDefined_Is_defined; eauto.
-    + take (Permutation (concat _) _) and rewrite it.
-      take (Permutation x0 _) and rewrite it.
-      rewrite map_app, 2 map_fst_senv_of_decls.
-      simpl_Forall.
-      eapply NoDupLocals_incl; eauto.
-      solve_incl_app.
-    + take (Permutation (concat _) _) and rewrite it.
-      take (Permutation x0 _) and rewrite it.
-      rewrite fst_InMembers; auto.
-  Qed.
-
 End Static_env_node.
 
 
@@ -405,6 +295,22 @@ Section SDfuns_safe.
       /\ cl_DS ck s
       /\ safe_DS s.
 
+  (* on peut séparer wf_env en trois propositions pour faciliter
+     le découpage des preuves *)
+  Definition ty_env :=
+    (forall x ty, HasType Γ x ty -> ty_DS ty (denot_var ins envI env x)).
+  Definition cl_env :=
+    (forall x ck, HasClock Γ x ck -> cl_DS ck (denot_var ins envI env x)).
+  Definition ef_env :=
+    (forall x ty, HasType Γ x ty -> safe_DS (denot_var ins envI env x)).
+
+  Lemma wf_env_decompose : (ty_env /\ cl_env /\ ef_env) <-> wf_env.
+  Proof.
+    unfold wf_env, ty_env, cl_env, ef_env. split.
+    - intros * (Ty & Cl&  Ef ) * Hty Hcl. repeat split; eauto.
+    - intro H. repeat split; intros * HH; inv HH.
+      all: edestruct H as (?&?&?); eauto; econstructor; eauto.
+  Qed.
 
   (** Quelques résultats du type : qui peut le plus, peut le moins *)
 
@@ -1855,6 +1761,304 @@ Proof.
   - rewrite Eq1, Eq3, Eq2; auto.
 Qed.
 
+(** ** Faits sur denot_var et denot_clock  *)
+
+Lemma app_denot_var :
+  forall ins envI1 envI2 env1 env2 x,
+    app (denot_var ins envI1 env1 x) (denot_var ins envI2 env2 x)
+    == denot_var ins (APP_env envI1 envI2) (APP_env env1 env2) x.
+Proof.
+  clear.
+  intros.
+  unfold denot_var; cases.
+Qed.
+
+Lemma rem_denot_var :
+  forall ins envI env x,
+    rem (denot_var ins envI env x)
+    == denot_var ins (REM_env envI) (REM_env env) x.
+Proof.
+  unfold denot_var; intros; cases.
+Qed.
+
+Lemma rem_denot_clock :
+  forall ins envI bs env ck,
+    rem (denot_clock ins envI bs env ck)
+    == denot_clock ins (REM_env envI) (rem bs) (REM_env env) ck.
+Proof.
+  induction ck as [| ??? []]; simpl; auto.
+  now rewrite rem_zip, IHck, rem_denot_var.
+Qed.
+
+Lemma denot_clock_app :
+  forall ins envI1 envI2 bs1 bs2 env1 env2 ck,
+    denot_clock ins (APP_env envI1 envI2) (app bs1 bs2) (APP_env env1 env2) ck
+    == app (denot_clock ins envI1 bs1 env1 ck) (denot_clock ins envI2 bs2 env2 ck).
+Proof.
+  induction ck as [|??? []]; simpl; auto.
+  now rewrite zip_app, IHck, app_denot_var.
+Qed.
+
+
+(** ** Faits sur wf_env  *)
+
+Lemma wf_env_rem :
+  forall Γ ins envI bs env,
+    wf_env Γ ins envI bs env ->
+    wf_env Γ ins (REM_env envI) (rem bs) (REM_env env).
+Proof.
+  unfold wf_env.
+  intros * Hco ??? Hty Hcl.
+  destruct (Hco _ _ _ Hty Hcl) as (Ty & Cl & Sf); clear Hco.
+  unfold ty_DS, cl_DS, safe_DS, DSForall_pres in *.
+  rewrite <- rem_denot_var, <- rem_denot_clock, <- rem_AC.
+  auto using DSForall_rem.
+Qed.
+
+Lemma wf_env_APP_ :
+  forall Γ ins envI1 envI2 bs1 bs2 env1 env2,
+    wf_env Γ ins envI1 bs1 env1 ->
+    wf_env Γ ins envI2 bs2 env2 ->
+    wf_env Γ ins (APP_env envI1 envI2) (app bs1 bs2) (APP_env env1 env2).
+Proof.
+  intros * Co1 Co2.
+  intros x ty ck Hty Hck.
+  destruct (Co1 _ _ _ Hty Hck) as (Ty1 & Cl1 & Sf1).
+  destruct (Co2 _ _ _ Hty Hck) as (Ty2 & Cl2 & Sf2).
+  unfold denot_var in *.
+  rewrite 2 APP_env_eq.
+  repeat split.
+  - (* ty *)
+    unfold ty_DS, DSForall_pres in *.
+    cases; apply DSForall_app; auto.
+  - (* cl *)
+    unfold cl_DS, AC in *.
+    rewrite denot_clock_app, MAP_map in *.
+    cases; rewrite app_map in *; auto.
+  - (* Sf *)
+    unfold safe_DS in *.
+    cases; apply DSForall_app; auto.
+Qed.
+
+Corollary wf_env_APP :
+  forall Γ ins envI bs env1 env2,
+    wf_env Γ ins envI bs env1 ->
+    wf_env Γ ins (REM_env envI) (rem bs) env2 ->
+    wf_env Γ ins envI bs (APP_env env1 env2).
+Proof.
+  intros * Co1 Co2.
+  rewrite <- app_rem.
+  rewrite <- (app_rem_env envI).
+  apply wf_env_APP_; auto.
+Qed.
+
+Section wf_var.
+
+  (** [wf_env] n'étant pas un prédicat co-inductif, il est impossible
+      de raisonner directement dessus avec la tactique cofix. (Typiquement,
+      pour "attendre" un [Con] sur le flot de la condition de reset).
+
+      On introduit donc le prédicat co-inductif [wf_var] et on montre
+      qu'il est équivalent à [wf_env] s'il tient pour chaque variable
+      de l'environment (cf. [wfv_wfe] et [wfe_wfv]).
+   *)
+  (* FIXME: c'est quand même un peu lourd comme procédé, et pas très pratique.
+     Comment faire plus simplement ?*)
+
+  CoInductive wf_var ty ck ins : DS_prod SI -> DS bool -> DS_prod SI -> DS (sampl value) -> Prop :=
+  | wfvEps :
+    forall envI bs env s,
+      wf_var ty ck ins envI bs env s ->
+      wf_var ty ck ins envI bs env (Eps s)
+  | wfvCon :
+    forall envI bs env x s,
+      wf_var ty ck ins (REM_env envI) (rem bs) (REM_env env) s ->
+      first (AC (cons x s)) <= first (denot_clock ins envI bs env ck) ->
+      (match x with
+       | pres v => wt_value v ty
+       | abs => True
+       | err _ => False
+       end) ->
+      wf_var ty ck ins envI bs env (cons x s).
+
+  Global Add Parametric Morphism ty ck ins : (wf_var ty ck ins)
+         with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==>
+                          @Oeq (DS_prod SI) ==> @Oeq (DS (sampl value)) ==> Basics.impl
+           as wfv_morph.
+  Proof.
+    clear.
+    cofix Cof; intros * Eq1 ?? Eq2 ?? Eq3 ?? Eq4 Hwfv.
+    destruct y2.
+    { constructor.
+      rewrite <- eqEps in Eq4.
+      eapply Cof; eauto. }
+    constructor.
+    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+      eapply Cof.
+      rewrite <- Eq1; reflexivity.
+      rewrite <- Eq2; reflexivity.
+      rewrite <- Eq3; reflexivity.
+      rewrite Hy; reflexivity.
+      revert dependent x2.
+      induction k; simpl; intros; subst.
+      + inv Hwfv; auto.
+      + eapply IHk in Hk; eauto.
+        destruct x2; simpl; auto.
+        now inv Hwfv.
+    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+      rewrite <- Eq1, <- Eq2, <- Eq3.
+      revert dependent x2.
+      induction k; intros; simpl in Hk; subst.
+      + inv Hwfv.
+        rewrite AC_cons, first_cons in *; auto.
+      + eapply IHk in Hk; eauto.
+        destruct x2; simpl; auto.
+        now inv Hwfv.
+    - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
+      revert dependent x2.
+      induction k; intros; simpl in Hk; subst.
+      + now inv Hwfv.
+      + eapply IHk in Hk; eauto.
+        destruct x2; simpl; auto.
+        now inv Hwfv.
+  Qed.
+
+  Lemma wfv_spec1 :
+    forall ins envI bs env,
+    forall ty ck xs,
+      wf_var ty ck ins envI bs env xs ->
+      ty_DS ty xs /\ safe_DS xs.
+  Proof.
+    clear.
+    intros * Hwfv.
+    unfold safe_DS, ty_DS, DSForall_pres.
+    repeat split.
+    - (* ty *)
+      revert dependent xs.
+      revert envI bs env.
+      cofix Cof; intros.
+      destruct xs; inv Hwfv.
+      + constructor; eauto.
+      + constructor; [cases|]; eauto.
+    - (* sf *)
+      revert dependent xs.
+      revert envI bs env.
+      cofix Cof; intros.
+      destruct xs; inv Hwfv.
+      + constructor; eauto.
+      + constructor.
+        * destruct s; tauto.
+        * eapply Cof; eauto.
+  Qed.
+
+  Lemma wfv_spec2 :
+    forall ins envI bs env,
+    forall ty ck xs,
+      wf_var ty ck ins envI bs env xs ->
+      cl_DS ins envI bs env ck xs.
+  Proof.
+    intros * Hwfv.
+    unfold cl_DS.
+    eapply DSle_rec_eq2 with
+      (R := fun U V => exists xs envI bs env,
+                wf_var ty ck ins envI bs env xs
+                /\ U == AC xs
+                /\ V == denot_clock ins envI bs env ck
+      ).
+    3: eauto 8.
+    { intros ???? (?&?&?&?&?&?&?) ??.
+      do 5 esplit; eauto. }
+    clear.
+    intros U V Hc (xs & envI & bs & env & Hwfv & Hu & Hv).
+    destruct (@is_cons_elim _ xs) as (vx & xs' & Hx).
+    { apply AC_is_cons; now rewrite <- Hu. }
+    rewrite Hx in Hu, Hwfv.
+    inversion_clear Hwfv as [|????? Wfv Le Hm].
+    rewrite AC_cons, first_cons in *.
+    apply DSle_cons_elim in Le as HH.
+    destruct HH as (t & Hf & _).
+    apply first_cons_elim in Hf as HH.
+    destruct HH as (w & Hw & Ht).
+    rewrite Ht in Hf.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    split.
+    - now rewrite first_cons, Hf.
+    - setoid_rewrite rem_denot_clock.
+      rewrite rem_cons.
+      do 5 esplit; eauto.
+  Qed.
+
+  Lemma wfv_wfe :
+    forall Γ ins envI bs env,
+      (forall x ty ck,
+          HasType Γ x ty ->
+          HasClock Γ x ck ->
+          let s := denot_var ins envI env x in
+          wf_var ty ck ins envI bs env s) ->
+      wf_env Γ ins envI bs env.
+  Proof.
+    intros * Hwfv x ty ck Hty Hck.
+    eapply wfv_spec1 in Hwfv as ?; eauto.
+    eapply wfv_spec2 in Hwfv as ?; eauto.
+    simpl; tauto.
+  Qed.
+
+  Lemma wfe_wfv_ :
+    forall ins envI bs env,
+    forall ty ck s,
+      ty_DS ty s /\ cl_DS ins envI bs env ck s /\ safe_DS s ->
+      wf_var ty ck ins envI bs env s.
+  Proof.
+    intros *  (Ty & Cl & Sf).
+    revert Ty Cl Sf.
+    revert envI bs env s.
+    clear.
+    unfold cl_DS, ty_DS, DSForall_pres.
+    cofix Cof; intros.
+    destruct s; constructor.
+    - rewrite <- eqEps in *; eauto.
+    - apply rem_le_compat in Cl.
+      rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
+      inv Sf. inv Ty.
+      eauto.
+    - apply first_le_compat in Cl.
+      rewrite AC_cons in *; auto.
+    - inv Sf. inv Ty.
+      cases.
+  Qed.
+
+  Lemma wfe_wfv :
+    forall Γ ins envI bs env,
+      wf_env Γ ins envI bs env ->
+      (forall x ty ck,
+          HasType Γ x ty ->
+          HasClock Γ x ck ->
+          let s := denot_var ins envI env x in
+          wf_var ty ck ins envI bs env s).
+  Proof.
+    intros * Hwf ??? Hty Hcl; simpl.
+    destruct (Hwf _ _ _ Hty Hcl) as (Ty & Cl & Sf).
+    revert Ty Cl Sf.
+    clear.
+    generalize (denot_var ins envI env x) as xs.
+    revert envI bs env.
+    unfold cl_DS, ty_DS, DSForall_pres.
+    cofix Cof; intros.
+    destruct xs; constructor.
+    - rewrite <- eqEps in *; eauto.
+    - apply rem_le_compat in Cl.
+      rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
+      inv Sf. inv Ty.
+      eauto.
+    - apply first_le_compat in Cl.
+      rewrite AC_cons in *; auto.
+    - inv Sf. inv Ty.
+      cases.
+  Qed.
+
+End wf_var.
+
 
 (** ** Continuous alternatives of [denot_var] and [denot_clock],
     sometimes useful to deal with the ordering properties *)
@@ -2161,6 +2365,76 @@ Section SubClock.
 End SubClock.
 
 
+(** ** Traitement de l'horloge de base *)
+
+Lemma sub_clock_bss :
+  forall l bs (env : DS_prod SI),
+    l <> [] ->
+    (forall x, In x l -> sub_clock bs (AC (env x))) ->
+    sub_clock bs (bss l env).
+Proof.
+  induction l as [| x [| y l]]; intros * Hnil Hsub.
+  - congruence.
+  - apply Hsub. now constructor.
+  - rewrite bss_cons2.
+    apply sub_clock_orb.
+    + apply Hsub. now constructor.
+    + apply IHl. congruence.
+      { intros. apply Hsub. simpl in *. tauto. }
+Qed.
+
+(* ressemble à LClockedSemantics.sc_parent *)
+Lemma bss_sub :
+  forall l (env : DS_prod SI) bs,
+    (exists x, In x l /\ (AC (env x) <= bs)) ->
+    (forall x, In x l -> sub_clock bs (AC (env x))) ->
+    bss l env <= bs.
+Proof.
+  induction l as [| y [| z l]]; intros * (x & Hin & Hx) Hsub.
+  - destruct Hin.
+  - destruct Hin as [|HH]; subst; auto; inv HH.
+  - rewrite bss_cons2.
+    destruct Hin as [|Hin]; subst.
+    + apply orb_sub_clock; auto.
+      apply sub_clock_bss. congruence.
+      { intros. apply Hsub. simpl in *. tauto. }
+    + rewrite zip_comm; auto using Bool.orb_comm.
+      apply orb_sub_clock.
+      * apply Hsub. simpl. tauto.
+      * apply IHl; eauto.
+        { intros. apply Hsub. simpl in *. tauto. }
+Qed.
+
+Lemma bss_le_bs :
+  forall (n : node) env bs,
+    let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+    wc_env (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
+    cl_env Γ (idents (n_in n)) env bs 0 ->
+    bss (idents (n_in n)) env <= bs.
+Proof.
+  intros * WCin Hcl.
+  apply bss_sub.
+  - pose proof (wc_env_has_Cbase _ WCin) as [i Hin].
+    { rewrite map_length. exact (n_ingt0 n). }
+    assert (In i (idents (n_in n))) as Hi by (unfold idents; solve_In).
+    exists i; split; auto.
+    specialize (Hcl i Cbase).
+    unfold cl_DS, denot_var in Hcl.
+    rewrite (proj2 (mem_ident_spec _ _) Hi) in Hcl.
+    simpl_In.
+    eapply Hcl, HasClock_app; eauto using senv_HasClock.
+  - intros x Hin.
+    simpl_In.
+    specialize (Hcl x c).
+    unfold cl_DS, denot_var in Hcl.
+    rewrite (proj2 (mem_ident_spec _ _)) in Hcl.
+    2: unfold idents; solve_In.
+    eapply sub_clock_le.
+    eapply Hcl, HasClock_app; eauto using senv_HasClock.
+    apply sub_clock_bs.
+Qed.
+
+
 Section Node_safe.
 
   Variables
@@ -2211,7 +2485,7 @@ Section Node_safe.
                         | None => True end)
         (nclockof e) (list_of_nprod ss).
   Proof.
-    intros. subst ss.
+    intros; subst ss.
     (* on détruit les paires, c'est parfois utile *)
     destruct e; repeat match goal with p:(_*_)|- _ => destruct p end.
     all: simpl; simpl_Forall; auto.
@@ -2238,28 +2512,6 @@ Section Node_safe.
     apply Forall2_app; auto using basilus_nclockus.
   Qed.
 
-
-  (* on peut séparer wf_env en trois propositions pour faciliter
-     le découpage des preuves *)
-  Definition ty_env Γ ins (envI env : DS_prod SI) :=
-    (forall x ty, HasType Γ x ty -> ty_DS ty (denot_var ins envI env x)).
-  Definition cl_env Γ ins envI bs env :=
-    (forall x ck, HasClock Γ x ck -> cl_DS ins envI bs env ck (denot_var ins envI env x)).
-  Definition ef_env Γ ins (envI env : DS_prod SI) :=
-    (forall x ty, HasType Γ x ty -> safe_DS (denot_var ins envI env x)).
-
-  Lemma wf_env_decompose :
-    forall Γ ins envI bs env,
-      (ty_env Γ ins envI env
-       /\ cl_env Γ ins envI bs env
-       /\ ef_env Γ ins envI env)
-      <-> wf_env Γ ins envI bs env.
-  Proof.
-    unfold wf_env, ty_env, cl_env, ef_env. split.
-    - intros * (Ty & Cl&  Ef ) * Hty Hcl. repeat split; eauto.
-    - intro H. repeat split; intros * HH; inv HH.
-      all: edestruct H as (?&?&?); eauto; econstructor; eauto.
-  Qed.
 
   (** ** Traitement des instanciations de nœuds  *)
 
@@ -2555,174 +2807,8 @@ Section Node_safe.
     * apply ef_env_inst; eauto.
   Qed.
 
-  (** ** Traitement de l'horloge de base *)
-
-  Lemma sub_clock_bss :
-    forall l bs (env : DS_prod SI),
-      l <> [] ->
-      (forall x, In x l -> sub_clock bs (AC (env x))) ->
-      sub_clock bs (bss l env).
-  Proof.
-    clear.
-    induction l as [| x [| y l]]; intros * Hnil Hsub.
-    - congruence.
-    - apply Hsub. now constructor.
-    - rewrite bss_cons2.
-      apply sub_clock_orb.
-      + apply Hsub. now constructor.
-      + apply IHl. congruence.
-        { intros. apply Hsub. simpl in *. tauto. }
-  Qed.
-
-  (* ressemble à LClockedSemantics.sc_parent *)
-  Lemma bss_sub :
-    forall l (env : DS_prod SI) bs,
-      (exists x, In x l /\ (AC (env x) <= bs)) ->
-      (forall x, In x l -> sub_clock bs (AC (env x))) ->
-      bss l env <= bs.
-  Proof.
-    clear.
-    induction l as [| y [| z l]]; intros * (x & Hin & Hx) Hsub.
-    - destruct Hin.
-    - destruct Hin as [|HH]; subst; auto; inv HH.
-    - rewrite bss_cons2.
-      destruct Hin as [|Hin]; subst.
-      + apply orb_sub_clock; auto.
-        apply sub_clock_bss. congruence.
-        { intros. apply Hsub. simpl in *. tauto. }
-      + rewrite zip_comm; auto using Bool.orb_comm.
-        apply orb_sub_clock.
-        * apply Hsub. simpl. tauto.
-        * apply IHl; eauto.
-          { intros. apply Hsub. simpl in *. tauto. }
-  Qed.
-
-  Lemma bss_le_bs :
-    forall (n : node) env bs,
-      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-      wc_env (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
-      cl_env Γ (idents (n_in n)) env bs 0 ->
-      bss (idents (n_in n)) env <= bs.
-  Proof.
-    clear.
-    intros * WCin Hcl.
-    apply bss_sub.
-    - pose proof (wc_env_has_Cbase _ WCin) as [i Hin].
-      { rewrite map_length. exact (n_ingt0 n). }
-      assert (In i (idents (n_in n))) as Hi by (unfold idents; solve_In).
-      exists i; split; auto.
-      specialize (Hcl i Cbase).
-      unfold cl_DS, denot_var in Hcl.
-      rewrite (proj2 (mem_ident_spec _ _) Hi) in Hcl.
-      simpl_In.
-      eapply Hcl, HasClock_app; eauto using senv_HasClock.
-    - intros x Hin.
-      simpl_In.
-      specialize (Hcl x c).
-      unfold cl_DS, denot_var in Hcl.
-      rewrite (proj2 (mem_ident_spec _ _)) in Hcl.
-      2: unfold idents; solve_In.
-      eapply sub_clock_le.
-      eapply Hcl, HasClock_app; eauto using senv_HasClock.
-      apply sub_clock_bs.
-  Qed.
-
 
   (** ** Traitement du reset *)
-
-  (** Pour raisonner sur la définition de [sreset_aux], on a besoin
-      de quelques résultats sur la combinaison d'environments via
-      [REM_env] et [APP_env]. *)
-
-  Lemma rem_denot_var :
-    forall ins envI env x,
-      rem (denot_var ins envI env x)
-      == denot_var ins (REM_env envI) (REM_env env) x.
-  Proof.
-    unfold denot_var; intros; cases.
-  Qed.
-
-  Lemma rem_denot_clock :
-    forall ins envI bs env ck,
-      rem (denot_clock ins envI bs env ck)
-      == denot_clock ins (REM_env envI) (rem bs) (REM_env env) ck.
-  Proof.
-    induction ck as [| ??? []]; simpl; auto.
-    now rewrite rem_zip, IHck, rem_denot_var.
-  Qed.
-
-  Lemma wf_env_rem :
-    forall Γ ins envI bs env,
-      wf_env Γ ins envI bs env ->
-      wf_env Γ ins (REM_env envI) (rem bs) (REM_env env).
-  Proof.
-    clear.
-    unfold wf_env.
-    intros * Hco ??? Hty Hcl.
-    destruct (Hco _ _ _ Hty Hcl) as (Ty & Cl & Sf); clear Hco.
-    unfold ty_DS, cl_DS, safe_DS, DSForall_pres in *.
-    rewrite <- rem_denot_var, <- rem_denot_clock, <- rem_AC.
-    auto using DSForall_rem.
-  Qed.
-
-  Lemma denot_var_app :
-    forall ins envI1 envI2 env1 env2 x,
-      app (denot_var ins envI1 env1 x) (denot_var ins envI2 env2 x)
-      == denot_var ins (APP_env envI1 envI2) (APP_env env1 env2) x.
-  Proof.
-    clear.
-    intros.
-    unfold denot_var; cases.
-  Qed.
-
-  Lemma denot_clock_app :
-    forall ins envI1 envI2 bs1 bs2 env1 env2 ck,
-      denot_clock ins (APP_env envI1 envI2) (app bs1 bs2) (APP_env env1 env2) ck
-      == app (denot_clock ins envI1 bs1 env1 ck) (denot_clock ins envI2 bs2 env2 ck).
-  Proof.
-    clear.
-    induction ck as [|??? []]; simpl; auto.
-    now rewrite zip_app, IHck, denot_var_app.
-  Qed.
-
-  Lemma wf_env_APP_ :
-    forall Γ ins envI1 envI2 bs1 bs2 env1 env2,
-      wf_env Γ ins envI1 bs1 env1 ->
-      wf_env Γ ins envI2 bs2 env2 ->
-      wf_env Γ ins (APP_env envI1 envI2) (app bs1 bs2) (APP_env env1 env2).
-  Proof.
-    clear.
-    intros * Co1 Co2.
-    intros x ty ck Hty Hck.
-    destruct (Co1 _ _ _ Hty Hck) as (Ty1 & Cl1 & Sf1).
-    destruct (Co2 _ _ _ Hty Hck) as (Ty2 & Cl2 & Sf2).
-    unfold denot_var in *.
-    rewrite 2 APP_env_eq.
-    repeat split.
-    - (* ty *)
-      unfold ty_DS, DSForall_pres in *.
-      cases; apply DSForall_app; auto.
-    - (* cl *)
-      unfold cl_DS, AC in *.
-      rewrite denot_clock_app, MAP_map in *.
-      cases; rewrite app_map in *; auto.
-    - (* Sf *)
-      unfold safe_DS in *.
-      cases; apply DSForall_app; auto.
-  Qed.
-
-  Corollary wf_env_APP :
-    forall Γ ins envI bs env1 env2,
-      wf_env Γ ins envI bs env1 ->
-      wf_env Γ ins (REM_env envI) (rem bs) env2 ->
-      wf_env Γ ins envI bs (APP_env env1 env2).
-  Proof.
-    clear.
-    intros * Co1 Co2.
-    rewrite <- app_rem.
-    rewrite <- (app_rem_env envI).
-    apply wf_env_APP_; auto.
-  Qed.
 
   Lemma denot_clock_ins :
     forall ins bs envI env1 env2 ck,
@@ -2753,215 +2839,6 @@ Section Node_safe.
     eapply wc_env_Is_free_in_clock_In in Wci as Hy; eauto using HasClock_senv.
     subst ins; solve_In.
   Qed.
-
-  (* TODO: déplacer la section à côté de wf_env ? *)
-  Section wf_var.
-
-    (** [wf_env] n'étant pas un prédicat co-inductif, il est impossible
-        de raisonner directement dessus avec la tactique cofix. (Typiquement,
-        pour "attendre" un [Con] sur le flot de la condition de reset).
-
-        On introduit donc le prédicat co-inductif [wf_var] et on montre
-        qu'il est équivalent à [wf_env] s'il tient pour chaque variable
-        de l'environment (cf. [wfv_wfe] et [wfe_wfv]).
-     *)
-    (* FIXME: c'est quand même un peu lourd comme procédé, et pas très pratique.
-       Comment faire plus simplement ?*)
-
-    CoInductive wf_var ty ck ins : DS_prod SI -> DS bool -> DS_prod SI -> DS (sampl value) -> Prop :=
-    | wfvEps :
-      forall envI bs env s,
-        wf_var ty ck ins envI bs env s ->
-        wf_var ty ck ins envI bs env (Eps s)
-    | wfvCon :
-      forall envI bs env x s,
-        wf_var ty ck ins (REM_env envI) (rem bs) (REM_env env) s ->
-        first (AC (cons x s)) <= first (denot_clock ins envI bs env ck) ->
-        (match x with
-         | pres v => wt_value v ty
-         | abs => True
-         | err _ => False
-         end) ->
-        wf_var ty ck ins envI bs env (cons x s).
-
-    Global Add Parametric Morphism ty ck ins : (wf_var ty ck ins)
-        with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==>
-                         @Oeq (DS_prod SI) ==> @Oeq (DS (sampl value)) ==> Basics.impl
-          as wfv_morph.
-    Proof.
-      clear.
-      cofix Cof; intros * Eq1 ?? Eq2 ?? Eq3 ?? Eq4 Hwfv.
-      destruct y2.
-      { constructor.
-        rewrite <- eqEps in Eq4.
-        eapply Cof; eauto. }
-      constructor.
-      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-        eapply Cof.
-        rewrite <- Eq1; reflexivity.
-        rewrite <- Eq2; reflexivity.
-        rewrite <- Eq3; reflexivity.
-        rewrite Hy; reflexivity.
-        revert dependent x2.
-        induction k; simpl; intros; subst.
-        + inv Hwfv; auto.
-        + eapply IHk in Hk; eauto.
-          destruct x2; simpl; auto.
-          now inv Hwfv.
-      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-        rewrite <- Eq1, <- Eq2, <- Eq3.
-        revert dependent x2.
-        induction k; intros; simpl in Hk; subst.
-        + inv Hwfv.
-          rewrite AC_cons, first_cons in *; auto.
-        + eapply IHk in Hk; eauto.
-          destruct x2; simpl; auto.
-          now inv Hwfv.
-      - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-        revert dependent x2.
-        induction k; intros; simpl in Hk; subst.
-        + now inv Hwfv.
-        + eapply IHk in Hk; eauto.
-          destruct x2; simpl; auto.
-          now inv Hwfv.
-    Qed.
-
-    Lemma wfv_spec1 :
-      forall ins envI bs env,
-      forall ty ck xs,
-        wf_var ty ck ins envI bs env xs ->
-        ty_DS ty xs /\ safe_DS xs.
-    Proof.
-      clear.
-      intros * Hwfv.
-      unfold safe_DS, ty_DS, DSForall_pres.
-      repeat split.
-      - (* ty *)
-        revert dependent xs.
-        revert envI bs env.
-        cofix Cof; intros.
-        destruct xs; inv Hwfv.
-        + constructor; eauto.
-        + constructor; [cases|]; eauto.
-      - (* sf *)
-        revert dependent xs.
-        revert envI bs env.
-        cofix Cof; intros.
-        destruct xs; inv Hwfv.
-        + constructor; eauto.
-        + constructor.
-          * destruct s; tauto.
-          * eapply Cof; eauto.
-    Qed.
-
-    Lemma wfv_spec2 :
-      forall ins envI bs env,
-      forall ty ck xs,
-        wf_var ty ck ins envI bs env xs ->
-        cl_DS ins envI bs env ck xs.
-    Proof.
-      intros * Hwfv.
-      unfold cl_DS.
-      eapply DSle_rec_eq2 with
-        (R := fun U V => exists xs envI bs env,
-                  wf_var ty ck ins envI bs env xs
-                  /\ U == AC xs
-                  /\ V == denot_clock ins envI bs env ck
-        ).
-      3: eauto 8.
-      { intros ???? (?&?&?&?&?&?&?) ??.
-        do 5 esplit; eauto. }
-      clear.
-      intros U V Hc (xs & envI & bs & env & Hwfv & Hu & Hv).
-      destruct (@is_cons_elim _ xs) as (vx & xs' & Hx).
-      { apply AC_is_cons; now rewrite <- Hu. }
-      rewrite Hx in Hu, Hwfv.
-      inversion_clear Hwfv as [|????? Wfv Le Hm].
-      rewrite AC_cons, first_cons in *.
-      apply DSle_cons_elim in Le as HH.
-      destruct HH as (t & Hf & _).
-      apply first_cons_elim in Hf as HH.
-      destruct HH as (w & Hw & Ht).
-      rewrite Ht in Hf.
-      setoid_rewrite Hu.
-      setoid_rewrite Hv.
-      split.
-      - now rewrite first_cons, Hf.
-      - setoid_rewrite rem_denot_clock.
-        rewrite rem_cons.
-        do 5 esplit; eauto.
-    Qed.
-
-    Lemma wfv_wfe :
-      forall Γ ins envI bs env,
-        (forall x ty ck,
-            HasType Γ x ty ->
-            HasClock Γ x ck ->
-            let s := denot_var ins envI env x in
-            wf_var ty ck ins envI bs env s) ->
-        wf_env Γ ins envI bs env.
-    Proof.
-      intros * Hwfv x ty ck Hty Hck.
-      eapply wfv_spec1 in Hwfv as ?; eauto.
-      eapply wfv_spec2 in Hwfv as ?; eauto.
-      simpl; tauto.
-    Qed.
-
-    Lemma wfe_wfv_ :
-      forall ins envI bs env,
-      forall ty ck s,
-        ty_DS ty s /\ cl_DS ins envI bs env ck s /\ safe_DS s ->
-        wf_var ty ck ins envI bs env s.
-    Proof.
-      intros *  (Ty & Cl & Sf).
-      revert Ty Cl Sf.
-      revert envI bs env s.
-      clear.
-      unfold cl_DS, ty_DS, DSForall_pres.
-      cofix Cof; intros.
-      destruct s; constructor.
-      - rewrite <- eqEps in *; eauto.
-      - apply rem_le_compat in Cl.
-        rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
-        inv Sf. inv Ty.
-        eauto.
-      - apply first_le_compat in Cl.
-        rewrite AC_cons in *; auto.
-      - inv Sf. inv Ty.
-        cases.
-    Qed.
-
-    Lemma wfe_wfv :
-      forall Γ ins envI bs env,
-        wf_env Γ ins envI bs env ->
-        (forall x ty ck,
-            HasType Γ x ty ->
-            HasClock Γ x ck ->
-            let s := denot_var ins envI env x in
-            wf_var ty ck ins envI bs env s).
-    Proof.
-      intros * Hwf ??? Hty Hcl; simpl.
-      destruct (Hwf _ _ _ Hty Hcl) as (Ty & Cl & Sf).
-      revert Ty Cl Sf.
-      clear.
-      generalize (denot_var ins envI env x) as xs.
-      revert envI bs env.
-      unfold cl_DS, ty_DS, DSForall_pres.
-      cofix Cof; intros.
-      destruct xs; constructor.
-      - rewrite <- eqEps in *; eauto.
-      - apply rem_le_compat in Cl.
-        rewrite rem_AC, rem_cons, rem_denot_clock in Cl.
-        inv Sf. inv Ty.
-        eauto.
-      - apply first_le_compat in Cl.
-        rewrite AC_cons in *; auto.
-      - inv Sf. inv Ty.
-        cases.
-    Qed.
-
-  End wf_var.
-
 
   (** FIXME: on voudrait généraliser (envG f) pour sortir de la section
       Node_safe, se concentrer sur la fonction de reset (sans Hnode, Γ, etc.)
@@ -3074,12 +2951,10 @@ Section Node_safe.
       | [ v : _ |- _ ] => specialize (H v)
       end.
 
-
   Lemma safe_exp_ :
     forall Γ ins envI bs env,
     wf_env Γ ins envI bs env ->
     forall (e : exp),
-      restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
       op_correct_exp G ins envG envI bs env e ->
@@ -3089,7 +2964,8 @@ Section Node_safe.
       /\ forall_nprod safe_DS ss.
   Proof.
     intros ????  env Safe.
-    induction e using exp_ind2; intros Hr Hwt Hwc Hoc; inv Hr.
+    induction e using exp_ind2; intros Hwt Hwc Hoc.
+    all: try (now inv Hoc).
     - (* Econst *)
       inv Hwt.
       rewrite denot_exp_eq; simpl; autorewrite with cpodb.
@@ -3109,9 +2985,9 @@ Section Node_safe.
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       find_specialize_in IHe.
-      find_specialize_in H13.
+      find_specialize_in H12.
       rewrite denot_exp_eq.
-      revert IHe H13.
+      revert IHe H12.
       gen_sub_exps.
       take (typeof e = _) and rewrite it.
       take (numstreams e = _) and rewrite it.
@@ -3128,9 +3004,9 @@ Section Node_safe.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       find_specialize_in IHe1.
       find_specialize_in IHe2.
-      specialize (H22 _ _ H11 H12).
+      specialize (H20 _ _ H9 H10).
       rewrite denot_exp_eq.
-      revert IHe1 IHe2 H22.
+      revert IHe1 IHe2 H20.
       gen_sub_exps.
       take (typeof e1 = _) and rewrite it.
       take (typeof e2 = _) and rewrite it.
@@ -3149,7 +3025,6 @@ Section Node_safe.
     - (* Efby *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
-      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H, H0; auto.
@@ -3178,7 +3053,6 @@ Section Node_safe.
     - (* Ewhen *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
@@ -3207,7 +3081,6 @@ Section Node_safe.
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       rewrite <- Forall_map, Forall_concat in *.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
@@ -3239,59 +3112,14 @@ Section Node_safe.
         repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
         take (Forall (eq _) _) and
           eapply Forall2_Forall_eq in it; eauto; now simpl_Forall.
-    - (* Ecase total *)
-      apply wt_exp_wl_exp in Hwt as Hwl.
-      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
-      find_specialize_in IHe.
-      rewrite <- Forall_map, Forall_concat in *.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
-      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
-      apply Forall_and_inv in H as [Wt H'].
-      apply Forall_and_inv in H' as [Wc Sf].
-      rewrite <- Forall_concat in *.
-      apply Forall_ty_expss with (n := length tys) in Wt; auto.
-      apply Forall_cl_expss with (n := length tys) in Wc; auto.
-      apply Forall_denot_expss with (n := length tys) in Sf; auto.
-      rewrite denot_exp_eq.
-      simpl (typeof _); simpl (clockof _).
-      revert IHe Wt Wc Sf.
-      gen_sub_exps.
-      simpl; intros; unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence.
-      destruct IHe as (Tye & Cle & Sfe).
-      take (typeof e = _) and rewrite it in Tye; inv Tye.
-      take (clockof e = _) and rewrite it in Cle; inv Cle.
-      change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
-      (* utile dans les deux dernières branches *)
-      assert (forall_nprod (forall_nprod (cl_DS ins envI bs env nck)) t0).
-      { apply Forall_forall_nprod; simpl_Forall.
-        eapply Forall2_in_right in Wc as (?&?& Hcl); eauto.
-        simpl_Forall; eauto using Forall_forall_nprod, Forall2_Forall_eq. }
-      repeat split.
-      + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
-          by (simpl_Forall; auto).
-        eapply Forall2_Forall_eq in Wt; eauto.
-        eapply Forall2_lift_nprod; eauto using ty_scasev.
-      + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
-        eapply forall_nprod_Forall, forall_lift_nprod; eauto using cl_scasev, map_eq_nnil.
-        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and_iff.
-        apply forall_nprod_and;
-          eauto using Forall_forall_nprod, Forall2_Forall_eq.
-      + eapply forall_lift_nprod; eauto using safe_scasev, map_eq_nnil.
-        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
-        setoid_rewrite <- forall_nprod_and_iff.
-        apply forall_nprod_and;
-          eauto using Forall_forall_nprod, Forall2_Forall_eq.
-    - (* Ecase défaut *)
+    - destruct d as [des|].
+      { (* Ecase défaut *)
       destruct a as [tys nck].
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       set (typesof des) as tys.
       find_specialize_in IHe.
       (* pour les expressions par défaut *)
-      apply Forall_impl_inside with (P := restr_exp) in H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
@@ -3300,7 +3128,6 @@ Section Node_safe.
                                      Sfd % forall_denot_exps (* % forall_nprod_Forall *)].
       (* pour les es *)
       rewrite <- Forall_map with (f := snd), Forall_concat in *.
-      apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
@@ -3350,10 +3177,53 @@ Section Node_safe.
         setoid_rewrite <- forall_nprod_and_iff.
         apply forall_nprod_cons, forall_nprod_and;
           eauto using Forall_forall_nprod, Forall2_Forall_eq.
+      }{ (* Ecase total *)
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      find_specialize_in IHe.
+      rewrite <- Forall_map, Forall_concat in *.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
+      apply Forall_and_inv in H as [Wt H'].
+      apply Forall_and_inv in H' as [Wc Sf].
+      rewrite <- Forall_concat in *.
+      apply Forall_ty_expss with (n := length tys) in Wt; auto.
+      apply Forall_cl_expss with (n := length tys) in Wc; auto.
+      apply Forall_denot_expss with (n := length tys) in Sf; auto.
+      rewrite denot_exp_eq.
+      simpl (typeof _); simpl (clockof _).
+      revert IHe Wt Wc Sf.
+      gen_sub_exps.
+      simpl; intros; unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence.
+      destruct IHe as (Tye & Cle & Sfe).
+      take (typeof e = _) and rewrite it in Tye; inv Tye.
+      take (clockof e = _) and rewrite it in Cle; inv Cle.
+      change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
+      (* utile dans les deux dernières branches *)
+      assert (forall_nprod (forall_nprod (cl_DS ins envI bs env nck)) t0).
+      { apply Forall_forall_nprod; simpl_Forall.
+        eapply Forall2_in_right in Wc as (?&?& Hcl); eauto.
+        simpl_Forall; eauto using Forall_forall_nprod, Forall2_Forall_eq. }
+      repeat split.
+      + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
+          by (simpl_Forall; auto).
+        eapply Forall2_Forall_eq in Wt; eauto.
+        eapply Forall2_lift_nprod; eauto using ty_scasev.
+      + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
+        eapply forall_nprod_Forall, forall_lift_nprod; eauto using cl_scasev, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and_iff.
+        apply forall_nprod_and;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq.
+      + eapply forall_lift_nprod; eauto using safe_scasev, map_eq_nnil.
+        match goal with |- forall_nprod ?P _ => change P with (fun x => P x) end.
+        setoid_rewrite <- forall_nprod_and_iff.
+        apply forall_nprod_and;
+          eauto using Forall_forall_nprod, Forall2_Forall_eq. }
      - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
-      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H, H0; auto.
@@ -3400,7 +3270,6 @@ Section Node_safe.
     forall Γ ins envI bs env,
     wf_env Γ ins envI bs env ->
     forall (e : exp),
-      restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
       op_correct_exp G ins envG envI bs env e ->
@@ -3415,7 +3284,6 @@ Section Node_safe.
     forall Γ ins envI bs env,
     wf_env Γ ins envI bs env ->
     forall (es : list exp),
-      Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
       Forall (op_correct_exp G ins envG envI bs env) es ->
@@ -3438,7 +3306,6 @@ Section Node_safe.
     forall Γ ins envI bs env,
     wf_env Γ ins envI bs env ->
     forall (es : list exp),
-      Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
       Forall (op_correct_exp G ins envG envI bs env) es ->
@@ -3471,11 +3338,9 @@ Section Node_safe.
     forall Γ ins envI bs env,
     forall xs f es er anns n bck sub,
       wf_env Γ ins envI bs env ->
-      Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
       Forall (op_correct_exp G ins envG envI bs env) es ->
-      Forall restr_exp er ->
       Forall (wt_exp G Γ) er ->
       Forall (wc_exp G Γ) er ->
       Forall (op_correct_exp G ins envG envI bs env) er ->
@@ -3501,7 +3366,7 @@ Section Node_safe.
       /\ Forall2 (cl_DS ins envI bs env') (List.map snd anns) (list_of_nprod ss)
       /\ forall_nprod safe_DS ss.
   Proof.
-    intros * Hsafe Hr Hwt Hwc Hop Hrr Hwtr Hwcr Hopr Hfind ND Wtr' Wci Wcio Wtin Wtout WIin WIout ? Hbs ? Hle.
+    intros * Hsafe Hwt Hwc Hop Hwtr Hwcr Hopr Hfind ND Wtr' Wci Wcio Wtin Wtout WIin WIout ? Hbs ? Hle.
     assert (length anns = length (n_out n)) as Hlout.
     { apply Forall3_length in WIout. now rewrite 2 map_length in WIout. }
     assert (length (List.map fst (n_out n)) = length anns) as Hlout'. (* pas une blague *)
@@ -3698,19 +3563,20 @@ Section Node_safe.
       bss (List.map fst (n_in n)) envI <= bs ->
       (* dans le cadre d'un point fixe, l'hypothèse suivante tient : *)
       env <= denot_node G n envG envI env ->
-      restr_node n ->
       wc_node G n ->
       wt_node G n ->
       op_correct G ins envG envI bs env n ->
       wf_env Γ ins envI bs env ->
       wf_env Γ ins envI bs (denot_node G n envG envI env).
   Proof.
-    intros * Hbs Hle Hr Wc Wt Hop Hsafe.
+    intros * Hbs Hle Wc Wt Hop Hsafe.
     revert Hle Hop Hsafe.
     revert Γ; unfold op_correct.
-    rewrite denot_node_eq.
-    inversion Hr as [vars blks Hrs Hnd].
-    simpl (denot_top_block _ _ _); simpl (get_locals _); intros.
+    rewrite denot_node_eq, denot_top_block_eq.
+    cases_eqn Hnd; simpl (get_locals _); intros.
+    (* cas restreints : *)
+    1-5: now assert (env == 0) as <- by auto.
+    rename l into vars, l0 into blks.
     inversion_clear Wc as [??? Wcb].
     inversion_clear Wt as [????? Wtb].
     intros x ty ck Hty Hck.
@@ -3722,60 +3588,55 @@ Section Node_safe.
       unfold cl_DS in *.
       rewrite denot_clock_eq in Clx|-*.
       eapply Ole_trans; eauto. }
-    (* si x est calculé dans le nœud *)
-    rewrite <- Hnd in *.
+
+    (* sinon, on prépare une itération sur la liste des blocs *)
+    rewrite Hnd in *.
     inv Wtb. inv Wcb.
     take (wt_scope _ _ _ _) and inv it.
     take (wc_scope _ _ _ _) and inv it.
-
-    assert (Hex : List.Exists (Is_defined_in (Var x)) blks).
-    { eapply nin_defined; eauto.
-      apply mem_ident_false in Hxin.
-      apply HasType_IsVar, IsVar_In in Hty.
-      clear - Hty Hxin.
-      rewrite map_app, map_fst_senv_of_ins, in_app_iff in Hty.
-      destruct Hty; auto; contradiction.
-    }
     assert (Ndiov : NoDupMembers ((senv_of_ins (n_in n) ++
                                      senv_of_decls (n_out n)) ++
                                     senv_of_decls vars)).
     { rewrite <- app_assoc; eapply NoDup_senv_loc; eauto. }
     assert (Nd : NoDup (flat_map get_defined blks ++ ins)).
-    { eapply NoDup_vars_ins; eauto. }
+    { eapply NoDup_get_defined; eauto. }
+    assert (Ndd : NoDup (flat_map get_defined blks)).
+    { eapply NoDup_app_l; eauto. }
     assert (Hwl : Forall (wl_block G) blks).
     { simpl_Forall. eauto using wt_block_wl_block. }
-
-    (* on cherche le bloc dans lequel x est défini *)
-    clear Hnd.
     fold ins in Hbs, Hle |- *.
     set (bs' := bss ins envI) in *.
-    pose proof (denot_blocks_equs G ins envG envI bs' env blks Hwl (NoDup_app_l _ _ Nd)) as Henv'.
+    pose proof (denot_blocks_equs G ins envG envI bs' env blks Hwl Ndd) as Henv'.
+    clear Hnd.
     revert Hle Henv'; cbv zeta.
     generalize (denot_blocks G ins blks envG envI bs' env) at 1 2 4.
     intros env' Henv' Hle.
 
-    induction blks as [|blk blks]. inv Hex.
+    induction blks as [|blk blks].
+    { (* bloc vide : ⊥ *)
+      rewrite denot_blocks_eq; simpl.
+      unfold ty_DS, cl_DS, safe_DS, AC.
+      repeat split; try apply DSForall_bot.
+      rewrite MAP_map, map_bot; auto. }
+
     rewrite denot_blocks_eq_cons.
     rewrite denot_block_eq.
     repeat take (Forall _ (_ :: _)) and inv it.
-    take (restr_block _) and inv it.
+    destruct blk; eauto.
+    destruct e as (xs,es).
     simpl in Nd.
     rewrite <- app_assoc in Nd.
     apply NoDup_app'_iff in Nd as HH; destruct HH as (Nd1 & Nd2 & Nd3).
     rewrite env_of_np_ext_eq.
-    destruct (mem_nth xs x) as [k|] eqn:Hmem; cycle 1.
-    { (* si x est défini plus tard : récurrence *)
-      inversion_clear Hex as [?? Hd|]; auto.
-      contradict Hd; intro Hd; inv Hd; eauto using mem_nth_nin.
-    }
-    (* sinon, c'est qu'on a trouvé le bloc *)
+    destruct (mem_nth xs x) as [k|] eqn:Hmem; eauto using NoDup_app_l.
+    (* on a trouvé le bloc de x *)
     take (wt_block _ _ _) and inv it.
     take (wt_equation _ _ _) and inv it.
     take (wc_block _ _ _) and inv it.
     rewrite app_assoc in Hsafe.
     (* Il y a deux cas possibles dans wc_equation. Dans les deux cas, on
-         montre que les [es] sont bien cadencées *dans env'*, l'environment
-         mis à jour. *)
+       montre que les [es] sont bien cadencées *dans env'*, l'environment
+       mis à jour. *)
     assert (
         let ss := denot_exps G ins es envG envI bs' env in
         Forall2 ty_DS (typesof es) (list_of_nprod ss)
@@ -3785,7 +3646,6 @@ Section Node_safe.
       take (wc_equation _ _ _) and inv it.
       - (* cas merdique *)
         repeat (take (Forall _ [_]) and inv it).
-        take (restr_exp _) and inv it.
         take (op_correct_exp _ _ _ _ _ _ _) and inv it.
         take (wt_exp _ _ _) and inv it.
         take (find_node _ _ = _) and rewrite it in *.
@@ -3804,7 +3664,7 @@ Section Node_safe.
           rewrite (denot_exps_1 _ _ (Eapp f es0 er anns)).
           apply Forall2_impl_In; auto.
       - (* cas normal *)
-        take (Forall restr_exp es) and
+        take (Forall (wt_exp _ _) es) and
           eapply safe_exps_ in it as (Ty & Cl & Sf); eauto.
         repeat split.
         + eapply Forall2_ty_DS_le in Ty; eauto 2.
@@ -3828,14 +3688,14 @@ Section Node_safe.
       subst bs'; eapply list_of_nprod_nth_error in Hn as ->.
       subst Γ' Γ.
       rewrite app_assoc in *.
-      eapply HasType_det in Hty' as ->; auto using NoDup_senv.
+      eapply HasType_det in Hty' as ->; auto.
     * (* cl_DS *)
       eapply nth_error_Forall2 in Clxs as (?&?& Hcl'); eauto.
       eapply nth_error_Forall2 in esCl as (?& Hn &?); eauto.
       subst bs'; eapply list_of_nprod_nth_error in Hn as ->.
       subst Γ' Γ.
       rewrite app_assoc in *.
-      eapply HasClock_det in Hcl' as ->; eauto using NoDup_senv.
+      eapply HasClock_det in Hcl' as ->; auto.
     * (* safe_DS *)
       eapply forall_nprod_k with (k := k) in esSf; eauto.
       assert (length xs = list_sum (List.map numstreams es)) as <-.
@@ -4056,7 +3916,6 @@ Qed.
 
 Theorem noerrors_prog :
   forall (G : global),
-    restr_global G ->
     wt_global G ->
     wc_global G ->
     op_correct_global G ->
@@ -4068,7 +3927,7 @@ Theorem noerrors_prog :
       wf_env Γ ins envI bs 0 ->
       wf_env Γ ins envI bs (denot_global G f envI).
 Proof.
-  intros * Rg Wtg Wcg Ocg * Hfind ??? Hle Hins.
+  intros * Wtg Wcg Ocg * Hfind ??? Hle Hins.
   unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   now apply wl_global_Ordered_nodes, wt_global_wl_global.
@@ -4103,7 +3962,7 @@ Proof.
     apply Ordered_nodes_cons in Hord as Hord'.
     apply wt_global_cons in Wtg as Wtg'.
     destruct Wtg as [? Wtp] eqn:HH; clear HH. (* trouver un autre moyen de garder Wtg *)
-    inv Wcg. inv Wtp. inv Rg.
+    inv Wcg. inv Wtp. (* inv Rg. *)
     apply safe_node; auto; try tauto.
     (* reste l'hypothèse de récurrence sur les nœuds *)
     clear dependent envI; clear bs env.
@@ -4121,7 +3980,6 @@ Proof.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
   - rewrite find_node_other in Hfind; auto.
     apply IHnds; auto.
-    + now inv Rg.
     + eauto using wt_global_cons.
     + eauto using wc_global_cons.
     + clear - Ocg Hord. inv Ocg.

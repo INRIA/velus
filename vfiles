@@ -94,6 +94,7 @@ src/Lustre/Denot/Cpo.v
 src/Lustre/Denot/CommonList2.v
 src/Lustre/Denot/CommonDS.v
 src/Lustre/Denot/SDfuns.v
+src/Lustre/Denot/Restr.v
 src/Lustre/Denot/Denot.v
 src/Lustre/Denot/Infty.v
 src/Lustre/Denot/InftyProof.v
