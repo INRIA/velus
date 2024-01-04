@@ -53,3 +53,8 @@ Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc
 
 From Velus Require Import Lustre.Denot.Restr.
 Module Restr := RestrFun  Ids Op OpAux Cks L.Senv L.Syn.
+
+From Velus Require Import Lustre.Denot.CheckOpCc.
+From Velus Require Import Lustre.Denot.CheckOpTest.
+Module CheckOpTest := CheckOpTestFun  Ids Op OpAux Cks L.Senv L.Syn.
+Definition op_check_global := @CheckOpTest.check_global CheckOpCc.check_unop CheckOpCc.check_binop_val CheckOpCc.check_binop_any.

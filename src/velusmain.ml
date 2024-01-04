@@ -152,10 +152,10 @@ let compile source_name out_name =
    | Errors.OK true -> ()
    | _ -> Format.eprintf "warning: could not check semantic existence@."
   );
-  (* (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (CheckOp.check_global (Ident.Ids.elab_prefs) x)) with
-   *  | Errors.OK true -> ()
-   *  | _ -> Format.eprintf "warning: cannot guarantee absence of arithmetic errors@."
-   * ); *)
+  (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.op_check_global (Ident.Ids.elab_prefs) x)) with
+   | Errors.OK true -> ()
+   | _ -> Format.eprintf "warning: cannot guarantee absence of arithmetic errors@."
+  );
   match Compiler.apply_partial
           (Velus.compile ast main_node)
           Asmexpand.expand_program with
