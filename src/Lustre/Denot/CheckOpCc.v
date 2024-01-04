@@ -60,6 +60,7 @@ Qed.
 
 Import String.
 
+(* une autre définition des type de Vélus *)
 Inductive okty : Ctypes.type -> Prop :=
 | OkInt : forall sz sg attr, okty (Ctypes.Tint sz sg attr)
 | OkLong : forall sg attr, okty (Ctypes.Tlong sg attr)
@@ -72,6 +73,14 @@ Proof.
   inv H; simpl; congruence.
   destruct ty; simpl in *; try congruence; constructor.
 Qed.
+
+(* valeurs problématiques dans Vélus *)
+Definition okval (v : Values.val) :=
+  match v with
+  | Values.Vundef
+  | Values.Vptr _ _ => False
+  | _ => True
+  end.
 
 Lemma classify_binarith_ok :
   forall t1 t2 op t3,
@@ -86,25 +95,17 @@ Proof.
   inv Ht1; inv Ht2; (* inv Ht3; *) simpl in *; cases.
 Qed.
 
-Definition okval (v : Values.val) :=
-  match v with
-  | Values.Vundef
-  | Values.Vptr _ _ => False
-  | _ => True
-  end.
-
 Lemma sem_cast1_ok :
   forall v1 t1 t2 m op t3,
     okty t1 ->
     okty t2 ->
-    (* okty t3 -> *)
     Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
     okval v1 ->
     Ctyping.wt_val v1 t1 ->
     Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
 Proof.
   unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 (* Ht3 *) Hop Hokv1 Hv1.
+  intros * Ht1 Ht2 Hop Hokv1 Hv1.
   inv Ht1; inv Ht2; inv Hv1.
   all: cases_eqn HH; subst.
   all: try congruence.
@@ -115,14 +116,13 @@ Lemma sem_cast2_ok :
   forall v2 t1 t2 m op t3,
     okty t1 ->
     okty t2 ->
-    (* okty t3 -> *)
     Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
     okval v2 ->
     Ctyping.wt_val v2 t2 ->
     Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
 Proof.
   unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 (* Ht3 *) Hop Hokv2 Hv2.
+  intros * Ht1 Ht2 Hop Hokv2 Hv2.
   inv Ht1; inv Ht2; inv Hv2.
   all: cases_eqn HH; subst.
   all: try congruence.
@@ -136,10 +136,9 @@ Lemma sem_cast_ok :
     okval v2.
 Proof.
   unfold Cop.sem_cast, okval.
-  intros * Hc Hv.
+  intros * Hc Hv1.
   destruct t1, t2; simpl in *; inv Hc; auto.
-  all: cases.
-  
+  all: destruct v1, v2; auto; cases; congruence.
 Qed.
 
 
@@ -168,14 +167,8 @@ Proof.
   5:{ eapply classify_binarith_ok in Hcb; eauto. }
   all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
   all: simpl in Hv, Hv0.
-  inv Hv, Hv0.
-
-  
-  all: inv Hv; inv Hv0; auto.
-  all: destruct v1, v2; simpl in *; try congruence.
-  all: inv Hv1; inv Hv2.
-  all: destruct v, v0; eauto.
-  Search  Cop.sem_cast.
+  all: apply sem_cast_ok in Hc1 as Hok, Hc2 as Hok0.
+  all: inv Hv; inv Hv0; simpl in *; auto.
 Qed.
 
 
