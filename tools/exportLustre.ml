@@ -104,7 +104,7 @@ let name_ctype (ty : Interface.Op.ctype) =
 let prtype p ty =
   match ty with
   | Op.Tprimitive ty -> fprintf p "(Tprimitive %s)" (name_ctype ty)
-  | Op.Tenum (id,ids) ->  fprintf p "(Tenum %s)" (name_ctype ty)
+  | Op.Tenum (id,ids) -> fprintf p "(Tenum %a %a)" prid id (print_list prid) ids
 
 (* let pritype p ty = *)
 (*   fprintf p "%s" (string_of_type ty) *)
@@ -227,7 +227,7 @@ let rec prexp p (e : exp) =
        (print_list (print_pair prtag (print_list prexp))) ies
        prlann lann
   | Ecase (e,ies,eds,lann) ->
-     fprintf p "@[<hov 2>(Emerge %a@ %a@ %a@ %a)@]"
+     fprintf p "@[<hov 2>(Ecase %a@ %a@ %a@ %a)@]"
        prexp e
        (print_list (print_pair prtag (print_list prexp))) ies
        (print_option (print_list prexp)) eds
@@ -288,8 +288,7 @@ let print_node p (n : node) =
    *   nname nname nname; *)
   fprintf p "@ @ @]"
 
-let print_externs p exts =
-  assert false
+let print_externs p exts = ()
 
 let prglobal p (g : global) =
   fprintf p "@[<hov 2>Definition G : global :=@ Global %a@ %a@ %a.@]"
