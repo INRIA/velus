@@ -71,6 +71,14 @@ velustotex: extraction tools/velustotex.ml
 	cp $(COMPCERTDIR)/compcert.ini $(BUILDDIR)/tools/compcert.ini
 	@echo "${bold}Done.${normal}"
 
+# lus to v
+lusgen: extraction tools/lusgen.ml tools/exportLustre.ml
+	@echo "${bold}Building lusgen...${normal}"
+	ocamlbuild $(FLAGS) -I tools $@.$(TARGET)
+	mv $@.$(TARGET) $@
+	cp $(COMPCERTDIR)/compcert.ini $(BUILDDIR)/tools/compcert.ini
+	@echo "${bold}Done.${normal}"
+
 # EXAMPLES
 $(EXAMPLESDIR): $(VELUS)
 	$(MAKE) $(EXAMPLESFLAGS)
