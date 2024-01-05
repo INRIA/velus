@@ -181,6 +181,67 @@ Definition check_binop_any (op : binop) : bool :=
   | _ => true
   end.
 
+Lemma sem_binary_operation_ok :
+  forall env op v1 t1 v2 t2 t3 m,
+    check_binop_any op = true ->
+    Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
+
+    okty t1 ->
+    okty t2 ->
+    Ctyping.wt_val v1 t1 ->
+    Ctyping.wt_val v2 t2 ->
+    okval v1 ->
+    okval v2 ->
+
+    Cop.sem_binary_operation env op v1 t1 v2 t2 m <> None.
+Proof.
+  intros.
+  unfold Cop.sem_binary_operation.
+  destruct op; simpl in *; try congruence.
+  3:{ unfold Cop.sem_mul.
+      eapply sem_binarith_ok; intros; eauto; try congruence.
+      exists Cop.Omul.
+      exists t3.
+      now simpl. }
+  - unfold Cop.sem_add.
+    cases.
+    5:{ eapply sem_binarith_ok; intros; eauto; try congruence.
+        exists Cop.Oadd, t3. simpl. inv H0.  cases. 
+  all: cases_eqn HH; subst. inv H0.
+  destruct op eqn:Hop; simpl in *; try congruence.
+  - unfold Cop.sem_add.
+    cases.
+    5:{ eapply sem_binarith_ok; intros; eauto; try congruence.
+        exists op.  
+Qed.int
+
+
+
+  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
+  (forall sg n1 n2, sem_int sg n1 n2 <> None) ->
+  (forall sg n1 n2, sem_long sg n1 n2 <> None) ->
+  (forall n1 n2, sem_float n1 n2 <> None) ->
+  (forall n1 n2, sem_single n1 n2 <> None) ->
+  okty t1 ->
+  okty t2 ->
+  Ctyping.wt_val v1 t1 ->
+  Ctyping.wt_val v2 t2 ->
+  okval v1 ->
+  okval v2 ->
+  (exists op t3, Ctyping.type_binop op t1 t2 = Errors.OK t3) ->
+  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None.
+Proof.
+  intros * Hint Hlong Hfloat Hsingle Ht1 Ht2 Hv1 Hv2 Ok1 Ok2 (op & t3 & Hty).
+  unfold Cop.sem_binarith.
+
+
+
+Definition okvalue (v : value) : Prop :=
+  match v with
+  | Vscalar v => okval v
+  | Venum _ => True
+  end.
+
 Theorem check_binop_any_correct :
   forall op,
     check_binop_any op = true ->
@@ -189,11 +250,23 @@ Theorem check_binop_any_correct :
   forall v1 v2,
     wt_value v1 ty1 ->
     wt_value v2 ty2 ->
+    okvalue v1 ->
+    okvalue v2 ->
     sem_binop op v1 ty1 v2 ty2 <> None.
 Proof.
-  intros ? Hop ?? Hty ?? Hv1 Hv2.
+  intros ? Hop ?? Hty ?? Hv1 Hv2 Ok1 Ok2.
+  unfold sem_binop.
+  cases_eqn HH; subst; simpl in *; try congruence.
+  all: cases_eqn HH; subst; try congruence.
+  all: inv Hv1; inv Hv2.
+  6-17: repeat rewrite ?Bool.andb_true_iff, ?Bool.andb_false_iff in *.
+  6-17: (firstorder; congruence).
+  2: admit.
+  all: unfold option_map; cases_eqn HH; try congruence.
   
+
 Qed.
+
 
 (* Définition concrète de check_binop_any *)
 Definition check_binop_any (op : binop) (ty1 ty2 : type) : bool :=
