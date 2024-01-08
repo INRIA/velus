@@ -467,10 +467,9 @@ Section SStream_functions.
     intros [].
     - (* true : fbyA *)
       apply curry, curry.
-      eapply (fcont_comp2 (DSCASE _ _)).
-      2: exact (SND _ _).
+      refine ((DSCASE _ _ @2_ _) (SND _ _)).
       apply ford_fcont_shift.
-      intro x.
+      intro y.
       apply curry.
       match goal with
       | |- _ (_ (Dprod ?pl ?pr) _) =>
@@ -478,9 +477,9 @@ Section SStream_functions.
           pose (xs := (SND _ _ @_ FST _ _ @_ FST pl pr));
           pose (ys' := SND pl pr)
       end.
-      refine match x with
+      refine match y with
         | abs => (fby @3_ ID _) xs ys'
-        | err _ => (fby @3_ ID _) (MAP (fun _ => x) @_ xs) ys'
+        | err _ => (fby @3_ ID _) (MAP (fun _ => y) @_ xs) ys'
         | pres _ => (fby @3_ ID _) (MAP (fun _ => err error_Cl) @_ xs) ys'
       end.
     - (* false : fby *)
