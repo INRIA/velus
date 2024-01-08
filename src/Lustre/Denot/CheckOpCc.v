@@ -83,29 +83,26 @@ Definition okval (v : Values.val) :=
   end.
 
 Lemma classify_binarith_ok :
-  forall t1 t2 op t3,
+  forall t1 t2,
     okty t1 ->
     okty t2 ->
-    (* okty t3 -> *)
-    Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
     Cop.classify_binarith t1 t2 <> Cop.bin_default.
 Proof.
   unfold Cop.classify_binarith.
-  intros * Ht1 Ht2 (* Ht3 *) Hop Hcl.
-  inv Ht1; inv Ht2; (* inv Ht3; *) simpl in *; cases.
+  intros * Ht1 Ht2 Hcl.
+  inv Ht1; inv Ht2; simpl in *; cases.
 Qed.
 
 Lemma sem_cast1_ok :
-  forall v1 t1 t2 m op t3,
+  forall v1 t1 t2 m,
     okty t1 ->
     okty t2 ->
-    Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
     okval v1 ->
     Ctyping.wt_val v1 t1 ->
     Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
 Proof.
   unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 Hop Hokv1 Hv1.
+  intros * Ht1 Ht2 Hokv1 Hv1.
   inv Ht1; inv Ht2; inv Hv1.
   all: cases_eqn HH; subst.
   all: try congruence.
@@ -113,16 +110,15 @@ Proof.
 Qed.
 
 Lemma sem_cast2_ok :
-  forall v2 t1 t2 m op t3,
+  forall v2 t1 t2 m,
     okty t1 ->
     okty t2 ->
-    Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
     okval v2 ->
     Ctyping.wt_val v2 t2 ->
     Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
 Proof.
   unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 Hop Hokv2 Hv2.
+  intros * Ht1 Ht2 Hokv2 Hv2.
   inv Ht1; inv Ht2; inv Hv2.
   all: cases_eqn HH; subst.
   all: try congruence.
@@ -141,7 +137,6 @@ Proof.
   all: destruct v1, v2; auto; cases; congruence.
 Qed.
 
-
 Lemma sem_binarith_ok :
   forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
   (forall sg n1 n2, sem_int sg n1 n2 <> None) ->
@@ -154,10 +149,10 @@ Lemma sem_binarith_ok :
   Ctyping.wt_val v2 t2 ->
   okval v1 ->
   okval v2 ->
-  (exists op t3, Ctyping.type_binop op t1 t2 = Errors.OK t3) ->
   Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None.
 Proof.
-  intros * Hint Hlong Hfloat Hsingle Ht1 Ht2 Hv1 Hv2 Ok1 Ok2 (op & t3 & Hty).
+  intros * Hint Hlong Hfloat Hsingle Ht1 Ht2 Hv1 Hv2 Ok1 Ok2.
+  (* (op & t3 & Hty). *)
   unfold Cop.sem_binarith.
   destruct (Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc1.
   2:{ eapply sem_cast1_ok in Hc1; eauto. }
@@ -171,13 +166,59 @@ Proof.
   all: inv Hv; inv Hv0; simpl in *; auto.
 Qed.
 
+(* pour les opérations qui ne fonctionnent que sur les entiers *)
+Lemma sem_binarith_ok' :
+  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
+  (* (forall sg n1 n2, sem_int sg n1 n2 <> None) -> *)
+  (* (forall sg n1 n2, sem_long sg n1 n2 <> None) -> *)
+  (* (forall n1 n2, sem_float n1 n2 <> None) -> *)
+  (* (forall n1 n2, sem_single n1 n2 <> None) -> *)
+  (* okty t1 -> *)
+  (* okty t2 -> *)
+  Ctyping.wt_val v1 t1 ->
+  Ctyping.wt_val v2 t2 ->
+  okval v1 ->
+  okval v2 ->
+  match Cop.classify_binarith t1 t2 with
+  | Cop.bin_case_i _ | Cop.bin_case_l _ =>
+                         (forall sg n1 n2, sem_int sg n1 n2 <> None)
+                         /\ (forall sg n1 n2, sem_long sg n1 n2 <> None)
+
+  | Cop.bin_case_f | Cop.bin_case_s =>
+                       (forall n1 n2, sem_float n1 n2 <> None)
+                       /\ (forall n1 n2, sem_single n1 n2 <> None)
+  | _ => False
+  end ->
+  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None.
+Proof.
+  intros * (* Hint Hlong *) (* Hfloat Hsingle *) (* Ht1 Ht2 *) Hv1 Hv2 Ok1 Ok2 Hop.
+  (* (op & t3 & Hty). *)
+  unfold Cop.sem_binarith.
+  destruct (Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc1.
+  2:{ eapply sem_cast1_ok in Hc1; eauto.
+      destruct t1, t2; simpl in Hop; cases; try tauto; constructor.
+      clear - Hop. destruct t1, t2; simpl in Hop; cases_eqn HH; subst; try tauto.
+      all: constructor.
+  }
+  destruct (Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc2.
+  2:{ eapply sem_cast2_ok in Hc2; eauto.
+      destruct t1, t2; simpl in Hop; cases; try tauto; constructor.
+      clear - Hop. destruct t1, t2; simpl in Hop; cases_eqn HH; subst; try tauto.
+      all: constructor.
+  }
+  destruct (Cop.classify_binarith t1 t2) eqn:Hcb; try tauto; destruct Hop.
+  all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
+  all: simpl in Hv, Hv0.
+  all: apply sem_cast_ok in Hc1 as Hok, Hc2 as Hok0.
+  all: inv Hv; inv Hv0; simpl in *; auto.
+Qed.
 
 Definition check_binop_any (op : binop) : bool :=
   match op with
   | Cop.Odiv => false
   | Cop.Omod => false
-  (* | Cop.Oshl => false *)
-  (* | Cop.Oshr => false *)
+  | Cop.Oshl => false
+  | Cop.Oshr => false
   | _ => true
   end.
 
@@ -185,24 +226,70 @@ Lemma sem_binary_operation_ok :
   forall env op v1 t1 v2 t2 t3 m,
     check_binop_any op = true ->
     Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
-
     okty t1 ->
     okty t2 ->
     Ctyping.wt_val v1 t1 ->
     Ctyping.wt_val v2 t2 ->
     okval v1 ->
     okval v2 ->
-
     Cop.sem_binary_operation env op v1 t1 v2 t2 m <> None.
+
 Proof.
-  intros.
+  intros * Hcheck Hop Ht1 Ht2 Hv1 Hv2 Ok1 Ok2.
   unfold Cop.sem_binary_operation.
   destruct op; simpl in *; try congruence.
+  { (* Oadd *)
+    unfold Cop.sem_add.
+    inv Ht1; inv Ht2; simpl.
+    all: unfold Cop.classify_add, Ctypes.typeconv.
+    all: cases_eqn HH; subst; try congruence.
+    all: try apply sem_binarith_ok'; auto.
+    simpl; split; intros; congruence.
+    all: try (simpl; split; intros; congruence).
+    all: simpl; cases_eqn HH.
+    all: try (simpl; split; intros; congruence).
+    all: simpl in *; congruence. }
+  { (* Osub *)
+    unfold Cop.sem_sub.
+    inv Ht1; inv Ht2; simpl.
+    all: unfold Cop.classify_sub, Ctypes.typeconv.
+    all: cases_eqn HH; subst; try congruence.
+    all: try apply sem_binarith_ok'; auto.
+    all: try (simpl; split; intros; congruence).
+    all: simpl; cases_eqn HH.
+    all: try (simpl; split; intros; congruence).
+  }
+  { (* Omul *)
+    unfold Cop.sem_mul.
+    inv Ht1; inv Ht2; simpl.
+    all: apply sem_binarith_ok'; auto.
+    all: simpl; cases_eqn HH.
+    all: try (simpl; split; intros; congruence).
+  }
+  3:{ (* Oxor *)
+    apply sem_binarith_ok'; auto.
+    inv Ht1; inv Ht2; simpl in *.
+    all: cases_eqn HH; subst.
+    all: cbn in Hop; try congruence.
+    all: split; intros; congruence.
+  }
+  3:{ (* Oand *)
+    unfold Cop.sem_and.
+    apply sem_binarith_ok'; auto.
+    inv Ht1; inv Ht2; simpl in *.
+    all: cases_eqn HH; subst.
+    all: cbn in Hop; try congruence.
+    all: split; intros; congruence.
+  }
+  - (* Osub *)
+
+
   3:{ unfold Cop.sem_mul.
       eapply sem_binarith_ok; intros; eauto; try congruence.
       exists Cop.Omul.
       exists t3.
       now simpl. }
+  
   - unfold Cop.sem_add.
     cases.
     5:{ eapply sem_binarith_ok; intros; eauto; try congruence.
