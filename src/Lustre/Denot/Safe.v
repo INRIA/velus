@@ -644,8 +644,9 @@ Section SDfuns_safe.
       fold (fby1AP ov) in Ht.
       rewrite fby1AP_eq in Ht.
       destruct (@is_cons_elim _ xs) as (x & xs' & Hx).
-      { cases; apply symmetry, cons_is_cons, fby1_cons in Ht; eauto using map_is_cons. }
-      cases; rewrite Hx, ?map_eq_cons, fby1_eq in Ht; cases.
+      { cases; apply symmetry, cons_is_cons in Ht;
+          eauto 2 using fby1_cons, map_is_cons. }
+      cases; rewrite Hx, ?map_eq_cons, ?fby1_eq in Ht; cases.
       (* cas d'erreur (regarder Ht) *)
       3,4,5,6,9,10: rewrite Ht, ?map_comp; constructor; auto; now apply DSForall_map, DSForall_all.
       (* les autres *)
@@ -684,8 +685,9 @@ Section SDfuns_safe.
       fold (@fbyA value) in Ht.
       rewrite fbyA_eq in Ht.
       destruct (@is_cons_elim _ xs) as (x & xs' & Hx).
-      { cases; apply symmetry, cons_is_cons, fby_cons in Ht; eauto using map_is_cons. }
-      cases; rewrite Hx, ?map_eq_cons, fby_eq in Ht; cases.
+      { cases; apply symmetry, cons_is_cons in Ht;
+          eauto 2 using fby_cons, map_is_cons. }
+      cases; rewrite Hx, ?map_eq_cons, ?fby_eq in Ht; cases.
       (* cas d'erreur (regarder Ht) *)
       3,4,5: rewrite Ht, ?map_comp; constructor; auto; now apply DSForall_map, DSForall_all.
       all: apply Con_eq_simpl in Ht as [? Ht]; subst.

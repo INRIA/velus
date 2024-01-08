@@ -323,8 +323,8 @@ Section SStream_functions.
       refine match ov, y with
         | Some v, abs
         | None, pres v => (fcont_ford_shift _ _ _ fby1 (Some v) @3_ ID _) xs ys'
-        | _, err _ => (fcont_ford_shift _ _ _ fby1 ov @3_ ID _) (MAP (fun _ => y) @_ xs) ys'
-        | _, _ => (fcont_ford_shift _ _ _ fby1 ov @3_ ID _) (MAP (fun _ => err error_Cl) @_ xs) ys'
+        | _, err _ => (MAP (fun _ => y) @_ xs)
+        | _, _ => (MAP (fun _ => err error_Cl) @_ xs)
       end.
     - (* false : fby1 *)
       apply ford_fcont_shift. intro ov.
@@ -353,8 +353,8 @@ Section SStream_functions.
       == match ov, y with
          | Some v, abs
          | None, pres v => F false (Some v) xs ys
-         | _, err _ => F false ov (map (fun _ => y) xs) ys
-         | _, _ => F false ov (map (fun _ => err error_Cl) xs) ys
+         | _, err _ => map (fun _ => y) xs
+         | _, _ => map (fun _ => err error_Cl) xs
          end.
   Proof.
     intros.
@@ -394,8 +394,8 @@ Section SStream_functions.
       == match ov,y with
          | Some v, abs
          | None, pres v => fby1 (Some v) xs ys
-         | _, err _ => fby1 ov (map (fun _ => y) xs) ys
-         | _, _ => fby1 ov (map (fun _ => err error_Cl) xs) ys
+         | _, err _ => map (fun _ => y) xs
+         | _, _ => map (fun _ => err error_Cl) xs
          end.
   Proof.
     intros.
@@ -479,8 +479,8 @@ Section SStream_functions.
       end.
       refine match y with
         | abs => (fby @3_ ID _) xs ys'
-        | err _ => (fby @3_ ID _) (MAP (fun _ => y) @_ xs) ys'
-        | pres _ => (fby @3_ ID _) (MAP (fun _ => err error_Cl) @_ xs) ys'
+        | err _ => (MAP (fun _ => y) @_ xs)
+        | pres _ => (MAP (fun _ => err error_Cl) @_ xs)
       end.
     - (* false : fby *)
       apply curry, curry.
@@ -506,8 +506,8 @@ Section SStream_functions.
       fbysf F true xs (cons y ys)
       == match y with
          | abs => F false xs ys
-         | err _ => F false (map (fun _ => y) xs) ys
-         | pres _ => F false (map (fun _ => err error_Cl) xs) ys
+         | err _ => map (fun _ => y) xs
+         | pres _ => map (fun _ => err error_Cl) xs
          end.
   Proof.
     intros.
@@ -557,8 +557,8 @@ Section SStream_functions.
       fbys true xs (cons y ys)
       == match y with
          | abs => fbys false xs ys
-         | err _ => fbys false (map (fun _ => y) xs) ys
-         | pres _ => fbys false (map (fun _ => err error_Cl) xs) ys
+         | err _ => map (fun _ => y) xs
+         | pres _ => map (fun _ => err error_Cl) xs
          end.
   Proof.
     intros.
@@ -575,8 +575,8 @@ Section SStream_functions.
       fbyA xs (cons y ys)
       == match y with
          | abs => fby xs ys
-         | err _ => fby (map (fun _ => y) xs) ys
-         | pres _ => fby (map (fun _ => err error_Cl) xs) ys
+         | err _ => map (fun _ => y) xs
+         | pres _ => map (fun _ => err error_Cl) xs
          end.
   Proof.
     intros.

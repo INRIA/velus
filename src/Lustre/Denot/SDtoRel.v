@@ -1301,7 +1301,7 @@ Proof.
   (* pour les cas d'erreur, il faut un con de plus : *)
   all: try (clear - Sr' itx;
             apply infinite_decomp in itx as (?&?& Htx &?);
-            rewrite Htx, Cpo_streams_type.map_eq_cons, fby1_eq in Sr'; now inv Sr').
+            rewrite Htx, Cpo_streams_type.map_eq_cons in Sr'; now inv Sr').
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
   all: constructor; eapply Cof; eauto.
 Qed.
