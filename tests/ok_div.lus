@@ -1,0 +1,5 @@
+-- the simple run-time error analysis should accept this
+node f (x : int) returns (y : int);
+let
+  y = (x + 4) / 2;
+tel;
