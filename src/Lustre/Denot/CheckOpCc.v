@@ -37,45 +37,45 @@ Proof.
        comment lier le typage avec la taille de l ?? (type global des enum ??)
 
      *)
-    type_unop
-    simpl in *.
-    destruct (EquivDec.equiv_decb _ _); auto; inv Hty.
-    unfold option_map; cases_eqn Hop; try congruence.
-    sem_unop_bool
-Qed.
+(*     type_unop *)
+(*     simpl in *. *)
+(*     destruct (EquivDec.equiv_decb _ _); auto; inv Hty. *)
+(*     unfold option_map; cases_eqn Hop; try congruence. *)
+(*     sem_unop_bool *)
+(* Qed. *)
 
-  cases_eqn HH; subst.
-  12:{ inv Hwt. apply equiv_decb_spec in HH0.
-  ; inv Hwt.
-  6:{
-  all: simpl in *; cases; simpl; try inv HH1.
-  22:{
-  all: simpl.
-  destruct op as [[]|].
+(*   cases_eqn HH; subst. *)
+(*   12:{ inv Hwt. apply equiv_decb_spec in HH0. *)
+(*   ; inv Hwt. *)
+(*   6:{ *)
+(*   all: simpl in *; cases; simpl; try inv HH1. *)
+(*   22:{ *)
+(*   all: simpl. *)
+(*   destruct op as [[]|]. *)
 
 
-  unfold check_unop, sem_unop, option_map.
-  unfold Cop.sem_unary_operation.
-  intros * Hck v Hwt.
-  destruct op as [[]|]; try congruence.
-  - (* Onotbool *)
-    unfold Cop.sem_notbool, Cop.bool_val, Cop.classify_bool; simpl.
-    cases_eqn HH; subst; try congruence; inv Hwt.
-    all: inv H1; simpl in *; try congruence; cases.
-  - (* Onotint *)
-    unfold Cop.sem_notint.
-    cases_eqn HH; subst; try congruence; inv Hwt.
-    all: inv H1; simpl in *; try congruence; cases.
-  - (* Oneg *)
-    unfold Cop.sem_neg.
-    cases_eqn HH; subst; try congruence; inv Hwt.
-    all: inv H1; simpl in *; try congruence; cases.
-  - (* Oabsfloat *)
-    unfold Cop.sem_absfloat.
-    cases_eqn HH; subst; try congruence; inv Hwt.
-    all: inv H1; simpl in *; try congruence; cases.
-Qed.
-
+(*   unfold check_unop, sem_unop, option_map. *)
+(*   unfold Cop.sem_unary_operation. *)
+(*   intros * Hck v Hwt. *)
+(*   destruct op as [[]|]; try congruence. *)
+(*   - (* Onotbool *) *)
+(*     unfold Cop.sem_notbool, Cop.bool_val, Cop.classify_bool; simpl. *)
+(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
+(*     all: inv H1; simpl in *; try congruence; cases. *)
+(*   - (* Onotint *) *)
+(*     unfold Cop.sem_notint. *)
+(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
+(*     all: inv H1; simpl in *; try congruence; cases. *)
+(*   - (* Oneg *) *)
+(*     unfold Cop.sem_neg. *)
+(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
+(*     all: inv H1; simpl in *; try congruence; cases. *)
+(*   - (* Oabsfloat *) *)
+(*     unfold Cop.sem_absfloat. *)
+(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
+(*     all: inv H1; simpl in *; try congruence; cases. *)
+(* Qed. *)
+Admitted.
 
 
 
