@@ -294,7 +294,7 @@ Module Export Op <: OPERATORS.
       end
     | Tenum tx tn =>
       (* FIXME: how to get |tn|=2 from tx=bool_id ?? *)
-      if (tx ==b bool_id) && (List.length tn ==b 2) then
+      if (tx ==b bool_id) && (List.length tn =? 2) then
         match uop with
         | UnaryOp Cop.Onotbool => Some bool_type
         | _ => None
@@ -566,7 +566,7 @@ Module Export Op <: OPERATORS.
           DestructCases; repeat split; try discriminate; auto.
         * unfold Cop.sem_absfloat in Hsop.
           DestructCases; repeat split; try discriminate; auto.
-    + destruct (tx ==b bool_id), (List.length tn ==b 2), uop; try discriminate.
+    + destruct (tx ==b bool_id), (List.length tn =? 2), uop; try discriminate.
       inv Htop.
       apply option_map_inv in Hsop as (v' & Hsop &?); subst.
       constructor.
