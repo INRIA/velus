@@ -1,3 +1,4 @@
+Require Import Lia.
 From Velus Require Import Common.CommonTactics.
 From Velus Require Import ObcToClight.Interface.
 
@@ -14,8 +15,57 @@ Proof.
   cases.
 Qed.
 
-(* Définition concrète de check_unop : inutile *)
-Definition check_unop (op : unop) (ty : type) : bool := true.
+
+(** Concrete definition of [check_unop].
+ * We only prohibit cast operations from floats to integers, which can fail
+ * on some values. More precisely, all of
+ *      Float.to_int, Float.to_intu, Float.to_long, Float.to_longu
+ * triggers the operation [ZofB_range f zmin zmax] that can return None if either
+ * - f is infinite or NaN
+ * - ZofB f < zmin
+ * - ZofB f > zmax
+ *)
+Definition check_unop (op : unop) (ty : type) : bool :=
+  match op, ty with
+  | CastOp t2, Tprimitive t1 =>
+      match Cop.classify_cast (cltype t1) (cltype t2) with
+      | Cop.cast_case_f2i _ _
+      | Cop.cast_case_s2i _ _
+      | Cop.cast_case_f2l _
+      | Cop.cast_case_s2l _ => false
+      | _ => true
+      end
+  | _, _ => true
+  end.
+
+Lemma sem_cast_ok :
+  forall v t1 t2 r m,
+    wt_cvalue v t1 ->
+    check_unop (CastOp t2) (Tprimitive t1) = true ->
+    Ctyping.check_cast (cltype t1) (cltype t2) = Errors.OK r ->
+    Cop.sem_cast v (cltype t1) (cltype t2) m <> None.
+Proof.
+  intros * Hwt Hck Ht.
+  unfold Cop.sem_cast, Ctyping.check_cast in *.
+  destruct t1,t2; inv Hwt.
+  all: simpl in *; try congruence.
+  all: cases_eqn HH; congruence.
+Qed.
+
+Lemma unary_operation_ok :
+  forall op ty ty' v m,
+    Ctyping.type_unop op (cltype ty) = Errors.OK ty' ->
+    wt_cvalue v ty ->
+    Cop.sem_unary_operation op v (cltype ty) m <> None.
+Proof.
+  intros * Hok Hwt.
+  destruct op; simpl in *; cases_eqn HH; subst; simpl in *.
+  all: inv Hwt; simpl in *; cbn; try congruence.
+  all: cases_eqn HH; subst; cbn; try congruence.
+  (* reste les cas booléens *)
+  all: unfold Cop.sem_notbool, Cop.bool_val, Cop.classify_bool in *.
+  all: repeat (cases_eqn HH; subst; simpl in *; try congruence).
+Qed.
 
 Theorem check_unop_correct :
   forall op ty ty',
@@ -25,110 +75,30 @@ Theorem check_unop_correct :
          sem_unop op v ty <> None.
 Proof.
   unfold sem_unop, type_unop.
-  (* unfold Cop.sem_unary_operation. *)
-  intros * _ Hty v Hwt.
-  destruct ty.
+  intros * Hck Hty v Hwt.
+  destruct ty as [ty|tx tn].
   - (* Tprimitive *)
-    admit.
-  - (* Tenum *)
-    destruct (EquivDec.equiv_decb _ _) eqn:Heq; try congruence.
-    apply equiv_decb_spec in Heq; subst.
-    destruct op as [[]|]; try congruence.
     inv Hwt.
-    simpl.
-
-    (*     unfold option_map; cases_eqn Hop; try congruence. *)
-(*     sem_unop_bool *)
-    (* TODO: à discuter avec TIM :
-       pourquoi type_unop ne vérifie pas op dans le cas booléen ?
-       comment lier le typage avec la taille de l ?? (type global des enum ??)
-
-     *)
-(*     type_unop *)
-(*     simpl in *. *)
-(*     destruct (EquivDec.equiv_decb _ _); auto; inv Hty. *)
-(*     unfold option_map; cases_eqn Hop; try congruence. *)
-(*     sem_unop_bool *)
-(* Qed. *)
-
-(*   cases_eqn HH; subst. *)
-(*   12:{ inv Hwt. apply equiv_decb_spec in HH0. *)
-(*   ; inv Hwt. *)
-(*   6:{ *)
-(*   all: simpl in *; cases; simpl; try inv HH1. *)
-(*   22:{ *)
-(*   all: simpl. *)
-(*   destruct op as [[]|]. *)
-
-
-(*   unfold check_unop, sem_unop, option_map. *)
-(*   unfold Cop.sem_unary_operation. *)
-(*   intros * Hck v Hwt. *)
-(*   destruct op as [[]|]; try congruence. *)
-(*   - (* Onotbool *) *)
-(*     unfold Cop.sem_notbool, Cop.bool_val, Cop.classify_bool; simpl. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Onotint *) *)
-(*     unfold Cop.sem_notint. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Oneg *) *)
-(*     unfold Cop.sem_neg. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Oabsfloat *) *)
-(*     unfold Cop.sem_absfloat. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(* Qed. *)
-Admitted.
-
-
-
-(* (* Définition concrète de check_unop *) *)
-(* Definition check_unop (op : unop) (ty : type) : bool := *)
-(*   match op, ty with *)
-(*   | UnaryOp Cop.Onotbool, Tprimitive _ => true *)
-(*   (* | UnaryOp Cop.Onotint, (Tprimitive (Tint _ _ | Tlong _)) => true *) *)
-(*   | UnaryOp Cop.Onotint, Tprimitive ty => *)
-(*       match Cop.classify_notint (cltype ty) with Cop.notint_default => false | _ => true end *)
-(*   | UnaryOp Cop.Oneg, Tprimitive _ => true *)
-(*   (* | UnaryOp Cop.Oneg, Tenum t _ => EquivDec.equiv_decb  t  Ident.Ids.bool_id *) *)
-(*   | UnaryOp Cop.Oabsfloat, Tprimitive _ => true *)
-(*   | _, _ => false *)
-(*   end. *)
-
-(* Theorem check_unop_correct : *)
-(*   forall op ty, *)
-(*     check_unop op ty = true -> *)
-(*     forall v, wt_value v ty -> *)
-(*          sem_unop op v ty <> None. *)
-(* Proof. *)
-(*   unfold check_unop, sem_unop, option_map. *)
-(*   unfold Cop.sem_unary_operation. *)
-(*   intros * Hck v Hwt. *)
-(*   destruct op as [[]|]; try congruence. *)
-(*   - (* Onotbool *) *)
-(*     unfold Cop.sem_notbool, Cop.bool_val, Cop.classify_bool; simpl. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Onotint *) *)
-(*     unfold Cop.sem_notint. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Oneg *) *)
-(*     unfold Cop.sem_neg. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(*   - (* Oabsfloat *) *)
-(*     unfold Cop.sem_absfloat. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt. *)
-(*     all: inv H1; simpl in *; try congruence; cases. *)
-(* Qed. *)
-
-(* Import BinInt. *)
-(* Check (Values.Vint (Integers.Int.repr (5%Z))). *)
+    destruct op.
+    + (* UnaryOp *)
+      unfold option_map.
+      cases_eqn Hok; try congruence.
+      eapply unary_operation_ok in Hok; eauto.
+    + (* CastOp *)
+      unfold option_map.
+      cases_eqn Hok; try congruence.
+      eapply sem_cast_ok in Hok; eauto.
+  - (* Tenum *)
+    destruct
+      (EquivDec.equiv_decb tx Ident.Ids.bool_id) eqn:Heq,
+      (PeanoNat.Nat.eqb (Datatypes.length tn) 2) eqn:Hl;
+      simpl in Hty; try congruence.
+    apply equiv_decb_spec in Heq; subst.
+    rewrite PeanoNat.Nat.eqb_eq in Hl.
+    destruct op as [[]|]; try congruence.
+    inv Hwt; rewrite Hl in *.
+    simpl; cases; simpl; try congruence; lia.
+Qed.
 
 
 Import String.
