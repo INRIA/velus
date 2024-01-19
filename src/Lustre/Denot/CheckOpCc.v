@@ -24,14 +24,21 @@ Theorem check_unop_correct :
     forall v, wt_value v ty ->
          sem_unop op v ty <> None.
 Proof.
-  unfold sem_unop.
+  unfold sem_unop, type_unop.
   (* unfold Cop.sem_unary_operation. *)
   intros * _ Hty v Hwt.
   destruct ty.
   - (* Tprimitive *)
     admit.
   - (* Tenum *)
+    destruct (EquivDec.equiv_decb _ _) eqn:Heq; try congruence.
+    apply equiv_decb_spec in Heq; subst.
+    destruct op as [[]|]; try congruence.
     inv Hwt.
+    simpl.
+
+    (*     unfold option_map; cases_eqn Hop; try congruence. *)
+(*     sem_unop_bool *)
     (* TODO: à discuter avec TIM :
        pourquoi type_unop ne vérifie pas op dans le cas booléen ?
        comment lier le typage avec la taille de l ?? (type global des enum ??)
