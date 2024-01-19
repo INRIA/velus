@@ -293,7 +293,12 @@ Module Export Op <: OPERATORS.
         end
       end
     | Tenum t _ =>
-      if t ==b bool_id then Some bool_type else None
+      if t ==b bool_id then
+        match uop with
+        | UnaryOp Cop.Onotbool => Some bool_type
+        | _ => None
+        end
+      else None
     end.
 
   Definition type_binop (bop: binop) (ty1 ty2: type) : option type :=
@@ -560,7 +565,7 @@ Module Export Op <: OPERATORS.
           DestructCases; repeat split; try discriminate; auto.
         * unfold Cop.sem_absfloat in Hsop.
           DestructCases; repeat split; try discriminate; auto.
-    + destruct (tx ==b bool_id); try discriminate.
+    + destruct (tx ==b bool_id), uop; try discriminate.
       inv Htop.
       apply option_map_inv in Hsop as (v' & Hsop &?); subst.
       constructor.
