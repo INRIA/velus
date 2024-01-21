@@ -9,17 +9,22 @@ From compcert Require Import common.Values.
 From compcert Require Import common.Errors.
 From compcert Require Import common.Memory.
 
+From compcert Require Import Determinism.
+From compcert Require Import common.Events.
+From compcert Require Import common.Behaviors.
+
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
 From Coq Require Import Classes.RelationClasses.
+From Coq Require Import Morphisms.
 
 Open Scope error_monad_scope.
 
-(* Extensions to CompCert libraries. *)
+(** * Extensions to CompCert libraries *)
 
-(** Conversions. *)
+(** ** Conversions *)
 
 Lemma NoDup_norepet:
   forall {A} (l: list A),
@@ -69,7 +74,7 @@ Proof.
   split; intro HH; inversion_clear HH; constructor; auto; apply IH; auto.
 Qed.
 
-(** The error monad. *)
+(** * The error monad. *)
 
 Section Mmaps.
 
@@ -250,7 +255,7 @@ Proof.
   apply IH in EQ0. auto.
 Qed.
 
-(** More monad syntax and tactics *)
+(** * More monad syntax and tactics *)
 
 Definition bind22 {A B C D: Type} (f: res (A * (B * C))) (g: A -> B -> C -> res D) : res D :=
   match f with
@@ -539,26 +544,6 @@ Proof.
   now rewrite PTree.gss, PTree.gso, PTree.gss.
   now rewrite 4 PTree.gso.
 Qed.
-
-(* Remark bind_parameter_temps_cons: *)
-(*   forall x t xs v vs le le', *)
-(*     bind_parameter_temps ((x, t) :: xs) (v :: vs) le = Some le' -> *)
-(*     list_norepet (var_names ((x, t) :: xs)) -> *)
-(*     PTree.get x le' = Some v. *)
-(* Proof. *)
-(*   induction xs as [|[x' t']]; destruct vs; *)
-(*     intros * Bind Norep; inversion Bind as [Bind']. *)
-(*   - apply PTree.gss. *)
-(*   - inversion_clear Norep as [|? ? Notin Norep']. *)
-(*     apply not_in_cons in Notin; destruct Notin as [? Notin]. *)
-(*     eapply IHxs; eauto. *)
-(*     + simpl. *)
-(*       erewrite set_comm in Bind'; eauto. *)
-(*     + constructor. *)
-(*       * apply Notin. *)
-(*       * inversion_clear Norep' as [|? ? ? Norep'']. *)
-(*         apply Norep''. *)
-(* Qed. *)
 
 Remark bind_parameter_temps_comm:
   forall xs vs s ts o to vself vout x t v le le',
@@ -982,3 +967,117 @@ Defined.
 Next Obligation.
   apply Z.divide_0_r.
 Defined.
+
+(** ** Reasoning about traces and behaviours *)
+
+Lemma traceinf_sim_appinf:
+  forall t T T',
+    traceinf_sim (t *** T) T' ->
+    exists T'',  T' = t *** T'' /\ traceinf_sim T T''.
+Proof.
+  induction t; simpl; eauto.
+  intros T T'. inversion 1; subst.
+  apply IHt in H3 as (? & -> & ?); eauto.
+Qed.
+
+Lemma traceinf_sim_forever_reactive:
+  forall P t t',
+    traceinf_sim t t' ->
+    forall s,
+      Smallstep.forever_reactive (Smallstep.step P) (Smallstep.globalenv P) s t ->
+      Smallstep.forever_reactive (Smallstep.step P) (Smallstep.globalenv P) s t'.
+Proof.
+  intro P. cofix HC. intros t t' TS s FR.
+  inv FR. (* start here to find the "granularity of steps" *)
+  apply traceinf_sim_appinf in TS as (? & -> & ?).
+  eapply Smallstep.forever_reactive_intro; eauto.
+Qed.
+
+Global Instance traceinf_sim_forever_reactive_Proper (P: Smallstep.semantics):
+  Proper (@eq (Smallstep.state P) ==> @traceinf_sim ==> Basics.impl)
+    (Smallstep.forever_reactive (Smallstep.step P) (Smallstep.globalenv P)).
+Proof.
+  intros s s' Eq; subst.
+  intros t t' Eq HH. eauto using traceinf_sim_forever_reactive.
+Qed.
+
+Lemma traceinf_sim_program_behaves:
+  forall P t,
+    program_behaves P (Reacts t) ->
+    forall t', traceinf_sim t t' ->
+          program_behaves P (Reacts t').
+Proof.
+  intros P t PB t' TS. inv PB.
+  take (Smallstep.initial_state _ _) and rename it into PI.
+  take (state_behaves _ _ _) and rename it into PB.
+  apply program_runs with (s:=s); auto. clear PI.
+  inv PB. rewrite TS in H0. eauto using state_behaves.
+Qed.
+
+Lemma inv_forever_reactive:
+  forall P, Smallstep.single_events P ->
+       forall t T s,
+         Smallstep.forever_reactive (Smallstep.step P) (Smallstep.globalenv P) s (t *** T) ->
+         exists s', Smallstep.star (Smallstep.step P) (Smallstep.globalenv P) s t s'
+               /\ Smallstep.forever_reactive (Smallstep.step P) (Smallstep.globalenv P) s' T.
+Proof.
+  intros P SE. induction t; intros * FR.
+  now exists s; split; eauto using Smallstep.star.
+  inversion FR as [? ? t' T' St' NE0 FR']; subst.
+  apply (Smallstep.star_non_E0_split' SE) in St'.
+  destruct t'; [contradiction|].
+  destruct St' as (s' & H1s' & H2s').
+  take ((_ :: _) *** T' = _) and inv it.
+  apply Smallstep.star_forever_reactive with (1:=H2s') in FR'; clear H2s'.
+  take (t' *** T' = _) and rewrite it in *; clear it.
+  apply IHt in FR' as (s'' & H1s'' & H2s'').
+  apply Smallstep.plus_star in H1s'.
+  eapply Smallstep.star_trans with (1:= H1s') (3:=eq_refl) in H1s''.
+  eauto.
+Qed.
+
+Lemma single_events_star_split:
+  forall P, Smallstep.single_events P ->
+       forall s s' t1 t2,
+         Smallstep.star (Smallstep.step P) (Smallstep.globalenv P) s (t1 ** t2) s' ->
+         exists s1, Smallstep.star (Smallstep.step P) (Smallstep.globalenv P) s t1 s1
+               /\ Smallstep.star (Smallstep.step P) (Smallstep.globalenv P) s1 t2 s'.
+Proof.
+  intros P SE s s' t1 t2; revert t2 s s'.
+  induction t1; [now eauto using Smallstep.star|].
+  intros * Hstar.
+  apply Smallstep.star_non_E0_split' with (1:=SE) in Hstar as (sa & Hplus & Hstar).
+  apply IHt1 in Hstar as (s1 & Hstar1 & Hstar2).
+  eapply Smallstep.plus_star_trans in Hplus; eauto.
+  apply Smallstep.plus_star in Hplus. eauto.
+Qed.
+
+Lemma star_world_sem:
+  forall P W t s s',
+    Smallstep.star (Smallstep.step P) (Smallstep.globalenv P) s t s' ->
+    forall w w',
+      possible_trace w t w' ->
+      Smallstep.star (Smallstep.step (world_sem P W))
+        (Smallstep.globalenv (world_sem P W))
+        (s, w) t (s', w').
+Proof.
+  assert (forall w w', possible_trace w E0 w' -> w = w') as HE0.
+  now inversion 1.
+  induction 1; intros * Hmay.
+  apply HE0 in Hmay; subst; now constructor.
+  take (t = t1 ** t2) and rename it into Ht; rewrite Ht.
+  assert (exists w1, possible_trace w t1 w1 /\ possible_trace w1 t2 w') as (w2 & Hww2 & Hw2w').
+  { destruct t as [|ev t].
+    + subst.
+      take ([] = t1 ** t2) and symmetry in it; apply Eapp_E0_inv in it as [Ht1 Ht2].
+      rewrite Ht1, Ht2 in *; clear Ht1 Ht2; subst.
+      eauto using possible_trace.
+    + rewrite Ht in *.
+      apply possible_trace_app_inv in Hmay as (w1 & Hmay1 & Hmay2).
+      eauto using possible_trace. }
+  clear Hmay.
+  eapply Smallstep.star_step with (3:=eq_refl) (s2:=(s2, w2)).
+  now constructor; auto.
+  apply IHstar; auto.
+Qed.
+

@@ -400,7 +400,8 @@ Section PRESERVATION.
           pose proof (find_class_name _ _ _ _ Findowner); subst.
           edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto.
           destruct (struct_in_bounds_sizeof _ _ _ Hco).
-          edestruct wt_program_find_unit as [WTc]; eauto; destruct WTc as [Find].
+          edestruct (wt_program_find_unit _ _ _ _ _ WT Findowner) as [WTc].
+          destruct WTc as [Find].
           eapply Forall_forall in Find; eauto; simpl in Find.
           apply not_None_is_Some in Find.
           destruct Find as [(?, ?)]; eauto.
@@ -418,7 +419,6 @@ Section PRESERVATION.
             apply (Z.le_le_add_le 0 (sizeof_struct (Clight.globalenv tprog) (make_members c))); try lia.
             apply sizeof_struct_pos.
         Qed.
-
       End SelfField.
 
       Theorem expr_correct:

@@ -222,4 +222,5 @@ src/ClightToAsm.v
 src/Instantiator.v
 src/Velus.v
 src/NLCorrectness.v
+src/VelusWorld.v
 src/VelusCorrectness.v

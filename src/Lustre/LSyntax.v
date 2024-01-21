@@ -2006,12 +2006,28 @@ Module Type LSYNTAX
     apply n_nodup.
   Qed.
 
+  Global Instance Permutation_idents_Proper:
+    Proper (@Permutation (ident * (type * Cks.clock * ident))
+              ==> @Permutation ident) idents.
+  Proof.
+    intros xs ys Hperm.
+    induction Hperm; simpl; eauto using Permutation.
+  Qed.
+
   Lemma node_NoDup_in {PSyn prefs} : forall (n : @node PSyn prefs),
       NoDup (idents (n_in n)).
   Proof.
     intros n.
     eapply NoDup_app_l.
     apply n_nodup.
+  Qed.
+
+  Lemma NoDupMembers_n_in {PSyn prefs} : forall (node: @node PSyn prefs),
+      NoDupMembers node.(n_in).
+  Proof.
+    intros node.
+    pose proof (node.(n_nodup)) as (Hnd & Hndl); clear Hndl.
+    now apply NoDup_app_l, fst_NoDupMembers in Hnd.
   Qed.
 
   Lemma node_NoDup_out {PSyn prefs} : forall (n : @node PSyn prefs),
