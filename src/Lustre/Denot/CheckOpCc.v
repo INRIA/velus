@@ -168,7 +168,7 @@ Proof.
   all: simpl in *; cases_eqn HH; subst; try congruence.
 Qed.
 
-Lemma sem_cast_ok :
+Lemma sem_cast_okval :
   forall v1 v2 t1 t2 m,
     Cop.sem_cast v1 t1 t2 m = Some v2 ->
     okval v1 ->
@@ -205,7 +205,7 @@ Proof.
   5:{ eapply classify_binarith_ok in Hcb; eauto. }
   all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
   all: simpl in Hv, Hv0.
-  all: apply sem_cast_ok in Hc1 as Hok, Hc2 as Hok0.
+  all: apply sem_cast_okval in Hc1 as Hok, Hc2 as Hok0.
   all: inv Hv; inv Hv0; simpl in *; auto.
 Qed.
 
@@ -252,7 +252,7 @@ Proof.
   destruct (Cop.classify_binarith t1 t2) eqn:Hcb; try tauto; destruct Hop.
   all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
   all: simpl in Hv, Hv0.
-  all: apply sem_cast_ok in Hc1 as Hok, Hc2 as Hok0.
+  all: apply sem_cast_okval in Hc1 as Hok, Hc2 as Hok0.
   all: inv Hv; inv Hv0; simpl in *; auto.
 Qed.
 
