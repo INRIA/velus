@@ -84,6 +84,15 @@ Proof.
   exfalso. apply H; discriminate.
 Qed.
 
+Lemma in_inj_app_map:
+  forall {A B} (f : A -> B) (finj : forall x y, f x = f y -> x = y),
+    forall x xs,
+      In (f x) (map f xs) -> In x xs.
+Proof.
+  induction xs as [|y xs]. now inversion 1.
+  simpl. destruct 1 as [Hi|Hi]; auto.
+Qed.
+
 (** *** About identifiers **)
 
 Lemma ident_eqb_neq:
@@ -271,6 +280,10 @@ Proof.
   rewrite ident_eqb_eq in *.
   congruence.
 Qed.
+
+Lemma assoc_ident_nil:
+  forall {A} x, assoc_ident x ([] : list (ident * A)) = None.
+Proof. reflexivity. Qed.
 
 Module Type IDS.
   Parameter bool_id : ident.

@@ -1,6 +1,7 @@
 From compcert Require Import common.Errors.
 From compcert Require Import common.Events.
 From compcert Require Import common.Behaviors.
+From compcert Require Import common.Determinism.
 From compcert Require Import cfrontend.Clight.
 From compcert Require Import cfrontend.ClightBigstep.
 From compcert Require Import lib.Integers.
@@ -10,7 +11,6 @@ From Velus Require Import Common.
 From Velus Require Import Ident.
 From Velus Require Import CoindStreams.
 From Velus Require Import ObcToClight.Generation.
-From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
 From Velus Require Import ObcToClight.Correctness.
 From Velus Require Import ObcToClight.Interface.
@@ -34,9 +34,13 @@ Import CIStr.
 Import OpAux.
 Import Op.
 
+From Velus Require Import Traces.
+From Velus Require Import VelusWorld.
+
 From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
+From Coq Require Import Permutation.
 
 Open Scope error_monad_scope.
 Open Scope stream_scope.
@@ -65,75 +69,14 @@ End WtStream.
 
 Definition wc_ins {PSyn prefs} (G: @global PSyn prefs) main ins := sem_clock_inputs G main ins.
 
-(** The trace of a Lustre node *)
-Section LTrace.
-  Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
-
-  Variable (node: @node PSyn prefs) (ins outs: list (Stream value)).
-
-  Hypothesis Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [].
-  Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
-  Hypothesis Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out).
-
-  Program Definition trace_node (n: nat): traceinf :=
-    mk_trace (tr_Streams ins) (tr_Streams outs)
-             (idfst (idfst node.(n_in))) (idfst (idfst (idfst node.(n_out))))
-             _ _ _ n.
-  Next Obligation.
-    destruct Spec_in_out.
-    - left; intro E; apply map_eq_nil, map_eq_nil in E; auto.
-    - right; intro E; apply map_eq_nil, map_eq_nil, map_eq_nil in E; auto.
-  Qed.
-  Next Obligation.
-    unfold tr_Streams, idfst; rewrite 3 map_length; auto.
-  Qed.
-  Next Obligation.
-    unfold tr_Streams, idfst; rewrite 4 map_length; auto.
-  Qed.
-
-  (** Simply link the trace of a Lustre node with the trace of an NLustre node with the same parameters *)
-  Lemma trace_inf_sim_node:
-    forall n n' Spec_in_out_n' Len_ins_n' Len_outs_n',
-      idfst (NL.Syn.n_in n') = idfst (idfst (n_in node)) ->
-      idfst (NL.Syn.n_out n') = idfst (idfst (idfst (n_out node))) ->
-      traceinf_sim (NLCorrectness.trace_node n' ins outs Spec_in_out_n' Len_ins_n' Len_outs_n' n)
-                   (trace_node n).
-  Proof.
-    intros; unfold NLCorrectness.trace_node, trace_node.
-    apply traceinf_sim'_sim.
-    revert n; cofix COFIX; intro.
-    rewrite unfold_mk_trace.
-    rewrite unfold_mk_trace with (xs := idfst (idfst (n_in node))).
-    simpl.
-    replace (load_events (tr_Streams ins n) (idfst (idfst (n_in node))) ** store_events (tr_Streams outs n) (idfst (idfst (idfst (n_out node)))))
-      with (load_events (tr_Streams ins n) (idfst (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idfst (NL.Syn.n_out n')));
-      try congruence.
-    constructor.
-    - intro E; eapply Eapp_E0_inv in E.
-      assert (forall n, length (tr_Streams ins n) = length (idfst (NL.Syn.n_in n'))) as Len_ins_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
-      assert (forall n, length (tr_Streams outs n) = length (idfst (NL.Syn.n_out n'))) as Len_outs_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
-      assert (idfst (NL.Syn.n_in n') <> [] \/ idfst (NL.Syn.n_out n') <> []) as Spec_in_out_2.
-      { clear - Spec_in_out_n'.
-        destruct Spec_in_out_n'; [left|right].
-        1,2:intro contra; eapply H, map_eq_nil; eauto. }
-      pose proof (load_store_events_not_E0 _ _ _ _ Spec_in_out_2 Len_ins_2 Len_outs_2 n).
-      intuition.
-    - apply COFIX.
-  Qed.
-
-End LTrace.
-
 (** A bisimulation relation between a declared node's trace and a given trace *)
 Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: list (Stream value)): traceinf -> Prop :=
   IOStep:
     forall T node
-      (Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [])
       (Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in))
       (Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out)),
       find_node f G = Some node ->
-      traceinf_sim T (trace_node node ins outs Spec_in_out Len_ins Len_outs 0) ->
+      traceinf_sim T (trace_node node ins outs Len_ins Len_outs 0) ->
       bisim_IO G f ins outs T.
 
 Local Hint Resolve
@@ -208,6 +151,42 @@ Proof.
     1,2:intros; destruct_conjs; auto.
 Qed.
 
+(** Simply link the trace of a Lustre node with the trace of an NLustre node with the same parameters *)
+Lemma trace_inf_sim_node {PSyn} {prefs}:
+  forall (node: @node PSyn prefs) ins outs
+    (Len_ins: Datatypes.length ins = Datatypes.length node.(n_in))
+    (Len_outs: Datatypes.length outs = Datatypes.length node.(n_out))
+    n n' Spec_in_out_n' Len_ins_n' Len_outs_n',
+    idfst (NL.Syn.n_in n') = idfst (idfst (n_in node)) ->
+    idfst (NL.Syn.n_out n') = idfst (idfst (idfst (n_out node))) ->
+    traceinf_sim (NLCorrectness.trace_node n' ins outs Spec_in_out_n' Len_ins_n' Len_outs_n' n)
+      (trace_node node ins outs Len_ins Len_outs n).
+Proof.
+  intros; unfold NLCorrectness.trace_node, trace_node.
+  rename node0 into node.
+  apply traceinf_sim'_sim.
+  revert n; cofix COFIX; intro.
+  rewrite unfold_mk_trace.
+  rewrite unfold_mk_trace with (xs := idfst (idfst (n_in node))).
+  simpl.
+  replace (load_events (tr_Streams ins n) (idfst (idfst (n_in node))) ** store_events (tr_Streams outs n) (idfst (idfst (idfst (n_out node)))))
+    with (load_events (tr_Streams ins n) (idfst (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idfst (NL.Syn.n_out n')));
+    try congruence.
+  constructor.
+  - intro E; eapply Eapp_E0_inv in E.
+    assert (forall n, length (tr_Streams ins n) = length (idfst (NL.Syn.n_in n'))) as Len_ins_2.
+    { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+    assert (forall n, length (tr_Streams outs n) = length (idfst (NL.Syn.n_out n'))) as Len_outs_2.
+    { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+    assert (idfst (NL.Syn.n_in n') <> [] \/ idfst (NL.Syn.n_out n') <> []) as Spec_in_out_2.
+    { clear - Spec_in_out_n'.
+      destruct Spec_in_out_n'; [left|right].
+      1,2:intro contra; eapply H, map_eq_nil; eauto. }
+    pose proof (load_store_events_not_E0 _ _ _ _ Spec_in_out_2 Len_ins_2 Len_outs_2 n).
+    intuition.
+  - apply COFIX.
+Qed.
+
 (** The ultimate lemma states that, if
     - the parsed declarations [D] elaborate to a dataflow program [G] and
       a proof [Gp] that it satisfies [wt_global G] and [wc_global G],
@@ -245,8 +224,7 @@ Proof.
         by (rewrite <-length_idfst; congruence).
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
         by (now rewrite Len_outs, Hout, 2 length_idfst).
-    eapply IOStep with (Spec_in_out:=or_introl Hnnul)
-                       (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
+    eapply IOStep with (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.
     eapply trace_inf_sim_node.
     1,2:f_equal; auto.
@@ -263,3 +241,53 @@ Proof.
     eapply normfby_global_normal_args, normlast_global_normal_args, unnest_global_normal_args; eauto 7 with lclocking.
   - eapply behavior_l_to_nl in Comp'; eauto.
 Qed.
+
+Corollary behavior_asm_trace_node:
+  forall D G Gp P main ins outs,
+    elab_declarations D = OK (exist _ G Gp) ->
+    lustre_to_asm (Some main) G = OK P ->
+    wt_ins G main ins ->
+    wc_ins G main (pStr ins) ->
+    Sem.sem_node G main (pStr ins) (pStr outs) ->
+    exists node Len_ins Len_outs,
+      find_node main G = Some node
+      /\ program_behaves (Asm.semantics P)
+          (Reacts (trace_node node ins outs Len_ins Len_outs 0)).
+Proof.
+  intros * EL LA WT WC SEM.
+  apply behavior_asm with (1:=EL) (2:=LA) (3:=WT) (4:=WC) in SEM as (T & SEM & BIS).
+  inv BIS.
+  exists node0; exists Len_ins; exists Len_outs.
+  split; auto.
+  eapply CompCertLib.traceinf_sim_program_behaves in SEM; eauto.
+Qed.
+
+Corollary behavior_asm_velus_world_trace_node_and_nothing_else:
+  forall D G Gp P main ins outs,
+    elab_declarations D = OK (exist _ G Gp) ->
+    lustre_to_asm (Some main) G = OK P ->
+    wt_ins G main ins ->
+    wc_ins G main (pStr ins) ->
+    Sem.sem_node G main (pStr ins) (pStr outs) ->
+    exists node Len_ins Len_outs,
+      find_node main G = Some node
+      /\ program_behaves (world_sem (Asm.semantics P) (velus_world G main ins))
+          (Reacts (trace_node node ins outs Len_ins Len_outs 0))
+      /\ forall beh, program_behaves (world_sem (Asm.semantics P) (velus_world G main ins)) beh
+               -> same_behaviors beh (Reacts (trace_node node ins outs Len_ins Len_outs 0)).
+Proof.
+  intros * EL LA WT WC SEM.
+  apply behavior_asm_trace_node with (1:=EL) (2:=LA) (3:=WT) (4:=WC) in SEM
+      as (node & Len_ins & Len_outs & FIND & BEH).
+  exists node; exists Len_ins; exists Len_outs.
+  match goal with |- _ /\ ?PB /\ _ => enough PB as BEH' end.
+  repeat split; auto.
+  - intros beh PB2.
+    eapply asm_and_velus_world_deterministic with (1:=BEH') in PB2.
+    destruct beh; inv PB2; auto.
+    constructor.
+    now apply traceinf_sim_sym.
+  - apply velus_world_behaves; auto.
+    apply Asm.semantics_determinate.
+Qed.
+

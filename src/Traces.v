@@ -155,3 +155,49 @@ Section Obc.
     mk_trace ins outs m.(m_in) m.(m_out) _ _ _ n.
 
 End Obc.
+
+(** The trace of a Lustre node *)
+
+From Velus Require Import CoindStreams.
+From Velus Require Import Instantiator.
+Import L.
+Import CIStr.
+
+Section LTrace.
+
+  Context {PSyn : list decl -> block -> Prop} {prefs : PS.t}.
+
+  Variable (node: @node PSyn prefs) (ins outs: list (Stream value)).
+
+  Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
+  Hypothesis Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out).
+
+  Program Definition trace_node (n: nat): traceinf :=
+    mk_trace (tr_Streams ins) (tr_Streams outs)
+      (idfst (idfst node.(n_in))) (idfst (idfst (idfst node.(n_out))))
+      _ _ _ n.
+  Next Obligation.
+    left. pose proof (node.(n_ingt0)) as H0.
+    destruct (node.(n_in)). now inv H0. now inversion 1.
+  Qed.
+  Next Obligation.
+    unfold tr_Streams, idfst; rewrite 3 map_length; auto.
+  Qed.
+  Next Obligation.
+    unfold tr_Streams, idfst; rewrite 4 map_length; auto.
+  Qed.
+
+  Lemma trace_node_step:
+    forall n, trace_node n = (load_events (tr_Streams ins n) (idfst (idfst node.(n_in)))
+                      ** store_events (tr_Streams outs n) (idfst (idfst (idfst node.(n_out)))))
+                     *** (trace_node (S n)).
+  Proof.
+    intros.
+    unfold trace_node, mk_trace.
+    rewrite (unroll_traceinf' (mk_trace' _ _ _ _ _ _ _ n)).
+    simpl. rewrite traceinf_traceinf'_app.
+    reflexivity.
+  Qed.
+
+End LTrace.
+
