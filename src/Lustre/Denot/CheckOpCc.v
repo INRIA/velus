@@ -4,16 +4,8 @@ From Velus Require Import ObcToClight.Interface.
 
 Import String.
 
-(** TEST : définitions de check_* avec les valeurs de CompCert *)
-
-Lemma equiv_decb_spec :
-  forall x y,
-    EquivDec.equiv_decb x y = true -> x = y.
-Proof.
-  intros * He.
-  cbv in He.
-  cases.
-Qed.
+(** * Concrete definitions of [check_unop], [check_binop_any]
+ * and [check_binop_val], instantiated with CompCert's operators *)
 
 
 (** Concrete definition of [check_unop].
@@ -70,7 +62,7 @@ Qed.
 Theorem check_unop_correct :
   forall op ty ty',
     check_unop op ty = true ->
-    type_unop op ty = Some ty' -> (* ok par wt_exp *)
+    type_unop op ty = Some ty' -> (* ok with wt_exp *)
     forall v, wt_value v ty ->
          sem_unop op v ty <> None.
 Proof.
@@ -93,7 +85,6 @@ Proof.
       (EquivDec.equiv_decb tx Ident.Ids.bool_id) eqn:Heq,
       (PeanoNat.Nat.eqb (Datatypes.length tn) 2) eqn:Hl;
       simpl in Hty; try congruence.
-    apply equiv_decb_spec in Heq; subst.
     rewrite PeanoNat.Nat.eqb_eq in Hl.
     destruct op as [[]|]; try congruence.
     inv Hwt; rewrite Hl in *.
@@ -101,424 +92,210 @@ Proof.
 Qed.
 
 
-Import String.
-
-(* une autre définition des type de Vélus *)
-Inductive okty : Ctypes.type -> Prop :=
-| OkInt : forall sz sg attr, okty (Ctypes.Tint sz sg attr)
-| OkLong : forall sg attr, okty (Ctypes.Tlong sg attr)
-| OkLFloat : forall sz attr, okty (Ctypes.Tfloat sz attr)
-.
-
-Lemma typecl_okty : forall ty, okty ty <-> typecl ty <> None.
-Proof.
-  split; intro H.
-  inv H; simpl; congruence.
-  destruct ty; simpl in *; try congruence; constructor.
-Qed.
-
-(* valeurs problématiques dans Vélus *)
-Definition okval (v : Values.val) :=
-  match v with
-  | Values.Vundef
-  | Values.Vptr _ _ => False
-  | _ => True
-  end.
-
-Lemma classify_binarith_ok :
-  forall t1 t2,
-    okty t1 ->
-    okty t2 ->
-    Cop.classify_binarith t1 t2 <> Cop.bin_default.
-Proof.
-  unfold Cop.classify_binarith.
-  intros * Ht1 Ht2 Hcl.
-  inv Ht1; inv Ht2; simpl in *; cases.
-Qed.
-
-Lemma sem_cast1_ok :
-  forall v1 t1 t2 m,
-    okty t1 ->
-    okty t2 ->
-    okval v1 ->
-    Ctyping.wt_val v1 t1 ->
-    Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
-Proof.
-  unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 Hokv1 Hv1.
-  inv Ht1; inv Ht2; inv Hv1.
-  all: cases_eqn HH; subst.
-  all: try congruence.
-  all: simpl in *; cases_eqn HH; subst; try congruence.
-Qed.
-
-Lemma sem_cast2_ok :
-  forall v2 t1 t2 m,
-    okty t1 ->
-    okty t2 ->
-    okval v2 ->
-    Ctyping.wt_val v2 t2 ->
-    Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m <> None.
-Proof.
-  unfold Cop.sem_cast, Cop.classify_binarith.
-  intros * Ht1 Ht2 Hokv2 Hv2.
-  inv Ht1; inv Ht2; inv Hv2.
-  all: cases_eqn HH; subst.
-  all: try congruence.
-  all: simpl in *; cases_eqn HH; subst; try congruence.
-Qed.
-
-Lemma sem_cast_okval :
-  forall v1 v2 t1 t2 m,
-    Cop.sem_cast v1 t1 t2 m = Some v2 ->
-    okval v1 ->
-    okval v2.
-Proof.
-  unfold Cop.sem_cast, okval.
-  intros * Hc Hv1.
-  destruct t1, t2; simpl in *; inv Hc; auto.
-  all: destruct v1, v2; auto; cases; congruence.
-Qed.
-
-Lemma sem_binarith_ok :
-  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
-  (forall sg n1 n2, sem_int sg n1 n2 <> None) ->
-  (forall sg n1 n2, sem_long sg n1 n2 <> None) ->
-  (forall n1 n2, sem_float n1 n2 <> None) ->
-  (forall n1 n2, sem_single n1 n2 <> None) ->
-  okty t1 ->
-  okty t2 ->
-  Ctyping.wt_val v1 t1 ->
-  Ctyping.wt_val v2 t2 ->
-  okval v1 ->
-  okval v2 ->
-  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None.
-Proof.
-  intros * Hint Hlong Hfloat Hsingle Ht1 Ht2 Hv1 Hv2 Ok1 Ok2.
-  (* (op & t3 & Hty). *)
-  unfold Cop.sem_binarith.
-  destruct (Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc1.
-  2:{ eapply sem_cast1_ok in Hc1; eauto. }
-  destruct (Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc2.
-  2:{ eapply sem_cast2_ok in Hc2; eauto. }
-  destruct (Cop.classify_binarith t1 t2) eqn:Hcb.
-  5:{ eapply classify_binarith_ok in Hcb; eauto. }
-  all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
-  all: simpl in Hv, Hv0.
-  all: apply sem_cast_okval in Hc1 as Hok, Hc2 as Hok0.
-  all: inv Hv; inv Hv0; simpl in *; auto.
-Qed.
-
-(* pour les opérations qui ne fonctionnent que sur les entiers *)
-Lemma sem_binarith_ok' :
-  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
-  (* (forall sg n1 n2, sem_int sg n1 n2 <> None) -> *)
-  (* (forall sg n1 n2, sem_long sg n1 n2 <> None) -> *)
-  (* (forall n1 n2, sem_float n1 n2 <> None) -> *)
-  (* (forall n1 n2, sem_single n1 n2 <> None) -> *)
-  (* okty t1 -> *)
-  (* okty t2 -> *)
-  Ctyping.wt_val v1 t1 ->
-  Ctyping.wt_val v2 t2 ->
-  okval v1 ->
-  okval v2 ->
-  match Cop.classify_binarith t1 t2 with
-  | Cop.bin_case_i _ | Cop.bin_case_l _ =>
-                         (forall sg n1 n2, sem_int sg n1 n2 <> None)
-                         /\ (forall sg n1 n2, sem_long sg n1 n2 <> None)
-
-  | Cop.bin_case_f | Cop.bin_case_s =>
-                       (forall n1 n2, sem_float n1 n2 <> None)
-                       /\ (forall n1 n2, sem_single n1 n2 <> None)
-  | _ => False
-  end ->
-  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None.
-Proof.
-  intros * (* Hint Hlong *) (* Hfloat Hsingle *) (* Ht1 Ht2 *) Hv1 Hv2 Ok1 Ok2 Hop.
-  (* (op & t3 & Hty). *)
-  unfold Cop.sem_binarith.
-  destruct (Cop.sem_cast v1 t1 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc1.
-  2:{ eapply sem_cast1_ok in Hc1; eauto.
-      destruct t1, t2; simpl in Hop; cases; try tauto; constructor.
-      clear - Hop. destruct t1, t2; simpl in Hop; cases_eqn HH; subst; try tauto.
-      all: constructor.
-  }
-  destruct (Cop.sem_cast v2 t2 (Cop.binarith_type (Cop.classify_binarith t1 t2)) m) eqn:Hc2.
-  2:{ eapply sem_cast2_ok in Hc2; eauto.
-      destruct t1, t2; simpl in Hop; cases; try tauto; constructor.
-      clear - Hop. destruct t1, t2; simpl in Hop; cases_eqn HH; subst; try tauto.
-      all: constructor.
-  }
-  destruct (Cop.classify_binarith t1 t2) eqn:Hcb; try tauto; destruct Hop.
-  all: apply Ctyping.pres_sem_cast in Hc1 as Hv, Hc2 as Hv0; auto.
-  all: simpl in Hv, Hv0.
-  all: apply sem_cast_okval in Hc1 as Hok, Hc2 as Hok0.
-  all: inv Hv; inv Hv0; simpl in *; auto.
-Qed.
-
-(* FIXME: changer la signature de cette fonction car elle se fout des types *)
+(** Binary operations that always work with types ty1 and ty2 *)
 Definition check_binop_any (op : binop) (ty1 ty2 : type) : bool :=
   match op with
-  | Cop.Odiv => false
+  | Cop.Odiv =>
+      match ty1, ty2 with
+      | Tprimitive t1, Tprimitive t2 =>
+          match Cop.classify_binarith (cltype t1) (cltype t2) with
+          (* floating point division is always defined *)
+          | Cop.bin_case_f | Cop.bin_case_s => true
+          | _ => false
+          end
+      | _,_ => false
+      end
   | Cop.Omod => false
   | Cop.Oshl => false
   | Cop.Oshr => false
   | _ => true
   end.
 
-Lemma sem_binary_operation_ok :
-  forall env op v1 t1 v2 t2 t3 m tyy,
-    check_binop_any op tyy tyy = true ->
-    Ctyping.type_binop op t1 t2 = Errors.OK t3 ->
-    okty t1 ->
-    okty t2 ->
-    Ctyping.wt_val v1 t1 ->
-    Ctyping.wt_val v2 t2 ->
-    okval v1 ->
-    okval v2 ->
-    Cop.sem_binary_operation env op v1 t1 v2 t2 m <> None.
-
+(* TODO: plus rapide. TODO: c'est plus fort que sem_cast ??? sans doute pas *)
+Lemma sem_cast1_ok :
+  forall v1 t1 t2 m,
+    wt_cvalue v1 t1 ->
+    Cop.sem_cast v1 (cltype t1) (Cop.binarith_type (Cop.classify_binarith (cltype t1) (cltype t2))) m <> None.
 Proof.
-  intros * Hcheck Hop Ht1 Ht2 Hv1 Hv2 Ok1 Ok2.
-  unfold Cop.sem_binary_operation.
-  destruct op; simpl in *; try congruence.
-  { (* Oadd *)
-    unfold Cop.sem_add.
-    inv Ht1; inv Ht2; simpl.
-    all: unfold Cop.classify_add, Ctypes.typeconv.
-    all: cases_eqn HH; subst; try congruence.
-    all: try apply sem_binarith_ok'; auto.
-    simpl; split; intros; congruence.
-    all: try (simpl; split; intros; congruence).
-    all: simpl; cases_eqn HH.
-    all: try (simpl; split; intros; congruence).
-    all: simpl in *; congruence. }
-  { (* Osub *)
-    unfold Cop.sem_sub.
-    inv Ht1; inv Ht2; simpl.
-    all: unfold Cop.classify_sub, Ctypes.typeconv.
-    all: cases_eqn HH; subst; try congruence.
-    all: try apply sem_binarith_ok'; auto.
-    all: try (simpl; split; intros; congruence).
-    all: simpl; cases_eqn HH.
-    all: try (simpl; split; intros; congruence).
-  }
-  { (* Omul *)
-    unfold Cop.sem_mul.
-    inv Ht1; inv Ht2; simpl.
-    all: apply sem_binarith_ok'; auto.
-    all: simpl; cases_eqn HH.
-    all: try (simpl; split; intros; congruence).
-  }
-  3:{ (* Oxor *)
-    apply sem_binarith_ok'; auto.
-    inv Ht1; inv Ht2; simpl in *.
-    all: cases_eqn HH; subst.
-    all: cbn in Hop; try congruence.
-    all: split; intros; congruence.
-  }
-(*   3:{ unfold Cop.sem_mul. *)
-(*       eapply sem_binarith_ok; intros; eauto; try congruence. *)
-(*       exists Cop.Omul. *)
-(*       exists t3. *)
-(*       now simpl. } *)
-(*   - unfold Cop.sem_add. *)
-(*     cases. *)
-(*     5:{ eapply sem_binarith_ok; intros; eauto; try congruence. *)
-(*         exists Cop.Oadd, t3. simpl. inv H0.  cases.  *)
-(*   all: cases_eqn HH; subst. inv H0. *)
-(*   destruct op eqn:Hop; simpl in *; try congruence. *)
-(*   - unfold Cop.sem_add. *)
-(*     cases. *)
-(*     5:{ eapply sem_binarith_ok; intros; eauto; try congruence. *)
-(*         exists op.   *)
-(* Qed.int *)
-Admitted.
-
-(*   forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m, *)
-(*   (forall sg n1 n2, sem_int sg n1 n2 <> None) -> *)
-(*   (forall sg n1 n2, sem_long sg n1 n2 <> None) -> *)
-(*   (forall n1 n2, sem_float n1 n2 <> None) -> *)
-(*   (forall n1 n2, sem_single n1 n2 <> None) -> *)
-(*   okty t1 -> *)
-(*   okty t2 -> *)
-(*   Ctyping.wt_val v1 t1 -> *)
-(*   Ctyping.wt_val v2 t2 -> *)
-(*   okval v1 -> *)
-(*   okval v2 -> *)
-(*   (exists op t3, Ctyping.type_binop op t1 t2 = Errors.OK t3) -> *)
-(*   Cop.sem_binarith sem_int sem_long sem_float sem_single v1 t1 v2 t2 m <> None. *)
-(* Proof. *)
-(*   intros * Hint Hlong Hfloat Hsingle Ht1 Ht2 Hv1 Hv2 Ok1 Ok2 (op & t3 & Hty). *)
-(*   unfold Cop.sem_binarith. *)
+  unfold Cop.sem_cast, Cop.classify_binarith.
+  intros * Hwt1.
+  inv Hwt1; simpl.
+  all: cases_eqn HH; subst.
+  all: try congruence.
+  all: simpl in *; cases_eqn HH; subst; congruence.
+Qed.
 
 
-Definition okvalue (v : value) : Prop :=
-  match v with
-  | Vscalar v => okval v
-  | Venum _ => True
-  end.
+(* TODO: plus rapide. TODO: c'est plus fort que sem_cast ??? sans doute pas *)
+Lemma sem_cast2_ok :
+  forall v2 t1 t2 m,
+    wt_cvalue v2 t2 ->
+    Cop.sem_cast v2 (cltype t2) (Cop.binarith_type (Cop.classify_binarith (cltype t1) (cltype t2))) m <> None.
+Proof.
+  unfold Cop.sem_cast, Cop.classify_binarith.
+  intros * Hwt.
+  inv Hwt; simpl.
+  all: cases_eqn HH; subst.
+  all: try congruence.
+  all: simpl in *; cases_eqn HH; subst; congruence.
+Qed.
 
-(* Theorem check_binop_any_correct : *)
-(*   forall op, *)
-(*     check_binop_any op = true -> *)
-(*   forall ty1 ty2, *)
-(*     type_binop op ty1 ty2 <> None -> *)
-(*   forall v1 v2, *)
-(*     wt_value v1 ty1 -> *)
-(*     wt_value v2 ty2 -> *)
-(*     okvalue v1 -> *)
-(*     okvalue v2 -> *)
-(*     sem_binop op v1 ty1 v2 ty2 <> None. *)
-(* Proof. *)
-(*   intros ? Hop ?? Hty ?? Hv1 Hv2 Ok1 Ok2. *)
-(*   unfold sem_binop. *)
-(*   cases_eqn HH; subst; simpl in *; try congruence. *)
-(*   all: cases_eqn HH; subst; try congruence. *)
-(*   all: inv Hv1; inv Hv2. *)
-(*   6-17: repeat rewrite ?Bool.andb_true_iff, ?Bool.andb_false_iff in *. *)
-(*   6-17: (firstorder; congruence). *)
-(*   2: admit. *)
-(*   all: unfold option_map; cases_eqn HH; try congruence. *)
-(* Qed. *)
+(* useless ? *)
+Lemma classify_binarith_ok :
+  forall t1 t2,
+    Cop.classify_binarith (cltype t1) (cltype t2) <> Cop.bin_default.
+Proof.
+  intros t1 t2.
+  unfold Cop.classify_binarith.
+  destruct t1, t2; simpl; cases; congruence.
+Qed.
 
-(* Module OLDCHECK. *)
+Lemma sem_binarith_ok1 :
+  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
+  (forall sg n1 n2, sem_int sg n1 n2 <> None) ->
+  (forall sg n1 n2, sem_long sg n1 n2 <> None) ->
+  (forall n1 n2, sem_float n1 n2 <> None) ->
+  (forall n1 n2, sem_single n1 n2 <> None) ->
+  wt_cvalue v1 t1 ->
+  wt_cvalue v2 t2 ->
+  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 (cltype t1) v2 (cltype t2) m <> None.
+Proof.
+  intros * Hint Hlong Hfloat Hsingle Hwt1 Hwt2.
 
-(*   (* Définition concrète de check_binop_any *) *)
-(* Definition check_binop_any (op : binop) (ty1 ty2 : type) : bool := *)
-(*   match op, ty1, ty2 with *)
-(*       | Cop.Oadd, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_add (cltype ty1) (cltype ty2) with Cop.add_default => false | _ => true end *)
-(*   | Cop.Osub, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_sub (cltype ty1) (cltype ty2) with Cop.sub_default => false | _ => true end *)
-(*   (* (* mul général semble impossible ? à cause d'un cast_float_int qui peut échouer selon une valeur *) *) *)
-(*   | Cop.Omul, Tprimitive (Tint _ _ | Tlong  _), Tprimitive (Tint _ _ | Tlong _) => *)
-(*       true *)
-(*   | Cop.Omul, Tprimitive (Tfloat _), Tprimitive (Tfloat _) => *)
-(*       true *)
-(*   | Cop.Odiv, Tprimitive (Tfloat _), Tprimitive (Tfloat _) => *)
-(*       true *)
-(*   (* idem : impossible *) *)
-(*   | Cop.Odiv, _, _ => *)
-(*       false *)
-(*   (* idem : impossible *) *)
-(*   | Cop.Omod, Tprimitive ty1, Tprimitive ty2 => *)
-(*       false *)
-(*   (* | Oand : binary_operation             (**r bitwise and ([&]) *) *) *)
-(*   (* | Oor : binary_operation              (**r bitwise or ([|]) *) *) *)
-(*   (* | Oxor : binary_operation             (**r bitwise xor ([^]) *) *) *)
-(*   (* | Oshl : binary_operation             (**r left shift ([<<]) *) *) *)
-(*   (* | Oshr : binary_operation             (**r right shift ([>>]) *) *) *)
-(*   | Cop.Oeq, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | Cop.One, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | Cop.Olt, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | Cop.Ogt, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | Cop.Ole, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | Cop.Oge, Tprimitive ty1, Tprimitive ty2 => *)
-(*       match Cop.classify_cmp (cltype ty1) (cltype ty2) with Cop.cmp_default => false | _ => true end *)
-(*   | _, _, _ => false *)
-(*   end. *)
+  unfold Cop.sem_binarith.
+  destruct (Cop.sem_cast v1 _ _ _) eqn:Hc1.
+  2:{ apply sem_cast1_ok in Hc1; auto. }
+  destruct (Cop.sem_cast v2 _ _ _) eqn:Hc2.
+  2:{ apply sem_cast2_ok in Hc2; auto. }
 
-(* Theorem check_binop_any_correct : *)
-(*   forall op ty1 ty2, *)
-(*     type_binop op ty1 ty2 <> None -> *)
-(*     check_binop_any op ty1 ty2 = true -> *)
-(*     forall v1 v2, wt_value v1 ty1 -> *)
-(*              wt_value v2 ty2 -> *)
-(*              sem_binop op v1 ty1 v2 ty2 <> None. *)
-(* Proof. *)
-(*   unfold check_binop_any, sem_binop, option_map. *)
-(*   unfold Cop.sem_binary_operation. *)
-(*   intros * hty Hck v1 v2 Hwt1 Hwt2. *)
-(*   destruct op; try congruence. *)
-(*   - (* Oadd *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_add; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Osub *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_sub; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Omul *) *)
-(*     cases_eqn HH; subst; simpl in *; try congruence; inv Hwt1; inv Hwt2. *)
-(*     { inv H1; inv H2. *)
-(*       revert HH6. *)
-(*       unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       simpl; cases_eqn HH; subst; congruence. } *)
-(*     { inv H1; inv H2. *)
-(*       revert HH6. *)
-(*       unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       simpl; cases_eqn HH; subst; congruence. } *)
-(*     { inv H1; inv H2. *)
-(*       revert HH6. *)
-(*       unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       simpl; cases_eqn HH; subst; congruence. } *)
-(*     { inv H1; inv H2. *)
-(*       revert HH6. *)
-(*       unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       simpl; cases_eqn HH; subst; congruence. } *)
-(*     { inv H1; inv H2. *)
-(*       all: revert HH6. *)
-(*       all: unfold Cop.sem_mul, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       all: simpl; cases_eqn HH; subst; congruence. } *)
-(*   - (* Odiv flottants *) *)
-(*     cases_eqn HH; subst; simpl in *; try congruence; inv Hwt1; inv Hwt2. *)
-(*     { inv H1; inv H2. *)
-(*       all: revert HH6. *)
-(*       all: unfold Cop.sem_div, Cop.sem_binarith, Cop.sem_cast, Cop.classify_cast. *)
-(*       all: simpl; cases_eqn HH; subst; congruence. } *)
-(*   - (* Omod *) *)
-(*     cases. *)
-(*   - (* Oeq *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* One *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Olt *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Ogt *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Ole *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(*   - (* Oge *) *)
-(*     revert Hck. *)
-(*     unfold Cop.classify_cmp; intros. *)
-(*     cases_eqn HH; subst; try congruence; inv Hwt1; inv Hwt2. *)
-(*     all: simpl in *; try congruence. *)
-(*     all: inv H1; inv H2; simpl in *; try congruence; cases. *)
-(* Qed. *)
+  destruct t1, t2; simpl.
+  all: inv Hwt1; inv Hwt2.
+  all: repeat (simpl in *; cases_eqn HH; subst).
+  all: inv Hc1; inv Hc2.
+Qed.
 
-(* End OLDCHECK. *)
+Lemma sem_binarith_ok2 :
+  forall sem_int sem_long sem_float sem_single v1 t1 v2 t2 m,
+  match Cop.classify_binarith (cltype t1) (cltype t2) with
+  | Cop.bin_case_i _ | Cop.bin_case_l _ =>
+     (forall sg n1 n2, sem_int sg n1 n2 <> None)
+   /\ (forall sg n1 n2, sem_long sg n1 n2 <> None)
+  | Cop.bin_case_f | Cop.bin_case_s =>
+     (forall n1 n2, sem_float n1 n2 <> None)
+     /\ (forall n1 n2, sem_single n1 n2 <> None)
+  | _ => False
+  end ->
+  wt_cvalue v1 t1 ->
+  wt_cvalue v2 t2 ->
+  Cop.sem_binarith sem_int sem_long sem_float sem_single v1 (cltype t1) v2 (cltype t2) m <> None.
+Proof.
+  intros * Hcl Hwt1 Hwt2.
+  unfold Cop.sem_binarith.
+  destruct (Cop.sem_cast v1 _ _ _) eqn:Hc1.
+  2:{ apply sem_cast1_ok in Hc1; auto. }
+  destruct (Cop.sem_cast v2 _ _ _) eqn:Hc2.
+  2:{ apply sem_cast2_ok in Hc2; auto. }
 
-(* Définition concrète de check_binop_val (v2 = valeur du membre droit) *)
+  destruct t1, t2; simpl.
+  all: inv Hwt1; inv Hwt2.
+  all: repeat (simpl in *; cases_eqn HH; subst).
+  all: inv Hc1; inv Hc2.
+  all: destruct Hcl; congruence.
+Qed.
+
+Theorem check_binop_any_correct :
+  forall op ty1 ty2 ty',
+    check_binop_any op ty1 ty2 = true ->
+    type_binop op ty1 ty2 = Some ty' -> (* ok with wt_exp *)
+    forall v1 v2, wt_value v1 ty1 ->
+             wt_value v2 ty2 ->
+             sem_binop op v1 ty1 v2 ty2 <> None.
+Proof.
+  unfold sem_binop, type_binop.
+  intros * Hck Hty v1 v2 Hwt1 Hwt2.
+  destruct ty1, ty2; try congruence.
+  - (* Tprimitive *)
+    inv Hwt1; inv Hwt2.
+    destruct op; simpl in *; try congruence.
+    + (* Oadd *)
+      unfold option_map, Cop.sem_add.
+      rewrite classify_add_cltypes.
+      destruct (Cop.sem_binarith _ _ _ _ _) eqn:Hop; try congruence.
+      apply sem_binarith_ok1 in Hop; congruence.
+    + (* Osub *)
+      unfold option_map, Cop.sem_sub.
+      rewrite classify_sub_cltypes.
+      destruct (Cop.sem_binarith _ _ _ _ _) eqn:Hop; try congruence.
+      apply sem_binarith_ok1 in Hop; congruence.
+    + (* Omul *)
+      unfold option_map, Cop.sem_mul; cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* Odiv *)
+      unfold option_map, Cop.sem_div.
+      destruct (Cop.sem_binarith _ _ _ _ _) eqn:Hop; try congruence.
+      apply sem_binarith_ok2 in Hop; try congruence.
+      cases; split; congruence.
+    + (* Oand *)
+      unfold option_map; cases_eqn Hop; try congruence.
+      apply sem_binarith_ok2 in Hop0; try congruence.
+      unfold Ctyping.binarith_int_type in Hop.
+      cases; split; congruence.
+    + (* Oor *)
+      unfold option_map; cases_eqn Hop; try congruence.
+      apply sem_binarith_ok2 in Hop0; try congruence.
+      unfold Ctyping.binarith_int_type in Hop.
+      cases; split; congruence.
+    + (* Oxor *)
+      unfold option_map; cases_eqn Hop; try congruence.
+      apply sem_binarith_ok2 in Hop0; try congruence.
+      unfold Ctyping.binarith_int_type in Hop.
+      cases; split; congruence.
+    + (* Oeq *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* One *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* Olt *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* Ogt *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* Ole *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+    + (* Oge *)
+      unfold option_map, Cop.sem_cmp.
+      rewrite classify_cmp_cltypes.
+      cases_eqn Hop; try congruence.
+      apply sem_binarith_ok1 in Hop0; congruence.
+  - (* Tenum *)
+    inv Hwt1; inv Hwt2.
+    destruct (EquivDec.equiv_decb i Ident.Ids.bool_id && EquivDec.equiv_decb i0 Ident.Ids.bool_id)
+      eqn:Heq1.
+    2: cases_eqn HH; simpl in *; congruence.
+    repeat (cases_eqn Hl; simpl in *; try congruence).
+    apply andb_prop in Hl0 as [ Hl1 Hl2 ].
+    apply PeanoNat.Nat.eqb_eq in Hl1, Hl2.
+    unfold option_map, sem_binop_bool, truth_table.
+    destruct op; simpl in Hck; try congruence.
+    all: cases_eqn HH; subst; simpl in *; try congruence; lia.
+Qed.
+
+
+(** Concrete definition of check_binop_val (v2 = valeur du membre droit) *)
+(* TODO: étendre un peu ?? *)
 Definition check_binop_val (op : binop) (ty1 : type) (v2 : value) (ty2 : type) : bool :=
   match op, ty1, v2, ty2 with
   | Cop.Odiv, Tprimitive (Tint Ctypes.I32 _), Vscalar (Values.Vint n), Tprimitive (Tint Ctypes.I32 _) =>
@@ -526,8 +303,6 @@ Definition check_binop_val (op : binop) (ty1 : type) (v2 : value) (ty2 : type) :
       && negb (Integers.Int.eq n Integers.Int.mone)
   | _, _, _, _ => false
   end.
-
-(* Require Import String. (* pour type_binop *) *)
 
 Theorem check_binop_val_correct :
   forall op ty1 v2 ty2,
