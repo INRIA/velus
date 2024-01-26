@@ -310,9 +310,13 @@ Module Export Op <: OPERATORS.
            | Errors.OK ty' => option_map Tprimitive (typecl ty')
            | Errors.Error _ => None
            end
-    | Tenum t1 _, Tenum t2 _ =>
+    | Tenum t1 tn1, Tenum t2 tn2 =>
       if (t1 ==b bool_id) && (t2 ==b bool_id) && (binop_sometimes_returns_bool bop)
-      then Some bool_type
+      then
+        (* FIXME: how to get |tn1|=|tn2|=2 from t1=t2=bool_id ?? *)
+        if (List.length tn1 =? 2) && (List.length tn2 =? 2)
+        then Some bool_type
+        else None
       else match bop with
            | Cop.Oeq => Some bool_type
            | Cop.One => Some bool_type
@@ -961,7 +965,7 @@ Module Export Op <: OPERATORS.
     (* Enum - Enum *)
     - destruct ((t1 ==b bool_id) && (t2 ==b bool_id)); simpl in *.
       + apply option_map_inv in Hsem as (c & Hsem & ?); subst.
-        destruct bop; simpl in *; try discriminate; inv Hty;
+        destruct bop, (_ && _); simpl in *; try discriminate; inv Hty;
           eapply truth_table_wt_value with (5:=Hsem); eauto.
       + destruct bop; try discriminate; inv Hty; inv Hsem; constructor;
           cases; simpl; lia.
