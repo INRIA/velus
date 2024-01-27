@@ -564,3 +564,19 @@ Abort.
 End TEST2.
 
 End CHECKOP.
+
+Module CheckOpFun
+  (Ids   : IDS)
+  (Op    : OPERATORS)
+  (OpAux : OPERATORS_AUX Ids Op)
+  (Cks   : CLOCKS        Ids Op OpAux)
+  (Senv  : STATICENV     Ids Op OpAux Cks)
+  (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+  (Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+  (Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
+  (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
+  (Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+  (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
+<: CHECKOP Ids Op OpAux Cks Senv Syn Typ Restr Lord Den OpErr.
+  Include CHECKOP Ids Op OpAux Cks Senv Syn Typ Restr Lord Den OpErr.
+End CheckOpFun.
