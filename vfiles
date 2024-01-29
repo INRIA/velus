@@ -108,7 +108,6 @@ src/Lustre/Denot/SDtoRel.v
 # pour le test
 src/Lustre/Denot/CheckOp.v
 src/Lustre/Denot/CheckOpCc.v
-src/Lustre/Denot/CheckOpTest.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v

@@ -148,11 +148,11 @@ let compile source_name out_name =
   let ast = parse toks in
   let main_node = get_main_node ast in
   (* TODO: move these two checks to a new pass *)
-  (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.Restr.check_global (Ident.Ids.elab_prefs) x)) with
+  (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.check_restr (Ident.Ids.elab_prefs) x)) with
    | Errors.OK true -> ()
    | _ -> Format.eprintf "warning: could not check semantic existence@."
   );
-  (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.op_check_global (Ident.Ids.elab_prefs) x)) with
+  (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.check_op (Ident.Ids.elab_prefs) x)) with
    | Errors.OK true -> ()
    | _ -> Format.eprintf "warning: cannot guarantee absence of arithmetic errors@."
   );

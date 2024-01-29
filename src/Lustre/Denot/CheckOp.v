@@ -33,7 +33,6 @@ Module Type CHECKOP
  * - false -> we don't know
  *)
 
-
 (** Legal unary operators *)
 Parameter check_unop : unop -> type -> bool.
 Conjecture check_unop_correct :
@@ -65,6 +64,7 @@ Conjecture check_binop_any_correct :
     forall v1 v2, wt_value v1 ty1 ->
              wt_value v2 ty2 ->
              sem_binop op v1 ty1 v2 ty2 <> None.
+
 
 (* true -> cannot fail
  * false -> we don't know *)
@@ -121,7 +121,8 @@ Definition check_node (n : node) :=
 
 Definition check_global (G : global) := forallb check_node (nodes G).
 
-(** Correction of the procedure *)
+
+(** ** Correction of the procedure *)
 
 Theorem check_exp_ok :
   forall Γ G ins envG envI bs env,
