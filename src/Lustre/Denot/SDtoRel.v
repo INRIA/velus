@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof OpErr Safe Abs Lp Reset Restr.
+Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof CheckOp OpErr Safe Abs Lp Reset Restr.
 
 Import List ListNotations.
 
@@ -28,8 +28,9 @@ Module Type SDTOREL
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
        (Import Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
-       (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
-       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
+       (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
+       (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop)
+       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Restr Cl Lord Den Ckop OpErr)
        (Import Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
        (Import Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den).
 
@@ -4525,8 +4526,8 @@ Module SdtorelFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS        Ids Op OpAux)
        (Senv  : STATICENV     Ids Op OpAux Cks)
-       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
-       (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
        (Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
        (Caus  : LCAUSALITY    Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
@@ -4535,10 +4536,11 @@ Module SdtorelFun
        (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
        (Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
        (Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
-       (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den)
-       (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr)
+       (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
+       (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop)
+       (Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Restr Cl Lord Den Ckop OpErr)
        (Abs   : ABS_INDEP  Ids Op OpAux Cks Senv Syn Typ Lord Den)
        (Lp    : LP         Ids Op OpAux Cks Senv Syn Typ Lord Den)
-<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf OpErr Safe Abs Lp.
-  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf OpErr Safe Abs Lp.
+<: SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf Ckop OpErr Safe Abs Lp.
+  Include SDTOREL Ids Op OpAux Cks Senv Syn Typ Cl Caus Lord Str Sem Den Restr Inf Ckop OpErr Safe Abs Lp.
 End SdtorelFun.

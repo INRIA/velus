@@ -197,7 +197,7 @@ Separate Extraction
   Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs
   Conventions1.allocatable_registers
   Clight.type_of_function
-  Instantiator.check_restr.
+  Instantiator.check_restr
   Instantiator.check_op.
 
 Extraction Library Ordered.

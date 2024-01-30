@@ -51,21 +51,13 @@ Module Stc2ObcInvariants := Stc2ObcInvariantsFun Ids Op OpAux ComTyp Cks IStr CE
 Module Stc2ObcTyping     := Stc2ObcTypingFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc.
 Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc Stc2ObcTyping.
 
-(** this is a test to instantiate Restr & Rt-Op checks
-    FIXME: on devrait mettre le Op.check et la preuve dans deux modules séparés pour
-    éviter les dépendantces sur Denot et OpErr ? *)
+
+(** this is a test to instantiate Restr & Rt-Op checks *)
 From Velus Require Import Lustre.Denot.Restr.
-From Velus Require Import Lustre.Denot.Denot.
-From Velus Require Import Lustre.Denot.OpErr.
 From Velus Require Import Lustre.Denot.CheckOp.
-From Velus Require Import Lustre.Denot.CheckOpCc.
 
 Module Restr := RestrFun  Ids Op OpAux Cks L.Senv L.Syn.
-Module Denot := LDenotFun Ids Op OpAux Cks L.Senv L.Syn L.Ord.
-Module OpErr := OpErrFun Ids Op OpAux Cks L.Senv L.Syn L.Ord Denot.
-Module CheckOp := CheckOpFun Ids Op OpAux Cks L.Senv L.Syn L.Typ Restr L.Ord Denot OpErr.
-Check CheckOp.check_global.
+Module CheckOp := CheckOpFun Ids Op OpAux Cks L.Senv L.Syn.
 
 Definition check_restr := @Restr.check_global.
 Definition check_op := @CheckOp.check_global.
-(* CheckOpCc.check_unop CheckOpCc.check_binop_val CheckOpCc.check_binop_any. *)

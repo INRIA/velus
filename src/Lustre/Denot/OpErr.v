@@ -1,8 +1,9 @@
 From Coq Require Import List.
 Import ListNotations.
 
-From Velus Require Import Common Operators Clocks StaticEnv LSyntax Denot LOrdered.
+From Velus Require Import Common Operators Clocks StaticEnv LSyntax LTyping LOrdered.
 From Velus Require Import Cpo SDfuns CommonDS.
+From Velus Require Import Denot Restr CheckOp.
 
 (** * Operators failure
 
@@ -14,9 +15,6 @@ From Velus Require Import Cpo SDfuns CommonDS.
     This file introduces the [op_correct] predicate that describes the (minimal?)
     set of assumptions required on a Lustre program for its denotation to be
     free of [error_Op].
-
-
-TODO !!!!!!!!!!! OpErr ne doit pas être un autre restr !!!! faire un truc plus souple
  *)
 
 Module Type OP_ERR
@@ -26,8 +24,11 @@ Module Type OP_ERR
        (Import Cks   : CLOCKS        Ids Op OpAux)
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+       (Import Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord).
+       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn).
 
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
   DSForall (fun s => match s with pres v => P v | _ => True end).
@@ -322,6 +323,123 @@ Proof.
 Qed.
 
 
+(** ** Correction of the [CheckOp] procedure *)
+
+Theorem check_exp_ok :
+  forall Γ G ins envG envI bs env,
+  forall e, restr_exp e ->
+       wt_exp G Γ e ->
+       check_exp e = true ->
+       op_correct_exp G ins envG envI bs env e.
+Proof.
+  intros *.
+  induction e using exp_ind2; simpl; intros Hr Hwt Hchk; inv Hr; inv Hwt.
+  - (* Econst *)
+    constructor.
+  - (* Eenum *)
+    constructor.
+  - (* Evar *)
+    constructor.
+  - (* Eunop *)
+    destruct (typeof e) as [|? []] eqn:Hty; try congruence.
+    apply andb_prop in Hchk as [F1 F2].
+    constructor; auto.
+    intros ty' Hty'.
+    rewrite Hty' in Hty; inv Hty.
+    (* c'est très très simple *)
+    apply nprod_forall_Forall, Forall_forall.
+    intros s Hin.
+    apply DSForall_all; intros [| v |]; auto.
+    intro Wtv.
+    eapply check_unop_correct; eauto; simpl; auto.
+    congruence.
+  - (* Ebinop *)
+    take (typeof e1 = _) and rewrite it in Hchk.
+    take (typeof e2 = _) and rewrite it in Hchk.
+    constructor.
+    (* récurrence pour e1, e2 *)
+    1,2: cases; repeat rewrite Bool.andb_true_iff in *; tauto.
+    intros ty1' ty2' Hty1' Hty2' ss1 ss2.
+    rewrite Hty1' in *; take ([_] = [_]) and inv it.
+    rewrite Hty2' in *; take ([_] = [_]) and inv it.
+    (* cas sur la tête de e2 *)
+    cases; inv Hty2'; repeat rewrite Bool.andb_true_iff, ?Bool.orb_true_iff in *.
+    (* membre droit constant *)
+    { subst ss2; rewrite denot_exp_eq.
+      simpl.
+      unfold sconst, DSForall_2pres.
+      rewrite ID_simpl, Id_simpl, MAP_map, zip_map.
+      eapply DSForall_zip with (P := fun _ => True) (Q := fun _ => True); auto using DSForall_all.
+      intros [] [] _ _; auto.
+      intros Wt1 Wt2.
+      destruct Hchk as [? []];
+        eapply check_binop_correct; eauto; simpl; auto; congruence. }
+    (* autres cas *)
+    all: apply DSForall_all.
+    all: intros [[|v1|] [|v2|]]; auto; intros Wt1 Wt2.
+    all: destruct Hchk as [[Hck]].
+    all: eapply check_binop_correct in Hck; eauto; congruence.
+  - (* Efby *)
+    apply andb_prop in Hchk as [F1 F2].
+    apply forallb_Forall in F1, F2.
+    constructor; simpl_Forall; auto.
+  - (* Ewhen *)
+    apply forallb_Forall in Hchk.
+    constructor; simpl_Forall; auto.
+  - (* Emerge *)
+    apply forallb_Forall in Hchk.
+    constructor; simpl_Forall.
+    eapply forallb_Forall, Forall_forall in Hchk; eauto.
+  - (* Ecase default *)
+    apply andb_prop in Hchk as [F1 F2].
+    apply forallb_Forall in F2.
+    constructor; simpl_Forall; auto.
+    eapply forallb_Forall, Forall_forall in F2; eauto.
+  - (* Ecase *)
+    apply andb_prop in Hchk as [F1 F3].
+    apply andb_prop in F1 as [F1 F2].
+    apply forallb_Forall in F2,F3.
+    constructor; simpl_Forall; auto.
+    eapply forallb_Forall, Forall_forall in F2; eauto.
+  - (* Eapp *)
+    apply andb_prop in Hchk as [F1 F2].
+    apply forallb_Forall in F1, F2.
+    constructor; simpl_Forall; auto.
+Qed.
+
+Lemma check_block_ok :
+  forall Γ G ins envG envI bs env,
+  forall b, restr_block b ->
+       wt_block G Γ b ->
+       check_block b = true ->
+       op_correct_block G ins envG envI bs env b.
+Proof.
+  destruct b; simpl; intros * Hr Hwt Hc; try tauto.
+  destruct e.
+  eapply forallb_Forall in Hc.
+  inv Hr; inv Hwt.
+  simpl_Forall; eauto using check_exp_ok.
+Qed.
+
+Lemma check_node_ok :
+  forall G ins envG envI bs env,
+  forall (n : node),
+    restr_node n ->
+    wt_node G n ->
+    check_node n = true ->
+    op_correct G ins envG envI bs env n.
+Proof.
+  unfold check_node, check_top_block, op_correct.
+  intros * Hr Hwt Hc.
+  inv Hr; inv Hwt.
+  cases.
+  take (restr_top_block _) and inv it.
+  take (wt_block _ _ _) and inv it.
+  take (wt_scope _ _ _ _) and inv it.
+  apply forallb_Forall in Hc.
+  simpl_Forall; eauto using check_block_ok.
+Qed.
+
 End OP_ERR.
 
 Module OpErrFun
@@ -330,9 +448,12 @@ Module OpErrFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS        Ids Op OpAux)
        (Senv  : STATICENV     Ids Op OpAux Cks)
-       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
-       (Lord  : LORDERED     Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
-<: OP_ERR Ids Op OpAux Cks Senv Syn Lord Den.
-  Include OP_ERR Ids Op OpAux Cks Senv Syn Lord Den.
+       (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+       (Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
+       (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
+       (Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
+<: OP_ERR Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop.
+  Include OP_ERR Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop.
 End OpErrFun.

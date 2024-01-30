@@ -113,6 +113,46 @@ Module Type OPERATORS.
   Axiom unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
   Axiom binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
 
+  (* Simple characterization of unary/binary operators failure cases.
+   * [check_unop], [check_binop] return
+   * - [true] if the operator cannot fail with the values possibly provided,
+       if no value is given the operator should never fail
+   * - [false] otherwise
+   *)
+
+  Parameter check_unop : unop -> option value -> type -> bool.
+
+  Conjecture check_unop_correct :
+    forall op ov ty,
+      check_unop op ov ty = true ->
+      type_unop op ty <> None ->
+      forall v,
+      wt_value v ty ->
+      match ov with
+      | Some v' => v' = v
+      | _ => True
+      end ->
+      sem_unop op v ty <> None.
+
+  Parameter check_binop : binop -> option value -> type -> option value -> type -> bool.
+
+  Conjecture check_binop_correct :
+    forall op ov1 ty1 ov2 ty2,
+      check_binop op ov1 ty1 ov2 ty2 = true ->
+      type_binop op ty1 ty2 <> None ->
+      forall v1 v2,
+      wt_value v1 ty1 ->
+      wt_value v2 ty2 ->
+      match ov1 with
+      | Some v => v = v1
+      | _ => True
+      end ->
+      match ov2 with
+      | Some v => v = v2
+      | _ => True
+      end ->
+      sem_binop op v1 ty1 v2 ty2 <> None.
+
 End OPERATORS.
 
 Module Type OPERATORS_AUX

@@ -15,7 +15,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import CommonDS SDfuns Denot OpErr CommonList2.
+Require Import CommonDS SDfuns Denot CheckOp OpErr Restr CommonList2.
 
 (* TODO: peut-être qu'il faudra prouver la sûreté du typage indépendamment
    des autres propriétés cl_DS et safe_op. Ça pourrait être utile dans une
@@ -30,10 +30,12 @@ Module Type LDENOTSAFE
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+       (Import Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Import Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
-       (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Lord Den).
+       (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
+       (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop).
 
 (* TODO: move to Vélus ? *)
 Lemma typeof_same :
@@ -4002,12 +4004,14 @@ Module LdenotsafeFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS        Ids Op OpAux)
        (Senv  : STATICENV     Ids Op OpAux Cks)
-       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
-       (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+       (Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
-       (Lord  : LORDERED     Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
-       (OpErr : OP_ERR     Ids Op OpAux Cks Senv Syn Lord Den)
-<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr.
-  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den OpErr.
+       (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
+       (Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
+       (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop)
+<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Restr Cl Lord Den Ckop OpErr.
+  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Restr Cl Lord Den Ckop OpErr.
 End LdenotsafeFun.
