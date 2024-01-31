@@ -650,14 +650,14 @@ Section LP_node.
 
   (* utile pour les cas récursifs *)
   Lemma lift_IH :
-    forall ins es envG envI bs env n,
-      Forall (fun e => denot_exp G ins e envG (take_env n envI) (take n bs) (take_env n env)
-                    == lift (take n) (denot_exp G ins e envG envI bs env)) es ->
-      denot_exps G ins es envG (take_env n envI) (take n bs) (take_env n env)
-      == lift (take n) (denot_exps G ins es envG envI bs env).
+    forall ins es envG envI env n,
+      Forall (fun e => denot_exp G ins e envG (take_env n envI) (take_env n env)
+                    == lift (take n) (denot_exp G ins e envG envI env)) es ->
+      denot_exps G ins es envG (take_env n envI) (take_env n env)
+      == lift (take n) (denot_exps G ins es envG envI env).
   Proof.
     induction es; intros * Hf; inv Hf.
-    - now rewrite 2 denot_exps_nil, <- take_map.
+    - rewrite 2 denot_exps_nil; auto.
     - rewrite 2 denot_exps_eq.
       setoid_rewrite lift_app; auto.
   Qed.
