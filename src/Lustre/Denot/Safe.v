@@ -3569,13 +3569,13 @@ Section Node_safe.
       env <= denot_node G n envG envI env ->
       wc_node G n ->
       wt_node G n ->
-      op_correct G ins envG envI bs env n ->
+      op_correct_node G ins envG envI bs env n ->
       wf_env Γ ins envI bs env ->
       wf_env Γ ins envI bs (denot_node G n envG envI env).
   Proof.
     intros * Hbs Hle Wc Wt Hop Hsafe.
     revert Hle Hop Hsafe.
-    revert Γ; unfold op_correct.
+    revert Γ; unfold op_correct_node.
     rewrite denot_node_eq, denot_top_block_eq.
     cases_eqn Hnd; simpl (get_locals _); intros.
     (* cas restreints : *)
@@ -3815,13 +3815,13 @@ Proof.
   eauto using op_correct_exp_le.
 Qed.
 
-Lemma op_correct_le :
+Lemma op_correct_node_le :
   forall G ins envG envI bs env env' n,
     env <= env' ->
-    op_correct G ins envG envI bs env' n ->
-    op_correct G ins envG envI bs env n.
+    op_correct_node G ins envG envI bs env' n ->
+    op_correct_node G ins envG envI bs env n.
 Proof.
-  unfold op_correct.
+  unfold op_correct_node.
   intros * ?; cases.
   apply Forall_impl.
   eauto using op_correct_block_le.
@@ -3847,12 +3847,12 @@ Proof.
   constructor; eauto using op_correct_exp_le.
 Qed.
 
-Lemma oc_admissible_rev :
+Lemma oc_node_admissible_rev :
   forall G ins envG envI bs n,
-    admissible_rev _ (fun env => op_correct G ins envG envI bs env n).
+    admissible_rev _ (fun env => op_correct_node G ins envG envI bs env n).
 Proof.
   intros ??????? Hoc.
-  eauto using op_correct_le.
+  eauto using op_correct_node_le.
 Qed.
 
 End Rev.
@@ -3864,16 +3864,16 @@ End Rev.
  *)
 (* TODO: c'est sans doute beaucoup trop fort, c'est une obligation
    impossible à prouver *)
-Definition op_correct_global (G : global) : Prop :=
-  let envG := denot_global G in
-  Forall (fun n =>
-            (* hypothèses de typage/cadencement aussi ? *)
-            let ins := List.map fst n.(n_in) in
-            let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-            forall envI bs,
-              wf_env Γ ins envI bs 0 ->
-              op_correct G ins envG envI bs (envG (n_name n) envI) n)
-    (nodes G).
+(* Definition op_correct_global (G : global) : Prop := *)
+(*   let envG := denot_global G in *)
+(*   Forall (fun n => *)
+(*             (* hypothèses de typage/cadencement aussi ? *) *)
+(*             let ins := List.map fst n.(n_in) in *)
+(*             let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in *)
+(*             forall envI bs, *)
+(*               wf_env Γ ins envI bs 0 -> *)
+(*               op_correct G ins envG envI bs (envG (n_name n) envI) n) *)
+(*     (nodes G). *)
 
 (* on peut affaiblir [wf_env] en ignorant les variables locales *)
 Lemma wf_env_loc :
@@ -3950,18 +3950,19 @@ Proof.
   - (* cas qui nous intéresse *)
     rewrite find_node_now in Hfind; inv Hfind; auto.
     inversion_clear Ocg as [|?? Hoc Hocs].
-    specialize (Hoc envI bs (wf_env_loc _ _ _ _ Hins)).
+    specialize (Hoc envI bs).
+    (* specialize (Hoc envI bs (wf_env_loc _ _ _ _ Hins)). *)
     revert Hoc. fold ins.
     rewrite HenvG; auto using find_node_now.
     rewrite <- denot_node_cons;
       eauto using find_node_not_Is_node_in, find_node_now.
     rewrite FIXP_fixp.
     intro Hoc.
-    apply op_correct_cons in Hoc; eauto using find_node_not_Is_node_in, find_node_now.
+    apply op_correct_node_cons in Hoc; eauto using find_node_not_Is_node_in, find_node_now.
     apply fixp_inv2_le with
       (Q := fun env =>
-              op_correct {| types := tys; externs := exts; nodes := nds |} ins envG envI bs env n
-      ); eauto using wf_env_admissible, oc_admissible_rev, wf_env_0_ext.
+              op_correct_node {| types := tys; externs := exts; nodes := nds |} ins envG envI bs env n
+      ); eauto using wf_env_admissible, oc_node_admissible_rev, wf_env_0_ext.
     intros env Hsafe Hl Hoc2.
     apply Ordered_nodes_cons in Hord as Hord'.
     apply wt_global_cons in Wtg as Wtg'.
@@ -3976,8 +3977,8 @@ Proof.
     + (* montrons que op_correct tient toujours *)
       clear - Hocs Hord.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH * Hins.
-      eapply op_correct_cons in HH; eauto using Ordered_nodes_nin.
+      intros * Hin HH *.
+      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + (* et que HenvG aussi *)
       intros f' ndf' envI' Hfind'.
       eapply find_node_uncons with (nd := n) in Hfind' as ?; auto.
@@ -3988,8 +3989,8 @@ Proof.
     + eauto using wc_global_cons.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH * Hins.
-      eapply op_correct_cons in HH; eauto using Ordered_nodes_nin.
+      intros * Hin HH *.
+      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + eauto using Ordered_nodes_cons.
     + intros f' ndf' envI' Hfind'.
       eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.

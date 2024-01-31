@@ -4219,7 +4219,7 @@ Lemma ok_sem_node :
     let ss := np_of_env ins envI in
     let os := np_of_env (List.map fst (n_out n)) envn in
     wf_env Γ ins envI bs envn ->
-    op_correct G ins envG envI bs envn n ->
+    op_correct_node G ins envG envI bs envn n ->
     inf_dom Γ ins envI envn ->
     forall infI infO,
       sem_node (Global tys exts (n :: nds)) f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
@@ -4272,7 +4272,7 @@ Proof.
     inversion_clear Hr as [?? Hrtb (? & Vdc & Perm)].
     inv Hrtb.
     constructor.
-    unfold op_correct in Hoc.
+    unfold op_correct_node in Hoc.
     pose proof (n_nodup n) as [Nd Ndl].
     take (_ = n_block n) and rewrite <- it in *.
     take (wt_block _ _ _) and inv it.
@@ -4413,7 +4413,7 @@ Proof.
       all: rewrite <- HenvG; auto using find_node_now,
         wf_env_loc, wf_env_0_ext.
       - (* op_correct *)
-        inv Ocg. apply (op_correct_cons _ n);
+        inv Ocg. apply (op_correct_node_cons _ n);
           eauto using find_node_not_Is_node_in, find_node_now.
       - (* inf_dom *)
         eapply inf_dom_decomp in InfG; eauto using find_node_now.
@@ -4424,8 +4424,8 @@ Proof.
     intros; apply IHnds; auto.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH ???.
-      eapply op_correct_cons in HH; eauto using Ordered_nodes_nin.
+      intros * Hin HH ??.
+      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + eauto using find_node_uncons.
     + eauto using find_node_uncons.
     + eauto using find_node_uncons.
@@ -4443,8 +4443,8 @@ Proof.
     + eauto using wc_global_cons.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH ???.
-      eapply op_correct_cons in HH; eauto using Ordered_nodes_nin.
+      intros * Hin HH ??.
+      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + now inv Causg.
     + eauto using Ordered_nodes_cons.
     + intros f' ndf' envI' Hfind'.
@@ -4502,7 +4502,8 @@ Theorem ok_global :
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    op_correct_global G ->
+    (* op_correct_global G -> *)
+    check_global G = true ->
     Forall node_causal (nodes G) ->
     forall f n, find_node f G = Some n ->
     forall (xs : nprod (length (n_in n))) InfXs,
@@ -4511,6 +4512,7 @@ Theorem ok_global :
         sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
 Proof.
   intros ?? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
+  apply check_global_ok in Hoc; auto.
   unshelve eapply _ok_global2 with (InfSs := InfXs) in Hins; eauto.
   { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;
       eauto using inf_dom_env_of_np. }

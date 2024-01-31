@@ -73,7 +73,7 @@ Proof.
 Qed.
 
 
-Section Op_correct.
+Section Op_correct_node.
 
 Variables
   (G : global)
@@ -156,13 +156,23 @@ Definition op_correct_block (b : block) : Prop :=
   | _ => True
   end.
 
-Definition op_correct (n : node) : Prop :=
+Definition op_correct_node (n : node) : Prop :=
   match n.(n_block) with
   | Blocal (Scope vars blks) => Forall op_correct_block blks
   | _ => True
   end.
 
-End Op_correct.
+End Op_correct_node.
+
+(* TODO: c'est trop fort pour l'instant.
+   Comment ne parler que du nœud main ?
+   Et propager les valeurs dans les appels de fonction ? *)
+Definition op_correct_global (G : global) : Prop :=
+  let envG := denot_global G in
+  Forall (fun n => forall envI bs,
+              let ins := List.map fst n.(n_in) in
+              op_correct_node G ins envG envI bs (envG (n_name n) envI) n)
+    (nodes G).
 
 
 (** ** Facts about op_correct  *)
@@ -242,13 +252,13 @@ Proof.
   solve_Exists.
 Qed.
 
-Lemma op_correct_cons :
+Lemma op_correct_node_cons :
   forall n nd nds tys exts ins envG envI bs env,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
-    op_correct (Global tys exts (nd :: nds)) ins envG envI bs env n ->
-    op_correct (Global tys exts nds) ins envG envI bs env n.
+    op_correct_node (Global tys exts (nd :: nds)) ins envG envI bs env n ->
+    op_correct_node (Global tys exts nds) ins envG envI bs env n.
 Proof.
-  unfold op_correct.
+  unfold op_correct_node.
   intros * Hnin Hop; cases.
   eapply Forall_impl_In in Hop; eauto.
   intros * Hin.
@@ -257,6 +267,100 @@ Proof.
   constructor; constructor.
   solve_Exists.
 Qed.
+
+(** *** The other way *)
+
+Lemma op_correct_exp_uncons :
+  forall e nd nds tys exts ins envG envI bs env,
+    ~ Is_node_in_exp nd.(n_name) e ->
+    op_correct_exp (Global tys exts (nds)) ins envG envI bs env e ->
+    op_correct_exp (Global tys exts (nd :: nds)) ins envG envI bs env e.
+Proof.
+  induction e using exp_ind2; intros * Hnin Hop; inv Hop;
+    eauto using op_correct_exp.
+  - (* Eunop *)
+    setoid_rewrite denot_exp_cons in H3;
+      eauto 6 using op_correct_exp, Is_node_in_exp.
+  - (* Ebinop *)
+    simpl in *.
+    setoid_rewrite denot_exp_cons in H5;
+      eauto 12 using op_correct_exp, Is_node_in_exp.
+  - (* Efby *)
+    constructor; simpl_Forall.
+    + eapply H; eauto.
+      contradict Hnin; constructor; left; solve_Exists.
+    + eapply H0; eauto.
+      contradict Hnin; constructor; right; solve_Exists.
+  - (* Ewhen *)
+    constructor.
+    simpl_Forall.
+    eapply H; eauto.
+    contradict Hnin; constructor; solve_Exists.
+  - (* Emerge *)
+    constructor.
+    simpl_Forall.
+    eapply H; eauto.
+    contradict Hnin; constructor; solve_Exists.
+  - (* Case total *)
+    constructor.
+    + eapply IHe; eauto.
+      contradict Hnin; constructor; auto.
+    + simpl_Forall.
+      eapply H; eauto.
+      contradict Hnin; constructor; right; left; solve_Exists.
+  - (* Case defaut *)
+    constructor.
+    + eapply IHe; eauto.
+      contradict Hnin; constructor; auto.
+    + simpl_Forall.
+      eapply H; eauto.
+      contradict Hnin; constructor; right; left; solve_Exists.
+    + simpl_Forall.
+      eapply H0; eauto.
+      contradict Hnin; constructor; right; right; esplit; split; solve_Exists.
+  - (* Eapp *)
+    constructor.
+    + simpl_Forall.
+      eapply H; eauto.
+      contradict Hnin; constructor; left; solve_Exists.
+    + simpl_Forall.
+      eapply H0; eauto.
+      contradict Hnin; constructor; right; solve_Exists.
+Qed.
+
+Lemma op_correct_block_uncons :
+  forall b nd nds tys exts ins envG envI bs env,
+    ~ Is_node_in_block nd.(n_name) b ->
+    op_correct_block (Global tys exts (nds)) ins envG envI bs env b ->
+    op_correct_block (Global tys exts (nd :: nds)) ins envG envI bs env b.
+Proof.
+  unfold op_correct_block.
+  intros * Hnin Hop; cases.
+  eapply Forall_impl_In in Hop; eauto.
+  intros * Hin.
+  apply op_correct_exp_uncons.
+  contradict Hnin.
+  constructor.
+  unfold Is_node_in_eq.
+  solve_Exists.
+Qed.
+
+Lemma op_correct_node_uncons :
+  forall n nd nds tys exts ins envG envI bs env,
+    ~ Is_node_in nd.(n_name) n ->
+    op_correct_node (Global tys exts nds) ins envG envI bs env n ->
+    op_correct_node (Global tys exts (nd :: nds)) ins envG envI bs env n.
+Proof.
+  unfold op_correct_node, Is_node_in.
+  intros * Hnin Hop; cases.
+  eapply Forall_impl_In in Hop; eauto.
+  intros * Hin.
+  apply op_correct_block_uncons.
+  contradict Hnin.
+  constructor; constructor.
+  solve_Exists.
+Qed.
+
 
 Global Add Parametric Morphism G ins : (@op_correct_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==>
@@ -310,13 +414,13 @@ Proof.
   split; intros Hf; simpl_Forall; eapply op_correct_exp_morph in Hf; eauto.
 Qed.
 
-Global Add Parametric Morphism G ins : (@op_correct G ins)
+Global Add Parametric Morphism G ins : (@op_correct_node G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==>
                      @Oeq (DS_prod SI) ==> @eq node ==> iff
-      as op_correct_morph.
+      as op_correct_node_morph.
 Proof.
   intros * Eq1 * Eq2 * Eq3 * Eq4 *.
-  unfold op_correct.
+  unfold op_correct_node.
   cases; try tauto.
   split; intros * HH; simpl_Forall.
   all: eapply op_correct_block_morph in HH; eauto.
@@ -427,9 +531,9 @@ Lemma check_node_ok :
     restr_node n ->
     wt_node G n ->
     check_node n = true ->
-    op_correct G ins envG envI bs env n.
+    op_correct_node G ins envG envI bs env n.
 Proof.
-  unfold check_node, check_top_block, op_correct.
+  unfold check_node, check_top_block, op_correct_node.
   intros * Hr Hwt Hc.
   inv Hr; inv Hwt.
   cases.
@@ -438,6 +542,30 @@ Proof.
   take (wt_scope _ _ _ _) and inv it.
   apply forallb_Forall in Hc.
   simpl_Forall; eauto using check_block_ok.
+Qed.
+
+Lemma check_global_ok :
+  forall G,
+    restr_global G ->
+    wt_global G ->
+    check_global G = true ->
+    op_correct_global G.
+Proof.
+  unfold check_global, op_correct_global, restr_global.
+  intros * Hr Hwt Hc%forallb_Forall.
+  generalize (denot_global G); intro envG.
+  assert (Ordered_nodes G) as Hord.
+  now apply wl_global_Ordered_nodes, wt_global_wl_global.
+  destruct G as [tys exts nds]; simpl in *.
+  induction nds as [|nd nds]; simpl; auto.
+  inv Hr. inv Hc.
+  apply wt_global_uncons in Hwt as Hwtn.
+  constructor; intros; auto.
+  - eapply check_node_ok, op_correct_node_uncons in Hwtn; eauto.
+    eapply find_node_not_Is_node_in; eauto using find_node_now.
+  - eapply IHnds in H2; eauto using wt_global_cons, Ordered_nodes_cons.
+    simpl_Forall.
+    eapply op_correct_node_uncons in H2; eauto using Ordered_nodes_nin.
 Qed.
 
 End OP_ERR.
