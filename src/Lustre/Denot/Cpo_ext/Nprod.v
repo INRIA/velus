@@ -76,6 +76,21 @@ Proof.
   auto.
 Qed.
 
+Lemma nprod_hd_bot : forall n, nprod_hd (0 : nprod (S n)) = 0.
+Proof.
+  destruct n; reflexivity.
+Qed.
+
+Lemma nprod_tl_bot : forall n, nprod_tl (0 : nprod (S n)) = 0.
+Proof.
+  destruct n; reflexivity.
+Qed.
+
+Lemma nprod_cons_bot : forall n, nprod_cons 0 (0 : nprod n) = 0.
+Proof.
+  destruct n; reflexivity.
+Qed.
+
 (** nprod concatenation *)
 Fixpoint nprod_app {n p} : nprod n -C-> nprod p -C-> nprod (n + p) :=
   match n return nprod n -C-> nprod p -C-> nprod (n+p) with
@@ -622,6 +637,17 @@ Lemma lift_cons :
       nprod_cons (f x) (lift f np).
 Proof.
   destruct n; auto.
+Qed.
+
+Lemma lift_bot :
+  forall (f : D1 -C-> D2), f 0 == 0 -> forall n, lift f (0 : nprod n) == 0.
+Proof.
+  induction n; simpl; auto.
+  autorewrite with cpodb.
+  setoid_rewrite nprod_hd_bot.
+  setoid_rewrite nprod_tl_bot.
+  rewrite IHn, H.
+  now setoid_rewrite nprod_cons_bot.
 Qed.
 
 Lemma lift_app :

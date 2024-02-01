@@ -657,24 +657,24 @@ Section LP_node.
       == lift (take n) (denot_exps G ins es envG envI env).
   Proof.
     induction es; intros * Hf; inv Hf.
-    - rewrite 2 denot_exps_nil; auto.
+    - simpl; rewrite 2 denot_exps_nil, take_bot; auto.
     - rewrite 2 denot_exps_eq.
       setoid_rewrite lift_app; auto.
   Qed.
 
   (* idem *)
   Lemma lift_IHs :
-    forall ins (ess : list (enumtag * _)) m envG envI bs env n,
+    forall ins (ess : list (enumtag * _)) m envG envI env n,
       Forall (fun es =>
-                Forall (fun e => denot_exp G ins e envG (take_env n envI) (take n bs) (take_env n env)
-                    == lift (take n) (denot_exp G ins e envG envI bs env)) (snd es)) ess ->
-      denot_expss G ins ess m envG (take_env n envI) (take n bs) (take_env n env)
-      == lift (lift (take n)) (denot_expss G ins ess m envG envI bs env).
+                Forall (fun e => denot_exp G ins e envG (take_env n envI) (take_env n env)
+                    == lift (take n) (denot_exp G ins e envG envI env)) (snd es)) ess ->
+      denot_expss G ins ess m envG (take_env n envI) (take_env n env)
+      == lift (lift (take n)) (denot_expss G ins ess m envG envI env).
   Proof.
     intros * Hf.
     induction ess as [|(x,es)]; inv Hf.
     - rewrite 2 denot_expss_nil; simpl.
-      now rewrite lift_nprod_const, take_map.
+      rewrite lift_bot; auto using take_bot.
     - rewrite 2 denot_expss_eq.
       unfold eq_rect.
       cases; subst.
@@ -682,27 +682,28 @@ Section LP_node.
           |-_ == _ (_ (_ ?a) ?b) =>
             setoid_rewrite (lift_cons (lift (take n)) _ a b)
         end; rewrite lift_IH; auto.
-      + simpl (length _).
-        now rewrite 2 lift_nprod_const, take_map.
+      + rewrite lift_bot; auto.
+        rewrite lift_bot; auto using take_bot.
   Qed.
 
   Lemma lp_exp :
-    forall Γ ins e n envI bs env,
+    forall Γ ins e n envI env,
+      ins <> [] ->
       wt_exp G Γ e ->
       wl_exp G e ->
-      denot_exp G ins e envG (take_env n envI) (take n bs) (take_env n env)
-      == lift (take n) (denot_exp G ins e envG envI bs env).
+      denot_exp G ins e envG (take_env n envI) (take_env n env)
+      == lift (take n) (denot_exp G ins e envG envI env).
   Proof.
-    intros * Hwt Hwl.
+    intros * Hins Hwt Hwl.
     induction e using exp_ind2.
     - (* Econst *)
       rewrite 2 denot_exp_eq.
       unfold sconst.
-      rewrite 2 MAP_map, <- take_map; auto.
+      rewrite 2 MAP_map, take_bss, <- take_map; auto.
     - (* Eenum *)
       rewrite 2 denot_exp_eq.
       unfold sconst.
-      rewrite 2 MAP_map, <- take_map; auto.
+      rewrite 2 MAP_map, take_bss, <- take_map; auto.
     - (* Evar *)
       rewrite 2 denot_exp_eq.
       now rewrite take_var.
@@ -763,7 +764,7 @@ Section LP_node.
     - (* Emerge *)
       inv Hwt. inv Hwl.
       rewrite 2 (denot_exp_eq _ _ (Emerge _ _ _)).
-      pose proof (IH := lift_IHs ins es (length tys) envG envI bs env n).
+      pose proof (IH := lift_IHs ins es (length tys) envG envI env n).
       eassert (Heq: _ == _); [apply IH; simpl_Forall; auto|clear IH].
       cbv zeta; revert Heq.
       gen_sub_exps; intros t1 t2 Eq.
@@ -776,7 +777,7 @@ Section LP_node.
       apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
       apply Forall_impl_inside with (P := wl_exp _ ) in H0; auto.
       apply lift_IH in H0.
-      pose proof (IH := lift_IHs ins es (length tys) envG envI bs env n).
+      pose proof (IH := lift_IHs ins es (length tys) envG envI env n).
       eassert (Eq: _ == _); [apply IH; simpl_Forall; auto|clear H IH].
       rewrite 2 (denot_exp_eq _ _ (Ecase _ _ _ _)).
       cbv zeta; revert IHe H0 Eq; gen_sub_exps.
@@ -790,7 +791,7 @@ Section LP_node.
       }{ (* Ecase total *)
       inv Hwt. inv Hwl.
       rewrite 2 (denot_exp_eq _ _ (Ecase _ _ _ _)).
-      pose proof (IH := lift_IHs ins es (length tys) envG envI bs env n).
+      pose proof (IH := lift_IHs ins es (length tys) envG envI env n).
       eassert (Heq: _ == _); [apply IH; simpl_Forall; auto|clear IH].
       cbv zeta; revert IHe Heq; gen_sub_exps.
       take (numstreams e = 1) and rewrite it.
@@ -827,14 +828,15 @@ Section LP_node.
   Qed.
 
   Corollary lp_exps :
-    forall Γ ins es n envI bs env,
+    forall Γ ins es n envI env,
+      ins <> [] ->
       Forall (wt_exp G Γ) es ->
       Forall (wl_exp G) es ->
-      denot_exps G ins es envG (take_env n envI) (take n bs) (take_env n env)
-      == lift (take n) (denot_exps G ins es envG envI bs env).
+      denot_exps G ins es envG (take_env n envI) (take_env n env)
+      == lift (take n) (denot_exps G ins es envG envI env).
   Proof.
-    induction es as [|e es]; intros * Hwt Hwl; inv Hwl; inv Hwt.
-    - now rewrite 2 denot_exps_nil, <- take_map.
+    induction es as [|e es]; intros * Hins Hwt Hwl; inv Hwl; inv Hwt.
+    - rewrite 2 denot_exps_nil, lift_bot; auto using take_bot.
     - rewrite 2 denot_exps_eq.
       match goal with
         |-_ == _ (_ (_ ?a) ?b) => setoid_rewrite (lift_app (take n) _ a _ b)
@@ -843,13 +845,14 @@ Section LP_node.
   Qed.
 
   Lemma lp_block :
-    forall Γ ins blk n envI bs env acc,
+    forall Γ ins blk n envI env acc,
+      ins <> [] ->
       wt_block G Γ blk ->
       wl_block G blk ->
-      denot_block G ins blk envG (take_env n envI) (take n bs) (take_env n env) (take_env n acc)
-      == take_env n (denot_block G ins blk envG envI bs env acc).
+      denot_block G ins blk envG (take_env n envI) (take_env n env) (take_env n acc)
+      == take_env n (denot_block G ins blk envG envI env acc).
   Proof.
-    intros * Hwt Hwl.
+    intros * Hins Hwt Hwl.
     rewrite 2 denot_block_eq; cases.
     inv Hwl; take (wl_equation _ _) and inv it.
     inv Hwt; take (wt_equation _ _ _) and inv it.
@@ -876,10 +879,9 @@ Section LP_node.
     induction blks as [|b blks]; simpl (fold_right _ _ _).
     { apply symmetry, take_env_bot. }
     do 2 take (Forall _ (_::_)) and inv it.
-    rewrite take_bss.
-    - rewrite <- lp_block; auto; eauto.
-    - pose proof (n_ingt0 nd).
-      destruct (n_in nd); simpl in *; try congruence; lia.
+    rewrite <- lp_block; auto; eauto.
+    pose proof (n_ingt0 nd).
+    destruct (n_in nd); simpl in *; try congruence; lia.
   Qed.
 
 End LP_node.
