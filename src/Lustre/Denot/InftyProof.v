@@ -1101,19 +1101,18 @@ Lemma infinite_exp :
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
         infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
-    (* FIMXE: un peu redondant par rapport à l'hypothèse d'après *)
-    infinite_dom envI ins ->
+    infinite (bss ins envI) ->
     forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
     forall e, restr_exp e -> wx_exp Γ e -> wl_exp G e ->
     forall_nprod (@infinite _) (denot_exp G ins e envG envI env).
 Proof.
-  intros * HG InfI ? Hvar e Hr Hwx Hwl.
+  intros * HG bsi ? Hvar e Hr Hwx Hwl.
   induction e using exp_ind2; inv Hr; inv Hwx; inv Hwl.
   all: simpl; setoid_rewrite denot_exp_eq; auto.
   - (* Econst *)
-    apply sconst_inf, bss_inf_dom; auto.
+    apply sconst_inf; auto.
   - (* Eenum *)
-    apply sconst_inf, bss_inf_dom; auto.
+    apply sconst_inf; auto.
   - (* Eunop *)
     revert IHe.
     gen_sub_exps.
@@ -1202,7 +1201,7 @@ Corollary infinite_exps :
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
         infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
-    infinite_dom envI ins ->
+    infinite (bss ins envI) ->
     forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
     forall es, Forall restr_exp es -> Forall (wx_exp Γ) es -> Forall (wl_exp G) es ->
     forall_nprod (@infinite _) (denot_exps G ins es envG envI env).
@@ -1218,7 +1217,7 @@ Corollary infinite_expss :
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
         infinite_dom (envG f envI) (List.map fst (n_out nd))) ->
-    infinite_dom envI ins ->
+    infinite (bss ins envI) ->
     forall Γ, (forall x, IsVar Γ x -> infinite (denot_var ins envI env x)) ->
     forall I (ess : list (I * list exp)) n,
     Forall (Forall restr_exp) (map snd ess) ->
