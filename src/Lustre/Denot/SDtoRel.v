@@ -3638,7 +3638,9 @@ Qed.
     nécessaires. En particulier, rien à dire sur la dépendance entre les
     horloges de l'équation et de l'application. *)
 Lemma ok_sem_Eapp :
-  forall Γ ins env envI bs bsi (InfΓ : inf_dom Γ ins envI env),
+  forall Γ ins env envI,
+    let bs := bss ins envI in
+    forall bsi (InfΓ : inf_dom Γ ins envI env),
     wf_env Γ ins envI bs env ->
     let H := hist_of_envs2 Γ ins envI env InfΓ in
     forall f n es er anns bck sub,
@@ -3674,52 +3676,50 @@ Proof.
   apply (Forall_impl _ (wt_exp_wl_exp G Γ)) in Hwt as Hwl, Hwtr as Hwlr.
   set (ss := denot_exps G ins es envG envI env).
   set (rs := denot_exps G ins er envG envI env).
-  (* (* utile pour après ou pas ? *) *)
-  (* assert (Hins : wf_ins n (env_of_np (idents (n_in n)) ss) *)
-  (*                  (bss (idents (n_in n)) (env_of_np (idents (n_in n)) ss))). *)
-  (* { unfold wf_ins. *)
-  (*   rewrite annots_numstreams in Hli. *)
-  (*   pose proof (nclocksof_sem G envG ins envI env es) as Ncs. *)
-  (*   edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf); *)
-  (*     eauto using wf_env_loc, wf_env_0_ext. *)
-  (*   rewrite clocksof_nclocksof in sCl. *)
-  (*   eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto. *)
-  (*   eapply wf_env_morph in Hec; eauto 1. *)
-  (*   (* équivalence des horloges *) *)
-  (*   apply wf_env_decompose in Hec as (?& Hcl &?). *)
-  (*   apply bss_le_bs in Hcl as Hbs; auto. *)
-  (*   apply infinite_le_eq in Hbs as ->; auto. *)
-  (*   eapply bss_inf, inf_dom_env_of_np, infinite_exps; eauto. *)
-  (* } *)
+  (* utile pour après ou pas ? *)
+  assert (Hins : wf_ins n (env_of_np (idents (n_in n)) ss)
+                   (bss (idents (n_in n)) (env_of_np (idents (n_in n)) ss))).
+  { unfold wf_ins.
+    rewrite annots_numstreams in Hli.
+    pose proof (nclocksof_sem G envG ins envI env es) as Ncs.
+    edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf);
+      eauto using wf_env_loc, wf_env_0_ext.
+    rewrite clocksof_nclocksof in sCl.
+    eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto.
+    eapply wf_env_morph in Hec; eauto 1.
+    (* équivalence des horloges *)
+    apply wf_env_decompose in Hec as (?& Hcl &?).
+    apply bss_le_bs in Hcl as Hbs; auto.
+    apply infinite_le_eq in Hbs as ->; auto.
+    eapply bss_inf, inf_dom_env_of_np, infinite_exps; eauto.
+  }
   edestruct sem_sub_exps with (es := es) as (sss & Heqs & Hsss); eauto.
   edestruct sem_sub_exps with (es := er) as (rss & Heqr & Hrss); eauto.
   clear Hsem Hsemr.
   Unshelve.
-  2,3: admit.
-  (* 2:{ eapply infinite_exps; eauto. 2,3: now eauto using infinite_exps. *)
+  2,3: now eauto using infinite_exps.
   eapply Sapp_retro_compat; eauto.
   - (* bools_ofs *)
     rewrite Heqr.
-    Abort.
-(*     eapply safe_exps_ in Hwtr as (rTy & _ & _); *)
-(*       eauto using wf_env_loc, wf_env_0_ext. *)
-(*     apply typeof_same, Forall2_Forall_eq with (2:= rTy), Forall_forall_nprod in Hwtr'. *)
-(*     unshelve apply bools_ofs_sbools_of; *)
-(*       eauto using sbools_ofs_inf, infinite_exp, infinite_exps. *)
-(*   - (* sem_node *) *)
-(*     intro k. *)
-(*     rewrite Heqs. *)
-(*     subst ss rs; revert infO Hins; revert os. *)
-(*     save_denot_exp se Hse. *)
-(*     setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl. *)
-(*     gen_sub_exps. *)
-(*     rewrite Hfind, <- annots_numstreams, Hli. *)
-(*     unfold decl in Hlo; rewrite <- (map_length fst) in Hlo. *)
-(*     rewrite <- (map_length fst). *)
-(*     unfold idents, eq_rect. *)
-(*     cases; intros; subst; try congruence. *)
-(*     apply ok_reset; auto. *)
-(* Qed. *)
+    eapply safe_exps_ in Hwtr as (rTy & _ & _);
+      eauto using wf_env_loc, wf_env_0_ext.
+    apply typeof_same, Forall2_Forall_eq with (2:= rTy), Forall_forall_nprod in Hwtr'.
+    unshelve apply bools_ofs_sbools_of;
+      eauto using sbools_ofs_inf, infinite_exp, infinite_exps.
+  - (* sem_node *)
+    intro k.
+    rewrite Heqs.
+    subst ss rs; revert infO Hins; revert os.
+    save_denot_exp se Hse.
+    setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+    gen_sub_exps.
+    rewrite Hfind, <- annots_numstreams, Hli.
+    unfold decl in Hlo; rewrite <- (map_length fst) in Hlo.
+    rewrite <- (map_length fst).
+    unfold idents, eq_rect.
+    cases; intros; subst; try congruence.
+    apply ok_reset; auto.
+Qed.
 
 
 (** Morphismes rencontrés dans la preuve de [ok_sem_exp].
@@ -4077,17 +4077,18 @@ Proof.
 Qed.
 
 Corollary ok_sem_exps :
-  forall Γ ins env envI InfΓ bs bsi,
+  forall Γ ins env envI InfΓ bsi,
+    let bs := bss ins envI in
     wf_env Γ ins envI bs env ->
     let H := hist_of_envs2 Γ ins envI env InfΓ in
     forall es,
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI bs env) es ->
+      Forall (op_correct_exp G ins envG envI env) es ->
       Forall (fun e => forall Infe,
                   sem_exp G H (S_of_DS id bs bsi) e
-                    (Ss_of_nprod (denot_exp G ins e envG envI bs env) Infe)) es.
+                    (Ss_of_nprod (denot_exp G ins e envG envI env) Infe)) es.
 Proof.
   intros.
   simpl_Forall; eauto using ok_sem_exp.
@@ -4115,17 +4116,18 @@ Proof.
 Qed.
 
 Lemma ok_sem_equation :
-  forall Γ xs es ins envI bs bsi env,
+  forall Γ xs es ins envI bsi env,
+    let bs := bss ins envI in
     Forall restr_exp es ->
     wc_equation G Γ (xs,es) ->
     wt_equation G Γ (xs,es) ->
     NoDup (ins ++ xs) ->
     wf_env Γ ins envI bs env ->
-    Forall (op_correct_exp G ins envG envI bs env) es ->
+    Forall (op_correct_exp G ins envG envI env) es ->
     (* hypothèse sur [env] qui doit satisfaire les contraintes
        de l'équation; typiquement obtenue avec [denot_blocks_equs] *)
     Forall2 (fun x (s : DS (sampl value)) => s == PROJ _ x env) xs
-      (list_of_nprod (denot_exps G ins es envG envI bs env)) ->
+      (list_of_nprod (denot_exps G ins es envG envI env)) ->
     forall InfΓ,
       sem_equation G (hist_of_envs2 Γ ins envI env InfΓ) (S_of_DS id bs bsi) (xs,es).
 Proof.
@@ -4168,26 +4170,27 @@ Qed.
 (* on traite tous les blocs d'une liste d'un coup, c'est moins problématique
    dans la gestion des duplications d'identifiants *)
 Lemma ok_sem_blocks :
-  forall Γ ins (env : DS_prod SI) envI bs bsi blks,
-    env == denot_blocks G ins blks envG envI bs env ->
+  forall Γ ins (env : DS_prod SI) envI bsi blks,
+    let bs := bss ins envI in
+    env == denot_blocks G ins blks envG envI env ->
     wf_env Γ ins envI bs env ->
     Forall restr_block blks ->
     NoDup (flat_map get_defined blks ++ ins) ->
     Forall (wt_block G Γ) blks ->
     Forall (wc_block G Γ) blks ->
-    Forall (op_correct_block G ins envG envI bs env) blks ->
+    Forall (op_correct_block G ins envG envI env) blks ->
     forall InfΓ,
       Forall (sem_block G (hist_of_envs2 Γ ins envI env InfΓ) (S_of_DS id bs bsi)) blks.
 Proof.
-  intros Γ ins env envI bs bsi blks Henv Hco Hr Ndi Hwt Hwc Hoc Inf.
+  intros Γ ins env envI bsi blks bs Henv Hco Hr Ndi Hwt Hwc Hoc Inf.
   assert (Forall (wl_block G) blks) as Hwl
       by eauto using Forall_impl, wt_block_wl_block.
   assert (NoDup (flat_map get_defined blks)) as Nd
       by eauto using NoDup_app_weaken.
-  pose proof (denot_blocks_equs G ins envG envI bs env blks Hwl Nd) as Hb.
+  pose proof (denot_blocks_equs G ins envG envI env blks Hwl Nd) as Hb.
   clear Hwl Nd.
   revert dependent env; intro env; simpl.
-  generalize (denot_blocks G ins blks envG envI bs env).
+  generalize (denot_blocks G ins blks envG envI env).
   intros env' Henv.
   induction blks as [| blk blks]; constructor.
   - inv Hr.
@@ -4225,7 +4228,7 @@ Lemma ok_sem_node :
     let ss := np_of_env ins envI in
     let os := np_of_env (List.map fst (n_out n)) envn in
     wf_env Γ ins envI bs envn ->
-    op_correct_node G ins envG envI bs envn n ->
+    op_correct_node G ins envG envI envn n ->
     inf_dom Γ ins envI envn ->
     forall infI infO,
       sem_node (Global tys exts (n :: nds)) f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
@@ -4430,7 +4433,7 @@ Proof.
     intros; apply IHnds; auto.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH ??.
+      intros * Hin HH ?.
       eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + eauto using find_node_uncons.
     + eauto using find_node_uncons.
@@ -4449,7 +4452,7 @@ Proof.
     + eauto using wc_global_cons.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
-      intros * Hin HH ??.
+      intros * Hin HH ?.
       eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
     + now inv Causg.
     + eauto using Ordered_nodes_cons.
