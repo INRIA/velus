@@ -41,53 +41,128 @@ Import ListNotations.
    ou bien, pour faire le même premier instant que LS :
 
    c = true -> if r then false else (true fby c)
-
-
  *)
 
+(* case booléen : if-then-else *)
+Definition scaseb {A} := @scase A bool bool Some bool_eq [true;false].
 
+(* when/merge booléen *)
+Definition swhenb {A} := @swhen A bool bool Some bool_eq.
+Definition smergeb {A} := @smerge A bool bool Some bool_eq [true;false].
 
+(* on part d'une fonction de flots *)
+Module VERSION2.
 
-(* version booléenne conne *)
-Module TRUE_UNTIL1.
-Definition true_until : DS bool -C-> DS bool.
+Parameter (I A : Type).
+Definition SI := fun _ : I => sampl A.
+Definition DS_prod := @DS_prod I.
+
+Parameter (f : DS (sampl A) -C-> DS (sampl A)).
+
+(* environnement où tous les flots sont égaux à l'entrée *)
+Definition env1 : DS (sampl A) -c> DS_prod SI :=
+  Dprodi_DISTR _ _ _ (fun _ => ID _).
+
+(* f appliqué aux environnements *)
+Definition fs : DS_prod SI -C-> DS_prod SI := DMAPi (fun _ => f).
+
+Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
   refine (FIXP _ _).
   apply curry.
-  refine (CONS true @_ _).
-  refine ((ZIP andb @2_ MAP negb @_ REM _ @_ SND _ _) _).
-  refine ((AP _ _ @2_ FST _ _) (REM _ @_ SND _ _)).
+  refine ((scaseb @2_ SND _ _) _).
+  refine ((PAIR _ _ @2_ _) _).
+  - (* true *)
+    refine (sconst false @_ AC @_ SND _ _).
+  - (* false *)
+    refine ((fby @2_ sconst true @_ AC @_ SND _ _) _).
+    refine ((AP _ _ @2_ FST _ _) (SND _ _)).
 Defined.
 
 Lemma true_until_eq :
-  forall rs, true_until rs == cons true (ZIP andb (map negb (rem rs)) (true_until (rem rs))).
+  forall r, true_until r == scaseb r (sconst false (AC r),
+                           fby (sconst true (AC r)) (true_until r)).
 Proof.
-  intro.
+  intros.
   unfold true_until at 1.
-  rewrite FIXP_eq; auto.
-Qed.
-End TRUE_UNTIL1.
-
-Section ARROW.
-Context {A : Type}.
-
-(* case booléen : if-then-else *)
-Definition scaseb := @scase A bool bool Some bool_eq [true;false].
-
-Definition arrow : DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
-  apply curry.
-  refine ((scaseb @2_ _) (ID _)).
-  refine ((fby @2_ sconst true @_ AC @_ FST _ _)
-            (sconst false @_ AC @_ FST _ _)).
-Defined.
-
-Lemma arrow_eq :
-  forall s0 s1,
-    let bs := AC s0 in
-    arrow s0 s1 = scaseb (fby (sconst true bs) (sconst false bs)) (s0, s1).
-Proof.
+  rewrite FIXP_eq.
   reflexivity.
 Qed.
-End ARROW.
+
+(* c = true_until(r); *)
+(* y = merge c (f(x when c)) (reset_f((x, r) when not c)); *)
+
+  (* reset à la lucid synchrone *)
+Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
+  refine (FIXP _ _).
+  apply curry, curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (freset := FST _ _ @_ FST pl pr)
+      ; pose (r := SND _ _ @_ FST pl pr)
+      ; pose (x := SND pl pr)
+      ; pose (c := true_until @_ r)
+  end.
+  refine ((smergeb @2_ c) _).
+  refine ((PAIR _ _ @2_ _) _).
+  - (* true *)
+    refine (f @_ (swhenb true @2_ x) c).
+  - (* false *)
+    refine ((AP _ _ @3_ freset)
+              ((swhenb false @2_ r) c)
+              ((swhenb false @2_ x) c)).
+Defined.
+
+Lemma reset_eq :
+  forall r x,
+    reset r x ==
+      let c := true_until r in
+      smergeb c
+        (f (swhenb true x c),
+          reset (swhenb false r c)  (swhenb false x c)).
+Proof.
+  intros.
+  unfold reset at 1.
+  rewrite FIXP_eq.
+  reflexivity.
+Qed.
+
+Theorem reset_match :
+  forall rs xs o, reset rs xs == sreset fs (AC rs) (env1 xs) o.
+Proof.
+  (* TODO ! *)
+Qed.
+
+End VERSION2.
+
+
+(* on part d'une fonction d'environments *)
+Module VERSION1.
+Parameter (I A : Type).
+Definition SI := fun _ : I => sampl A.
+Definition DS_prod := @DS_prod I.
+
+Parameter (f : DS_prod SI -C-> DS_prod SI).
+Parameter (f_i f_o : I). (* nom de l'entrée et de la sortie dans f *)
+
+(* environnement où tous les flots sont égaux à l'entrée *)
+Definition env1 : DS (sampl A) -c> DS_prod SI :=
+  Dprodi_DISTR _ _ _ (fun _ => ID _).
+
+Definition fs : DS (sampl A) -C-> DS (sampl A) :=
+  PROJ _ f_o @_ f @_ env1.
+
+
+(* reset à la lucid synchrone *)
+Parameter reset : DS bool -C-> DS (sampl A) -C-> DS (sampl A).
+
+Theorem reset_match :
+  forall r X, reset r (X f_i) == sreset f r X f_o.
+Abort.
+End VERSION1.
+
+
+
+
 
 (* avec échantillonnage *)
 Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
@@ -145,3 +220,52 @@ Lemma resetls :
     == smergeb rs (f env_of_np ).
 
 Search smerge.
+
+
+
+
+
+
+Section ARROW.
+Context {A : Type}.
+
+(* case booléen : if-then-else *)
+Definition scaseb := @scase A bool bool Some bool_eq [true;false].
+
+Definition arrow : DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
+  apply curry.
+  refine ((scaseb @2_ _) (ID _)).
+  refine ((fby @2_ sconst true @_ AC @_ FST _ _)
+            (sconst false @_ AC @_ FST _ _)).
+Defined.
+
+Lemma arrow_eq :
+  forall s0 s1,
+    let bs := AC s0 in
+    arrow s0 s1 = scaseb (fby (sconst true bs) (sconst false bs)) (s0, s1).
+Proof.
+  reflexivity.
+Qed.
+End ARROW.
+
+
+
+
+(* version booléenne conne *)
+Module TRUE_UNTIL1.
+Definition true_until : DS bool -C-> DS bool.
+  refine (FIXP _ _).
+  apply curry.
+  refine (CONS true @_ _).
+  refine ((ZIP andb @2_ MAP negb @_ REM _ @_ SND _ _) _).
+  refine ((AP _ _ @2_ FST _ _) (REM _ @_ SND _ _)).
+Defined.
+
+Lemma true_until_eq :
+  forall rs, true_until rs == cons true (ZIP andb (map negb (rem rs)) (true_until (rem rs))).
+Proof.
+  intro.
+  unfold true_until at 1.
+  rewrite FIXP_eq; auto.
+Qed.
+End TRUE_UNTIL1.
