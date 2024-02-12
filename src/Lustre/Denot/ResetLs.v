@@ -38,13 +38,52 @@ Import ListNotations.
 
    c = if r then false else (true fby c)
 
-   ou bien, pour faire le même premier instant que LS :
+   ou bien, pour faire le même premier instant que LS
+   (évite une récurrence instantanée dans le reset)
 
    c = true -> if r then false else (true fby c)
  *)
 
 (* case booléen : if-then-else *)
 Definition scaseb {A} := @scase A bool bool Some bool_eq [true;false].
+
+
+Lemma scaseb_abs :
+  forall A rs (xs ys : DS (sampl A)),
+    scaseb (cons abs rs) (PAIR _ _ (cons abs xs) (cons abs ys))
+    == cons abs (scaseb rs (PAIR _ _ xs ys)).
+Proof.
+  intros.
+  unfold scaseb.
+  rewrite scase_eq at 1.
+  rewrite 2 Foldi_cons, Foldi_nil.
+  repeat (simpl; autorewrite with cpodb).
+  rewrite 2 zip3_cons.
+  reflexivity.
+Qed.
+
+Lemma scaseb_pres :
+  forall A r rs x y (xs ys : DS (sampl A)),
+    scaseb (cons (pres r) rs) (PAIR _ _ (cons (pres x) xs) (cons (pres y) ys))
+    == cons (pres (if r then x else y)) (scaseb rs (PAIR _ _ xs ys)).
+Proof.
+  intros.
+  unfold scaseb.
+  rewrite scase_eq at 1.
+  rewrite 2 Foldi_cons, Foldi_nil.
+  repeat (simpl; autorewrite with cpodb).
+  rewrite 2 zip3_cons.
+  destruct r; auto.
+Qed.
+
+(* TODO: move *)
+Lemma sconst_cons :
+    forall A (c:A) b bs,
+      sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
+Proof.
+  intros.
+  apply map_eq_cons.
+Qed.
 
 (* when/merge booléen *)
 Definition swhenb {A} := @swhen A bool bool Some bool_eq.
@@ -79,14 +118,50 @@ Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
 Defined.
 
 Lemma true_until_eq :
-  forall r, true_until r == scaseb r (sconst false (AC r),
-                           fby (sconst true (AC r)) (true_until r)).
+  forall r, true_until r
+       == scaseb r (PAIR _ _
+                      (sconst false (AC r))
+                      (fby (sconst true (AC r)) (true_until r))).
 Proof.
   intros.
   unfold true_until at 1.
   rewrite FIXP_eq.
   reflexivity.
 Qed.
+
+(* TODO: redéfinir true_until en co-inductif et comparer les principes
+   de raisonnement *)
+Lemma true_until_abs :
+  forall r, true_until (cons abs r) == cons abs (true_until r).
+Proof.
+  intros.
+
+  rewrite true_until_eq.
+  rewrite AC_cons, 2 sconst_cons.
+  rewrite fby_eq, scaseb_abs.
+  apply cons_eq_compat; auto.
+  unfold true_until.
+  rewrite FIXP_fixp.
+  revert r.
+  apply fixp_ind.
+  admit.
+  admit.
+  intros ftrue_until Hf r.
+  autorewrite with cpodb.
+  simpl.
+  autorewrite with cpodb.
+  simpl.
+    repeat match goal with
+  | |- context [(?a,?b)] => change (a,b) with (PAIR _ _ a b)
+  end.
+    setoid_rewrite <- Hf at 2.
+  rewrite AC_cons, 2 sconst_cons.
+  rewrite fby_eq.
+  rewrite (scaseb_abs _ r (sconst false (AC r))).
+  rewrite fbyA_eq.
+  reflexivity.
+Qed.
+
 
 (* c = true_until(r); *)
 (* y = merge c (f(x when c)) (reset_f((x, r) when not c)); *)
