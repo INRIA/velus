@@ -704,6 +704,11 @@ Proof.
   destruct n; rewrite take_eq; auto.
 Qed.
 
+Lemma take_1 : forall A (x : DS A), take 1 x = first x.
+Proof.
+  reflexivity.
+Qed.
+
 Global Add Parametric Morphism A n : (take n)
        with signature @Oeq (DS A) ==> @Oeq (DS A)
          as take_morph.
@@ -712,6 +717,35 @@ Proof.
   autorewrite with cpodb.
   rewrite Heq at 1.
   rewrite (IHn _ (rem y)); auto.
+Qed.
+
+Lemma take_Oeq :
+  forall A (xs ys : DS A), (forall n, take n xs == take n ys) -> xs == ys.
+Proof.
+  intros * Ht.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V => forall n, take n U == take n V); auto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear; intros U V Hc Ht.
+  split.
+  - rewrite <- 2 take_1; auto.
+  - intro n.
+    destruct (@is_cons_elim _ U) as (u & U' & Hu).
+    { destruct Hc; auto.
+      apply first_is_cons.
+      rewrite <- take_1, Ht, take_1.
+      now apply is_cons_first. }
+    destruct (@is_cons_elim _ V) as (v & V' & Hv).
+    { destruct Hc; auto.
+      apply first_is_cons.
+      rewrite <- take_1, <- Ht, take_1.
+      now apply is_cons_first. }
+    specialize (Ht (S n)).
+    rewrite 2 (take_eq (S n)), Hu, Hv, 2 rem_cons, 2 app_cons in *.
+    now apply Con_eq_simpl in Ht as [].
 Qed.
 
 (** Definition and specification of [nrem] : [n] applications of [rem].
@@ -1272,40 +1306,15 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma take_1 : forall A (x : DS A), take 1 x = first x.
-Proof.
-  reflexivity.
-Qed.
-
 Lemma take_env_Oeq :
   forall X Y, (forall n, take_env n X == take_env n Y) -> X == Y.
 Proof.
   intros * Ht.
   apply Oprodi_eq_intro; intro i.
-  eapply DS_bisimulation_allin1 with
-    (R := fun U V => forall n, take n U == take n V).
-  3: now intro n; rewrite <- 2 take_env_proj, <- 2 PROJ_simpl, Ht.
-  { intros * ? Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto. }
-  clear; intros U V Hc Ht.
-  split.
-  - rewrite <- 2 take_1; auto.
-  - intro n.
-    destruct (@is_cons_elim _ U) as (u & U' & Hu).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite <- take_1, Ht, take_1.
-      now apply is_cons_first. }
-    destruct (@is_cons_elim _ V) as (v & V' & Hv).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite <- take_1, <- Ht, take_1.
-      now apply is_cons_first. }
-    specialize (Ht (S n)).
-    rewrite 2 (take_eq (S n)), Hu, Hv, 2 rem_cons, 2 app_cons in *.
-    now apply Con_eq_simpl in Ht as [].
+  apply take_Oeq; intro n.
+  specialize (Ht n).
+  apply Oprodi_eq_elim with (i := i) in Ht.
+  now rewrite 2 take_env_proj in Ht.
 Qed.
 
 Lemma take_rem_env :

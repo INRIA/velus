@@ -2990,36 +2990,6 @@ Proof.
   rewrite <- Le; auto.
 Qed.
 
-(* TODO: faire de take_env_Oeq un corollaire *)
-Lemma take_Oeq :
-  forall A (xs ys : DS A), (forall n, take n xs == take n ys) -> xs == ys.
-Proof.
-  intros * Ht.
-  eapply DS_bisimulation_allin1 with
-    (R := fun U V => forall n, take n U == take n V); auto.
-  { intros * ? Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto. }
-  clear; intros U V Hc Ht.
-  split.
-  - rewrite <- 2 take_1; auto.
-  - intro n.
-    destruct (@is_cons_elim _ U) as (u & U' & Hu).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite <- take_1, Ht, take_1.
-      now apply is_cons_first. }
-    destruct (@is_cons_elim _ V) as (v & V' & Hv).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite <- take_1, <- Ht, take_1.
-      now apply is_cons_first. }
-    specialize (Ht (S n)).
-    rewrite 2 (take_eq (S n)), Hu, Hv, 2 rem_cons, 2 app_cons in *.
-    now apply Con_eq_simpl in Ht as [].
-Qed.
-
 (* le véritable cas de base *)
 Lemma smask_sreset0 :
   forall f nd,
