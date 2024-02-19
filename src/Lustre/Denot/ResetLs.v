@@ -1,5 +1,5 @@
 Require Import List.
-Require Import Cpo Reset SDfuns.
+Require Import Cpo Reset SDfuns CommonDS.
 Import ListNotations.
 
 (** An attempt to prove the equivalence between the reset construct
@@ -76,6 +76,37 @@ Proof.
   destruct r; auto.
 Qed.
 
+(* Lemma scaseb_cons : *)
+(*   forall A r rs x y (xs ys : DS (sampl A)), *)
+(*     scaseb (cons r rs) (PAIR _ _ (cons x xs) (cons y ys)) *)
+(*     == cons (match r, x, y with *)
+(*              | abs, abs, abs => abs *)
+(*              | pres true, pres x, pres y => pres x *)
+(*              | pres false, pres x, pres y => pres y *)
+(*              | err e, _, _ => err e *)
+(*              | _, err e, _ => err e *)
+(*              | _, _, err e => err e *)
+(*              | _, _, _ => err error_Cl *)
+(*              end) (scaseb rs (PAIR _ _ xs ys)). *)
+(* Proof. *)
+(*   intros. *)
+(*   unfold scaseb. *)
+(*   rewrite scase_eq at 1. *)
+(*   rewrite 2 Foldi_cons, Foldi_nil. *)
+(*   repeat (simpl; autorewrite with cpodb). *)
+(*   rewrite 2 zip3_cons. *)
+(*   destruct r as [| [] |]. *)
+(*   4:{ simpl. *)
+(*       fcase *)
+(*   4: reflexivity. *)
+(*   destruct r, x, y; try reflexivity. *)
+(*   reflexivity. *)
+(*   destruct r as [| [] | ]. *)
+(*   auto. *)
+(*   destruct r; auto. *)
+(* Qed. *)
+
+
 (* TODO: move *)
 Lemma sconst_cons :
     forall A (c:A) b bs,
@@ -84,6 +115,9 @@ Proof.
   intros.
   apply map_eq_cons.
 Qed.
+
+Definition safe_DS {A} : DS (sampl A) -> Prop :=
+  DSForall (fun v => match v with err _ => False | _ => True end).
 
 (* when/merge booléen *)
 Definition swhenb {A} := @swhen A bool bool Some bool_eq.
@@ -117,9 +151,39 @@ Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
     refine ((AP _ _ @2_ FST _ _) (SND _ _)).
 Defined.
 
+
+Lemma test_take_Oeq:
+  forall r,
+    infinite r ->
+    fby (sconst 3 r) (sconst 3 r) == sconst 3 r.
+Proof.
+  intros r Infr.
+  apply take_Oeq; intro n.
+  revert dependent r; induction n; intros; auto.
+  apply infinite_decomp in Infr as (vr & r' & Hr & Infr).
+  rewrite Hr, sconst_cons.
+  destruct vr.
+  - rewrite fby_eq, fby1AP_eq, 2 (take_eq (S n)), 2 app_cons, 2 rem_cons.
+    apply cons_eq_compat; auto.
+    rewrite <- IHn; auto.
+    clear IHn Hr r.
+    revert dependent r'; induction n; intros r Infr; try reflexivity.
+    apply infinite_decomp in Infr as (vr & r' & Hr & Infr).
+    rewrite Hr, sconst_cons.
+    destruct vr.
+    + now rewrite fby_eq, fby1_eq, fby1AP_eq.
+    + rewrite fby_eq, fbyA_eq, fby1_eq, fby1AP_eq, 2 (take_eq (S n)), 2 app_cons, 2 rem_cons.
+      apply cons_eq_compat, IHn; auto.
+  - rewrite fby_eq, fbyA_eq, 2 (take_eq (S n)), 2 app_cons, 2 rem_cons.
+    apply cons_eq_compat; auto.
+Qed.
+
+(* TODO: ça pour tout ?? *)
+Arguments PAIR {D1 D2}.
+
 Lemma true_until_eq :
   forall r, true_until r
-       == scaseb r (PAIR _ _
+       == scaseb r (PAIR
                       (sconst false (AC r))
                       (fby (sconst true (AC r)) (true_until r))).
 Proof.
@@ -128,6 +192,116 @@ Proof.
   rewrite FIXP_eq.
   reflexivity.
 Qed.
+
+Lemma true_until_true :
+  forall r,
+    safe_DS r ->
+    true_until (cons (pres true) r) == cons (pres false) (sconst false (AC r)).
+Proof.
+ intros r Hsafe.
+  (* dérouler la tête *)
+  rewrite true_until_eq.
+  rewrite AC_cons, 2 sconst_cons.
+  rewrite fby_eq, scaseb_pres.
+  apply cons_eq_compat; auto.
+  (* bisim ici ? *)
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            exists rs,
+              safe_DS rs /\
+              U == scaseb rs (PAIR
+                                (sconst false (AC rs))
+                                (fby1 (Some false)(sconst true (AC rs)) U))
+              /\ V == (sconst false (AC rs))
+    ).
+  3:{ exists r. split. auto.
+      split. 2: auto.
+      rewrite true_until_eq at 1.
+      rewrite AC_cons, 2 sconst_cons.
+      rewrite fby_eq, scaseb_pres.
+      rewrite fby1AP_eq.
+      auto.
+  }
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (rs & Hsafe & Hu & Hv).
+  edestruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+  { destruct Hc as [Hc|Hc].
+    - rewrite Hu in Hc.
+      apply scase_is_cons in Hc as []; now auto.
+    - unfold sconst in Hv. rewrite Hv in Hc.
+      now apply map_is_cons, AC_is_cons in Hc.
+  }
+  rewrite Hrs in Hu, Hv, Hsafe.
+  inversion_clear Hsafe as [|?? Hvr Hsafe'].
+  rewrite AC_cons, sconst_cons in Hv.
+
+  (* TEST *)
+  split.
+  - (* first *)
+    rewrite Hv, first_cons.
+    rewrite Hu at 1.
+    rewrite AC_cons, 2 sconst_cons.
+    rewrite fby1_eq.
+    destruct vr; try tauto.
+    + rewrite scaseb_abs, first_cons; auto.
+    + rewrite scaseb_pres, first_cons.
+      destruct a; auto.
+  - (* rem *)
+    exists rs'; split; auto.
+    split.
+    2: now rewrite Hv, rem_cons.
+    rewrite Hu at 1.
+    rewrite AC_cons, 2 sconst_cons.
+    rewrite fby1_eq.
+    destruct vr; try tauto.
+    + rewrite scaseb_abs, rem_cons.
+      rewrite AC_cons, 2 sconst_cons in Hu.
+      rewrite fby1_eq in Hu.
+      rewrite scaseb_abs in Hu.
+      rewrite Hu, rem_cons.
+      rewrite fby1AP_eq; auto.
+    + rewrite scaseb_pres, rem_cons.
+      rewrite AC_cons, 2 sconst_cons in Hu.
+      rewrite fby1_eq in Hu.
+      rewrite scaseb_pres in Hu.
+      rewrite Hu, rem_cons.
+      rewrite fby1AP_eq.
+      now destruct a.
+Qed.
+
+Lemma true_until_false :
+  forall r, true_until (cons (pres false) r) == cons (pres true) (true_until r).
+Proof.
+  intros.
+  rewrite true_until_eq.
+  rewrite AC_cons, 2 sconst_cons.
+  rewrite fby_eq, scaseb_pres.
+  apply cons_eq_compat; auto.
+  unfold true_until.
+  rewrite FIXP_fixp.
+  revert r.
+  apply fixp_ind.
+  admit.
+  admit.
+  intros ftrue_until Hf r.
+  autorewrite with cpodb.
+  simpl.
+  autorewrite with cpodb.
+  simpl.
+    repeat match goal with
+  | |- context [(?a,?b)] => change (a,b) with (PAIR _ _ a b)
+  end.
+  setoid_rewrite <- Hf at 2.
+  rewrite AC_cons, 2 sconst_cons.
+  rewrite fby_eq.
+  rewrite (scaseb_pres _ false _ false true).
+  rewrite fby1AP_eq.
+Abort. (* pas tout à fait exact *)
+
 
 (* TODO: redéfinir true_until en co-inductif et comparer les principes
    de raisonnement *)
@@ -160,10 +334,11 @@ Proof.
   rewrite (scaseb_abs _ r (sconst false (AC r))).
   rewrite fbyA_eq.
   reflexivity.
-Qed.
+Admitted.
 
 
 (* c = true_until(r); *)
+(* c = true -> true_until(r); ??? *)
 (* y = merge c (f(x when c)) (reset_f((x, r) when not c)); *)
 
   (* reset à la lucid synchrone *)
@@ -200,6 +375,11 @@ Proof.
   rewrite FIXP_eq.
   reflexivity.
 Qed.
+
+(* propriétés :
+   - xs when true == xs
+   - ?
+ *)
 
 Theorem reset_match :
   forall rs xs o, reset rs xs == sreset fs (AC rs) (env1 xs) o.
