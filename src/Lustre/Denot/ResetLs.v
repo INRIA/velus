@@ -132,6 +132,22 @@ Definition DS_prod := @DS_prod I.
 
 Parameter (f : DS (sampl A) -C-> DS (sampl A)).
 
+(* <= en vrai, si pas d'infinité... *)
+Hypothesis AbsF : forall xs, f (cons abs xs) == cons abs (f xs).
+
+Hypothesis LpF : forall xs n, f (take n xs) == take n (f xs).
+
+(* TODO: align ??? *)
+(* Hypothesis Halign : *)
+(*   forall f n, *)
+(*     find_node f G = Some n -> *)
+(*     let ins := List.map fst (n_in n) in *)
+(*     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in *)
+(*     forall envI, *)
+(*     wf_env Γ ins envI (bss ins envI) (envG f envI) -> *)
+(*     abs_alignLE envI (envG f envI). *)
+(* *)
+
 (* environnement où tous les flots sont égaux à l'entrée *)
 Definition env1 : DS (sampl A) -c> DS_prod SI :=
   Dprodi_DISTR _ _ _ (fun _ => ID _).
@@ -199,79 +215,91 @@ Lemma true_until_true :
     true_until (cons (pres true) r) == cons (pres false) (sconst false (AC r)).
 Proof.
  intros r Hsafe.
-  (* dérouler la tête *)
-  rewrite true_until_eq.
-  rewrite AC_cons, 2 sconst_cons.
-  rewrite fby_eq, scaseb_pres.
-  apply cons_eq_compat; auto.
-  (* bisim ici ? *)
-  eapply DS_bisimulation_allin1 with
-    (R := fun U V =>
-            exists rs,
-              safe_DS rs /\
-              U == scaseb rs (PAIR
-                                (sconst false (AC rs))
-                                (fby1 (Some false)(sconst true (AC rs)) U))
-              /\ V == (sconst false (AC rs))
-    ).
-  3:{ exists r. split. auto.
-      split. 2: auto.
-      rewrite true_until_eq at 1.
-      rewrite AC_cons, 2 sconst_cons.
-      rewrite fby_eq, scaseb_pres.
-      rewrite fby1AP_eq.
-      auto.
-  }
-  { intros * ? Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto. }
-  clear.
-  intros U V Hc (rs & Hsafe & Hu & Hv).
-  edestruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
-  { destruct Hc as [Hc|Hc].
-    - rewrite Hu in Hc.
-      apply scase_is_cons in Hc as []; now auto.
-    - unfold sconst in Hv. rewrite Hv in Hc.
-      now apply map_is_cons, AC_is_cons in Hc.
-  }
-  rewrite Hrs in Hu, Hv, Hsafe.
-  inversion_clear Hsafe as [|?? Hvr Hsafe'].
-  rewrite AC_cons, sconst_cons in Hv.
-
-  (* TEST *)
-  split.
-  - (* first *)
-    rewrite Hv, first_cons.
-    rewrite Hu at 1.
-    rewrite AC_cons, 2 sconst_cons.
-    rewrite fby1_eq.
-    destruct vr; try tauto.
-    + rewrite scaseb_abs, first_cons; auto.
-    + rewrite scaseb_pres, first_cons.
-      destruct a; auto.
-  - (* rem *)
-    exists rs'; split; auto.
-    split.
-    2: now rewrite Hv, rem_cons.
-    rewrite Hu at 1.
-    rewrite AC_cons, 2 sconst_cons.
-    rewrite fby1_eq.
-    destruct vr; try tauto.
-    + rewrite scaseb_abs, rem_cons.
-      rewrite AC_cons, 2 sconst_cons in Hu.
-      rewrite fby1_eq in Hu.
-      rewrite scaseb_abs in Hu.
-      rewrite Hu, rem_cons.
-      rewrite fby1AP_eq; auto.
-    + rewrite scaseb_pres, rem_cons.
-      rewrite AC_cons, 2 sconst_cons in Hu.
-      rewrite fby1_eq in Hu.
-      rewrite scaseb_pres in Hu.
-      rewrite Hu, rem_cons.
-      rewrite fby1AP_eq.
-      now destruct a.
+ (* dérouler la tête *)
+ rewrite true_until_eq.
+ rewrite AC_cons, 2 sconst_cons.
+ rewrite fby_eq, scaseb_pres.
+ apply cons_eq_compat; auto.
+ (* bisim *)
+ eapply DS_bisimulation_allin1 with
+   (R := fun U V =>
+           exists rs,
+             safe_DS rs /\
+               U == scaseb rs (PAIR
+                                 (sconst false (AC rs))
+                                 (fby1 (Some false)(sconst true (AC rs)) U))
+             /\ V == (sconst false (AC rs))
+   ).
+ 3:{ exists r. split. auto.
+     split. 2: auto.
+     rewrite true_until_eq at 1.
+     rewrite AC_cons, 2 sconst_cons.
+     rewrite fby_eq, scaseb_pres.
+     rewrite fby1AP_eq.
+     auto.
+ }
+ { intros * ? Eq1 Eq2.
+   setoid_rewrite <- Eq1.
+   setoid_rewrite <- Eq2.
+   eauto. }
+ clear.
+ intros U V Hc (rs & Hsafe & Hu & Hv).
+ edestruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+ { destruct Hc as [Hc|Hc].
+   - rewrite Hu in Hc.
+     apply scase_is_cons in Hc as []; now auto.
+   - unfold sconst in Hv. rewrite Hv in Hc.
+     now apply map_is_cons, AC_is_cons in Hc.
+ }
+ rewrite Hrs in Hu, Hv, Hsafe.
+ inversion_clear Hsafe as [|?? Hvr Hsafe'].
+ rewrite AC_cons, sconst_cons in Hv.
+ split.
+ - (* first *)
+   rewrite Hv, first_cons.
+   rewrite Hu at 1.
+   rewrite AC_cons, 2 sconst_cons.
+   rewrite fby1_eq.
+   destruct vr; try tauto.
+   + rewrite scaseb_abs, first_cons; auto.
+   + rewrite scaseb_pres, first_cons.
+     destruct a; auto.
+ - (* rem *)
+   exists rs'; split; auto.
+   split.
+   2: now rewrite Hv, rem_cons.
+   rewrite Hu at 1.
+   rewrite AC_cons, 2 sconst_cons.
+   rewrite fby1_eq.
+   destruct vr; try tauto.
+   + rewrite scaseb_abs, rem_cons.
+     rewrite AC_cons, 2 sconst_cons in Hu.
+     rewrite fby1_eq in Hu.
+     rewrite scaseb_abs in Hu.
+     rewrite Hu, rem_cons.
+     rewrite fby1AP_eq; auto.
+   + rewrite scaseb_pres, rem_cons.
+     rewrite AC_cons, 2 sconst_cons in Hu.
+     rewrite fby1_eq in Hu.
+     rewrite scaseb_pres in Hu.
+     rewrite Hu, rem_cons.
+     rewrite fby1AP_eq.
+     now destruct a.
 Qed.
+
+Lemma true_until_false :
+  forall r,
+    safe_DS r ->
+    true_until (cons (pres false) r) == cons (pres true) (true_until r).
+Proof.
+ intros r Hsafe.
+ (* dérouler la tête *)
+ rewrite true_until_eq.
+ rewrite AC_cons, 2 sconst_cons.
+ rewrite fby_eq, scaseb_pres.
+ apply cons_eq_compat; auto.
+ (* bisim ?????*)
+Abort.
 
 Lemma true_until_false :
   forall r, true_until (cons (pres false) r) == cons (pres true) (true_until r).
@@ -292,9 +320,7 @@ Proof.
   simpl.
   autorewrite with cpodb.
   simpl.
-    repeat match goal with
-  | |- context [(?a,?b)] => change (a,b) with (PAIR _ _ a b)
-  end.
+  repeat change (?a, ?b) with (PAIR a b).
   setoid_rewrite <- Hf at 2.
   rewrite AC_cons, 2 sconst_cons.
   rewrite fby_eq.
@@ -309,7 +335,6 @@ Lemma true_until_abs :
   forall r, true_until (cons abs r) == cons abs (true_until r).
 Proof.
   intros.
-
   rewrite true_until_eq.
   rewrite AC_cons, 2 sconst_cons.
   rewrite fby_eq, scaseb_abs.
@@ -321,14 +346,10 @@ Proof.
   admit.
   admit.
   intros ftrue_until Hf r.
-  autorewrite with cpodb.
-  simpl.
-  autorewrite with cpodb.
-  simpl.
-    repeat match goal with
-  | |- context [(?a,?b)] => change (a,b) with (PAIR _ _ a b)
-  end.
-    setoid_rewrite <- Hf at 2.
+  change (fcontit ?a ?b) with (a b).
+  autorewrite with cpodb; simpl.
+  repeat change (?a, ?b) with (PAIR a b).
+  rewrite <- (Hf r).
   rewrite AC_cons, 2 sconst_cons.
   rewrite fby_eq.
   rewrite (scaseb_abs _ r (sconst false (AC r))).
@@ -353,7 +374,7 @@ Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
       ; pose (c := true_until @_ r)
   end.
   refine ((smergeb @2_ c) _).
-  refine ((PAIR _ _ @2_ _) _).
+  refine ((PAIR @2_ _) _).
   - (* true *)
     refine (f @_ (swhenb true @2_ x) c).
   - (* false *)
@@ -368,7 +389,7 @@ Lemma reset_eq :
       let c := true_until r in
       smergeb c
         (f (swhenb true x c),
-          reset (swhenb false r c)  (swhenb false x c)).
+          reset (swhenb false r c) (swhenb false x c)).
 Proof.
   intros.
   unfold reset at 1.
@@ -381,10 +402,62 @@ Qed.
    - ?
  *)
 
-Theorem reset_match :
-  forall rs xs o, reset rs xs == sreset fs (AC rs) (env1 xs) o.
+Arguments PROJ {I Di}.
+Arguments FST {D1 D2}.
+Arguments SND {D1 D2}.
+
+Lemma fs_env1 :
+  forall xs o, fs (env1 xs) o = f xs.
 Proof.
-  (* TODO ! *)
+  reflexivity.
+Qed.
+
+Lemma reset_abs :
+  forall rs xs,
+    reset (cons abs rs) (cons abs xs) == cons abs (reset rs xs).
+Proof.
+  intros.
+  rewrite 2 reset_eq; simpl.
+  change (?a, ?b) with (PAIR a b).
+  rewrite true_until_abs.
+  unfold swhenb at 1 2 3.
+  rewrite 3 swhen_eq.
+  rewrite AbsF.
+Qed.
+
+Theorem reset_match :
+  forall rs xs o,
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    reset rs xs == sreset fs (AC rs) (env1 xs) o.
+Proof.
+  intros * Hsr Hsx Hac.
+  rewrite reset_eq.
+  rewrite <- PROJ_simpl, sreset_eq.
+  assert (exists vr rs', rs == cons vr rs') as (vr & rs' & Hrs).
+  admit.
+  assert (exists vx xs', xs == cons vx xs') as (vx & xs' & Hxs).
+  admit.
+  change (?a, ?b) with (PAIR a b).
+  cbv zeta.
+  remember_ds (true_until rs) as cs.
+  rewrite Hrs in *.
+  rewrite Hxs in *.
+  inversion_clear Hsr as [|?? Hvr Hsr'].
+  inversion_clear Hsx as [|?? Hvx Hsx'].
+  repeat rewrite AC_cons in *.
+  apply Con_eq_simpl in Hac as [Hrx Hac].
+  destruct vr, vx; try tauto; try congruence.
+  - (* vr = vx = abs *)
+    rewrite true_until_abs in Hcs.
+    rewrite Hcs.
+    unfold swhenb.
+    repeat rewrite swhen_eq.
+    rewrite sreset_aux_eq.
+    rewrite PROJ_simpl, APP_env_eq, fs_env1.
+    rewrite AbsF.
+  -
 Qed.
 
 End VERSION2.
