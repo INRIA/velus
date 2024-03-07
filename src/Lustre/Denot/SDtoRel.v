@@ -2821,7 +2821,7 @@ Lemma np_of_env_eq :
   forall l env,
     np_of_env l env
     = match l with
-      | [] => abss
+      | [] => 0
       | i :: l => nprod_cons (env i) (np_of_env l env)
       end.
 Proof.

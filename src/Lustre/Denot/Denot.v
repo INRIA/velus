@@ -245,7 +245,7 @@ Qed.
 (** extract a tuple from an environment  *)
 Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x l].
-  - apply CTE, abss.
+  - apply CTE, 0.
   - exact ((nprod_cons @2_ PROJ _ x) IHl).
 Defined.
 

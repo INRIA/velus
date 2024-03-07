@@ -53,16 +53,18 @@ Qed.
 
 Lemma np_of_env_abs :
   forall l env,
-    np_of_env l (APP_env abs_env env) == lift (CONS abs) (np_of_env l env).
+    np_of_env l (APP_env abs_env env) <= lift (CONS abs) (np_of_env l env).
 Proof.
   induction l; intros.
   - cbn; unfold abss.
-    now rewrite <- DS_const_eq.
-  - rewrite 2 (np_of_env_cons a l), IHl.
+    apply (@Dbot (DS (sampl value))).
+  - rewrite 2 (np_of_env_cons a l).
     setoid_rewrite (lift_cons (CONS abs) _ (env a) (np_of_env l env)).
-    apply nprod_cons_Oeq_compat; auto.
     unfold abs_env, abss.
-    now rewrite DS_const_eq, APP_env_eq, app_cons.
+    rewrite DS_const_eq, APP_env_eq, app_cons.
+    apply fcont_monotonic.
+    rewrite <- DS_const_eq.
+    apply IHl.
 Qed.
 
 Lemma env_of_np_abs :
