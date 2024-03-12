@@ -1,5 +1,6 @@
 Require Import List.
 Require Import Cpo Reset SDfuns CommonDS.
+Open Scope bool_scope.
 Import ListNotations.
 
 (** An attempt to prove the equivalence between the reset construct
@@ -42,7 +43,366 @@ Import ListNotations.
    (évite une récurrence instantanée dans le reset)
 
    c = true -> if r then false else (true fby c)
+
+   mieux :
+   c = true -> not r and (true fby c)
  *)
+
+Arguments PROJ {I Di}.
+Arguments FST {D1 D2}.
+Arguments SND {D1 D2}.
+Arguments curry {D1 D2 D3}.
+
+(* TODO: move *)
+Lemma sconst_cons :
+    forall A (c:A) b bs,
+      sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
+Proof.
+  intros.
+  apply map_eq_cons.
+Qed.
+
+Definition safe_DS {A} : DS (sampl A) -> Prop :=
+  DSForall (fun v => match v with err _ => False | _ => True end).
+
+(* when booléen *)
+Definition when :  forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) :=
+  fun _ => ZIP (fun c x => match c, x with
+      | abs, abs => abs
+      | pres true, pres v => (pres v)
+      | pres false, pres v => abs
+      | _, _ => err error_Cl
+      end).
+Lemma when_eq :
+  forall A c cs x xs,
+    @when A (cons c cs) (cons x xs) ==
+      match c, x with
+      | abs, abs => cons abs (when cs xs)
+      | pres true, pres v => cons (pres v) (when cs xs)
+      | pres false, pres v => cons abs (when cs xs)
+      | _, _ => cons (err error_Cl) (when cs xs)
+      end.
+Proof.
+  intros.
+  unfold when at 1.
+  rewrite zip_cons.
+  destruct c as [|[]|], x; auto.
+Qed.
+
+Definition whennot :  forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) :=
+  fun _ => ZIP (fun c x => match c, x with
+      | abs, abs => abs
+      | pres false, pres v => (pres v)
+      | pres true, pres v => abs
+      | _, _ => err error_Cl
+      end).
+Lemma whennot_eq :
+  forall A c cs x xs,
+    @whennot A (cons c cs) (cons x xs) ==
+      match c, x with
+      | abs, abs => cons abs (whennot cs xs)
+      | pres false, pres v => cons (pres v) (whennot cs xs)
+      | pres true, pres v => cons abs (whennot cs xs)
+      | _, _ => cons (err error_Cl) (whennot cs xs)
+      end.
+Proof.
+  intros.
+  unfold whennot at 1.
+  rewrite zip_cons.
+  destruct c as [|[]|], x; auto.
+Qed.
+
+
+(* flèche avec constante à gauche *)
+Definition arrow {A} (a : A) : DS (sampl A) -C-> DS (sampl A).
+  refine (FIXP _ (DSCASE _ _ @_ _)).
+  apply ford_fcont_shift; intros [| v | e].
+  - (* abs *)
+    refine (curry (CONS abs @_ uncurry (AP _ _))).
+  - (* pres v *)
+    apply CTE, (CONS (pres a)).
+  - (* err e *)
+    apply CTE, (CONS (err e)).
+Defined.
+
+Lemma arrow_eq :
+  forall A (a : A) x xs,
+    arrow a (cons x xs) ==
+      match x with
+      | abs => cons abs (arrow a xs)
+      | pres _ => cons (pres a) xs
+      | err e => cons (err e) xs
+      end.
+Proof.
+  unfold arrow at 1; intros.
+  rewrite FIXP_eq, fcont_comp_simpl, DSCASE_simpl, DScase_cons.
+  destruct x; auto.
+Qed.
+
+
+(* prédicat co-inductif, peut-être plus facile à manipuler ?
+   équivalent de DS_bisimulation
+   TODO: pareil avec firsn, nrem ?
+ *)
+Section DS_eq.
+Variable (B : Type).
+CoInductive ds_eq : DS B -> DS B -> Prop :=
+| De :
+    forall x y,
+      first x == first y ->
+      ds_eq (rem x) (rem y) ->
+      ds_eq x y.
+
+Lemma Oeq_ds_eq : forall x y, x == y -> ds_eq x y.
+Proof.
+  cofix Cof; intros.
+  apply De; auto.
+Qed.
+
+Lemma ds_eq_Oeq : forall x y, ds_eq x y -> x == y.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with (R := fun U V => exists x y, ds_eq x y /\ U == x /\ V == y).
+  - intros * Eq Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto.
+  - clear.
+    intros U V Hc (x & y & Eq & Hu & Hv).
+    inversion_clear Eq.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    split; auto.
+    exists (rem x), (rem y); auto.
+  - eauto.
+Qed.
+
+Lemma ds_eq_Oeq_iff : forall x y, ds_eq x y <-> x == y.
+Proof.
+  split; eauto using ds_eq_Oeq, Oeq_ds_eq.
+Qed.
+End DS_eq.
+
+
+
+(* TEST: un merge initialisant *)
+Section MERGE.
+
+Definition expecta : forall {A}, DS (sampl A) -C-> DS (sampl A) :=
+  fun _ => DSCASE _ _ (fun v => match v with
+                | abs => ID _
+                | pres _ => MAP (fun _ => err error_Cl)
+                | err e => MAP (fun _ => err e)
+                    end).
+
+Lemma expecta_eq :
+  forall A c cs,
+    @expecta A (cons c cs) ==
+      match c with
+      | abs => cs
+      | pres _ => map (fun _ => err error_Cl) cs
+      | err _ => map (fun _ => c) cs
+      end.
+Proof.
+  intros.
+  unfold expecta.
+  rewrite DSCASE_simpl, DScase_cons.
+  destruct c; reflexivity.
+Qed.
+
+Lemma expecta_bot : forall A, @expecta A 0 == 0.
+Proof.
+  unfold expecta.
+  split; auto.
+  apply DScase_bot.
+Qed.
+
+(* TODO: pareil pour when ?? *)
+Parameter merge : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
+(* problèmes :
+   - pres T/F ne vérifie pas la présence de tête de xs/ys
+   - abs ne propage pas les erreurs de expecta
+ *)
+Hypothesis merge_eq :
+  forall A c cs xs ys,
+    @merge A (cons c cs) xs ys ==
+      match c with
+      | abs => cons abs (merge cs (expecta xs) (expecta ys))
+      | pres true => app xs (merge cs (rem xs) (expecta ys))
+      | pres false => app ys (merge cs (expecta xs) (rem ys))
+      | err e => map (fun _ => err e) xs
+      end.
+
+End MERGE.
+
+
+(* version avec sreset simplifié : seulement des flots (par d'environnement *)
+Module VERSION3.
+
+Parameter (A : Type).
+Parameter (f : DS (sampl A) -C-> DS (sampl A)).
+
+Hypothesis AbsF : forall xs, f (cons abs xs) == cons abs (f xs).
+Corollary AbsConstF : f (DS_const abs) == DS_const abs.
+Proof.
+  apply take_Oeq.
+  induction n; auto.
+  rewrite DS_const_eq, AbsF, 2 (take_eq (S n)), 2 app_cons, 2 rem_cons.
+  now rewrite IHn.
+Qed.
+
+Hypothesis LpF : forall xs n, f (take n xs) == take n (f xs).
+
+(* c = true -> not r and (true fby c) *)
+Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
+  refine (FIXP _ _).
+  apply curry.
+  refine (arrow true @_ _).
+  refine ((sbinop (fun b1 b2 => Some (negb b1 && b2)) @2_ SND) _).
+  refine ((fby @2_ sconst true @_ AC @_ SND) _).
+  refine ((AP _ _ @2_ FST) SND).
+Defined.
+
+Lemma true_until_eq :
+  forall r, true_until r ==
+         arrow true
+           (sbinop (fun b1 b2 => Some (negb b1 && b2)) r
+              (fby (sconst true (AC r)) (true_until r))).
+Proof.
+  intros.
+  unfold true_until at 1.
+  rewrite FIXP_eq.
+  reflexivity.
+Qed.
+
+Lemma true_until_abs :
+  forall r, true_until (cons abs r) == cons abs (true_until r).
+Proof.
+  intros.
+  rewrite true_until_eq at 1.
+  rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
+  apply cons_eq_compat; auto.
+  (* TODO !! *)
+
+
+  match goal with
+    |- ?l == ?r => remember_ds l as U
+                 ; remember_ds r as V
+  end.
+  apply ds_eq_Oeq.
+  revert_all; cofix Cof; intros.
+  constructor.
+  - rewrite HU, HV.
+    rewrite first_cons, true_until_eq.
+    now rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq, first_cons.
+  - apply (Cof (rem r)); clear Cof.
+    + rewrite HU.
+      rewrite true_until_eq.
+      admit.
+    + rewrite HV, rem_cons.
+Qed.
+
+
+Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
+  refine (FIXP _ _).
+  apply curry, curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (freset := FST @_ @FST pl pr)
+      ; pose (r := SND @_ @FST pl pr)
+      ; pose (x := @SND pl pr)
+      ; pose (c := true_until @_ r)
+  end.
+  refine ((merge @3_ c) _ _).
+  - (* true *)
+    refine (f @_ (when @2_ c) x).
+  - (* false *)
+    refine ((AP _ _ @3_ freset)
+              ((whennot @2_ c) r)
+              ((whennot @2_ c) x)).
+Defined.
+
+Lemma reset_eq :
+  forall r x,
+    reset r x ==
+      let c := true_until r in
+      merge c (f (when c x)) (reset (whennot c r) (whennot c x)).
+Proof.
+  intros.
+  unfold reset at 1.
+  rewrite FIXP_eq.
+  reflexivity.
+Qed.
+
+(* version simplifiée du reset dénotationnel *)
+Parameter sreset' : forall {A}, (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A -C-> DS A.
+Conjecture sreset'_eq : forall A f r R X Y,
+    @sreset' A f (cons r R) X Y ==
+      if r
+      then sreset' f (cons false R) X (f X)
+      else app Y (sreset' f R (rem X) (rem Y)).
+
+Definition sreset {A} : (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A.
+  apply curry, curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (f := FST @_ (@FST pl pr));
+      pose (R := SND @_ (@FST pl pr));
+      pose (X := @SND pl pr);
+      idtac
+  end.
+  exact ((sreset' @4_ f) R X ((AP _ _ @2_ f) X)).
+Defined.
+Lemma sreset_eq : forall A f R X,
+    @sreset A f R X == sreset' f R X (f X).
+Proof.
+  trivial.
+Qed.
+
+
+
+Theorem reset_match :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    reset rs xs == sreset f (AC rs) xs.
+Proof.
+  intros * Infr Infx Sr Sx Hac.
+  rewrite reset_eq, sreset_eq.
+  match goal with
+    |- ?l == ?r => remember_ds l as U
+                 ; remember_ds r as V
+  end.
+  apply ds_eq_Oeq.
+  revert_all; cofix Cof; intros.
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  cbv zeta in HU.
+  rewrite Hrs, Hxs in *.
+  repeat rewrite AC_cons in *.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx.
+  rewrite sreset'_eq, rem_cons in HV.
+  destruct vr, vx; try tauto; try congruence.
+  - (* abs *)
+    rewrite AbsF, app_cons, rem_cons in HV.
+    
+
+  
+Qed.
+
+
+End VERSION3.
+
+
+
+
+
+
+
 
 (* case booléen : if-then-else *)
 Definition scaseb {A} := @scase A bool bool Some bool_eq [true;false].
@@ -76,52 +436,6 @@ Proof.
   destruct r; auto.
 Qed.
 
-(* Lemma scaseb_cons : *)
-(*   forall A r rs x y (xs ys : DS (sampl A)), *)
-(*     scaseb (cons r rs) (PAIR _ _ (cons x xs) (cons y ys)) *)
-(*     == cons (match r, x, y with *)
-(*              | abs, abs, abs => abs *)
-(*              | pres true, pres x, pres y => pres x *)
-(*              | pres false, pres x, pres y => pres y *)
-(*              | err e, _, _ => err e *)
-(*              | _, err e, _ => err e *)
-(*              | _, _, err e => err e *)
-(*              | _, _, _ => err error_Cl *)
-(*              end) (scaseb rs (PAIR _ _ xs ys)). *)
-(* Proof. *)
-(*   intros. *)
-(*   unfold scaseb. *)
-(*   rewrite scase_eq at 1. *)
-(*   rewrite 2 Foldi_cons, Foldi_nil. *)
-(*   repeat (simpl; autorewrite with cpodb). *)
-(*   rewrite 2 zip3_cons. *)
-(*   destruct r as [| [] |]. *)
-(*   4:{ simpl. *)
-(*       fcase *)
-(*   4: reflexivity. *)
-(*   destruct r, x, y; try reflexivity. *)
-(*   reflexivity. *)
-(*   destruct r as [| [] | ]. *)
-(*   auto. *)
-(*   destruct r; auto. *)
-(* Qed. *)
-
-
-(* TODO: move *)
-Lemma sconst_cons :
-    forall A (c:A) b bs,
-      sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
-Proof.
-  intros.
-  apply map_eq_cons.
-Qed.
-
-Definition safe_DS {A} : DS (sampl A) -> Prop :=
-  DSForall (fun v => match v with err _ => False | _ => True end).
-
-(* when/merge booléen *)
-Definition swhenb {A} := @swhen A bool bool Some bool_eq.
-Definition smergeb {A} := @smerge A bool bool Some bool_eq [true;false].
 
 (* on part d'une fonction de flots *)
 Module VERSION2.
@@ -371,143 +685,6 @@ Proof.
 Admitted.
 
 
-Arguments PROJ {I Di}.
-Arguments FST {D1 D2}.
-Arguments SND {D1 D2}.
-Arguments curry {D1 D2 D3}.
-
-(* TEST: un merge initialisant *)
-Module TEST.
-(* Context {A : Type}. *)
-
-Definition expecta : forall {A}, DS (sampl A) -C-> DS (sampl A) :=
-  fun _ => DSCASE _ _ (fun v => match v with
-                | abs => ID _
-                | pres _ => MAP (fun _ => err error_Cl)
-                | err e => MAP (fun _ => err e)
-                    end).
-
-Lemma expecta_eq :
-  forall A c cs,
-    @expecta A (cons c cs) ==
-      match c with
-      | abs => cs
-      | pres _ => map (fun _ => err error_Cl) cs
-      | err _ => map (fun _ => c) cs
-      end.
-Proof.
-  intros.
-  unfold expecta.
-  rewrite DSCASE_simpl, DScase_cons.
-  destruct c; reflexivity.
-Qed.
-
-
-Lemma expecta_bot : forall A, @expecta A 0 == 0.
-Proof.
-  unfold expecta.
-  split; auto.
-  apply DScase_bot.
-Qed.
-
-Hint Rewrite
-  fcont_comp_simpl
-  fcont_comp2_simpl
-  fcont_comp3_simpl
-  curry_Curry
-  Curry_simpl
-  SND_simpl Snd_simpl
-  FST_simpl Fst_simpl
-  AP_simpl
-  : localdb.
-
-
-Definition when :  forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) :=
-  fun _ => ZIP (fun c x => match c, x with
-      | abs, abs => abs
-      | pres true, pres v => (pres v)
-      | pres false, pres v => abs
-      | _, _ => err error_Cl
-      end).
-
-(* Parameter when : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A). *)
-Lemma when_eq :
-  forall A c cs x xs,
-    @when A (cons c cs) (cons x xs) ==
-      match c, x with
-      | abs, abs => cons abs (when cs xs)
-      | pres true, pres v => cons (pres v) (when cs xs)
-      | pres false, pres v => cons abs (when cs xs)
-      | _, _ => cons (err error_Cl) (when cs xs)
-      end.
-Proof.
-  intros.
-  unfold when at 1.
-  rewrite zip_cons.
-  destruct c as [|[]|], x; auto.
-Qed.
-
-Parameter whennot : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
-Hypothesis whennot_eq :
-  forall A c cs x xs,
-    @whennot A (cons c cs) (cons x xs) ==
-      match c, x with
-      | abs, abs => cons abs (whennot cs xs)
-      | pres false, pres v => cons (pres v) (whennot cs xs)
-      | pres true, pres v => cons abs (whennot cs xs)
-      | _, _ => map (fun _ => err error_Cl) xs
-      end.
-
-(* TODO: pareil pour when ?? *)
-Parameter merge : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
-  (* refine (FIXP _ _). *)
-  (* apply curry, curry, curry. *)
-(*   (* match goal with *) *)
-(*   (* | |- _ (_ (Dprod ?pl ?pr) _) => *) *)
-(*   (*     pose (fmerge := FST @_ FST @_ @FST pl pr) *) *)
-(*   (*     ; pose (cs := SND @_ FST @_ @FST pl pr) *) *)
-(*   (*     ; pose (xs := SND @_ @FST pl pr) *) *)
-(*   (*     ; pose (ys := @SND pl pr) *) *)
-(*   (* end. *) *)
-(*   refine ((DSCASE _ _ @2_ _) (SND @_ FST @_ FST)). *)
-(*   apply ford_fcont_shift; intro c. *)
-(*   apply curry. *)
-(*   match goal with *)
-(*   | |- _ (_ (Dprod ?pl ?pr) _) => *)
-(*       pose (fmerge := FST @_ FST @_ @FST pl pr) *)
-(*       ; pose (cs := SND @_ FST @_ @FST pl pr) *)
-(*       ; pose (xs := SND @_ @FST pl pr) *)
-(*       ; pose (ys := @SND pl pr) *)
-(*   end. *)
-
-(*   refine *)
-(*     (match c with *)
-(*      | abs => CONS abs @_ ((AP _ _ @3_ fmerge) cs (expecta @_ xs) _) *)
-(*                (* (AP _ _ @_expecta @_ xs) (expecta ys)) *) *)
-(*      (* | pres true => app xs (merge cs (rem xs) (expecta ys)) *) *)
-(*      (* | pres false => app ys (merge cs (expecta xs) (rem ys)) *) *)
-(*                   (* | err e => map (fun _ => err e) xs *) *)
-(*      | _ => _ *)
-(*      end). *)
-
-(* problèmes :
-   - pres T/F ne vérifie pas la présence de tête de xs/ys
-   - abs ne propage pas les erreurs de expecta
- *)
-Hypothesis merge_eq :
-  forall A c cs xs ys,
-    @merge A (cons c cs) xs ys ==
-      match c with
-      | abs => cons abs (merge cs (expecta xs) (expecta ys))
-      | pres true => app xs (merge cs (rem xs) (expecta ys))
-      | pres false => app ys (merge cs (expecta xs) (rem ys))
-      | err e => map (fun _ => err e) xs
-      end.
-
-Hypothesis merge_is_cons :
-  forall A cs xs ys,
-    is_cons (@merge A cs xs ys) -> is_cons cs.
-
 Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
   refine (FIXP _ _).
   apply curry, curry.
@@ -707,50 +884,6 @@ Lemma f_true_until :
 Proof.
   (* sans doute pas facile *)
 Admitted.
-
-(* prédicat co-inductif, peut-être plus facile à manipuler ?
-   équivalent de DS_bisimulation
-   TODO: pareil avec firsn, nrem ?
- *)
-Section DS_eq.
-Variable (B : Type).
-CoInductive ds_eq : DS B -> DS B -> Prop :=
-| De :
-    forall x y,
-      first x == first y ->
-      ds_eq (rem x) (rem y) ->
-      ds_eq x y.
-
-Lemma Oeq_ds_eq : forall x y, x == y -> ds_eq x y.
-Proof.
-  cofix Cof; intros.
-  apply De; auto.
-Qed.
-
-Lemma ds_eq_Oeq : forall x y, ds_eq x y -> x == y.
-Proof.
-  intros.
-  apply DS_bisimulation_allin1 with (R := fun U V => exists x y, ds_eq x y /\ U == x /\ V == y).
-  - intros * Eq Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto.
-  - clear.
-    intros U V Hc (x & y & Eq & Hu & Hv).
-    inversion_clear Eq.
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    split; auto.
-    exists (rem x), (rem y); auto.
-  - eauto.
-Qed.
-
-Lemma ds_eq_Oeq_iff : forall x y, ds_eq x y <-> x == y.
-Proof.
-  split; eauto using ds_eq_Oeq, Oeq_ds_eq.
-Qed.
-End DS_eq.
-
 
 Section DSn_eq.
 Variable (B : Type).
