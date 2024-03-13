@@ -53,6 +53,11 @@ Arguments FST {D1 D2}.
 Arguments SND {D1 D2}.
 Arguments curry {D1 D2 D3}.
 
+Local Hint Rewrite
+  curry_Curry Curry_simpl fcont_comp_simpl fcont_comp2_simpl
+  FST_simpl Fst_simpl SND_simpl Snd_simpl AP_simpl
+  : localdb.
+
 (* TODO: move *)
 Lemma sconst_cons :
     forall A (c:A) b bs,
@@ -139,6 +144,12 @@ Proof.
   destruct x; auto.
 Qed.
 
+Lemma arrow_bot : forall A (a:A), arrow a 0 == 0.
+Proof.
+  intros; unfold arrow.
+  rewrite FIXP_eq.
+  apply DScase_bot_eq.
+Qed.
 
 (* prédicat co-inductif, peut-être plus facile à manipuler ?
    équivalent de DS_bisimulation
@@ -242,7 +253,7 @@ Module VERSION3.
 Parameter (A : Type).
 Parameter (f : DS (sampl A) -C-> DS (sampl A)).
 
-Hypothesis AbsF : forall xs, f (cons abs xs) == cons abs (f xs).
+Conjecture AbsF : forall xs, f (cons abs xs) == cons abs (f xs).
 Corollary AbsConstF : f (DS_const abs) == DS_const abs.
 Proof.
   apply take_Oeq.
@@ -251,7 +262,7 @@ Proof.
   now rewrite IHn.
 Qed.
 
-Hypothesis LpF : forall xs n, f (take n xs) == take n (f xs).
+Conjecture LpF : forall xs n, f (take n xs) == take n (f xs).
 
 (* c = true -> not r and (true fby c) *)
 Definition true_until : DS (sampl bool) -C-> DS (sampl bool).
@@ -275,6 +286,16 @@ Proof.
   reflexivity.
 Qed.
 
+Ltac coind_Oeq :=
+  intros
+  ; match goal with
+      |- ?l == ?r => remember_ds l as U
+                   ; remember_ds r as V
+    end
+  ; apply ds_eq_Oeq
+  ; revert_all; cofix Cof
+  ; intros.
+
 Lemma true_until_abs :
   forall r, true_until (cons abs r) == cons abs (true_until r).
 Proof.
@@ -282,24 +303,21 @@ Proof.
   rewrite true_until_eq at 1.
   rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
   apply cons_eq_compat; auto.
-  (* TODO !! *)
-
-
-  match goal with
-    |- ?l == ?r => remember_ds l as U
-                 ; remember_ds r as V
-  end.
-  apply ds_eq_Oeq.
-  revert_all; cofix Cof; intros.
-  constructor.
-  - rewrite HU, HV.
-    rewrite first_cons, true_until_eq.
-    now rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq, first_cons.
-  - apply (Cof (rem r)); clear Cof.
-    + rewrite HU.
-      rewrite true_until_eq.
-      admit.
-    + rewrite HV, rem_cons.
+  unfold true_until.
+  rewrite FIXP_fixp.
+  apply fixp_ind.
+  - intros h H.
+    do 2 setoid_rewrite <- fmon_comp_simpl.
+    setoid_rewrite lub_comp_eq; auto.
+    apply lub_eq_compat; auto.
+  - unfold sbinop.
+    now rewrite fbyA_bot, zip_bot2, arrow_bot.
+  - intros ftrue_until Hf.
+    change (fcontit ?a ?b) with (a b).
+    autorewrite with localdb; simpl.
+    rewrite <- Hf.
+    rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq, fbyA_eq.
+    reflexivity.
 Qed.
 
 
