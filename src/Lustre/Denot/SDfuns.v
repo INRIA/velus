@@ -635,7 +635,16 @@ Section SStream_functions.
     rewrite fby_eq; cases.
   Qed.
 
-  Lemma fby_bot1 : forall ys, fby 0 ys == 0.
+  Lemma fbyA_bot : forall xs, fbyA xs 0 == 0.
+  Proof.
+    intros.
+    unfold fbyA, fbys.
+    rewrite ford_eq_elim with (n := true).
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_bot_eq.
+  Qed.
+
+  Lemma fby_bot : forall ys, fby 0 ys == 0.
   Proof.
     intros.
     unfold fby, fbys.

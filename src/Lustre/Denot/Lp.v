@@ -313,7 +313,7 @@ Lemma take_fby_le1 :
     fby (take n xs) (take n ys) <= take n (fby xs ys).
 Proof.
   induction n; intros.
-  { now rewrite fby_bot1. }
+  { now rewrite fby_bot. }
   remember_ds (fby (take _ _) (take _ _)) as U.
   remember_ds (take _ (fby xs ys)) as V.
   (* TODO: le cofix simple, en faire une méthode générale pour trouver un cons ? *)
@@ -348,7 +348,7 @@ Lemma take_fby_le2 :
     take n (fby xs ys) <= fby (take n xs) (take n ys).
 Proof.
   induction n; intros.
-  { now rewrite fby_bot1. }
+  { now rewrite fby_bot. }
   remember_ds (fby (take _ _) (take _ _)) as V.
   remember_ds (take _ (fby xs ys)) as U.
   revert dependent U; cofix Cof; intros; destruct U;
