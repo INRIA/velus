@@ -54,7 +54,7 @@ Arguments SND {D1 D2}.
 Arguments curry {D1 D2 D3}.
 
 Local Hint Rewrite
-  curry_Curry Curry_simpl fcont_comp_simpl fcont_comp2_simpl
+  curry_Curry Curry_simpl fcont_comp_simpl fcont_comp2_simpl fcont_comp3_simpl
   FST_simpl Fst_simpl SND_simpl Snd_simpl AP_simpl
   : localdb.
 
@@ -234,7 +234,7 @@ Parameter merge : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A
    - pres T/F ne vérifie pas la présence de tête de xs/ys
    - abs ne propage pas les erreurs de expecta
  *)
-Hypothesis merge_eq :
+Conjecture merge_eq :
   forall A c cs xs ys,
     @merge A (cons c cs) xs ys ==
       match c with
@@ -352,6 +352,37 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma reset_abs :
+  forall r x,
+    reset (cons abs r) (cons abs x) == cons abs (reset r x).
+Proof.
+  intros.
+  rewrite 2 reset_eq; cbv zeta.
+  rewrite true_until_abs, when_eq, 2 whennot_eq, AbsF.
+  rewrite merge_eq, expecta_eq.
+  apply cons_eq_compat; auto.
+  apply fcont_stable.
+  unfold reset.
+  rewrite FIXP_fixp.
+  revert r x; apply fixp_ind.
+  - intros h H r x.
+    setoid_rewrite <- fmon_comp_simpl.
+    setoid_rewrite lub_comp_eq at 1; auto.
+    apply lub_eq_compat.
+    apply ford_eq_intro; intro n.
+    repeat rewrite ?fmon_comp_simpl, ?fmon_app_simpl.
+    apply H.
+  - intros.
+    unfold expecta.
+    rewrite DSCASE_simpl, DScase_bot_eq.
+    auto.
+  - intros freset Hf r x.
+    change (fcontit ?a ?b) with (a b).
+    autorewrite with localdb; simpl.
+    rewrite true_until_abs, when_eq, 2 whennot_eq, AbsF, merge_eq, 2 expecta_eq.
+    rewrite Hf; auto.
+Qed.
+
 (* version simplifiée du reset dénotationnel *)
 Parameter sreset' : forall {A}, (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A -C-> DS A.
 Conjecture sreset'_eq : forall A f r R X Y,
@@ -390,12 +421,7 @@ Theorem reset_match :
 Proof.
   intros * Infr Infx Sr Sx Hac.
   rewrite reset_eq, sreset_eq.
-  match goal with
-    |- ?l == ?r => remember_ds l as U
-                 ; remember_ds r as V
-  end.
-  apply ds_eq_Oeq.
-  revert_all; cofix Cof; intros.
+  coind_Oeq.
   apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
   apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
   cbv zeta in HU.
@@ -406,10 +432,15 @@ Proof.
   rewrite sreset'_eq, rem_cons in HV.
   destruct vr, vx; try tauto; try congruence.
   - (* abs *)
+    rewrite true_until_abs, when_eq, 2 whennot_eq, AbsF,
+      merge_eq, reset_abs, 2 expecta_eq in HU.
     rewrite AbsF, app_cons, rem_cons in HV.
-    
-
-  
+    constructor.
+    + rewrite HU, HV, 2 first_cons; auto.
+    + apply (Cof rs' xs'); auto.
+      * rewrite HU, rem_cons; auto.
+      * rewrite HV, rem_cons; auto.
+  - (* TODO *)
 Qed.
 
 
