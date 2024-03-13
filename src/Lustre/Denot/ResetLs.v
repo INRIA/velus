@@ -408,7 +408,8 @@ Proof.
   trivial.
 Qed.
 
-
+Definition bool_of : sampl bool -> bool :=
+  fun v => match v with pres true => true | _ => false end.
 
 Theorem reset_match :
   forall rs xs,
@@ -417,9 +418,10 @@ Theorem reset_match :
     safe_DS rs ->
     safe_DS xs ->
     AC xs == AC rs ->
-    reset rs xs == sreset f (AC rs) xs.
+    let rsb := map bool_of rs in
+    reset rs xs == sreset f rsb xs.
 Proof.
-  intros * Infr Infx Sr Sx Hac.
+  intros * Infr Infx Sr Sx Hac rsb; subst rsb.
   rewrite reset_eq, sreset_eq.
   coind_Oeq.
   apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
@@ -427,10 +429,11 @@ Proof.
   cbv zeta in HU.
   rewrite Hrs, Hxs in *.
   repeat rewrite AC_cons in *.
+  rewrite map_eq_cons in HV.
   apply Con_eq_simpl in Hac as [].
   inversion_clear Sr; inversion_clear Sx.
   rewrite sreset'_eq, rem_cons in HV.
-  destruct vr, vx; try tauto; try congruence.
+  destruct vr as [|r|], vx; simpl in HV; try tauto; try congruence.
   - (* abs *)
     rewrite true_until_abs, when_eq, 2 whennot_eq, AbsF,
       merge_eq, reset_abs, 2 expecta_eq in HU.
@@ -440,7 +443,9 @@ Proof.
     + apply (Cof rs' xs'); auto.
       * rewrite HU, rem_cons; auto.
       * rewrite HV, rem_cons; auto.
-  - (* TODO *)
+  - destruct r.
+    (* TODO *)
+    
 Qed.
 
 
