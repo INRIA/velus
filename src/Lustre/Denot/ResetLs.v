@@ -193,6 +193,75 @@ Proof.
   split; eauto using ds_eq_Oeq, Oeq_ds_eq.
 Qed.
 End DS_eq.
+Ltac coind_Oeq H :=
+  intros
+  ; match goal with
+      |- ?l == ?r => remember_ds l as U
+                   ; remember_ds r as V
+    end
+  ; apply ds_eq_Oeq
+  ; revert_all; cofix H
+  ; intros.
+
+(* un principe d'induction n par n *)
+Section DSn_eq.
+Variable (B : Type).
+CoInductive dsn_eq : DS B -> DS B -> Prop :=
+| Den :
+    forall x y n,
+      take (S n) x == take (S n) y ->
+      dsn_eq (nrem (S n) x) (nrem (S n) y) ->
+      dsn_eq x y.
+
+(* TODO: move *)
+Lemma take_rem :
+  forall A n (x y:DS A),
+    take (S n) x == take (S n) y ->
+    take n (rem x) == take n (rem y).
+Proof.
+  intros * Heq.
+  destruct n; auto.
+  rewrite 2 (take_eq (S (S n))) in Heq.
+  rewrite 2 (take_eq (S n)) in Heq.
+  apply rem_eq_compat in Heq.
+  rewrite 2 rem_app_app_rem in Heq; auto.
+Qed.
+
+Lemma dsn_rem :
+  forall U V, dsn_eq U V -> dsn_eq (rem U) (rem V).
+Proof.
+  intros * Hn.
+  inversion_clear Hn as [??? Ht Hdsn].
+  destruct n; auto.
+  apply Den with n; auto.
+  apply take_rem; auto.
+Qed.
+
+Lemma Oeq_dsn_eq : forall x y, x == y -> dsn_eq x y.
+Proof.
+  cofix Cof; intros.
+  apply Den with (n := O); try (simpl; now auto).
+  now rewrite H.
+Qed.
+
+Lemma dsn_eq_Oeq : forall x y, dsn_eq x y -> x == y.
+Proof.
+  intros * Hn.
+  coind_Oeq Cof.
+  constructor.
+  - inversion_clear Hn as [??? Ht _].
+    apply first_eq_compat in Ht.
+    rewrite 2 (take_eq (S n)), 2 first_app_first in Ht.
+    assumption.
+  - apply (Cof (rem x) (rem y)); auto.
+    apply dsn_rem; auto.
+Qed.
+
+Lemma dsn_eq_Oeq_iff : forall x y, dsn_eq x y <-> x == y.
+Proof.
+  split; eauto using dsn_eq_Oeq, Oeq_dsn_eq.
+Qed.
+End DSn_eq.
 
 
 
@@ -286,16 +355,6 @@ Proof.
   reflexivity.
 Qed.
 
-Ltac coind_Oeq :=
-  intros
-  ; match goal with
-      |- ?l == ?r => remember_ds l as U
-                   ; remember_ds r as V
-    end
-  ; apply ds_eq_Oeq
-  ; revert_all; cofix Cof
-  ; intros.
-
 Lemma true_until_abs :
   forall r, true_until (cons abs r) == cons abs (true_until r).
 Proof.
@@ -320,6 +379,37 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma true_until_pres1 :
+  forall b r,
+    safe_DS r ->
+    exists U,
+      true_until (cons (pres b) r) == cons (pres true) U
+      /\ U == (sbinop (fun b1 b2 => Some (negb b1 && b2)) r
+                (fby1 (Some true) (sconst true (AC r)) U)).
+Proof.
+  intros * Hr.
+  eexists.
+  rewrite true_until_eq at 1.
+  rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
+  split. reflexivity.
+  rewrite true_until_eq at 1.
+  rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
+  rewrite fby1AP_eq.
+  reflexivity.
+Qed.
+
+(* FAUX: le premier est ignoré (true -> _) *)
+Lemma true_until_true :
+  forall r,
+    safe_DS r ->
+    true_until (cons (pres true) r)
+    == cons (pres true) (sconst false (AC r)).
+Proof.
+  intros * Hr.
+  rewrite true_until_eq at 1.
+  rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
+  apply cons_eq_compat; auto.
+Abort.
 
 Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
   refine (FIXP _ _).
@@ -423,7 +513,38 @@ Theorem reset_match :
 Proof.
   intros * Infr Infx Sr Sx Hac rsb; subst rsb.
   rewrite reset_eq, sreset_eq.
-  coind_Oeq.
+
+  (* apply take_Oeq; intro n. *)
+  match goal with
+      |- ?l == ?r => remember_ds l as U
+                   ; remember_ds r as V
+  end
+  ; apply dsn_eq_Oeq
+  ; revert_all; cofix Cof
+  ; intros.
+  (* on regarde à quel n sauter? *)
+
+  apply Oeq_dsn_eq.
+  apply take_Oeq; intro n.
+  apply dsn_eq_Oeq.
+  apply Den with n.
+
+Qed.
+
+
+Theorem reset_match :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    let rsb := map bool_of rs in
+    reset rs xs == sreset f rsb xs.
+Proof.
+  intros * Infr Infx Sr Sx Hac rsb; subst rsb.
+  rewrite reset_eq, sreset_eq.
+  coind_Oeq Cof1.
   apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
   apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
   cbv zeta in HU.
@@ -440,12 +561,39 @@ Proof.
     rewrite AbsF, app_cons, rem_cons in HV.
     constructor.
     + rewrite HU, HV, 2 first_cons; auto.
-    + apply (Cof rs' xs'); auto.
+    + apply (Cof1 rs' xs'); auto.
       * rewrite HU, rem_cons; auto.
       * rewrite HV, rem_cons; auto.
-  - destruct r.
-    (* TODO *)
+  - (* deux cas identiques : *)
+    assert (HV' : V == app (f (cons (pres a) xs'))
+                         (sreset' f (map bool_of rs') xs'
+                            (rem (f (cons (pres a) xs'))))).
+    { destruct r; rewrite HV, ?sreset'_eq, ?rem_cons; auto. } clear HV.
+    destruct (true_until_pres1 r rs') as (U' & Htu & Hu'); auto.
+    rewrite Htu, when_eq, 2 whennot_eq, merge_eq in HU.
+    rewrite reset_abs, expecta_eq in HU.
+    constructor.
+    { rewrite HU, HV', 2 first_app_first.
+      now rewrite <- 2 take_1, <- 2 LpF, 2 take_1, 2 first_cons. }
+    apply Oeq_ds_eq.
+    rewrite HU, HV', 2 rem_app. 2,3: admit. (* infty ? *)
     
+
+
+
+
+
+
+
+
+
+      apply (Cof rs' xs'); auto.
+      * cbv zeta.
+        rewrite HU, rem_app. 2: admit.
+        
+      * rewrite HV', rem_app. 2:admit. (* facile *)
+        (* ok, juste généraliser (f xs') comme un nrem *)
+        admit.
 Qed.
 
 
@@ -939,55 +1087,6 @@ Proof.
   (* sans doute pas facile *)
 Admitted.
 
-Section DSn_eq.
-Variable (B : Type).
-CoInductive dsn_eq : DS B -> DS B -> Prop :=
-| Den :
-    forall x y n,
-      take (S n) x == take (S n) y ->
-      dsn_eq (nrem (S n) x) (nrem (S n) y) ->
-      dsn_eq x y.
-
-Lemma Oeq_dsn_eq : forall x y, x == y -> dsn_eq x y.
-Proof.
-  cofix Cof; intros.
-  apply Den with (n := O); try (simpl; now auto).
-  now rewrite H.
-Qed.
-
-Lemma dsn_eq_Oeq : forall x y, dsn_eq x y -> x == y.
-Proof.
-  intros.
-  apply DS_bisimulation_allin1 with (R := fun U V => exists x y, dsn_eq x y /\ U == x /\ V == y).
-  - intros * Eq Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto.
-  - clear.
-    intros U V Hc (x & y & Eq & Hu & Hv).
-    inversion_clear Eq.
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    clear Hu Hv.
-    revert dependent x.
-    revert dependent y.
-    induction n; intros.
-    + rewrite 2 take_1 in H; split; eauto.
-    + apply IHn.
-      * admit.
-      * eapply Den with O.
-        2:{ admit. }
-        rewrite 2 take_1.
-        Search first nrem.
-        admit.
-  - eauto.
-Admitted. (* un peu chiant mais ok *)
-
-Lemma dsn_eq_Oeq_iff : forall x y, dsn_eq x y <-> x == y.
-Proof.
-  split; eauto using dsn_eq_Oeq, Oeq_dsn_eq.
-Qed.
-End DSn_eq.
 
 
 Theorem reset_match :
