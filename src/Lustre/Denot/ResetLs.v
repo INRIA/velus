@@ -59,6 +59,88 @@ Local Hint Rewrite
   : localdb.
 
 (* TODO: move *)
+Lemma take_rem :
+  forall A n (x y:DS A),
+    take (S n) x == take (S n) y ->
+    take n (rem x) == take n (rem y).
+Proof.
+  intros * Heq.
+  destruct n; auto.
+  rewrite 2 (take_eq (S (S n))) in Heq.
+  rewrite 2 (take_eq (S n)) in Heq.
+  apply rem_eq_compat in Heq.
+  rewrite 2 rem_app_app_rem in Heq; auto.
+Qed.
+(* From lp.v *)
+Lemma take_zip :
+    forall A B C (op:A->B->C),
+    forall n xs ys,
+      take n (ZIP op xs ys) == ZIP op (take n xs) (take n ys).
+  Proof.
+    induction n; intros.
+    - now rewrite zip_bot1.
+    - rewrite 3 (take_eq (S n)).
+      now rewrite <- zip_app, <- 2 APP_simpl, rem_zip, IHn.
+  Qed.
+
+
+Lemma app_impl :
+  forall A (x1 x2 x3 y1 y2 y3:DS A),
+    app x1 x2 == app y1 y2 ->
+    (x2 == y2 -> x3 == y3) ->
+    app x1 x3 == app y1 y3.
+Proof.
+  intros * Ha Him.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            exists x1 x2 x3 y1 y2 y3,
+              app x1 x2 == app y1 y2
+              /\ (x2 == y2 -> x3 == y3)
+              /\ U == app x1 x3
+              /\ V == app y1 y3).
+  3:eauto 12.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (x1 & x2 & x3 & y1 & y2 & y3 & Ha & Him & Hu & Hv).
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  rewrite Hu, Hv in Hc.
+  clear Hu Hv.
+  split.
+  - apply first_eq_compat in Ha.
+    now rewrite 2 first_app_first in *.
+  - assert (is_cons x1).
+    { destruct Hc; eauto using app_is_cons.
+      eapply app_is_cons; rewrite Ha; eauto using app_is_cons, is_cons_app. }
+    assert (is_cons y1).
+    { destruct Hc; eauto using app_is_cons.
+      eapply app_is_cons; rewrite <- Ha; eauto using app_is_cons, is_cons_app. }
+    apply rem_eq_compat in Ha as Har.
+    rewrite 2 rem_app in Har; auto.
+    setoid_rewrite rem_app.
+    all: auto.
+    exists (first x3), 0, (rem x3), (first y3), 0, (rem y3).
+    rewrite 2 app_first_rem, Him; auto.
+Qed.
+
+Lemma take_rem_eq :
+  forall A n1 n2 (x y : DS A),
+    take n1 x == take n1 y ->
+    take n2 (nrem n1 x) == take n2 (nrem n1 y) ->
+    take (n1 + n2) x == take (n1 + n2) y.
+Proof.
+  induction n1; intros * Ht1 Ht2; auto.
+  rewrite plus_Sn_m.
+  rewrite 2 (take_eq (S _)) in Ht1.
+  rewrite 2 (take_eq (S _)).
+  apply app_impl with (1 := Ht1); auto.
+Qed.
+
+  
+(* TODO: move *)
 Lemma sconst_cons :
     forall A (c:A) b bs,
       sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
@@ -208,40 +290,28 @@ Section DSn_eq.
 Variable (B : Type).
 CoInductive dsn_eq : DS B -> DS B -> Prop :=
 | Den :
-    forall x y n,
-      take (S n) x == take (S n) y ->
-      dsn_eq (nrem (S n) x) (nrem (S n) y) ->
+  forall x y,
+    (exists n,
+      take (S n) x == take (S n) y
+      /\ dsn_eq (nrem (S n) x) (nrem (S n) y)) ->
       dsn_eq x y.
-
-(* TODO: move *)
-Lemma take_rem :
-  forall A n (x y:DS A),
-    take (S n) x == take (S n) y ->
-    take n (rem x) == take n (rem y).
-Proof.
-  intros * Heq.
-  destruct n; auto.
-  rewrite 2 (take_eq (S (S n))) in Heq.
-  rewrite 2 (take_eq (S n)) in Heq.
-  apply rem_eq_compat in Heq.
-  rewrite 2 rem_app_app_rem in Heq; auto.
-Qed.
 
 Lemma dsn_rem :
   forall U V, dsn_eq U V -> dsn_eq (rem U) (rem V).
 Proof.
   intros * Hn.
-  inversion_clear Hn as [??? Ht Hdsn].
+  inversion_clear Hn as [?? (n &  Ht & Hdsn) ].
   destruct n; auto.
-  apply Den with n; auto.
+  apply Den; exists n; split; auto.
   apply take_rem; auto.
 Qed.
 
 Lemma Oeq_dsn_eq : forall x y, x == y -> dsn_eq x y.
 Proof.
   cofix Cof; intros.
-  apply Den with (n := O); try (simpl; now auto).
+  apply Den; exists O; split.
   now rewrite H.
+  simpl; now auto.
 Qed.
 
 Lemma dsn_eq_Oeq : forall x y, dsn_eq x y -> x == y.
@@ -249,7 +319,7 @@ Proof.
   intros * Hn.
   coind_Oeq Cof.
   constructor.
-  - inversion_clear Hn as [??? Ht _].
+  - inversion_clear Hn as [?? (n & Ht & _) ].
     apply first_eq_compat in Ht.
     rewrite 2 (take_eq (S n)), 2 first_app_first in Ht.
     assumption.
@@ -316,7 +386,7 @@ Conjecture merge_eq :
 End MERGE.
 
 
-(* version avec sreset simplifié : seulement des flots (par d'environnement *)
+(* version avec sreset simplifié : seulement des flots (pas d'environnement *)
 Module VERSION3.
 
 Parameter (A : Type).
@@ -398,19 +468,6 @@ Proof.
   reflexivity.
 Qed.
 
-(* FAUX: le premier est ignoré (true -> _) *)
-Lemma true_until_true :
-  forall r,
-    safe_DS r ->
-    true_until (cons (pres true) r)
-    == cons (pres true) (sconst false (AC r)).
-Proof.
-  intros * Hr.
-  rewrite true_until_eq at 1.
-  rewrite AC_cons, sconst_cons, fby_eq, sbinop_eq, arrow_eq.
-  apply cons_eq_compat; auto.
-Abort.
-
 Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
   refine (FIXP _ _).
   apply curry, curry.
@@ -434,7 +491,8 @@ Lemma reset_eq :
   forall r x,
     reset r x ==
       let c := true_until r in
-      merge c (f (when c x)) (reset (whennot c r) (whennot c x)).
+      merge c (f (when c x))
+              (reset (whennot c r) (whennot c x)).
 Proof.
   intros.
   unfold reset at 1.
@@ -498,8 +556,231 @@ Proof.
   trivial.
 Qed.
 
+(* From reset.v *)
+Lemma take_bool_dec :
+  forall n R,
+    infinite R ->
+    take n R == take n (DS_const true)
+    \/ exists m, m < n
+           /\ take m R == take m (DS_const true)
+           /\ first (nrem m R) == cons false 0.
+Proof.
+  clear.
+  induction n; intros * Infr; auto.
+  inversion_clear Infr as [Cr Infr'].
+  destruct (is_cons_elim Cr) as (r & R' & Hr).
+  rewrite Hr, rem_cons in *.
+  destruct r; cycle 1.
+  - (* true trouvé *)
+    right.
+    exists O; simpl.
+    rewrite Hr, first_cons; auto with arith.
+  - rewrite 2 (take_eq (S n)).
+    rewrite DS_const_eq, 2 rem_cons, 2 app_cons.
+    destruct (IHn R' Infr') as [Ht|(m & Hlt & Ht & Hf)].
+    + rewrite Ht; auto.
+    + right; exists (S m); rewrite 2 (take_eq (S m)); simpl.
+      rewrite Hr, 2 rem_cons, 2 app_cons, Ht, Hf.
+      auto with arith.
+Qed.
+
 Definition bool_of : sampl bool -> bool :=
   fun v => match v with pres true => true | _ => false end.
+
+
+Definition true_of : sampl bool -> bool :=
+  fun v => match v with pres true | abs => true | _ => false end.
+Lemma take_when_true :
+  forall A n cs (xs : DS (sampl A)),
+    infinite cs ->
+    infinite xs ->
+    safe_DS cs ->
+    safe_DS xs ->
+    AC xs == AC cs ->
+    take n (map true_of cs) == take n (DS_const true) ->
+    take n (when cs xs) == take n xs.
+Proof.
+  induction n; intros * Infc Infx Sc Sx Hac Hc; auto.
+  apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hcs in *.
+  rewrite Hxs in *.
+  repeat rewrite AC_cons in Hac.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sc; inversion_clear Sx.
+  rewrite map_eq_cons, DS_const_eq, 2 (take_eq (S n)), 2 rem_cons, 2 app_cons in Hc.
+  apply Con_eq_simpl in Hc as []; subst.
+  destruct vc as [|[]|], vx as [|x|]; try (simpl in *; congruence || tauto).
+  all: rewrite when_eq, 2 (take_eq (S n)), 2 rem_cons, 2 app_cons; auto.
+Qed.
+
+Lemma take_when_false :
+  forall A n cs (xs : DS (sampl A)),
+    infinite cs ->
+    infinite xs ->
+    safe_DS cs ->
+    safe_DS xs ->
+    AC xs == AC cs ->
+    take n (map true_of cs) == take n (DS_const false) ->
+    take n (when cs xs) == take n (DS_const abs).
+Proof.
+  induction n; intros * Infc Infx Sc Sx Hac Hc; auto.
+  apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hcs in *.
+  rewrite Hxs in *.
+  repeat rewrite AC_cons in Hac.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sc; inversion_clear Sx.
+  rewrite map_eq_cons, DS_const_eq, 2 (take_eq (S n)), 2 rem_cons, 2 app_cons in Hc.
+  apply Con_eq_simpl in Hc as []; subst.
+  destruct vc as [|[]|], vx as [|x|]; try (simpl in *; congruence || tauto).
+  rewrite when_eq, DS_const_eq, 2 (take_eq (S n)), 2 rem_cons, 2 app_cons; auto.
+Qed.
+
+Lemma take_true_until_spec :
+  forall n rs,
+    safe_DS rs ->
+    infinite rs ->
+    let tu := map true_of (true_until rs) in
+    take n tu == take n (DS_const true)
+    \/ exists m, m < n
+           /\ take m tu == take m (DS_const true)
+           /\ take (n - m) (nrem m tu) == take (n - m) (DS_const false).
+Proof.
+  cbv zeta.
+  induction n; intros * Sr Infr; auto.
+  inversion_clear Infr as [Cr Infr'].
+  destruct (is_cons_elim Cr) as (r & R' & Hr).
+  rewrite Hr, rem_cons in *.
+  inversion_clear Sr.
+  destruct r as [|r|]; try tauto.
+  - (* abs *)
+    rewrite true_until_abs, map_eq_cons.
+    destruct (IHn R') as [|(m&Hlt&Ht1&Ht2)]; auto.
+    + left.
+      rewrite DS_const_eq, 2 (take_eq (S n)), 2 rem_cons, 2 app_cons; auto.
+    + right.
+      exists (S m).
+      split; auto with arith.
+      rewrite Hr, true_until_abs, map_eq_cons.
+      split.
+      rewrite DS_const_eq, 2 (take_eq (S m)), 2 rem_cons, 2 app_cons; auto.
+      rewrite nrem_S, rem_cons, Nat.sub_succ; auto.
+  - (* pres *)
+    destruct (true_until_pres1 r R') as (cs & Htu & Hc); auto.
+    setoid_rewrite Htu.
+Admitted.
+
+
+(* vrai seulement si AC xs == AC (f xs)... *)
+Lemma f_when :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    (forall ys, AC ys == AC (f ys)) ->
+    f (when (true_until rs) xs) == when (true_until rs) (f xs).
+Proof.
+  intros * Infr Infx Sr Sx Hac Hacf.
+  apply take_Oeq; intro n.
+  rewrite <- LpF.
+  destruct (take_true_until_spec n rs) as [Ht|(m & Hlt & Ht & Hf)]; auto.
+  - rewrite 2 take_when_true, LpF; auto.
+    all: admit. (* ok *)
+  -
+
+
+
+
+    induction m.
+    + simpl (nrem _ _) in *.
+      rewrite Nat.sub_0_r in *.
+      rewrite 2 take_when_false, LpF, AbsConstF; auto.
+      all: admit. (* ok *)
+    + 
+Qed.
+
+(* IDEM !!! *)
+Lemma f_when :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    f (when (true_until rs) xs) == when (true_until rs) (f xs).
+Proof.
+  intros * Infr Infx Sr Sx Hac.
+  (* on commence par une co-induction pour laisser passer les absences *)
+  coind_Oeq Cof.
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hrs in *.
+  rewrite Hxs in *.
+  repeat rewrite AC_cons in Hac.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx.
+  destruct vr as [|r|], vx as [|x|]; try (congruence || tauto).
+  { (* abs *)
+    rewrite true_until_abs, when_eq, AbsF, when_eq in *.
+    constructor. now rewrite HU, HV, 2 first_cons.
+    eapply Cof; rewrite ?HU, ?HV, 2 ?rem_cons; eauto.
+  }
+  clear Cof.
+  (* ensuite on cherche un (pres true) dans rs' *)
+  destruct (true_until_pres1 r rs') as (cs & Htu & Hc); auto.
+  rewrite Htu in *.
+  apply Oeq_ds_eq, take_Oeq; intro n.
+  rewrite HU, HV, <- LpF.
+  rewrite 2 take_when_true; auto.
+  rewrite <- LpF; auto.
+  destruct (take_bool_dec n (map bool_of cs)).
+Abort.
+
+
+(* approche foireuse : *)
+Lemma f_when :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    f (when (true_until rs) xs) == when (true_until rs) (f xs).
+Proof.
+    intros * Infr Infx Sr Sx Hac.
+  apply take_Oeq; intro n.
+  destruct (take_bool_dec n (map bool_of rs)) as [HH|HH];
+    auto using map_inf.
+  - (* faux sur n *)
+    revert dependent rs.
+    revert dependent xs.
+    induction n; intros; auto.
+
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hrs in *.
+  rewrite Hxs in *.
+  repeat rewrite AC_cons in Hac.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx.
+  destruct vr as [|r|], vx as [|x|]; try (congruence || tauto).
+
+    + (* abs *)
+      rewrite true_until_abs, AbsF, 2 when_eq, AbsF.
+      rewrite 2 (take_eq (S n)), 2 app_cons, 2 rem_cons.
+      rewrite 2 (take_eq (S n)), map_eq_cons, DS_const_eq,
+        2 rem_cons, 2 app_cons in HH.
+      apply Con_eq_simpl in HH as []; auto.
+    + (* cons *)
+      destruct (true_until_pres1 r rs') as (cs & Htu & Hc); auto.
+      rewrite Htu in *.
+      rewrite 2 (take_eq (S n)), when_eq.
+Abort.
+
 
 Theorem reset_match :
   forall rs xs,
@@ -512,23 +793,96 @@ Theorem reset_match :
     reset rs xs == sreset f rsb xs.
 Proof.
   intros * Infr Infx Sr Sx Hac rsb; subst rsb.
-  rewrite reset_eq, sreset_eq.
+  rewrite sreset_eq.
 
-  (* apply take_Oeq; intro n. *)
-  match goal with
-      |- ?l == ?r => remember_ds l as U
-                   ; remember_ds r as V
-  end
-  ; apply dsn_eq_Oeq
-  ; revert_all; cofix Cof
-  ; intros.
-  (* on regarde à quel n sauter? *)
+  apply DS_bisimulation_allin1 with
+    (R:= fun U V =>
+           exists rs xs n cs,
+             infinite rs
+             /\ infinite xs
+             /\ safe_DS rs
+             /\ safe_DS xs
+             /\ AC xs == AC rs
+             (* /\ cs == (sbinop (fun b1 b2 => Some (negb b1 && b2)) rs *)
+             (*            (fby1 (Some true) (sconst true (AC rs)) cs)) *)
+             (* TODO: quelle relation avec rs ??? *)
+             /\ U == merge cs (nrem n (f (when cs xs))) (* sans doute pas le bon cs ici *)
+                      (reset (nrem n (whennot cs rs)) (nrem n ((whennot cs xs))))
+             /\ V == sreset' f (map bool_of rs) (nrem n xs) (nrem n (f xs))
+    ).
+  3:{ eexists rs,xs,O,_.
+      repeat (split; [now auto|]). split; [|now auto].
+      rewrite reset_eq; cbv zeta.
+      eauto. }
+  admit.
+  clear.
+  intros U V Hc (rs & xs & n & cs & Infr & Infx & Sr & Sx & Hac & Hu & Hv).
 
-  apply Oeq_dsn_eq.
-  apply take_Oeq; intro n.
-  apply dsn_eq_Oeq.
-  apply Den with n.
+  (* idée: f (when cs xs) == when cs (f xs) -> non à cause des horloges... *)
+  
 
+
+
+  apply DS_bisimulation_allin1 with
+    (R:= fun U V =>
+           exists rs xs,
+             infinite rs
+             /\ infinite xs
+             /\ safe_DS rs
+             /\ safe_DS xs
+             /\ AC xs == AC rs
+             /\ (
+                 (U == reset rs xs
+                  /\ V == sreset' f (map bool_of rs) xs (f xs))
+                 \/
+                   (exists n cs,
+                       (* cs est le true_until déroulé *)
+                       cs == (sbinop (fun b1 b2 => Some (negb b1 && b2)) rs
+                                (fby1 (Some true) (sconst true (AC rs)) cs))
+                       /\
+                         U ==
+                           merge cs (nrem n (f (when cs xs))) (* sans doute pas le bon cs ici *)
+                             (reset (nrem n (whennot cs rs)) (nrem n ((whennot cs xs))))
+                       /\ V == sreset' f (map bool_of rs) (nrem n xs) (nrem n (f xs)))
+               )
+    ).
+  3: eauto 10.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (rs & xs & Infr & Infx & Sr & Sx & Hac & HH).
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hrs in Sr, Hac.
+  rewrite Hxs in Sx, Hac.
+  repeat rewrite AC_cons in Hac.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx.
+  setoid_rewrite Hrs in HH.
+  setoid_rewrite Hxs in HH.
+  split.
+  - (* first = first *)
+    destruct HH as [(Hu & Hv)|(n & cs & Hcs & Hu & Hv)].
+    + admit.
+    + rewrite Hu, Hv.
+      rewrite map_eq_cons, sreset'_eq.
+      rewrite Hcs, AC_cons, sconst_cons.
+      rewrite fby1_eq.
+      destruct vr, vx; try (congruence || tauto).
+      * (* abs *)
+        rewrite sbinop_eq; simpl.
+        rewrite merge_eq, first_cons, first_app_first.
+        admit. (* il faut une hypothèse d'alignement des absences en plus... *)
+      * (* pres *)
+        rewrite sbinop_eq; simpl.
+        rewrite merge_eq.
+        destruct a; simpl; repeat rewrite first_app_first, ?sreset'_eq.
+        rewrite whennot_eq.
+        2:rewrite when_eq.
+        all: rewrite fby1AP_eq.
+  - (* R (rem) *)
 Qed.
 
 
