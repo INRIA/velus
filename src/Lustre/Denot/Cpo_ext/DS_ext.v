@@ -274,6 +274,48 @@ Proof.
   apply app_first_rem.
 Qed.
 
+Lemma app_eq_impl :
+  forall A (x1 x2 x3 y1 y2 y3:DS A),
+    app x1 x2 == app y1 y2 ->
+    (x2 == y2 -> x3 == y3) ->
+    app x1 x3 == app y1 y3.
+Proof.
+  intros * Ha Him.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            exists x1 x2 x3 y1 y2 y3,
+              app x1 x2 == app y1 y2
+              /\ (x2 == y2 -> x3 == y3)
+              /\ U == app x1 x3
+              /\ V == app y1 y3).
+  3:eauto 12.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc (x1 & x2 & x3 & y1 & y2 & y3 & Ha & Him & Hu & Hv).
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  rewrite Hu, Hv in Hc.
+  clear Hu Hv.
+  split.
+  - apply first_eq_compat in Ha.
+    now rewrite 2 first_app_first in *.
+  - assert (is_cons x1).
+    { destruct Hc; eauto using app_is_cons.
+      eapply app_is_cons; rewrite Ha; eauto using app_is_cons, is_cons_app. }
+    assert (is_cons y1).
+    { destruct Hc; eauto using app_is_cons.
+      eapply app_is_cons; rewrite <- Ha; eauto using app_is_cons, is_cons_app. }
+    apply rem_eq_compat in Ha as Har.
+    rewrite 2 rem_app in Har; auto.
+    setoid_rewrite rem_app.
+    all: auto.
+    exists (first x3), 0, (rem x3), (first y3), 0, (rem y3).
+    rewrite 2 app_first_rem, Him; auto.
+Qed.
+
 Lemma rem_app_app_rem :
   forall A (x y : DS A), rem (app x (app (rem x) y)) == app (rem x) y.
 Proof.
@@ -522,7 +564,7 @@ Qed.
 Lemma cons_decomp :
   forall D x (s : DS D) t,
     s == cons x t ->
-    exists t', decomp x t' s.
+    exists t', decomp x t' s /\ t == t'.
 Proof.
   intros * Hs.
   pose proof (is_cons_eq_compat (symmetry Hs) (isConCon _ _)) as Hc.
@@ -748,6 +790,49 @@ Proof.
     now apply Con_eq_simpl in Ht as [].
 Qed.
 
+Lemma take_is_cons :
+  forall A (s : DS A) n, is_cons (take n s) -> is_cons s.
+Proof.
+  intros * Hc.
+  rewrite take_eq in Hc.
+  destruct n.
+  - contradict Hc; apply not_is_consBot.
+  - now apply app_is_cons in Hc.
+Qed.
+
+Lemma take_cons :
+  forall A n (x : A) xs,
+    take (S n) (cons x xs) = cons x (take n xs).
+Proof.
+  intros.
+  now rewrite take_eq, app_cons, rem_cons.
+Qed.
+
+Lemma take_map :
+  forall A B (f : A ->B),
+  forall n xs,
+    take n (map f xs) == map f (take n xs).
+Proof.
+  induction n; intros.
+  - now rewrite map_bot.
+  - now rewrite 2 (take_eq (S n)), rem_map, IHn, app_map.
+Qed.
+
+Lemma take_rem :
+  forall A n (x y:DS A),
+    take (S n) x == take (S n) y ->
+    take n (rem x) == take n (rem y).
+Proof.
+  intros * Heq.
+  destruct n; auto.
+  rewrite 2 (take_eq (S n)).
+  rewrite 2 (take_eq (S (S n))) in Heq.
+  rewrite 2 (take_eq (S n)) in Heq.
+  apply rem_eq_compat in Heq.
+  rewrite 2 rem_app_app_rem in Heq; auto.
+Qed.
+
+
 (** Definition and specification of [nrem] : [n] applications of [rem].
     It is useful to show the productivity of stream functions.
     A function [f] of a stream [xs] is producive/length-preserving if
@@ -755,7 +840,7 @@ Qed.
  *)
 Section Nrem.
 
-Context {A : Type}.
+Context {A B C : Type}.
 
 Fixpoint nrem (n : nat) (xs : DS A) : DS A :=
   match n with
@@ -824,6 +909,19 @@ Proof.
   intros.
   revert s.
   induction n; simpl; auto.
+Qed.
+
+Lemma take_nrem_eq :
+  forall n1 n2 (x y : DS A),
+    take n1 x == take n1 y ->
+    take n2 (nrem n1 x) == take n2 (nrem n1 y) ->
+    take (n1 + n2) x == take (n1 + n2) y.
+Proof.
+  induction n1; intros * Ht1 Ht2; auto.
+  rewrite plus_Sn_m.
+  rewrite 2 (take_eq (S _)) in Ht1.
+  rewrite 2 (take_eq (S _)).
+  apply app_eq_impl with (1 := Ht1); auto.
 Qed.
 
 Lemma is_ncons_S :
@@ -912,6 +1010,17 @@ Lemma nrem_map :
 Proof.
   induction n; simpl; intros; auto.
   rewrite rem_map; auto.
+Qed.
+
+Lemma is_ncons_map :
+  forall A B (f : A -> B) s n,
+    is_ncons n s ->
+    is_ncons n (map f s).
+Proof.
+  unfold is_ncons.
+  intros; destruct n; auto.
+  rewrite nrem_map.
+  now apply is_cons_map.
 Qed.
 
 Module Alt_inf.
@@ -1748,6 +1857,44 @@ Section Zip.
       + exists xs'. rewrite 2 rem_cons; auto.
   Qed.
 
+  Lemma take_zip :
+    forall n xs ys,
+      take n (ZIP xs ys) == ZIP (take n xs) (take n ys).
+  Proof.
+    induction n; intros.
+    - now rewrite zip_bot1.
+    - rewrite 3 (take_eq (S n)).
+      now rewrite <- zip_app, <- 2 APP_simpl, rem_zip, IHn.
+  Qed.
+
+  Lemma zip_take_const :
+    forall n xs c,
+      ZIP (take n xs) (DS_const c) == ZIP (take n xs) (take n (DS_const c)).
+  Proof.
+    induction n; intros.
+    - now rewrite 2 zip_bot1.
+    - rewrite 2 (take_eq (S n)).
+      setoid_rewrite DS_const_eq at 3.
+      rewrite DS_const_eq, rem_cons at 1.
+      rewrite <- (app_cons _ (DS_const c)), <- DS_const_eq.
+      now rewrite <- 2 zip_app, IHn.
+  Qed.
+
+  Lemma is_ncons_zip :
+    forall n xs ys,
+      is_ncons n xs ->
+      is_ncons n ys ->
+      is_ncons n (ZIP xs ys).
+  Proof.
+    induction n as [|[]]; simpl; intros * Cx Cy; auto using is_cons_zip.
+    apply is_ncons_is_cons in Cx as Hx.
+    apply is_cons_rem in Hx as (?&?&?& Hx); rewrite Hx in *.
+    apply is_ncons_is_cons in Cy as Hy.
+    apply is_cons_rem in Hy as (?&?&?& Hy); rewrite Hy in *.
+    rewrite zip_cons, rem_cons in *.
+    apply IHn; auto.
+  Qed.
+
 End Zip.
 
 Global Hint Rewrite @zip_cons @zip_bot1 @zip_bot2 : cpodb.
@@ -1912,6 +2059,7 @@ Proof.
       eauto 7.
 Qed.
 
+
 (** ** ZIP3 synchronizes three streams *)
 Section Zip3.
 
@@ -1986,6 +2134,14 @@ Section Zip3.
   Proof.
     intros.
     now rewrite zip3_eq, 2 zip_bot1.
+  Qed.
+
+  Lemma take_zip3 :
+    forall n xs ys zs,
+      take n (ZIP3 xs ys zs) == ZIP3 (take n xs) (take n ys) (take n zs).
+  Proof.
+    intros.
+    now rewrite 2 zip3_eq, 2 take_zip.
   Qed.
 
 End Zip3.

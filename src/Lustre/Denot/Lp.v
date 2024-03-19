@@ -30,78 +30,6 @@ Module Type LP
 
 
   (*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx TODO: move ? *)
-  Lemma take_is_cons :
-    forall A (s : DS A) n, is_cons (take n s) -> is_cons s.
-  Proof.
-    intros * Hc.
-    rewrite take_eq in Hc.
-    destruct n.
-    - contradict Hc; apply not_is_consBot.
-    - now apply app_is_cons in Hc.
-  Qed.
-  Lemma take_zip :
-    forall A B C (op:A->B->C),
-    forall n xs ys,
-      take n (ZIP op xs ys) == ZIP op (take n xs) (take n ys).
-  Proof.
-    induction n; intros.
-    - now rewrite zip_bot1.
-    - rewrite 3 (take_eq (S n)).
-      now rewrite <- zip_app, <- 2 APP_simpl, rem_zip, IHn.
-  Qed.
-  Lemma take_zip3 :
-    forall A B C D (op:A->B->C->D),
-    forall n xs ys zs,
-      take n (ZIP3 op xs ys zs) == ZIP3 op (take n xs) (take n ys) (take n zs).
-  Proof.
-    intros.
-    now rewrite 2 zip3_eq, 2 take_zip.
-  Qed.
-
-  Lemma zip_take_const :
-    forall A B C (op:A->B->C),
-    forall n xs c,
-      ZIP op (take n xs) (DS_const c) == ZIP op (take n xs) (take n (DS_const c)).
-  Proof.
-    induction n; intros.
-    - now rewrite 2 zip_bot1.
-    - rewrite 2 (take_eq (S n)).
-      setoid_rewrite DS_const_eq at 3.
-      rewrite DS_const_eq, rem_cons at 1.
-      rewrite <- (app_cons _ (DS_const c)), <- DS_const_eq.
-      now rewrite <- 2 zip_app, IHn.
-  Qed.
-  Lemma take_cons :
-    forall A n (x : A) xs,
-      take (S n) (cons x xs) = cons x (take n xs).
-  Proof.
-    intros.
-    now rewrite take_eq, app_cons, rem_cons.
-  Qed.
-  (* TODO: remplacer l'autre cons_decomp *)
-  Lemma cons_decomp :
-    forall D x (s : DS D) t,
-      s == cons x t ->
-      exists t', decomp x t' s /\ t == t'.
-  Proof.
-    intros * Hs.
-    pose proof (is_cons_eq_compat (symmetry Hs) (isConCon _ _)) as Hc.
-    destruct (uncons Hc) as (?&?& Hd).
-    apply decomp_eqCon in Hd as Heq.
-    rewrite Heq in Hs.
-    apply Con_eq_simpl in Hs as []; subst.
-    eauto.
-  Qed.
-
-  Lemma take_map :
-    forall A B (f : A ->B),
-    forall n xs,
-      take n (map f xs) == map f (take n xs).
-  Proof.
-    induction n; intros.
-    - now rewrite map_bot.
-    - now rewrite 2 (take_eq (S n)), rem_map, IHn, app_map.
-  Qed.
 
       (* FIXME: partagé avec Abs.v *)
       Lemma np_of_env_cons :
@@ -119,7 +47,6 @@ Module Type LP
             rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
             now apply DScase_bot_eq.
           Qed.
-
 
 
   Lemma Fold_eq :

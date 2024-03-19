@@ -13,41 +13,6 @@ Ltac solve_err :=
         || now auto using is_cons_DS_const, is_consn_DS_const, is_ncons_DS_const
     end.
 
-(** ** Productivity of primitive stream functions  *)
-
-Section Ncons_DS.
-
-Context {A B D : Type}.
-
-Lemma is_ncons_zip :
-  forall (f : A -> B -> D) n xs ys,
-    is_ncons n xs ->
-    is_ncons n ys ->
-    is_ncons n (ZIP f xs ys).
-Proof.
-  induction n as [|[]]; simpl; intros * Cx Cy; auto using is_cons_zip.
-  apply is_ncons_is_cons in Cx as Hx.
-  apply is_cons_rem in Hx as (?&?&?& Hx); rewrite Hx in *.
-  apply is_ncons_is_cons in Cy as Hy.
-  apply is_cons_rem in Hy as (?&?&?& Hy); rewrite Hy in *.
-  rewrite zip_cons, rem_cons in *.
-  apply IHn; auto.
-Qed.
-
-Lemma is_ncons_map :
-  forall A B (f : A -> B) s n,
-    is_ncons n s ->
-    is_ncons n (map f s).
-Proof.
-  unfold is_ncons.
-  intros; cases.
-  rewrite nrem_map.
-  now apply is_cons_map.
-Qed.
-
-End Ncons_DS.
-
-
 (** ** Productivity of Lustre operators *)
 
 Section Ncons_ops.
