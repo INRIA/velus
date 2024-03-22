@@ -1185,43 +1185,39 @@ Proof.
       all: rewrite when_eq in Ht.
 Abort.
 
-Lemma merge_false :
-  forall A cs ( ys:DS (sampl A)),
-    infinite cs ->
-    safe_DS cs ->
-    (* safe_DS xs -> *)
-    safe_DS ys ->
-    (* AC cs == AC xs -> *)
-    DSForall_pres (fun b => b = false) cs ->
-    merge cs (map (fun _ : sampl bool => abs) cs) ys == ys.
-Proof.
-  intros * Infc Sc (* Sx *) Sy Cf.
-
-  apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc').
-  rewrite Hcs in *.
-  (* TODO: réfléchir ici... *)
-  rewrite merge_eq.
-
-
-
-  coind_Oeq Cof.
-  constructor; intros _.
-  apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc').
-  rewrite Hcs in *.
-  inversion_clear Sc.
-  inversion_clear Cf.
-  destruct vc; subst; try (tauto || congruence).
-  - (* abs *)
-    rewrite merge_eq in HU.
-    split. rewrite HV, HU, first_cons.
-    admit. admit.
-  - (* pres *)
-    rewrite merge_eq, map_eq_cons, expecta_eq in HU.
-    split. now rewrite HU, HV, first_app_first.
-    eapply (Cof _ cs' (rem ys)); auto.
-    apply DSForall_rem, Sy.
-    rewrite HU, rem_app; auto.
-Abort.
+(* Lemma merge_false : *)
+(*   forall A cs ( ys:DS (sampl A)), *)
+(*     infinite cs -> *)
+(*     safe_DS cs -> *)
+(*     (* safe_DS xs -> *) *)
+(*     safe_DS ys -> *)
+(*     (* AC cs == AC xs -> *) *)
+(*     DSForall_pres (fun b => b = false) cs -> *)
+(*     merge cs (map (fun _ : sampl bool => abs) cs) ys == ys. *)
+(* Proof. *)
+(*   intros * Infc Sc (* Sx *) Sy Cf. *)
+(*   apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc'). *)
+(*   rewrite Hcs in *. *)
+(*   (* TODO: réfléchir ici... *) *)
+(*   rewrite merge_eq. *)
+(*   coind_Oeq Cof. *)
+(*   constructor; intros _. *)
+(*   apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc'). *)
+(*   rewrite Hcs in *. *)
+(*   inversion_clear Sc. *)
+(*   inversion_clear Cf. *)
+(*   destruct vc; subst; try (tauto || congruence). *)
+(*   - (* abs *) *)
+(*     rewrite merge_eq in HU. *)
+(*     split. rewrite HV, HU, first_cons. *)
+(*     admit. admit. *)
+(*   - (* pres *) *)
+(*     rewrite merge_eq, map_eq_cons, expecta_eq in HU. *)
+(*     split. now rewrite HU, HV, first_app_first. *)
+(*     eapply (Cof _ cs' (rem ys)); auto. *)
+(*     apply DSForall_rem, Sy. *)
+(*     rewrite HU, rem_app; auto. *)
+(* Abort. *)
 
 
 Theorem reset_match :
@@ -1285,6 +1281,108 @@ Proof.
 
 Set Nested Proofs Allowed.
 
+Lemma AC_app :
+  forall A (xs ys:DS (sampl A)), AC (app xs ys) == app (AC xs) (AC ys).
+Proof.
+  intros; apply app_map.
+Qed.
+Lemma AC_rem :
+  forall A (xs :DS (sampl A)), AC (rem xs) == rem (AC xs).
+Proof.
+  intros; apply symmetry, rem_map.
+Qed.
+(* TODO: inclure Infty.v ?? *)
+Lemma sbinop_inf :
+  forall A B D (f : A -> B -> option D) s1 s2,
+    infinite s1 ->
+    infinite s2 ->
+    infinite (sbinop f s1 s2).
+Proof.
+Admitted.
+
+(* l'état récurrent *)
+Lemma AC_reset_aux :
+  forall rs xs ys cs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    safe_DS ys ->
+    AC xs == AC rs ->
+    AC ys == AC (when cs xs) ->
+    cs == sbinop (fun b1 b2 : bool => Some (negb b1 && b2)) rs
+            (fby1 (Some true) (sconst true (AC rs)) cs) ->
+    AC xs == AC (merge cs ys (reset (whennot cs rs) (whennot cs xs))).
+Proof.
+  intros * Infr Infx Sr Sx Sy Hac Acy Hcs.
+  coind_Oeq Cof.
+  constructor; intros _.
+  rewrite HU in Hac.
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  destruct (@is_cons_elim _ ys) as (vy & ys' & Hys).
+  {  unfold AC, when in *.
+    eapply map_is_cons.
+    rewrite <- MAP_map, Acy, Hxs, Hcs, Hrs, 2 MAP_map, map_eq_cons, sconst_cons, fby1_eq.
+    destruct vr; rewrite sbinop_eq, zip_cons, map_eq_cons; auto. }
+  rewrite Hrs, Hxs, Hys in *.
+  repeat rewrite AC_cons in *.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx; inversion_clear Sy.
+  rewrite sconst_cons, fby1_eq in Hcs.
+  destruct vr as [|vr|]; try tauto; rewrite sbinop_eq in Hcs.
+  { (* abs *)
+    assert (Acy_backup := Acy).
+    rewrite Hcs, when_eq in Acy.
+    destruct vx, vy; try (congruence || tauto).
+    all: rewrite AC_cons in Acy; apply Con_eq_simpl in Acy as []; try congruence.
+    rewrite Hcs, 2 whennot_eq, merge_eq, reset_abs, 2 expecta_eq, AC_cons in HV.
+    split. rewrite HU, HV, 2 first_cons; auto.
+    apply (Cof rs' xs' ys' (rem cs)); rewrite ?HU, ?HV, ?rem_cons; auto.
+    + rewrite Acy.
+
+Qed.
+
+Lemma AC_reset :
+  forall rs xs,
+    infinite rs ->
+    infinite xs ->
+    safe_DS rs ->
+    safe_DS xs ->
+    AC xs == AC rs ->
+    AC xs == AC (reset rs xs).
+Proof.
+  intros * Infr Infx Sr Sx Hac.
+  coind_Oeq Cof.
+  constructor; intros _.
+  rewrite HU in Hac.
+  apply infinite_decomp in Infr as (vr & rs' & Hrs &Infr').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite Hrs, Hxs in *.
+  repeat rewrite AC_cons in *.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sr; inversion_clear Sx.
+  destruct vr as [|vr|], vx; try (congruence || tauto).
+  { (* abs *)
+    rewrite reset_abs, AC_cons in HV.
+    split. rewrite HU, HV, 2 first_cons; auto.
+    apply (Cof rs' xs'); rewrite ?HU, ?HV, ?rem_cons; auto. }
+  (* pres : on passe dans l'état récurrent *)
+  clear Cof.
+  rewrite reset_eq in HV; simpl in HV.
+  destruct (true_until_pres1 vr rs') as (cs' & Htu & Hcs'); auto.
+  rewrite Htu, when_eq, 2 whennot_eq, reset_abs, merge_eq, expecta_eq, AC_app in HV.
+  split. rewrite HU, HV, <- AcF, first_app_first, AC_cons, 2 first_cons; auto.
+  apply Oeq_ds_eq.
+  rewrite HU, HV, rem_cons, rem_app.
+  2:now rewrite <- AcF, AC_cons.
+  remember_ds (rem (f (cons (pres a) (when cs' xs')))) as ys.
+  assert (Acy : AC ys == AC (when cs' xs')).
+  { rewrite Hys, AC_rem, <- AcF, AC_cons, rem_cons; auto. }
+  clear - Acy Hcs' Infr' Infx' H0 H2 H4.
+  apply AC_reset_aux; auto.
+Qed.
+
 
 
 (* TODO: renommer *)
@@ -1343,7 +1441,6 @@ Proof.
     + rewrite HV, rem_cons; reflexivity.
   - (* vr = true, seul cas vraiment intéressant*)
     rewrite sreset'_eq, rem_cons in HV.
-
     (* assert (Hcs : cs == cons (pres false) (map (fun v : sampl bool => match v with *)
     (*                                         | abs => abs *)
     (*                                         | pres _ => pres false *)
