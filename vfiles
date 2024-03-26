@@ -105,6 +105,7 @@ src/Lustre/Denot/Lp.v
 src/Lustre/Denot/Reset.v
 src/Lustre/Denot/Safe.v
 src/Lustre/Denot/SDtoRel.v
+src/Lustre/Denot/ResetLs.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
