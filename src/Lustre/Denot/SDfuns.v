@@ -114,6 +114,12 @@ Section Abstract_clock.
     intros; apply rem_map.
   Qed.
 
+  Lemma AC_app :
+    forall xs ys, AC (app xs ys) == app (AC xs) (AC ys).
+  Proof.
+    intros; apply app_map.
+  Qed.
+
   (** equivalent of [clocks_of] *)
   Fixpoint bss (ins : list I) : DS_prod (fun _ => sampl A) -C-> DS bool :=
     match ins with
@@ -275,6 +281,14 @@ Section SStream_functions.
   (** Rythm of constants if given by the base clock as an argument *)
   Definition sconst (v : A) : DS bool -C-> DS (sampl A) :=
     MAP (fun c : bool => if c then pres v else abs).
+
+  Lemma sconst_cons :
+    forall c b bs,
+      sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
+  Proof.
+    intros.
+    apply map_eq_cons.
+  Qed.
 
   Lemma AC_sconst :
     forall c bs,

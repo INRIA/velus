@@ -158,6 +158,73 @@ Proof.
     auto; intros ?? Hic ?; now apply Hfr in Hic.
 Qed.
 
+(** *** [ds_eq], a coinductive equivalence principle that is sometimes
+    less cumbersome to use than [DS_bsimulation_allin1] *)
+Section DS_eq.
+
+Variable (D : Type).
+CoInductive ds_eq : DS D -> DS D -> Prop :=
+| De :
+  forall x y,
+    (is_cons x \/ is_cons y ->
+     first x == first y /\ ds_eq (rem x) (rem y)) ->
+      ds_eq x y.
+
+Lemma Oeq_ds_eq : forall x y, x == y -> ds_eq x y.
+Proof.
+  cofix Cof; intros.
+  apply De; auto.
+Qed.
+
+Lemma ds_eq_Oeq : forall x y, ds_eq x y -> x == y.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with (R := fun U V => exists x y, ds_eq x y /\ U == x /\ V == y).
+  - intros * Eq Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto.
+  - clear.
+    intros U V Hc (x & y & Eq & Hu & Hv).
+    rewrite Hu, Hv in Hc.
+    inversion_clear Eq.
+    destruct H; auto.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    split; auto.
+    exists (rem x), (rem y); split; auto.
+  - eauto.
+Qed.
+
+Lemma ds_eq_Oeq_iff : forall x y, ds_eq x y <-> x == y.
+Proof.
+  split; eauto using ds_eq_Oeq, Oeq_ds_eq.
+Qed.
+
+End DS_eq.
+
+(* remember with [@Oeq (DS _)] instead of [eq] *)
+Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
+  let Hx := fresh "H"x in
+  remember s as x eqn:Hx;
+  apply Oeq_refl_eq in Hx.
+
+Ltac revert_all :=
+  repeat match goal with
+         | H:_ |- _ => revert H
+         end.
+
+Ltac coind_Oeq H :=
+  intros
+  ; match goal with
+      |- ?l == ?r => remember_ds l as U
+                   ; remember_ds r as V
+    end
+  ; apply ds_eq_Oeq
+  ; revert_all; cofix H
+  ; intros.
+
+
 Lemma first_rem_eq :
   forall D (xs ys : DS D),
     first xs == first ys ->
@@ -561,6 +628,16 @@ Proof.
   now rewrite Hfxs, <- rem_map.
 Qed.
 
+Lemma inf_map :
+  forall A B (f : A -> B) xs,
+    infinite (map f xs) ->
+    infinite xs.
+Proof.
+  cofix Cof; intros * Hf.
+  inversion_clear Hf; rewrite rem_map in *.
+  constructor; eauto using map_is_cons.
+Qed.
+
 Lemma cons_decomp :
   forall D x (s : DS D) t,
     s == cons x t ->
@@ -911,6 +988,13 @@ Proof.
   induction n; simpl; auto.
 Qed.
 
+Lemma nrem_nrem :
+  forall n1 n2 xs, nrem n1 (nrem n2 xs) == nrem (n1 + n2) xs.
+Proof.
+  induction n1; simpl in *; intros; auto.
+  now rewrite nrem_rem, IHn1, nrem_rem.
+Qed.
+
 Lemma take_nrem_eq :
   forall n1 n2 (x y : DS A),
     take n1 x == take n1 y ->
@@ -1000,6 +1084,12 @@ Proof.
   rewrite Hx' in Hc.
   exists x1,x2,xs'.
   rewrite Hx, Hx'; auto.
+Qed.
+
+Lemma nrem_infinite :
+  forall n xs, infinite xs -> infinite (nrem n xs).
+Proof.
+  induction n; simpl; intros * H; inversion H; auto.
 Qed.
 
 End Nrem.
@@ -1704,6 +1794,14 @@ Section Zip.
       split; autorewrite with cpodb; auto.
       exists xs', ys'.
       rewrite Hu, Hv, Hx, Hy; now autorewrite with cpodb.
+  Qed.
+
+  Lemma nrem_zip :
+    forall n xs ys,
+      nrem n (ZIP xs ys) == ZIP (nrem n xs) (nrem n ys).
+  Proof.
+    induction n; intros; auto.
+    now rewrite 3 nrem_S, rem_zip, IHn.
   Qed.
 
   Lemma first_zip :

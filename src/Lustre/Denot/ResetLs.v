@@ -1,5 +1,5 @@
 Require Import List.
-Require Import Cpo Reset SDfuns CommonDS.
+Require Import Cpo SDfuns CommonDS.
 Open Scope bool_scope.
 Import ListNotations.
 
@@ -59,121 +59,8 @@ Local Hint Rewrite
   : localdb.
 
 
-Lemma AC_app :
-  forall A (xs ys:DS (sampl A)), AC (app xs ys) == app (AC xs) (AC ys).
-Proof.
-  intros; apply app_map.
-Qed.
-Lemma AC_rem :
-  forall A (xs :DS (sampl A)), AC (rem xs) == rem (AC xs).
-Proof.
-  intros; apply symmetry, rem_map.
-Qed.
-(* TODO: inclure Infty.v ?? *)
-Lemma sbinop_inf :
-  forall A B D (f : A -> B -> option D) s1 s2,
-    infinite s1 ->
-    infinite s2 ->
-    infinite (sbinop f s1 s2).
-Proof.
-Admitted.
-
-(* TODO: move *)
-Lemma inf_map :
-  forall A B (f : A -> B) xs,
-    infinite (Cpo_streams_type.map f xs) ->
-    infinite xs.
-Proof.
-  cofix Cof; intros * Hf.
-  inversion_clear Hf; rewrite rem_map in *.
-  constructor; eauto using map_is_cons.
-Qed.
-
-
-(* TODO: move *)
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
   DSForall (fun s => match s with pres v => P v | _ => True end).
-(* TODO: move *)
-Lemma DSForall_take {A} (P : A -> Prop) :
-  forall n xs,
-  DSForall P xs ->
-  DSForall P (take n xs).
-Proof.
-  induction n; intros * Hf; rewrite take_eq.
-  apply DSForall_bot.
-  apply DSForall_app; auto using DSForall_rem.
-Qed.
-
-Lemma nrem_nrem :
-  forall A n1 n2 (xs:DS A), nrem n1 (nrem n2 xs) == nrem (n1 + n2) xs.
-Proof.
-  induction n1; simpl in *; intros; auto.
-  now rewrite nrem_rem, IHn1, nrem_rem.
-Qed.
-
-Lemma nrem_infinite :
-  forall A n (xs:DS A), infinite xs -> infinite (nrem n xs).
-Proof.
-  induction n; simpl; intros * H; inversion H; auto.
-Qed.
-
-Lemma DSForall_nrem :
-  forall A (P:A-> Prop),
-  forall s n, DSForall P s -> DSForall P (nrem n s).
-Proof.
-  induction n; intros; auto.
-  rewrite nrem_S, nrem_rem.
-  apply DSForall_rem; auto.
-Qed.
-
-(* TODO: move *)
-Lemma sconst_cons :
-    forall A (c:A) b bs,
-      sconst c (cons b bs) == cons (if b then pres c else abs) (sconst c bs).
-Proof.
-  intros.
-  apply map_eq_cons.
-Qed.
-
-Lemma nrem_zip :
-  forall A B C (op :A->B->C),
-    forall n xs ys,
-      nrem n (ZIP op xs ys) == ZIP op (nrem n xs) (nrem n ys).
-Proof.
-  induction n; intros; auto.
-  now rewrite 3 nrem_S, rem_zip, IHn.
-Qed.
-
-(* TODO: move *)
-(* TODO: useless? *)
-Lemma nrem_Oeq :
-  forall A (xs ys:DS A),
-    (forall n, first (nrem n xs) == first (nrem n ys)) ->
-    xs == ys.
-Proof.
-  intros * Hf.
-  eapply DS_bisimulation_allin1 with
-    (R := fun U V => forall n, first (nrem n U) == first (nrem n V)); auto.
-  intros * ? Eq1 Eq2; setoid_rewrite <- Eq1; setoid_rewrite <- Eq2; eauto.
-  clear; intros U V Hc Hf.
-  split.
-  - apply (Hf O).
-  - intro n.
-  destruct (@is_cons_elim _ U) as (u & U' & Hu).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite (Hf O).
-      now apply is_cons_first. }
-    destruct (@is_cons_elim _ V) as (v & V' & Hv).
-    { destruct Hc; auto.
-      apply first_is_cons.
-      rewrite <- (Hf O).
-      now apply is_cons_first. }
-    specialize (Hf (S n)).
-    now rewrite Hu, Hv, 2 nrem_S, 2 rem_cons in *.
-Qed.
-
-
 
 Definition safe_DS {A} : DS (sampl A) -> Prop :=
   DSForall (fun v => match v with err _ => False | _ => True end).
@@ -223,7 +110,7 @@ Lemma nrem_when :
   forall A n cs (xs:DS (sampl A)),
     nrem n (when cs xs) == when (nrem n cs) (nrem n xs).
 Proof.
-  intros.
+  intros; unfold when.
   apply nrem_zip.
 Qed.
 
@@ -390,7 +277,8 @@ Proof.
     destruct c as [|[]|], v; try (tauto || congruence); rewrite rem_cons; auto.
 Qed.
 
-(* flèche avec constante à gauche *)
+
+(** Arrow operator initialized by a constant *)
 Definition arrow {A} (a : A) : DS (sampl A) -C-> DS (sampl A).
   refine (FIXP _ (DSCASE _ _ @_ _)).
   apply ford_fcont_shift; intros [| v | e].
@@ -423,109 +311,11 @@ Proof.
   apply DScase_bot_eq.
 Qed.
 
-(* prédicat co-inductif, peut-être plus facile à manipuler ?
-   équivalent de DS_bisimulation
-   TODO: pareil avec firsn, nrem ?
- *)
-Section DS_eq.
-Variable (B : Type).
-CoInductive ds_eq : DS B -> DS B -> Prop :=
-| De :
-  forall x y,
-    (is_cons x \/ is_cons y ->
-     first x == first y /\ ds_eq (rem x) (rem y)) ->
-      ds_eq x y.
 
-Lemma Oeq_ds_eq : forall x y, x == y -> ds_eq x y.
-Proof.
-  cofix Cof; intros.
-  apply De; auto.
-Qed.
-
-Lemma ds_eq_Oeq : forall x y, ds_eq x y -> x == y.
-Proof.
-  intros.
-  apply DS_bisimulation_allin1 with (R := fun U V => exists x y, ds_eq x y /\ U == x /\ V == y).
-  - intros * Eq Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto.
-  - clear.
-    intros U V Hc (x & y & Eq & Hu & Hv).
-    rewrite Hu, Hv in Hc.
-    inversion_clear Eq.
-    destruct H; auto.
-    setoid_rewrite Hu.
-    setoid_rewrite Hv.
-    split; auto.
-    exists (rem x), (rem y); split; auto.
-  - eauto.
-Qed.
-
-Lemma ds_eq_Oeq_iff : forall x y, ds_eq x y <-> x == y.
-Proof.
-  split; eauto using ds_eq_Oeq, Oeq_ds_eq.
-Qed.
-End DS_eq.
-Ltac coind_Oeq H :=
-  intros
-  ; match goal with
-      |- ?l == ?r => remember_ds l as U
-                   ; remember_ds r as V
-    end
-  ; apply ds_eq_Oeq
-  ; revert_all; cofix H
-  ; intros.
-
-(* un principe d'induction n par n *)
-Section DSn_eq.
-Variable (B : Type).
-CoInductive dsn_eq : DS B -> DS B -> Prop :=
-| Den :
-  forall x y,
-    (exists n,
-      take (S n) x == take (S n) y
-      /\ dsn_eq (nrem (S n) x) (nrem (S n) y)) ->
-      dsn_eq x y.
-
-Lemma dsn_rem :
-  forall U V, dsn_eq U V -> dsn_eq (rem U) (rem V).
-Proof.
-  intros * Hn.
-  inversion_clear Hn as [?? (n &  Ht & Hdsn) ].
-  destruct n; auto.
-  apply Den; exists n; split; auto.
-  apply take_rem; auto.
-Qed.
-
-Lemma Oeq_dsn_eq : forall x y, x == y -> dsn_eq x y.
-Proof.
-  cofix Cof; intros.
-  apply Den; exists O; split.
-  now rewrite H.
-  simpl; now auto.
-Qed.
-
-Lemma dsn_eq_Oeq : forall x y, dsn_eq x y -> x == y.
-Proof.
-  intros * Hn.
-  coind_Oeq Cof.
-  constructor; intros Hc; split.
-  - inversion_clear Hn as [?? (n & Ht & _) ].
-    apply first_eq_compat in Ht.
-    rewrite 2 (take_eq (S n)), 2 first_app_first in Ht.
-    assumption.
-  - apply (Cof (rem x) (rem y)); auto.
-    apply dsn_rem; auto.
-Qed.
-
-Lemma dsn_eq_Oeq_iff : forall x y, dsn_eq x y <-> x == y.
-Proof.
-  split; eauto using dsn_eq_Oeq, Oeq_dsn_eq.
-Qed.
-End DSn_eq.
-
-(* TEST: un merge initialisant *)
+(** A special [merge] operator that produces an [abs] as soon as an [abs]
+    is read on the condition stream. Trying to read on both arguments when
+    expecting absences could lead to causality issues in the recursive
+    definition of reset. *)
 Section MERGE.
 
 Definition expecta : forall {A}, DS (sampl A) -C-> DS (sampl A) :=
@@ -557,12 +347,39 @@ Proof.
   apply DScase_bot.
 Qed.
 
-Parameter merge : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
+Definition merge {A} : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A).
+  refine (FIXP _ _).
+  apply curry, curry, curry.
+  refine ((DSCASE _ _ @2_ _) (SND @_ FST @_ FST)).
+  apply ford_fcont_shift; intro c.
+  apply curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (f := FST @_ FST @_ FST @_ (@FST pl pr))
+      ; pose (X := SND @_ FST @_ (@FST pl pr))
+      ; pose (Y := SND @_ (@FST pl pr))
+      ; pose (C' := @SND pl pr)
+  end.
+  destruct c as [|[]| e].
+  - (* abs *)
+    refine (CONS abs @_ _).
+    refine ((f @4_ ID _) C' (expecta @_ X) (expecta @_ Y)).
+  - (* pres true *)
+    refine ((APP _ @2_ X) _).
+    refine ((f @4_ ID _) C' (REM _ @_ X) (expecta @_ Y)).
+  - (* pres false *)
+    refine ((APP _ @2_ Y) _).
+    refine ((f @4_ ID _) C' (expecta @_ X) (REM _ @_ Y)).
+  - (* err *)
+    refine ((MAP (fun _ => err e) @_ CONS (err e) @_ C')).
+Defined.
+
+(* Parameter merge : forall {A}, DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A). *)
 (* problèmes :
    - pres T/F ne vérifie pas la présence de tête de xs/ys
    - abs ne propage pas les erreurs de expecta
  *)
-Conjecture merge_eq :
+Lemma merge_eq :
   forall A c cs xs ys,
     @merge A (cons c cs) xs ys ==
       match c with
@@ -571,6 +388,24 @@ Conjecture merge_eq :
       | pres false => app ys (merge cs (expecta xs) (rem ys))
       | err e => map (fun _ => err e) (cons c cs)
       end.
+Proof.
+  intros.
+  unfold merge at 1.
+  rewrite FIXP_eq.
+  rewrite 3 curry_Curry, 3 Curry_simpl.
+  rewrite fcont_comp2_simpl, 2 fcont_comp_simpl.
+  rewrite DSCASE_simpl.
+  setoid_rewrite DScase_cons.
+  destruct c as [|[]|].
+(* FIXME: beaucoup trop lent : *)
+(*   - apply cons_eq_compat; reflexivity. *)
+(*   - apply app_eq_compat; reflexivity. *)
+(*   - apply app_eq_compat; reflexivity. *)
+(*   - reflexivity. *)
+(* Qed. *)
+Admitted.
+
+Global Opaque merge.
 
 Lemma expecta_inf :
   forall A (xs:DS (sampl A)),
@@ -988,6 +823,76 @@ Qed.
 End TRUE_UNTIL.
 
 
+Section RESET.
+(** Definition of the recursive reset operator, using true_until *)
+
+Context {A : Type}.
+Variable (f : DS (sampl A) -C-> DS (sampl A)).
+
+Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
+  refine (FIXP _ _).
+  apply curry, curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (freset := FST @_ @FST pl pr)
+      ; pose (r := SND @_ @FST pl pr)
+      ; pose (x := @SND pl pr)
+      ; pose (c := true_until @_ r)
+  end.
+  refine ((merge @3_ c) _ _).
+  - (* true *)
+    refine (f @_ (when @2_ c) x).
+  - (* false *)
+    refine ((AP _ _ @3_ freset)
+              ((whennot @2_ c) r)
+              ((whennot @2_ c) x)).
+Defined.
+
+Lemma reset_eq :
+  forall r x,
+    reset r x ==
+      let c := true_until r in
+      merge c (f (when c x))
+              (reset (whennot c r) (whennot c x)).
+Proof.
+  intros.
+  unfold reset at 1.
+  rewrite FIXP_eq.
+  reflexivity.
+Qed.
+
+End RESET.
+
+(** simplified version of the denotational [sreset] (no environnements) *)
+Section SRESET.
+
+Parameter sreset' : forall {A}, (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A -C-> DS A.
+Conjecture sreset'_eq : forall A f r R X Y,
+    @sreset' A f (cons r R) X Y ==
+      if r
+      then sreset' f (cons false R) X (f X)
+      else app Y (sreset' f R (rem X) (rem Y)).
+
+Definition sreset {A} : (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A.
+  apply curry, curry.
+  match goal with
+  | |- _ (_ (Dprod ?pl ?pr) _) =>
+      pose (f := FST @_ (@FST pl pr));
+      pose (R := SND @_ (@FST pl pr));
+      pose (X := @SND pl pr);
+      idtac
+  end.
+  exact ((sreset' @4_ f) R X ((AP _ _ @2_ f) X)).
+Defined.
+
+Lemma sreset_eq : forall A f R X,
+    @sreset A f R X == sreset' f R X (f X).
+Proof.
+  trivial.
+Qed.
+
+End SRESET.
+
 (* We prove a simplified form, with a function of a single stream *)
 Module RESET_OK.
 
@@ -1082,42 +987,9 @@ Proof.
   exists u,U'; auto.
 Qed.
 
-(** Definition of the recursive reset operator, using true_until *)
-Definition reset : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A).
-  refine (FIXP _ _).
-  apply curry, curry.
-  match goal with
-  | |- _ (_ (Dprod ?pl ?pr) _) =>
-      pose (freset := FST @_ @FST pl pr)
-      ; pose (r := SND @_ @FST pl pr)
-      ; pose (x := @SND pl pr)
-      ; pose (c := true_until @_ r)
-  end.
-  refine ((merge @3_ c) _ _).
-  - (* true *)
-    refine (f @_ (when @2_ c) x).
-  - (* false *)
-    refine ((AP _ _ @3_ freset)
-              ((whennot @2_ c) r)
-              ((whennot @2_ c) x)).
-Defined.
-
-Lemma reset_eq :
-  forall r x,
-    reset r x ==
-      let c := true_until r in
-      merge c (f (when c x))
-              (reset (whennot c r) (whennot c x)).
-Proof.
-  intros.
-  unfold reset at 1.
-  rewrite FIXP_eq.
-  reflexivity.
-Qed.
-
 Lemma reset_abs :
   forall r x,
-    reset (cons abs r) (cons abs x) == cons abs (reset r x).
+    reset f (cons abs r) (cons abs x) == cons abs (reset f r x).
 Proof.
   intros.
   rewrite 2 reset_eq; cbv zeta.
@@ -1145,33 +1017,6 @@ Proof.
     rewrite true_until_abs, when_eq, 2 whennot_eq, AbsF, merge_eq, 2 expecta_eq.
     rewrite Hf; auto.
 Qed.
-
-(** simplified version of the denotational [sreset] (no environnements) *)
-Parameter sreset' : forall {A}, (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A -C-> DS A.
-Conjecture sreset'_eq : forall A f r R X Y,
-    @sreset' A f (cons r R) X Y ==
-      if r
-      then sreset' f (cons false R) X (f X)
-      else app Y (sreset' f R (rem X) (rem Y)).
-
-Definition sreset {A} : (DS A -C-> DS A) -C-> DS bool -C-> DS A -C-> DS A.
-  apply curry, curry.
-  match goal with
-  | |- _ (_ (Dprod ?pl ?pr) _) =>
-      pose (f := FST @_ (@FST pl pr));
-      pose (R := SND @_ (@FST pl pr));
-      pose (X := @SND pl pr);
-      idtac
-  end.
-  exact ((sreset' @4_ f) R X ((AP _ _ @2_ f) X)).
-Defined.
-
-Lemma sreset_eq : forall A f R X,
-    @sreset A f R X == sreset' f R X (f X).
-Proof.
-  trivial.
-Qed.
-
 
 (** Key lemma to prove the equivalence of resets *)
 Lemma f_when :
@@ -1243,7 +1088,7 @@ Lemma sreset_match_aux :
     AC xs == AC ys ->
     cs == sbinop (fun b1 b2 : bool => Some (negb b1 && b2)) rs
             (fby1 (Some true) (sconst true (AC rs)) cs) ->
-    merge cs (when cs ys) (reset (whennot cs rs) (whennot cs xs))
+    merge cs (when cs ys) (reset f (whennot cs rs) (whennot cs xs))
     == sreset' f (map bool_of rs) xs ys.
 Proof.
   intros * Infr Infx Infy Sr Sx Sy Hac Acy Hcs.
@@ -1335,7 +1180,7 @@ Theorem reset_match :
     safe_DS xs ->
     AC xs == AC rs ->
     let rsb := map bool_of rs in
-    reset rs xs == sreset f rsb xs.
+    reset f rs xs == sreset f rsb xs.
 Proof.
   intros * Infr Infx Sr Sx Hac rsb; subst rsb.
   rewrite sreset_eq.
@@ -1378,7 +1223,7 @@ Proof.
     rewrite app_cons, first_cons; auto. }
   (* ce que l'on cherche vraiment à prouver *)
   enough (Heq :
-           merge cs' (when cs' ys') (reset (whennot cs' rs') (whennot cs' xs'))
+           merge cs' (when cs' ys') (reset f (whennot cs' rs') (whennot cs' xs'))
            == sreset' f (map bool_of rs') xs' ys').
   { apply Oeq_ds_eq.
     rewrite HU, rem_cons.

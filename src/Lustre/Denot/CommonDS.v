@@ -318,6 +318,13 @@ Section DS_Forall.
     constructor; auto.
   Qed.
 
+  Lemma DSForall_nrem : forall s n, DSForall s -> DSForall (nrem n s).
+  Proof.
+    induction n; intros; auto.
+    rewrite nrem_S, nrem_rem.
+    apply DSForall_rem; auto.
+  Qed.
+
   (* unprovable induction principle *)
   Lemma DSForall_ind :
     (forall s, DSForall (rem s) -> DSForall s) ->
@@ -416,6 +423,13 @@ Section DS_Forall.
       rewrite Hu in Fu; now inv Fu.
     - apply symmetry, app_cons_elim in Ht as (?& ? & Ht).
       now rewrite Ht.
+  Qed.
+
+  Lemma DSForall_take : forall n xs, DSForall xs -> DSForall (take n xs).
+  Proof.
+    induction n; intros * Hf; rewrite take_eq.
+    apply DSForall_bot.
+    apply DSForall_app; auto using DSForall_rem.
   Qed.
 
 End DS_Forall.
