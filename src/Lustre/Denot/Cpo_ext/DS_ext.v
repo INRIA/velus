@@ -656,8 +656,8 @@ Qed.
    Useful to reason with [filter] by induction. *)
 Inductive isConP {D:Type} (P : D -> Prop) : DStr D -> Prop :=
 | isConPEps : forall x, isConP P x -> isConP P (Eps x)
-| isConPP : forall a s, P a -> isConP P (Con a s)
-| isConPnP: forall a s, isConP P s -> ~ P a -> isConP P (Con a s).
+| isConPnP: forall a s, isConP P s -> ~ P a -> isConP P (Con a s)
+| isConPP : forall a s, P a -> isConP P (Con a s).
 Global Hint Constructors isConP : core.
 
 Lemma isConP_pred : forall D (P:D->Prop) x, isConP P (pred x) -> isConP P x.
@@ -736,29 +736,23 @@ Proof.
     revert Hx Hy. revert xs ys.
     induction Hic; intros.
     + rewrite <- eqEps in *. setoid_rewrite <- eqEps. eapply IHHic; eauto.
-    + split; [|exists s];
-        autorewrite with cpodb;
-        destruct (Pdec a) as [Hp|Hnp], (P'dec (f a)) as [Hp'|Hnp']; try tauto.
-      1,3: now autorewrite with cpodb.
-      all: clear - HPP' Hp Hnp'; exfalso; firstorder 0.
     + autorewrite with cpodb in *|- ;
         destruct (Pdec a) as [Hp|Hnp], (P'dec (f a)) as [Hp'|Hnp']; try tauto.
       clear - HPP' Hnp Hp'; exfalso; firstorder 0.
       destruct (IHHic xs ys) as (? & x &?&?); auto.
       split; [| exists x];
         autorewrite with cpodb in *; destruct (Pdec a), (P'dec (f a)); tauto.
+    + split; [|exists s];
+        autorewrite with cpodb;
+        destruct (Pdec a) as [Hp|Hnp], (P'dec (f a)) as [Hp'|Hnp']; try tauto.
+      1,3: now autorewrite with cpodb.
+      all: clear - HPP' Hp Hnp'; exfalso; firstorder 0.
   - apply filter_is_cons in Hic.
     revert Hx Hy. revert xs ys.
     remember (map f s) as sm. apply Oeq_refl_eq in Heqsm.
     revert Heqsm. revert s.
     induction Hic; intros.
     + rewrite <- eqEps in *. setoid_rewrite <- eqEps. eapply IHHic; eauto.
-    + apply symmetry, map_eq_cons_elim in Heqsm as (b & t& Hs &?&?); subst.
-      setoid_rewrite Hs.
-      split; [| exists t]; autorewrite with cpodb.
-      all: destruct (Pdec b) as [Hp|Hnp], (P'dec (f b)) as [Hp'|Hnp']; try tauto.
-      all: autorewrite with cpodb; auto.
-      all: clear - HPP' Hnp Hp'; exfalso; firstorder 0.
     + apply symmetry, map_eq_cons_elim in Heqsm as (b &?& Hs &?& Hmap); subst.
       setoid_rewrite Hs.
       specialize (IHHic _ (symmetry Hmap) _ _ (Oeq_refl _) (Oeq_refl _))
@@ -767,6 +761,12 @@ Proof.
         autorewrite with cpodb;
         destruct (Pdec b) as [Hp|Hnp], (P'dec (f b)) as [Hp'|Hnp']; try tauto;
         clear - HPP' Hp Hnp'; exfalso; firstorder 0.
+    + apply symmetry, map_eq_cons_elim in Heqsm as (b & t& Hs &?&?); subst.
+      setoid_rewrite Hs.
+      split; [| exists t]; autorewrite with cpodb.
+      all: destruct (Pdec b) as [Hp|Hnp], (P'dec (f b)) as [Hp'|Hnp']; try tauto.
+      all: autorewrite with cpodb; auto.
+      all: clear - HPP' Hnp Hp'; exfalso; firstorder 0.
 Qed.
 
 Lemma infinite_decomp :
