@@ -150,7 +150,7 @@ let compile source_name out_name =
   (* TODO: move these two checks to a new pass *)
   (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.check_restr (Ident.Ids.elab_prefs) x)) with
    | Errors.OK true -> ()
-   | _ -> Format.eprintf "warning: could not check semantic existence@."
+   | _ -> Format.eprintf "warning: could not check semantic existence (construction not supported)@."
   );
   (match Compiler.apply_partial (LustreElab.elab_declarations ast) (fun x -> Errors.OK (Instantiator.check_op (Ident.Ids.elab_prefs) x)) with
    | Errors.OK true -> ()
