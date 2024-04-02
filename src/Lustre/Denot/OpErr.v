@@ -543,7 +543,7 @@ Proof.
   simpl_Forall; eauto using check_block_ok.
 Qed.
 
-Lemma check_global_ok :
+Theorem check_global_ok :
   forall G,
     restr_global G ->
     wt_global G ->
