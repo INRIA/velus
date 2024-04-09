@@ -7,6 +7,8 @@ Import String.
 (** * Concrete definitions of [check_unop], [check_binop_any]
  * and [check_binop_val], instantiated with CompCert's operators *)
 
+(** * /!\ this file is no longer in use !
+ * the definitions moved to [ObcToClight/Interface.v] *)
 
 (** Concrete definition of [check_unop].
  * We only prohibit cast operations from floats to integers, which can fail
