@@ -19,10 +19,6 @@ Module Type LDENOT
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn).
 
-Context {PSyn : list decl -> block -> Prop} {Prefs : PS.t}.
-Definition node := @node PSyn Prefs.
-Definition global := @global PSyn Prefs.
-
 (* TODO: move somewhere else? *)
 Section LSyntax_facts.
 
@@ -35,7 +31,8 @@ Definition get_locals (blk : block) : static_env :=
   end.
 
 Lemma NoDup_senv_loc :
-  forall (nd : node) vars blks,
+  forall {PSyn Prefs},
+  forall (nd : @node PSyn Prefs) vars blks,
     n_block nd = Blocal (Scope vars blks) ->
     NoDupMembers (senv_of_ins (n_in nd) ++ senv_of_decls (n_out nd) ++ senv_of_decls vars).
 Proof.
@@ -53,7 +50,8 @@ Proof.
 Qed.
 
 Corollary NoDup_iol :
-  forall (n : node),
+  forall {PSyn Prefs},
+  forall (n : @node PSyn Prefs),
     NoDupMembers (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n)).
 Proof.
   intros.
@@ -71,14 +69,15 @@ Definition get_defined (blk : block) : list ident :=
   end.
 
 (** Et dans les nœuds  *)
-Definition get_defined_node (n : node) : list ident :=
+Definition get_defined_node {PSyn Prefs} (n : @node PSyn Prefs) : list ident :=
   match n_block n with
   | Blocal (Scope _ blks) => flat_map get_defined blks
   | _ => []
   end.
 
 Lemma NoDup_get_defined :
-  forall (nd : node) vars blks,
+  forall {PSyn Prefs},
+  forall (nd : @node PSyn Prefs) vars blks,
     n_block nd = Blocal (Scope vars blks) ->
     NoDup (flat_map get_defined blks ++ List.map fst (n_in nd)).
 Proof.
@@ -111,7 +110,9 @@ Proof.
 Qed.
 
 Corollary NoDup_get_defined_node :
-  forall (nd : node), NoDup (get_defined_node nd ++ List.map fst (n_in nd)).
+  forall {PSyn Prefs},
+  forall (nd : @node PSyn Prefs),
+    NoDup (get_defined_node nd ++ List.map fst (n_in nd)).
 Proof.
   intros.
   pose proof (Ndin := node_NoDup_in nd).
@@ -121,10 +122,12 @@ Proof.
 Qed.
 
 Lemma get_defined_node_incl :
-  forall (n : node),
+  forall {PSyn Prefs},
+  forall (n : @node PSyn Prefs),
     incl (get_defined_node n)
       (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n))).
 Proof.
+  intros ??.
   unfold get_defined_node.
   intro n.
   pose proof (n_defd n) as (xs & Vd & Perm).
@@ -293,7 +296,9 @@ End Denot_env.
 
 Section Denot_node.
 
-Variable (G : global).
+Context {PSyn : list decl -> block -> Prop}.
+Context {Prefs : PS.t}.
+Variable (G : @global PSyn Prefs).
 
 (* TODO: c'est un test, bouger!! *)
 Section Nprod_Fold.
@@ -1099,7 +1104,7 @@ Proof.
   cases.
 Qed.
 
-Definition denot_node (n : node) :
+Definition denot_node (n : @node PSyn Prefs) :
   (* envG -> envI -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry.
@@ -1155,7 +1160,7 @@ Ltac gen_sub_exps :=
 
 Section Global.
 
-  Definition denot_global_ (G : global) : Dprodi FI -C-> Dprodi FI.
+  Definition denot_global_ {PSyn Prefs} (G : @global PSyn Prefs) : Dprodi FI -C-> Dprodi FI.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
     - exact (curry (FIXP _ @_ (denot_node G n @2_ FST _ _) (SND _ _))).
@@ -1163,7 +1168,8 @@ Section Global.
   Defined.
 
   Lemma denot_global_eq :
-    forall G envG f envI,
+    forall {PSyn Prefs},
+    forall (G : @global PSyn Prefs) envG f envI,
       denot_global_ G envG f envI =
         match find_node f G with
         | Some n => FIXP _ (denot_node G n envG envI)
@@ -1176,14 +1182,15 @@ Section Global.
     cases.
   Qed.
 
-  Definition denot_global G : Dprodi FI :=
+  Definition denot_global {PSyn Prefs} (G: @global PSyn Prefs) : Dprodi FI :=
     FIXP _ (denot_global_ G).
 
 End Global.
 
 
 Lemma denot_in :
-  forall G f n,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall f n,
     find_node f G = Some n ->
     forall envI x,
       In x (List.map fst (n_in n)) ->
@@ -1208,7 +1215,8 @@ Proof.
 Qed.
 
 Lemma not_out_bot :
-  forall G f n,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall f n,
     find_node f G = Some n ->
     forall envI x,
       ~ In x (List.map fst (n_out n)) ->
@@ -1241,7 +1249,8 @@ Qed.
 Section Denot_cons.
 
 Lemma denot_exps_hyp :
-  forall G G' ins es envG envI env,
+  forall {PSyn Prefs} (G G' : @global PSyn Prefs),
+  forall ins es envG envI env,
     Forall (fun e => denot_exp G ins e envG envI env ==
                     denot_exp G' ins e envG envI env) es ->
     denot_exps G ins es envG envI env ==
@@ -1254,7 +1263,8 @@ Proof.
 Qed.
 
 Lemma denot_exp_cons :
-  forall nd nds tys exts
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds tys exts
     ins envG envI env e,
     ~ Is_node_in_exp nd.(n_name) e ->
     denot_exp (Global tys exts nds) ins e envG envI env
@@ -1378,7 +1388,8 @@ Proof.
 Qed.
 
 Corollary denot_exps_cons :
-  forall nd nds tys exts
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds tys exts
     ins envG envI env es,
     ~ (List.Exists (Is_node_in_exp nd.(n_name)) es) ->
     denot_exps (Global tys exts nds) ins es envG envI env
@@ -1391,7 +1402,8 @@ Proof.
 Qed.
 
 Lemma denot_block_cons :
-  forall nd nds tys exts
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds tys exts
     ins envG envI env env_acc blk,
     ~ Is_node_in_block (n_name nd) blk ->
     denot_block (Global tys exts nds) ins blk envG envI env env_acc
@@ -1406,7 +1418,8 @@ Proof.
 Qed.
 
 Corollary denot_blocks_cons :
-  forall nd nds tys exts
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds tys exts
     ins envG envI env blks,
     ~ (List.Exists (Is_node_in_block (n_name nd)) blks) ->
     denot_blocks (Global tys exts nds) ins blks envG envI env
@@ -1421,7 +1434,8 @@ Proof.
 Qed.
 
 Lemma denot_node_cons :
-  forall n nd nds tys exts,
+  forall {PSyn Prefs} (n : @node PSyn Prefs),
+  forall nd nds tys exts,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
     denot_node (Global tys exts nds) n
     == denot_node (Global tys exts (nd :: nds)) n.
@@ -1455,7 +1469,6 @@ Qed.
 (* Qed. *)
 
 End Denot_cons.
-
 
 End LDENOT.
 

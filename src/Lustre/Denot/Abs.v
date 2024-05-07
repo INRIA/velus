@@ -280,8 +280,10 @@ Qed.
 
 Section Abs_indep_node.
 
+  Context {PSyn : list decl -> block -> Prop}.
+  Context {Prefs : PS.t}.
   Variables
-    (G : global)
+    (G : @global PSyn Prefs)
     (envG : Dprodi FI).
 
   Hypothesis Hnode :
@@ -525,7 +527,7 @@ End Abs_indep_node.
 
 
 Theorem abs_indep_global :
-  forall (G : global),
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
     forall f envI,
       denot_global G f (APP_env abs_env envI)

@@ -553,8 +553,10 @@ Qed.
 
 Section LP_node.
 
+  Context {PSyn : list decl -> block -> Prop}.
+  Context {Prefs : PS.t}.
   Variables
-    (G : global)
+    (G : @global PSyn Prefs)
     (envG : Dprodi FI).
 
   Hypothesis Hnode :
@@ -815,7 +817,7 @@ End LP_node.
 
 (* TODO: check hypotheses *)
 Theorem lp_global :
-  forall (G : global),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
     forall f n envI,
       denot_global G f (take_env n envI) == take_env n (denot_global G f envI).

@@ -75,8 +75,11 @@ Qed.
 
 Section Op_correct_node.
 
+Context {PSyn : list decl -> block -> Prop}.
+Context {Prefs : PS.t}.
+
 Variables
-  (G : global)
+  (G : @global PSyn Prefs)
   (ins : list ident)
   (envG : Dprodi FI)
   (envI : DS_prod SI)
@@ -155,7 +158,7 @@ Definition op_correct_block (b : block) : Prop :=
   | _ => True
   end.
 
-Definition op_correct_node (n : node) : Prop :=
+Definition op_correct_node (n : @node PSyn Prefs) : Prop :=
   match n.(n_block) with
   | Blocal (Scope vars blks) => Forall op_correct_block blks
   | _ => True
@@ -166,7 +169,7 @@ End Op_correct_node.
 (* TODO: c'est trop fort pour l'instant.
    Comment ne parler que du nœud main ?
    Et propager les valeurs dans les appels de fonction ? *)
-Definition op_correct_global (G : global) : Prop :=
+Definition op_correct_global {PSyn Prefs} (G : @global PSyn Prefs) : Prop :=
   let envG := denot_global G in
   Forall (fun n => forall envI,
               let ins := List.map fst n.(n_in) in
@@ -177,20 +180,21 @@ Definition op_correct_global (G : global) : Prop :=
 (** ** Facts about op_correct  *)
 
 Lemma op_correct_exp_cons :
-  forall e nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall e nds tys exts ins envG envI env,
     ~ Is_node_in_exp nd.(n_name) e ->
     op_correct_exp (Global tys exts (nd :: nds)) ins envG envI env e ->
     op_correct_exp (Global tys exts (nds)) ins envG envI env e.
 Proof.
   induction e using exp_ind2; intros * Hnin Hop; inv Hop;
-    eauto using op_correct_exp.
+    eauto using @op_correct_exp.
   - (* Eunop *)
     setoid_rewrite <- denot_exp_cons in H3;
-      eauto 6 using op_correct_exp, Is_node_in_exp.
+      eauto 6 using @op_correct_exp, Is_node_in_exp.
   - (* Ebinop *)
     simpl in *.
     setoid_rewrite <- denot_exp_cons in H5;
-      eauto 12 using op_correct_exp, Is_node_in_exp.
+      eauto 12 using @op_correct_exp, Is_node_in_exp.
   - (* Efby *)
     constructor; simpl_Forall.
     + eapply H; eauto.
@@ -235,7 +239,8 @@ Proof.
 Qed.
 
 Lemma op_correct_block_cons :
-  forall b nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall b nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) b ->
     op_correct_block (Global tys exts (nd :: nds)) ins envG envI env b ->
     op_correct_block (Global tys exts (nds)) ins envG envI env b.
@@ -252,7 +257,8 @@ Proof.
 Qed.
 
 Lemma op_correct_node_cons :
-  forall n nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall n nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
     op_correct_node (Global tys exts (nd :: nds)) ins envG envI env n ->
     op_correct_node (Global tys exts nds) ins envG envI env n.
@@ -270,20 +276,21 @@ Qed.
 (** *** The other way *)
 
 Lemma op_correct_exp_uncons :
-  forall e nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall e nds tys exts ins envG envI env,
     ~ Is_node_in_exp nd.(n_name) e ->
     op_correct_exp (Global tys exts (nds)) ins envG envI env e ->
     op_correct_exp (Global tys exts (nd :: nds)) ins envG envI env e.
 Proof.
   induction e using exp_ind2; intros * Hnin Hop; inv Hop;
-    eauto using op_correct_exp.
+    eauto using @op_correct_exp.
   - (* Eunop *)
     setoid_rewrite denot_exp_cons in H3;
-      eauto 6 using op_correct_exp, Is_node_in_exp.
+      eauto 6 using @op_correct_exp, Is_node_in_exp.
   - (* Ebinop *)
     simpl in *.
     setoid_rewrite denot_exp_cons in H5;
-      eauto 12 using op_correct_exp, Is_node_in_exp.
+      eauto 12 using @op_correct_exp, Is_node_in_exp.
   - (* Efby *)
     constructor; simpl_Forall.
     + eapply H; eauto.
@@ -328,7 +335,8 @@ Proof.
 Qed.
 
 Lemma op_correct_block_uncons :
-  forall b nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall b nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) b ->
     op_correct_block (Global tys exts (nds)) ins envG envI env b ->
     op_correct_block (Global tys exts (nd :: nds)) ins envG envI env b.
@@ -345,7 +353,8 @@ Proof.
 Qed.
 
 Lemma op_correct_node_uncons :
-  forall n nd nds tys exts ins envG envI env,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall n nds tys exts ins envG envI env,
     ~ Is_node_in nd.(n_name) n ->
     op_correct_node (Global tys exts nds) ins envG envI env n ->
     op_correct_node (Global tys exts (nd :: nds)) ins envG envI env n.
@@ -361,7 +370,7 @@ Proof.
 Qed.
 
 
-Global Add Parametric Morphism G ins : (@op_correct_exp G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq exp ==> Basics.impl
       as op_correct_exp_morph_impl.
@@ -393,7 +402,7 @@ Proof.
     constructor; simpl_Forall; auto.
 Qed.
 
-Global Add Parametric Morphism G ins : (@op_correct_exp G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq exp ==> iff
       as op_correct_exp_morph.
@@ -402,7 +411,7 @@ Proof.
   split; apply op_correct_exp_morph_impl; auto.
 Qed.
 
-Global Add Parametric Morphism G ins : (@op_correct_block G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_block G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq block ==> iff
       as op_correct_block_morph.
@@ -413,7 +422,7 @@ Proof.
   split; intros Hf; simpl_Forall; eapply op_correct_exp_morph in Hf; eauto.
 Qed.
 
-Global Add Parametric Morphism G ins : (@op_correct_node G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_node G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq node ==> iff
       as op_correct_node_morph.
@@ -429,7 +438,8 @@ Qed.
 (** ** Correction of the [CheckOp] procedure *)
 
 Theorem check_exp_ok :
-  forall Γ G ins envG envI env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall Γ ins envG envI env,
   forall e, restr_exp e ->
        wt_exp G Γ e ->
        check_exp e = true ->
@@ -511,7 +521,8 @@ Proof.
 Qed.
 
 Lemma check_block_ok :
-  forall Γ G ins envG envI env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall Γ ins envG envI env,
   forall b, restr_block b ->
        wt_block G Γ b ->
        check_block b = true ->
@@ -525,7 +536,8 @@ Proof.
 Qed.
 
 Lemma check_node_ok :
-  forall G ins envG envI env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env,
   forall (n : node),
     restr_node n ->
     wt_node G n ->
@@ -544,7 +556,7 @@ Proof.
 Qed.
 
 Theorem check_global_ok :
-  forall G,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     check_global G = true ->

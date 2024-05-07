@@ -52,7 +52,7 @@ Qed.
 Section Static_env_node.
 
   Lemma NoDup_senv :
-    forall (nd : node),
+    forall {PSyn Prefs} (nd : @node PSyn Prefs),
       NoDupMembers (senv_of_ins (n_in nd) ++ senv_of_decls (n_out nd)).
   Proof.
     intros.
@@ -61,7 +61,8 @@ Section Static_env_node.
   Qed.
 
   Lemma Ty_senv :
-    forall (n : node) x ty,
+    forall {PSyn Prefs} (n : @node PSyn Prefs),
+    forall x ty,
       HasType (senv_of_ins (n_in n)) x ty ->
       In (x,ty) (List.map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n)).
   Proof.
@@ -76,7 +77,8 @@ Section Static_env_node.
   Qed.
 
   Lemma HasType_ins_app :
-    forall (n : node) Γ x ty,
+    forall {PSyn Prefs} (n : @node PSyn Prefs),
+    forall Γ x ty,
       NoDupMembers (senv_of_ins (n_in n) ++ Γ) ->
       In x (List.map fst (n_in n)) ->
       HasType (senv_of_ins (n_in n) ++ Γ) x ty ->
@@ -94,7 +96,8 @@ Section Static_env_node.
   Qed.
 
   Lemma HasClock_ins_app :
-    forall (n : node) Γ x ck,
+    forall {PSyn Prefs} (n : @node PSyn Prefs),
+    forall Γ x ck,
       NoDupMembers (senv_of_ins (n_in n) ++ Γ) ->
       In x (List.map fst (n_in n)) ->
       HasClock (senv_of_ins (n_in n) ++ Γ) x ck ->
@@ -112,7 +115,8 @@ Section Static_env_node.
   Qed.
 
   Lemma HasClock_senv :
-    forall (n : node) x ck,
+    forall {PSyn Prefs} (n : @node PSyn Prefs),
+    forall x ck,
       HasClock (senv_of_ins (n_in n)) x ck ->
       In (x,ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
   Proof.
@@ -240,9 +244,12 @@ End Safe_DS.
 
 Section SDfuns_safe.
 
+  Context {PSyn : list decl -> block -> Prop}.
+  Context {Prefs : PS.t}.
+
   Variables
     (Γ : static_env)
-    (G : global)
+    (G : @global PSyn Prefs)
     (ins : list ident)
     (envG : Dprodi FI)
     (envI : DS_prod SI)
@@ -2410,7 +2417,8 @@ Proof.
 Qed.
 
 Lemma bss_le_bs :
-  forall (n : node) env bs,
+  forall {PSyn Prefs} (n : @node PSyn Prefs),
+  forall env bs,
     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
     wc_env (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
     cl_env Γ (idents (n_in n)) env bs 0 ->
@@ -2441,8 +2449,11 @@ Qed.
 
 Section Node_safe.
 
+  Context {PSyn : list decl -> block -> Prop}.
+  Context {Prefs : PS.t}.
+
   Variables
-    (G : global)
+    (G : @global PSyn Prefs)
     (envG : Dprodi FI).
 
   Hypothesis
@@ -2523,7 +2534,7 @@ Section Node_safe.
   Lemma Wi_match_ss :
     forall ins envI env env',
     forall bck sub,
-    forall (n : node) nn (ss : nprod nn) ncks,
+    forall (n : @node PSyn Prefs) nn (ss : nprod nn) ncks,
       let ckins := List.map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in) in
       Forall2 (WellInstantiated bck sub) ckins ncks ->
       Forall2 (fun nc s => match snd nc with
@@ -2555,7 +2566,7 @@ Section Node_safe.
   Lemma denot_clock_inst_ins :
     forall ins envI bs env,
     forall bck sub,
-    forall ncks (n:node) nn (ss : nprod nn),
+    forall ncks (n: @node PSyn Prefs) nn (ss : nprod nn),
       let ckins := List.map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in) in
       wc_env ckins ->
       Forall2 (WellInstantiated bck sub) ckins ncks ->
@@ -2582,7 +2593,7 @@ Section Node_safe.
   Lemma cl_env_inst :
     forall ins envI bs env,
     forall bck sub,
-    forall ncks (n : node) nn (ss : nprod nn),
+    forall ncks (n : @node PSyn Prefs) nn (ss : nprod nn),
       let ckins := List.map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in) in
       wc_env ckins ->
       Forall2 (WellInstantiated bck sub) ckins ncks ->
@@ -2616,7 +2627,7 @@ Section Node_safe.
   Qed.
 
   Lemma ef_env_inst :
-    forall (n : node) (ss : nprod (length (n_in n))),
+    forall (n : @node PSyn Prefs) (ss : nprod (length (n_in n))),
       forall_nprod safe_DS ss ->
       ef_env (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) (idents (n_in n))
         (env_of_np (idents (n_in n)) ss) 0.
@@ -2634,7 +2645,7 @@ Section Node_safe.
   Qed.
 
   Lemma ty_env_inst :
-    forall tys (n : node) nn (ss : nprod nn),
+    forall tys (n : @node PSyn Prefs) nn (ss : nprod nn),
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) tys (n_in n) ->
       Forall2 ty_DS tys (list_of_nprod ss) ->
       ty_env (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) (idents (n_in n))
@@ -2661,7 +2672,7 @@ Section Node_safe.
   Qed.
 
   Lemma inst_ty_env :
-    forall tys (n : node) envI env,
+    forall tys (n : @node PSyn Prefs) envI env,
       Forall2 (fun a '(_, (t, _, _, _)) => a = t) tys (n_out n) ->
       ty_env (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) (idents (n_in n)) envI env ->
       Forall2 ty_DS tys (list_of_nprod (np_of_env (List.map fst (n_out n)) env)).
@@ -2698,7 +2709,7 @@ Section Node_safe.
   Qed.
 
   Lemma inst_ef_env :
-    forall (n : node) envI env,
+    forall (n : @node PSyn Prefs) envI env,
       ef_env (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) (idents (n_in n)) envI env ->
       forall_nprod safe_DS (np_of_env (List.map fst (n_out n)) env).
   Proof.
@@ -2720,7 +2731,7 @@ Section Node_safe.
        peuvent en dépendre et on va appeler denot_clock_inst_ins *)
     forall ins envI bs env env',
     forall bck sub,
-    forall (a : list ann) (n : node) nn (ss : nprod nn) ncks,
+    forall (a : list ann) (n : @node PSyn Prefs) nn (ss : nprod nn) ncks,
       let ckins := List.map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in) in
       let ckouts := List.map (fun '(x, (_, ck, _, _)) => (x, ck)) n.(n_out) in
       wc_env ckins ->
@@ -2788,7 +2799,7 @@ Section Node_safe.
       d'entrées bien formé. *)
   Lemma safe_inst_in :
     forall ins envI bs env,
-    forall es (n : node) bck sub nn (ss : nprod nn),
+    forall es (n : @node PSyn Prefs) bck sub nn (ss : nprod nn),
       nn = length (n_in n) ->
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) (typesof es) (n_in n) ->
       Forall2 (WellInstantiated bck sub) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof es) ->
@@ -2827,7 +2838,7 @@ Section Node_safe.
   Qed.
 
   Lemma clock_ins_stable :
-    forall G (n : node) x ck,
+    forall (n : @node PSyn Prefs) x ck,
       wc_node G n ->
       let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
       let ins := List.map fst (n_in n) in
@@ -2912,8 +2923,7 @@ Section Node_safe.
       unfold cl_DS, ins.
       rewrite denot_clock_ins; eauto.
       apply mem_ident_spec in Hmem.
-      apply wc_find_node in Hfind as (?&?); auto.
-      now eauto using clock_ins_stable.
+      now eauto using clock_ins_stable, wc_global_node.
     }
 
     (* sinon on va "attendre" les [Eps] sur x jusqu'à lui trouver
@@ -3513,7 +3523,8 @@ Section Node_safe.
      get_defined
    *)
   Lemma denot_blocks_equs :
-    forall G ins envG envI env blks,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall ins envG envI env blks,
       Forall (wl_block G) blks ->
       NoDup (flat_map get_defined blks) ->
       let env' := denot_blocks G ins blks envG envI env in
@@ -3778,7 +3789,8 @@ Qed.
 (* op_correct est donné par hypothèse sur l'environment final,
    mais on aura besoin de l'avoir à chaque itération *)
 Lemma op_correct_exp_le :
-  forall G ins envG envI env env',
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env env',
     env <= env' ->
     forall e,
       op_correct_exp G ins envG envI env' e ->
@@ -3806,7 +3818,8 @@ Proof.
 Qed.
 
 Lemma op_correct_block_le :
-  forall G ins envG envI env env' b,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env env' b,
     env <= env' ->
     op_correct_block G ins envG envI env' b ->
     op_correct_block G ins envG envI env b.
@@ -3819,7 +3832,8 @@ Proof.
 Qed.
 
 Lemma op_correct_node_le :
-  forall G ins envG envI env env' n,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env env' n,
     env <= env' ->
     op_correct_node G ins envG envI env' n ->
     op_correct_node G ins envG envI env n.
@@ -3832,29 +3846,32 @@ Qed.
 
 (* TODO: useless? *)
 Lemma oc_exp_admissible_rev :
-  forall G ins envG envI e,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI e,
     admissible_rev _ (fun env => op_correct_exp G ins envG envI env e).
 Proof.
-  intros ???????.
+  intros ?????????.
   eauto using op_correct_exp_le.
 Qed.
 
 (* TODO: useless? *)
 Lemma oc_exps_admissible_rev :
-  forall G ins envG envI es,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI es,
     admissible_rev _ (fun env => Forall (op_correct_exp G ins envG envI env) es).
 Proof.
-  intros ?????? Hf.
+  intros ???????? Hf.
   induction es; intros; auto.
   inv Hf.
   constructor; eauto using op_correct_exp_le.
 Qed.
 
 Lemma oc_node_admissible_rev :
-  forall G ins envG envI n,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI n,
     admissible_rev _ (fun env => op_correct_node G ins envG envI env n).
 Proof.
-  intros ?????? Hoc.
+  intros ???????? Hoc.
   eauto using op_correct_node_le.
 Qed.
 
@@ -3880,7 +3897,8 @@ End Rev.
 
 (* on peut affaiblir [wf_env] en ignorant les variables locales *)
 Lemma wf_env_loc :
-  forall (n : node) envI bs env,
+  forall {PSyn Prefs} (n : @node PSyn Prefs),
+  forall envI bs env,
     wf_env (senv_of_ins (n_in n)
                    ++ senv_of_decls (n_out n)
                    ++ get_locals (n_block n)) (List.map fst (n_in n)) envI bs env ->
@@ -3897,7 +3915,8 @@ Qed.
 
 (* ... et le renforcer dans l'environnement initial *)
 Lemma wf_env_0_ext :
-  forall (n : node) envI bs,
+  forall {PSyn Prefs} (n : @node PSyn Prefs),
+  forall envI bs,
     wf_env (senv_of_ins (n_in n)
                    ++ senv_of_decls (n_out n)) (List.map fst (n_in n)) envI bs 0 ->
     wf_env (senv_of_ins (n_in n)
@@ -3922,7 +3941,7 @@ Proof.
 Qed.
 
 Theorem noerrors_prog :
-  forall (G : global),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
     wc_global G ->
     op_correct_global G ->
