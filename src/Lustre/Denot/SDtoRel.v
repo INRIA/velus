@@ -50,7 +50,7 @@ Proof.
 Qed.
 
 (* TODO: ajouter à Vélus  (iff vs Basics.impl *)
-Global Add Parametric Morphism (G : global) : (sem_exp G)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) : (sem_exp G)
     with signature history_equiv ==> @EqSt bool ==> eq ==> @EqSts svalue ==> iff
       as sem_exp_iff.
 Proof.
@@ -227,7 +227,8 @@ Section Sem_alt.
   (** Comment obtenir le prédicat Forall2Brs de LSemantics.Smerge sans
       avoir à manipuler de Forall3... *)
   Lemma Forall2Brs_transp :
-    forall (G : global) H b,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall H b,
     forall ess vss d Hk,
       vss <> [] ->
       Forall2
@@ -279,7 +280,8 @@ Section Sem_alt.
       merge relationnel est appliqué sur les lignes de la matrice
       grâce à Forall2t. *)
   Lemma Smerge_alt :
-    forall (G : global) H b x tx ess lann os,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall H b x tx ess lann os,
     forall d (xs : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
       sem_var H (Var x) xs ->
       vss <> [] ->
@@ -302,7 +304,8 @@ Section Sem_alt.
   (* TODO: dans l'autre sens !! *)
 
   Lemma ScaseTotal_alt :
-    forall (G : global) H b e ess tys ck os,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall H b e ess tys ck os,
     forall d (s : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
       vss <> [] ->
       (* Basile est d'accord pour virer la dépendance sur tys dans ScaseTotal,
@@ -329,7 +332,8 @@ Section Sem_alt.
      de la branche par défaut. Pour l'instant on utilise simplement
      Forall2t en combinant les flots par défaut et ceux de sortie. *)
   Lemma ScaseDefault_alt :
-    forall (G : global) H b e ess eds tys ck,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall H b e ess eds tys ck,
     forall d (s : Stream svalue) (sds : list (list (Stream svalue))) (vss : list (list (enumtag * Stream svalue))) os,
       vss <> [] ->
       sem_exp G H b e [s] ->
@@ -373,7 +377,8 @@ Qed.
 
 
 Lemma Smerge_alt2 :
-  forall (G : global) H b x tx ess lann os,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall H b x tx ess lann os,
   forall d (xs : Stream svalue) (vss : list (list (Stream svalue))),
     sem_var H (Var x) xs ->
     vss <> [] ->
@@ -403,7 +408,8 @@ Proof.
     eexists; split; auto; now rewrite Heq.
 Qed.
 Lemma ScaseTotal_alt2 :
-  forall (G : global) H b e ess tys ck os,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall H b e ess tys ck os,
   forall d (s : Stream svalue) (vss : list (list (Stream svalue))),
     sem_exp G H b e [s] ->
     vss <> [] ->
@@ -435,7 +441,8 @@ Proof.
 Qed.
 
 Lemma ScaseDefault_alt2 :
-  forall (G : global) H b e ess eds tys ck,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall H b e ess eds tys ck,
   forall d (s : Stream svalue) (sds : list (list (Stream svalue))) (vss : list (list (Stream svalue))) os,
     vss <> [] ->
     sem_exp G H b e [s] ->
@@ -504,7 +511,8 @@ Proof.
 Qed.
 (* à adapter de ClockedSem.sem_node_ck_cons' *)
 Corollary sem_node_cons' :
-    forall (nd : node) nds types externs f xs ys,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds types externs f xs ys,
       Ordered_nodes (Global types externs (nd::nds))
       -> sem_node (Global types externs nds) f xs ys
       -> nd.(n_name) <> f
@@ -514,7 +522,8 @@ Admitted.
 
 (* à adapter de ClockedSem.sem_block_ck_cons' *)
 Lemma sem_block_cons' :
-  forall (nd : node) nds types externs bck Hi bk,
+  forall {PSyn Prefs} (nd : @node PSyn Prefs),
+  forall nds types externs bck Hi bk,
     Ordered_nodes (Global types externs (nd::nds))
     -> sem_block (Global types externs nds) Hi bk bck
     -> ~Is_node_in_block nd.(n_name) bck
@@ -534,7 +543,7 @@ Proof.
 Qed.
 
 (* Hypothèse d'induction sur les nœuds du programme *)
-Definition sem_global_abs (G : global) :=
+Definition sem_global_abs {PSyn Prefs} (G : @global PSyn Prefs) :=
   forall f n,
     find_node f G = Some n ->
     let ss := repeat (Streams.const absent) (length (n_in n)) in
@@ -542,7 +551,8 @@ Definition sem_global_abs (G : global) :=
     sem_node G f ss os.
 
 Lemma sem_exp_absent :
-  forall (G : global) Γ,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall Γ,
     sem_global_abs G ->
     forall e,
     restr_exp e ->
@@ -779,12 +789,12 @@ On voudrait un wt_global plus faible mais plus
 on réserve le Ordered_nodes pour les raisonnements inductifs
  *)
 Lemma sem_global_absent :
-  forall (G : global),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     sem_global_abs G.
 Proof.
-  intros [tys exts nds] Hr Hwt.
+  intros ?? [tys exts nds] Hr Hwt.
   induction nds as [| n' nds]; intros f n Hfind ??. inv Hfind.
   apply wt_global_wl_global in Hwt as Hord.
   apply wl_global_Ordered_nodes in Hord.
@@ -1030,7 +1040,8 @@ Qed.
 
 (** comment passer de denot_exps à (concat denot_exp) *)
 Lemma Ss_exps :
-  forall G ins envG envI env es Hinf Infe,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env es Hinf Infe,
     EqSts (Ss_of_nprod (denot_exps G ins es envG envI env) Hinf)
       (flat_map (fun e => Ss_of_nprod (denot_exp G ins e envG envI env) (Infe e)) es).
 Proof.
@@ -1136,7 +1147,8 @@ Qed.
 
 (** comment passer de denot_expss à (map _ (concat denot_exp)) *)
 Lemma Ss_expss :
-  forall G ins envG envI env (ess : list (enumtag * (list exp))) n Infe Inf,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envI env (ess : list (enumtag * (list exp))) n Infe Inf,
     Forall (fun es => list_sum (map numstreams (snd es)) = n) ess ->
     Forall2 EqSts
       (map
@@ -1927,7 +1939,8 @@ Section OLD_MASK.
   Qed.
 
   Lemma Sapp_retro_compat :
-    forall (G:global) (H : history) (b : Stream bool) (f : ident) (es er : list exp) 
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall (H : history) (b : Stream bool) (f : ident) (es er : list exp) 
       (lann : list ann) (ss : list (list (Stream svalue))) (os : list (Stream svalue))
       (rs : list (list (Stream svalue))) (bs : Stream bool),
       Forall2 (sem_exp G H b) es ss ->
@@ -2359,7 +2372,7 @@ Qed.
 
 (* TDOO: sans restr? *)
 Lemma wf_alignLE :
-  forall G,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     forall f n,
     find_node f G = Some n ->
@@ -2528,7 +2541,7 @@ Qed.
 
 (** Hypothèse sur les entrées d'un nœud : elles doivent être bien typées
     et respecter leurs annotations d'horloge. *)
-Definition wf_ins (n : node) envI bs :=
+Definition wf_ins {PSyn Prefs} (n : @node PSyn Prefs) envI bs :=
   let ins := List.map fst n.(n_in) in
   let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
   wf_env Γ ins envI bs 0.
@@ -2536,8 +2549,11 @@ Definition wf_ins (n : node) envI bs :=
 
 Section Ok_node.
 
+Context {PSyn : list decl -> block -> Prop}.
+Context {Prefs : PS.t}.
+
 Variables
-  (G : global)
+  (G : @global PSyn Prefs)
   (envG : Dprodi FI).
 
 (** Toutes les hypothèses de section sur G et envG seront obtenues par
@@ -3527,7 +3543,8 @@ Qed.
 (* À partir de [sem_exp (denot_exp ...)], typiquement obtenu par hypothèse
    d'induction, on construit du [sem_exp (denot_exps ...)]. *)
 Lemma sem_sub_exps :
-  forall ins G H envI envG bs bsi env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins H envI envG bs bsi env,
   forall (es : list exp) Infes,
     Forall (fun e => forall Infe, sem_exp G H (S_of_DS id bs bsi) e
                     (Ss_of_nprod (denot_exp G ins e envG envI env) Infe)) es ->
@@ -3554,7 +3571,8 @@ Qed.
 (* À partir de [sem_exp (denot_exp ...)], typiquement obtenu par hypothèse
    d'induction, on construit du [sem_exp (denot_expss ...)]. *)
 Lemma sem_sub_expss :
-  forall ins G H envI envG bs bsi env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins H envI envG bs bsi env,
   forall (ess : list (enumtag * list exp)) n Infes,
     Forall (fun es => length (annots (snd es)) = n) ess ->
     Forall (Forall (fun e => forall Infe, sem_exp G H (S_of_DS id bs bsi) e
@@ -3652,7 +3670,7 @@ Proof.
   { unfold wf_ins.
     rewrite annots_numstreams in Hli.
     pose proof (nclocksof_sem G envG ins envI env es) as Ncs.
-    edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf);
+    edestruct @safe_exps_ with (es := es) as (sTy & sCl & sEf);
       eauto using wf_env_loc, wf_env_0_ext.
     rewrite clocksof_nclocksof in sCl.
     eapply safe_inst_in with (ss := ss) in Hli as Hec; eauto.
@@ -3663,8 +3681,8 @@ Proof.
     apply infinite_le_eq in Hbs as ->; auto.
     eapply bss_inf, inf_dom_env_of_np, infinite_exps; eauto.
   }
-  edestruct sem_sub_exps with (es := es) as (sss & Heqs & Hsss); eauto.
-  edestruct sem_sub_exps with (es := er) as (rss & Heqr & Hrss); eauto.
+  edestruct @sem_sub_exps with (es := es) as (sss & Heqs & Hsss); eauto.
+  edestruct @sem_sub_exps with (es := er) as (rss & Heqr & Hrss); eauto.
   clear Hsem Hsemr.
   Unshelve.
   2,3: now eauto using infinite_exps.
@@ -4317,7 +4335,7 @@ Qed.
 
 Theorem _ok_global :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
-  forall G,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     wc_global G ->
@@ -4334,7 +4352,7 @@ Theorem _ok_global :
       exists InfI InfO,
         sem_node G f (Ss_of_nprod xs InfI) (Ss_of_nprod os InfO).
 Proof.
-  intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins InfI.
+  intros ???? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins InfI.
   unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
@@ -4392,7 +4410,7 @@ Proof.
       all: rewrite <- HenvG; auto using find_node_now,
         wf_env_loc, wf_env_0_ext.
       - (* op_correct *)
-        inv Ocg. apply (op_correct_node_cons _ n);
+        inv Ocg. apply (op_correct_node_cons n);
           eauto using find_node_not_Is_node_in, find_node_now.
       - (* inf_dom *)
         eapply inf_dom_decomp in InfG; eauto using find_node_now.
@@ -4440,7 +4458,7 @@ Qed.
 (** Autre formulation, en fournissant un nprod plutôt qu'un environnement en entrée *)
 Corollary _ok_global2 :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
-  forall G,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     wc_global G ->
@@ -4456,7 +4474,7 @@ Corollary _ok_global2 :
       forall InfSs InfO,
         sem_node G f (Ss_of_nprod ss InfSs) (Ss_of_nprod os InfO).
 Proof.
-  intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins ??.
+  intros ???? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins ??.
   edestruct _ok_global as (?&?& Hsem); eauto using inf_dom_env_of_np.
   eapply sem_node_morph in Hsem; eauto using _Ss_of_nprod_eq.
   subst envI os ins; clear.
@@ -4467,7 +4485,7 @@ Proof.
   destruct (n_nodup n); eauto using NoDup_app_weaken.
 Qed.
 
-Definition wf_inputs (n : node) (ss : nprod (length (n_in n))) :=
+Definition wf_inputs {PSyn Prefs} (n : @node PSyn Prefs) (ss : nprod (length (n_in n))) :=
   let ins := idents (n_in n) in
   let envI := env_of_np ins ss in
   let bs := bss ins envI in
@@ -4477,7 +4495,7 @@ Definition wf_inputs (n : node) (ss : nprod (length (n_in n))) :=
 (** Witness of the relational semantics *)
 Theorem ok_global :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
-  forall G,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     wc_global G ->
@@ -4490,7 +4508,7 @@ Theorem ok_global :
       exists (os : nprod ((length (n_out n)))) InfO,
         sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
 Proof.
-  intros ?? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
+  intros ???? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
   apply check_global_ok in Hoc; auto.
   unshelve eapply _ok_global2 with (InfSs := InfXs) in Hins; eauto.
   { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;

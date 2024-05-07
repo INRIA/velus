@@ -52,8 +52,10 @@ Module Type LDENOTINF
       length n outputs streams of length n. *)
   Section Node_n.
 
+  Context {PSyn : list decl -> block -> Prop}.
+  Context {Prefs : PS.t}.
   Variables
-    (G : global)
+    (G : @global PSyn Prefs)
     (envG : Dprodi FI).
 
   Fact idcaus_map :
@@ -811,7 +813,7 @@ Module Type LDENOTINF
   Qed.
 
   Lemma get_idcaus_locals :
-    forall (nd : node),
+    forall (nd : @node PSyn Prefs),
       restr_node nd ->
       map fst (get_locals (n_block nd)) = map snd (idcaus_of_locals (n_block nd)).
   Proof.
@@ -823,7 +825,7 @@ Module Type LDENOTINF
   Qed.
 
   Lemma nin_defined :
-    forall (n : node),
+    forall (n : @node PSyn Prefs),
     forall vars blks x,
       n_block n = Blocal (Scope vars blks) ->
       In x (List.map fst (senv_of_decls (n_out n) ++ senv_of_decls vars)) ->
@@ -939,7 +941,8 @@ Module Type LDENOTINF
       receiving streams of length n outputs streams of length n. *)
 
   Theorem denot_global_n :
-    forall n G f nd envI,
+    forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall n f nd envI,
       restr_global G ->
       wt_global G ->
       Forall node_causal (nodes G) ->
@@ -1030,7 +1033,7 @@ Qed.
 
 Theorem denot_inf :
   forall (HasCausInj : forall Γ x cx, HasCaus Γ x cx -> cx = x),
-  forall (G : global),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
     restr_global G ->
     wt_global G ->
     Forall node_causal (nodes G) ->
@@ -1079,7 +1082,8 @@ Qed.
 
 (* TODO: virer l'ancien, le laisser ici ? *)
 Lemma forall_forall_denot_expss :
-  forall G A ins (ess : list (A * list exp)) n envG envI env (P : DS (sampl value) -> Prop),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall A ins (ess : list (A * list exp)) n envG envI env (P : DS (sampl value) -> Prop),
     Forall (fun es => length (annots (snd es)) = n) ess ->
     Forall (fun es => forall_nprod P (denot_exps G ins (snd es) envG envI env)) ess ->
     forall_nprod (forall_nprod P) (denot_expss G ins ess n envG envI env).
@@ -1096,7 +1100,8 @@ Qed.
 (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour
     prouver l'infinité des expressions. *)
 Lemma infinite_exp :
-  forall G ins envI (envG : Dprodi FI) env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envI (envG : Dprodi FI) env,
     (forall f nd envI,
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
@@ -1196,7 +1201,8 @@ Proof.
 Qed.
 
 Corollary infinite_exps :
-  forall G ins (envG : Dprodi FI) envI env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins (envG : Dprodi FI) envI env,
     (forall f nd envI,
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
@@ -1212,7 +1218,8 @@ Proof.
 Qed.
 
 Corollary infinite_expss :
-  forall G ins (envG : Dprodi FI) envI env,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins (envG : Dprodi FI) envI env,
     (forall f nd envI,
         find_node f G = Some nd ->
         infinite_dom envI (List.map fst (n_in nd)) ->
