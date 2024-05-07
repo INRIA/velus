@@ -57,7 +57,12 @@ The type of <a href="html/Velus.Clocks.html#CLOCKS.clock">clocks</a>
   <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</a>: semantics of a Lustre constant, and the <a href="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</a> function</li>
 </ul>
 <h3>II.A Dependently-Typed Synchronous Semantics</h3>
-TODO
+<p>From <a href="https://www.di.ens.fr/~pouzet/lucid-synchrone/lucid_in_coq/">Boulm&eacute; and Hamon</a>, adapted to the new Coq syntax by <a href="https://www.lri.fr/~keller/etudes.html">Keller</a>.</p>
+<ul>
+  <li> <a href="lscoq/sampled_streams.html#samplStr">Str (samplStr)</a>: the type of clocked streams</li>
+  <li> <a href="lscoq/lucid_ops.html#sp_when">sp_when</a>: the sampling operator</li>
+</ul>
+
 
 <h3>II.B The CPO library</h3>
 <p>Imported from <a href="https://www.lri.fr/~paulin/KahnNetworks/HTML/all-gal.html">C. Paulin-Mohring</a></p>
@@ -142,9 +147,9 @@ Three main properties:
 
 <h3>IV.A Causality errors</h3>
 <ul>
-  <li> <a href="html/Velus.Lustre.Denot.Infty.html#is_ncons_S_fby">is_ncons_S_fby</a>: lemma 4</li>
-  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_S">denot_S</a>: lemma 5</li>
-  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_inf">denot_inf</a>: theorem 4</li>
+  <li> <a href="html/Velus.Lustre.Denot.Infty.html#is_ncons_S_fby">lemma 4 (is_ncons_S_fby)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_S">lemma 5 (denot_S)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_inf">theorem 4 (denot_inf)</a></li>
 </ul>
 
 
