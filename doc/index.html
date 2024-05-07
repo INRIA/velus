@@ -24,6 +24,12 @@ a:active {color : Red; text-decoration : underline; }
 
 <h2>References to the Coq development, by section</h2>
 
+<p><em>Note that some names differ between the article and the Coq source.
+    We are still gradually harmonizing the names to match the article.
+    The links refer to names from the article (names from Coq are given
+    in parentheses).
+</em></p>
+
 <h3>I. Introduction</h3>
 
 <ul>
@@ -46,13 +52,16 @@ The type of <a href="html/Velus.Clocks.html#CLOCKS.clock">clocks</a>
   <li> <a href="html/Velus.Operators.html#OPERATORS.value">value</a>: the abstract type of values and its CompCert <a href="html/Velus.ObcToClight.Interface.html#Op.value">instance</a></li>
      <li> <a href="html/Velus.Operators.html#OPERATORS_AUX.svalue">svalue</a>: the type of synchronous values</li>
   <li> <a href="html/Velus.Lustre.LSemantics.html">LSemantics</a>: Lustre semantic rules</li>
-  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">sem_node</a>: semantics of a Lustre node, and the <a href="html/Velus.CoindStreams.html#COINDSTREAMS.clocks_of">base-of</a> function </li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">sem_node</a>: semantics of a Lustre node, and the <a href="html/Velus.CoindStreams.html#COINDSTREAMS.clocks_of">base-of (clocks_of)</a> function </li>
   <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">sem_equation</a>: semantics of a Lustre equation</li>
   <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</a>: semantics of a Lustre constant, and the <a href="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</a> function</li>
 </ul>
+<h3>II.A Dependently-Typed Synchronous Semantics</h3>
+TODO
 
 <h3>II.B The CPO library</h3>
-Generic definitions
+<p>Imported from <a href="https://www.lri.fr/~paulin/KahnNetworks/HTML/all-gal.html">C. Paulin-Mohring</a></p>
+<p>Generic definitions</p>
 <ul>
   <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#ord">ord</a>: ordered type</li>
   <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#monotonic">monotonic</a>: monotonic functions</li>
@@ -72,16 +81,16 @@ Stream definitions
 
 <h3>III.A Values</h3>
 <ul>
-  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sampl">sampl</a>: the type of synchronous possibly erroneous values (sevalue)</li>
-  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.SI">DS_prod SI</a>: the type of stream environments (SEnv)</li>
-  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.FI">Dprodi FI</a>: the type of stream functions environments (FEnv)</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sampl">sevalue (sampl)</a>: the type of synchronous possibly erroneous values</li>
+  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.SI">SEnv (DS_prod SI)</a>: the type of stream environments</li>
+  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.FI">FEnv (Dprodi FI)</a>: the type of stream functions environments</li>
 </ul>
 
 <h3>III.B Fixpoint semantics of nodes</h3>
 <ul>
-  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_node">denot_node</a>: denotN, the denotation of nodes</li>
-  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_exp_eq">denot_exp_eq</a>: characterization of denotE, denotation of expressions</li>
-  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_global">denot_global</a>: denotG, denotation of programs</li>
+  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_node">denotN (denot_node)</a>: the denotation of nodes</li>
+  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_exp_eq">denotE (denot_exp_eq)</a>: denotation of expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.Denot.html#LDENOT.denot_global">denotG (denot_global)</a>: denotation of programs</li>
 </ul>
 
 <h3>III.C Synchronous stream operators</h3>
@@ -142,7 +151,7 @@ Three main properties:
 <h3>IV.B Typing and runtime errors</h3>
 <ul>
   <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.wf_env">wf_env</a>: the well-formed predicate on stream environments</li>
-  <li> <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.op_correct_exp">op_correct_exp</a>: the no-rte predicate for expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.op_correct_exp">no-rte (op_correct_exp)</a>: the no run-time errors predicate for expressions</li>
 </ul>
 
 <h3>IV.B Simple static analysis</h3>
@@ -152,7 +161,6 @@ Three main properties:
   <li> <a href="html/Velus.Lustre.Denot.CheckOp.html#CHECKOP.check_exp">check_exp</a>: the check-ops procedure for expression</li>
   <li> <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.check_global_ok">check_global_ok</a>: correction of the procedure</li>
 </ul>
-
 
 </BODY>
 </HTML>
