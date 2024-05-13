@@ -13,7 +13,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import SDfuns Denot Restr Infty CommonList2.
+Require Import SDfuns SD Restr Infty CommonList2.
 
 Import List.
 
@@ -28,7 +28,7 @@ Module Type LDENOTINF
        (Import LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import Restr : LRESTR Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord).
+       (Import Den   : SD     Ids Op OpAux Cks Senv Syn Lord).
 
   (* section là juste pour supposer HasCausInj, amené à disparaître  *)
   Section Top.
@@ -1255,7 +1255,7 @@ Module LDenotInfFun
        (LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Restr : LRESTR Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD     Ids Op OpAux Cks Senv Syn Lord)
 <: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Restr Den.
   Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Restr Den.
 End LDenotInfFun.

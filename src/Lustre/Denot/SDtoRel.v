@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 
-Require Import CommonList2 CommonDS SDfuns Denot Infty InftyProof CheckOp OpErr Safe Abs Lp Reset Restr.
+Require Import CommonList2 CommonDS SDfuns SD Infty InftyProof CheckOp OpErr Safe Abs Lp Reset Restr.
 
 Import List ListNotations.
 
@@ -25,7 +25,7 @@ Module Type SDTOREL
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Import Den   : SD         Ids Op OpAux Cks Senv Syn Lord)
        (Import Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
        (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
@@ -4532,7 +4532,7 @@ Module SdtorelFun
        (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD         Ids Op OpAux Cks Senv Syn Lord)
        (Restr : LRESTR     Ids Op OpAux Cks Senv Syn)
        (Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Restr Den)
        (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
