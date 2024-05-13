@@ -53,11 +53,10 @@ Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc
 
 
 (** this is a test to instantiate Restr & Rt-Op checks *)
-From Velus Require Import Lustre.Denot.Restr.
-From Velus Require Import Lustre.Denot.CheckOp.
 
-Module Restr := RestrFun  Ids Op OpAux Cks L.Senv L.Syn.
-Module CheckOp := CheckOpFun Ids Op OpAux Cks L.Senv L.Syn.
+From Velus Require Import Lustre.Denot.Denot.
 
-Definition check_restr := @Restr.check_global.
-Definition check_op := @CheckOp.check_global.
+Module Den := LdenotFun Ids Op OpAux Cks L.Senv L.Syn L.Typ L.Clo L.Cau L.Ord CStr L.Sem.
+
+Definition check_restr := @Den.Restr.check_global.
+Definition check_op := @Den.CheckOp.check_global.
