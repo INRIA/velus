@@ -1587,6 +1587,42 @@ Module Type LTYPING
   Global Hint Resolve iface_incl_wt_type iface_incl_wt_clock
          iface_incl_wt_exp iface_incl_wt_equation iface_incl_wt_block : ltyping.
 
+  Lemma wt_global_node {PSyn prefs}:
+    forall (G : @global PSyn prefs) f n,
+      wt_global G ->
+      find_node f G = Some n ->
+      wt_node G n.
+  Proof.
+    destruct G as [tys exts nds]; simpl.
+    induction nds as [|nd nds]; simpl; intros * Wtg Hfind.
+    inv Hfind.
+    apply find_node_cons in Hfind as [[]|[]]; subst.
+    - clear IHnds.
+      inv Wtg; simpl in *; inv H0; destruct_conjs.
+      eapply iface_incl_wt_node; eauto.
+      constructor; simpl; auto; try reflexivity.
+      split; try reflexivity.
+      intros; exists n0.
+      split.
+      2: constructor; auto.
+      rewrite find_node_other; auto.
+      edestruct (find_node_Exists f {| types := tys; externs := exts; nodes := nds |}) as (Hex&_).
+      eapply Exists_exists in Hex as (?&?&?); subst; try congruence.
+      simpl_Forall; auto.
+    - eapply IHnds in H0 as ?; eauto using wt_global_cons.
+      inv Wtg; simpl in *; inv H3; destruct_conjs.
+      eapply iface_incl_wt_node; eauto.
+      constructor; simpl; auto; try reflexivity.
+      split; try reflexivity.
+      intros; exists n0.
+      split.
+      2: constructor; auto.
+      rewrite find_node_other; auto.
+      edestruct (find_node_Exists f0 {| types := tys; externs := exts; nodes := nds |}) as (Hex&_).
+      eapply Exists_exists in Hex as (?&?&?); subst; try congruence.
+      simpl_Forall; auto.
+  Qed.
+
   (** *** wt implies wl *)
 
   Local Hint Constructors wl_exp wl_block : ltyping.

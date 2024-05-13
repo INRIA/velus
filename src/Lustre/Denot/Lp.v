@@ -10,7 +10,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import CommonDS SDfuns Denot CommonList2.
+Require Import CommonDS SDfuns SD CommonList2.
 
 
 (** ** Propriété de préservation des longueurs *)
@@ -25,7 +25,7 @@ Module Type LP
        (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
        (* TODO: tenter fixp_ind global? *)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord).
+       (Import Den   : SD            Ids Op OpAux Cks Senv Syn Lord).
 
 
 
@@ -913,7 +913,7 @@ Module LpFun
        (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED     Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD           Ids Op OpAux Cks Senv Syn Lord)
 <: LP Ids Op OpAux Cks Senv Syn Typ Lord Den.
   Include LP Ids Op OpAux Cks Senv Syn Typ Lord Den.
 End LpFun.

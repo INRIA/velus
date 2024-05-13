@@ -10,7 +10,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import CommonDS SDfuns Denot CommonList2.
+Require Import CommonDS SDfuns SD CommonList2.
 
 
 (** ** Pas de réaction et pas de changement d'état en cas d'absence, soit
@@ -34,10 +34,10 @@ Module Type ABS_INDEP
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord).
+       (Import Den   : SD        Ids Op OpAux Cks Senv Syn Lord).
 
 
-(* TODO: mettre dans Denot.v *)
+(* TODO: mettre dans SD.v *)
 (* XXXXXXXXXXXXXXXXXXXXXXXXX *)
 Lemma np_of_env_cons :
   forall i l env,
@@ -601,7 +601,7 @@ Module AbsIndepFun
        (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED     Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD           Ids Op OpAux Cks Senv Syn Lord)
 <: ABS_INDEP Ids Op OpAux Cks Senv Syn Typ Lord Den.
   Include ABS_INDEP Ids Op OpAux Cks Senv Syn Typ Lord Den.
 End AbsIndepFun.

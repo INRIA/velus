@@ -94,8 +94,8 @@ src/Lustre/Denot/Cpo.v
 src/Lustre/Denot/CommonList2.v
 src/Lustre/Denot/CommonDS.v
 src/Lustre/Denot/SDfuns.v
+src/Lustre/Denot/SD.v
 src/Lustre/Denot/Restr.v
-src/Lustre/Denot/Denot.v
 src/Lustre/Denot/Infty.v
 src/Lustre/Denot/InftyProof.v
 src/Lustre/Denot/CheckOp.v
@@ -106,6 +106,7 @@ src/Lustre/Denot/Reset.v
 src/Lustre/Denot/Safe.v
 src/Lustre/Denot/SDtoRel.v
 src/Lustre/Denot/ResetLs.v
+src/Lustre/Denot/Denot.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v

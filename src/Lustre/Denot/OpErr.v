@@ -3,7 +3,7 @@ Import ListNotations.
 
 From Velus Require Import Common Operators Clocks StaticEnv LSyntax LTyping LOrdered.
 From Velus Require Import Cpo SDfuns CommonDS.
-From Velus Require Import Denot Restr CheckOp.
+From Velus Require Import SD Restr CheckOp.
 
 (** * Operators failure
 
@@ -27,7 +27,7 @@ Module Type OP_ERR
        (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
        (Import Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Import Den   : SD            Ids Op OpAux Cks Senv Syn Lord)
        (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn).
 
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
@@ -591,7 +591,7 @@ Module OpErrFun
        (Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
        (Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD            Ids Op OpAux Cks Senv Syn Lord)
        (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
 <: OP_ERR Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop.
   Include OP_ERR Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop.

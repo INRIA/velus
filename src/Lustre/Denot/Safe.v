@@ -15,7 +15,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import CommonDS SDfuns Denot CheckOp OpErr Restr CommonList2.
+Require Import CommonDS SDfuns SD CheckOp OpErr Restr CommonList2.
 
 (* TODO: peut-être qu'il faudra prouver la sûreté du typage indépendamment
    des autres propriétés cl_DS et safe_op. Ça pourrait être utile dans une
@@ -33,7 +33,7 @@ Module Type LDENOTSAFE
        (Import Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Import Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Import Den   : SD        Ids Op OpAux Cks Senv Syn Lord)
        (Import Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
        (Import OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop).
 
@@ -4032,7 +4032,7 @@ Module LdenotsafeFun
        (Restr : LRESTR        Ids Op OpAux Cks Senv Syn)
        (Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
-       (Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord)
+       (Den   : SD            Ids Op OpAux Cks Senv Syn Lord)
        (Ckop  : CHECKOP       Ids Op OpAux Cks Senv Syn)
        (OpErr : OP_ERR        Ids Op OpAux Cks Senv Syn Typ Restr Lord Den Ckop)
 <: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Restr Cl Lord Den Ckop OpErr.

@@ -26,8 +26,8 @@ proof-job:
       - ./src/
   script:
     - echo "Hello"
-    - ./configure x86_64-linux --velus-only
     - TERM=xterm-mono make clean
+    - ./configure x86_64-linux --velus-only
     - TERM=xterm-mono make -j 4 proof
 
 build-job:
