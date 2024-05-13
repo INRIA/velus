@@ -1,3 +1,23 @@
+<!-- note: we use a modified version of coq2html to handle
+     definitions by tactics, very frequent using the CPO library.
+
+diff --git a/coq2html.mll b/coq2html.mll
+index 31204f2..8b7487c 100644
+--- a/coq2html.mll
++++ b/coq2html.mll
+@@ -245,7 +245,9 @@ let start_proof s kwd =
+   fprintf !oc "<div class=\"proofscript\" id=\"proof%d\">\n" !proof_counter
+ 
+ let end_proof kwd =
+-  fprintf !oc "%s</div>\n" kwd;
++  if !in_proof
++  then fprintf !oc "%s</div>\n" kwd
++  else (fprintf !oc "%s\n" kwd; newline());
+   in_proof := false
+ 
+ (* Like Str.global_replace but don't interpret '\1' etc in replacement text *)
+  -->
+
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
@@ -59,8 +79,8 @@ The type of <a href="html/Velus.Clocks.html#CLOCKS.clock">clocks</a>
 <h3>II.A Dependently-Typed Synchronous Semantics</h3>
 <p>From <a href="https://www.di.ens.fr/~pouzet/lucid-synchrone/lucid_in_coq/">Boulm&eacute; and Hamon</a>, adapted to the new Coq syntax by <a href="https://www.lri.fr/~keller/etudes.html">Keller</a>.</p>
 <ul>
-  <li> <a href="lscoq/sampled_streams.html#samplStr">Str (samplStr)</a>: the type of clocked streams</li>
-  <li> <a href="lscoq/lucid_ops.html#sp_when">sp_when</a>: the sampling operator</li>
+  <li> <a href="html/lscoq/sampled_streams.html#samplStr">Str (samplStr)</a>: the type of clocked streams</li>
+  <li> <a href="html/lscoq/lucid_ops.html#sp_when">sp_when</a>: the sampling operator</li>
 </ul>
 
 
