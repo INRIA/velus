@@ -52,8 +52,7 @@ Module Stc2ObcTyping     := Stc2ObcTypingFun     Ids Op OpAux ComTyp Cks IStr CE
 Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux ComTyp Cks IStr CE Stc Obc Stc2Obc Stc2ObcTyping.
 
 
-(** instantiate Restr & Rt-Op checks separately *)
-
+(** this is a test to instantiate Restr & Rt-Op checks *)
 From Velus Require Import Lustre.Denot.Restr.
 From Velus Require Import Lustre.Denot.CheckOp.
 
