@@ -71,7 +71,14 @@ Proof.
 Qed.
 
 
-Section FBY.
+Theorem erase_sbinop :
+  forall A B C (op:A->B->option C) xs ys,
+    safe_DS (sbinop op xs ys) ->
+    ea (sbinop op xs ys) == sbinop op (ea xs) (ea ys).
+Proof.
+  (* TODO !! *)
+Admitted.
+
 
 Theorem erase_fby1 :
   forall A v (xs ys : DS (sampl A)),
@@ -261,6 +268,3 @@ Proof.
       [eapply map_is_cons, isConP_is_cons, ea_is_cons; rewrite <- HU; eauto
       | rewrite Hxs, map_eq_cons in *; now inversion Hs'].
 Qed.
-
-
-End FBY.
