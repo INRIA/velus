@@ -55,6 +55,23 @@ Proof.
   induction 1; auto; now constructor.
 Qed.
 
+(* FIXME: c'est vraiment pas top comme formulation,
+   sunop laisse passer les absences *)
+Theorem erase_unop :
+  forall A B (op:A->option B) (xs : DS (sampl A)),
+    ea (sunop op xs) == sunop op (ea xs).
+Proof.
+  intros.
+  unfold ea,sunop.
+  rewrite 2 MAP_map.
+  rewrite 2 FILTER_filter.
+  rewrite map_filter; eauto.
+  intros []; split; intros; try congruence.
+  destruct (op a); congruence.
+Qed.
+
+
+Section FBY.
 
 Theorem erase_fby1 :
   forall A v (xs ys : DS (sampl A)),
@@ -244,3 +261,6 @@ Proof.
       [eapply map_is_cons, isConP_is_cons, ea_is_cons; rewrite <- HU; eauto
       | rewrite Hxs, map_eq_cons in *; now inversion Hs'].
 Qed.
+
+
+End FBY.
