@@ -418,6 +418,44 @@ Proof.
   destruct vx; auto using map_inf.
 Qed.
 
+(* sympa, mais l'hypothèse AC cs == AC xs est trop forte par la suite *)
+Lemma merge_false:
+  forall A cs (xs:DS (sampl A)),
+    safe_DS cs ->
+    safe_DS xs ->
+    infinite cs ->
+    infinite xs ->
+    DSForall_pres (fun b => b = false) cs ->
+    AC cs == AC xs ->
+    merge cs (map (fun _ : sampl bool => abs) cs) xs == xs.
+Proof.
+  intros * Sc Sx Infc Infx Hf Hac.
+  coind_Oeq Cof; intros; constructor; intros Hcons.
+  apply infinite_decomp in Infc as (vc & cs' & Hcs &Infc').
+  apply infinite_decomp in Infx as (vx & xs' & Hxs &Infx').
+  rewrite HV in Hxs, Hac, Sx.
+  rewrite Hcs, Hxs in *.
+  rewrite 2 AC_cons, map_eq_cons in *.
+  apply Con_eq_simpl in Hac as [].
+  inversion_clear Sc.
+  inversion_clear Sx.
+  inversion_clear Hf.
+  rewrite merge_eq in HU.
+  destruct vc as [|[]|], vx as [| |]; subst; try (congruence || tauto).
+  - (* abs *)
+    rewrite expecta_eq in HU.
+    split. rewrite HU, HV, 2 first_cons; auto.
+    eapply (Cof _ cs' xs'); auto using expecta_inf.
+    all: rewrite HV, ?rem_cons; auto.
+    rewrite HU, HV, rem_cons, expecta_eq; auto.
+  - (* pres *)
+    rewrite expecta_eq in HU.
+    split. rewrite HU, HV, first_app_first; auto.
+    apply (Cof _ cs' xs'); auto.
+    all: rewrite HV, ?rem_cons; auto.
+    rewrite HU, HV, rem_cons; auto.
+Qed.
+
 (* merge does not have a lot of good properties, but this is enough *)
 Lemma merge_false_merge:
   forall A cs cs2 (xs ys:DS (sampl A)),
