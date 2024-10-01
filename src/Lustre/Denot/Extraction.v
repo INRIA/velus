@@ -4,8 +4,8 @@ Import ListNotations.
 From Coq Require Import ExtrOcamlBasic.
 From Coq Require Import ExtrOcamlString.
 
-From Cpo Require Import Cpo_def Cpo_streams_type Systems.
-Require Import Cpo_ext SDfuns Denot.
+Require Import Cpo.
+Require Import SDfuns SD.
 
 (* Discard useless function arguments in extracted OCaml code *)
 Extraction Implicit fcontit [1 2].
