@@ -909,6 +909,16 @@ Proof.
   rewrite 2 rem_app_app_rem in Heq; auto.
 Qed.
 
+Lemma take_Ole :
+  forall A n (x:DS A),
+    take n x <= x.
+Proof.
+  induction n; intros.
+  - apply Dbot.
+  - rewrite take_eq.
+    rewrite IHn, <- app_app_first; auto.
+Qed.
+
 
 (** Definition and specification of [nrem] : [n] applications of [rem].
     It is useful to show the productivity of stream functions.
