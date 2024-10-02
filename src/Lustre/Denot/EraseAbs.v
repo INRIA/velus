@@ -79,6 +79,15 @@ Proof.
   (* TODO !! *)
 Admitted.
 
+Theorem erase_fby_inf :
+  forall A (xs ys : DS (sampl A)),
+    infinite (fby xs ys) ->
+    safe_DS (fby xs ys) ->
+    ea (fby xs ys) == app (ea xs) (ea ys).
+Proof.
+  (* TODO !! *)
+Admitted.
+
 
 Theorem erase_fby1 :
   forall A v (xs ys : DS (sampl A)),
