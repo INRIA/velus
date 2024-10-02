@@ -919,6 +919,31 @@ Proof.
     rewrite IHn, <- app_app_first; auto.
 Qed.
 
+Lemma take_n_Ole :
+  forall A (xs ys : DS A), (forall n, take n xs <= take n ys) -> xs <= ys.
+Proof.
+  intros * Ht.
+  eapply DSle_rec_eq with
+    (R := fun U V => forall n, take n U <= take n V); auto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear; intros ? U V Hu.
+  pose proof (Hu 1) as H1.
+  rewrite 4 take_eq, app_cons in H1.
+  apply DSle_cons_elim in H1 as (?& Hc & _).
+  destruct (@is_cons_elim _ V) as (v & V' & Hv).
+  { eapply app_is_cons; rewrite Hc; auto. }
+  exists V'.
+  rewrite Hv, app_cons in Hc.
+  apply Con_eq_simpl in Hc as []; subst.
+  rewrite Hv; split; auto.
+  intro n.
+  specialize (Hu (S n)).
+  rewrite 2 (take_eq (S n)), Hv, 2 app_cons, 2 rem_cons in Hu.
+  now apply Con_le_simpl in Hu.
+Qed.
 
 (** Definition and specification of [nrem] : [n] applications of [rem].
     It is useful to show the productivity of stream functions.
