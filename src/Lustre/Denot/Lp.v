@@ -522,6 +522,18 @@ Proof.
   - now apply take_sreset_aux_le1.
 Qed.
 
+(* pas utile dans la preuve mais joli quand même *)
+Corollary take_sreset :
+  forall (f : DS_prod SI -C-> DS_prod SI)
+    (Hf : forall n envI, f (take_env n envI) == take_env n (f envI)),
+  forall n rs X,
+    sreset f (take n rs) (take_env n X)
+    == take_env n (sreset f rs X).
+Proof.
+  intros.
+  rewrite 2 sreset_eq, Hf.
+  now apply take_sreset_aux.
+Qed.
 
       (* FIXME: prouvé dans Reset.v *)
       Lemma take_sreset_aux_false :
