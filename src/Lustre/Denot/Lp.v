@@ -573,10 +573,6 @@ Section LP_node.
 
   Hypothesis Hnode :
     forall f n envI,
-      (* FIXME: find_node est totalement inutile, sauf pour faire
-       passer l'induction sur OrderedNodes. À terme ça devrait sauter
-       avec une induction sur le point fixe global *)
-      find_node f G <> None ->
       envG f (take_env n envI) == take_env n (envG f envI).
 
   Lemma take_var :
@@ -627,6 +623,8 @@ Section LP_node.
         rewrite lift_bot; auto using take_bot.
   Qed.
 
+  (* on a quand même besoin de l'hypothès de typage, car la propriété
+     n'est pas vraie en cas d'erreurs : errTy <> take n errTy *)
   Lemma lp_exp :
     forall Γ ins e n envI env,
       ins <> [] ->
@@ -827,91 +825,58 @@ Section LP_node.
 
 End LP_node.
 
-(* TODO: check hypotheses *)
+
 Theorem lp_global :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
     forall f n envI,
       denot_global G f (take_env n envI) == take_env n (denot_global G f envI).
 Proof.
-  intros * Hwt f n envI.
-  apply wt_global_wl_global in Hwt as Hwl.
-  apply wl_global_Ordered_nodes in Hwl as Hord.
-  destruct (find_node f G) as [nd|] eqn:Hfind.
-  2:{ (* si find_node = None, c'est gagné *)
-    unfold denot_global.
-    rewrite <- PROJ_simpl, 2 FIXP_eq, PROJ_simpl, 2 denot_global_eq, Hfind.
-    now rewrite take_env_bot. }
-  (* TODO: ce schéma (set envG, HenvG, etc. semble récurrent, en faire une tactique ? *)
-  (* NON, car ça va dégager un jour *)
-  remember (denot_global G) as envG eqn:HG.
-  assert (forall f nd envI,
-             find_node f G = Some nd ->
-             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
-  { intros * Hf; subst.
-    unfold denot_global.
-    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
-  clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
-  revert Hfind.
-  revert f envI nd n.
-  destruct G as [tys exts nds].
-  induction nds as [|a nds]; intros.
-  { inv Hfind. }
-  destruct (ident_eq_dec (n_name a) f); subst.
-  - (* cas qui nous intéresse *)
-    rewrite 2 HenvG; auto using find_node_now.
-    rewrite <- denot_node_cons; eauto 3 using find_node_not_Is_node_in, find_node_now.
-    apply wt_global_uncons in Hwt as Wt.
-    apply wt_global_cons in Hwt.
-    inversion_clear Hwl as [|?? [Wl]]; simpl in Wl.
+  intros * Hwt.
+  unfold denot_global.
+  (* point fixe global *)
+  rewrite FIXP_fixp.
+  apply fixp_ind.
+  - (* admissible *)
+    intros ?????.
+    setoid_rewrite lub_fun_eq.
+    setoid_rewrite lub_comp_eq; auto.
+    apply lub_eq_compat.
+    apply fmon_eq_intro; intro m.
+    setoid_rewrite H; auto.
+  - (* bot *)
+    intros; rewrite take_env_bot; reflexivity.
+  - intros envG HenvG f n envI.
+    change (fcontit ?a ?b) with (a b).
+    rewrite 2 denot_global_eq.
+    destruct (find_node f G) eqn:Hfind.
+    2: rewrite take_env_bot; reflexivity.
     (* On ne peut pas prouver l'égalité directement avec fixp_ind,
        car [take_env n envI] est pris dans le point fixe. On prouve donc
        l'inégalité dans les deux sens *)
-
-    (* une spécialisation de IHnds utile dans les deux cas *)
-    assert (IH : forall f n0 envI0,
-               find_node f {| types := tys; externs := exts; nodes := nds |} <> None ->
-               envG f (take_env n0 envI0) == take_env n0 (envG f envI0)).
-    { clear dependent envI.
-      intros f2 n2 envI2 Find2.
-      edestruct (find_node f2 _) eqn:?; try congruence.
-      eapply IHnds; auto; [ now eauto using Ordered_nodes_cons | | eassumption ].
-      (* montrer que HenvG tient toujours *)
-      intros f' ndf' envI' Hfind'.
-      rewrite HenvG, <- denot_node_cons;
-        eauto using find_node_uncons, find_node_later_not_Is_node_in. }
     split.
-    + (* <= *)
+  + (* <= *)
       rewrite FIXP_fixp.
       apply fixp_ind; auto.
       * (* admissibilité, pas trop dur : *)
-        intros f Hf; exact (lub_le Hf).
+        intros ? Hf; exact (lub_le Hf).
       * (* itération *)
         intros env Hle.
         rewrite FIXP_eq.
-        rewrite <- lp_node; auto.
+        rewrite <- lp_node; eauto 2 using wt_global_node.
         apply fcont_monotonic, Hle.
     + (* >= *)
       rewrite FIXP_fixp.
       apply fixp_ind; auto.
       * (* admissibilité *)
-       intros f Hf.
-       rewrite (@lub_comp_eq _ _ (take_env n) f); auto.
+       intros g Hf.
+       rewrite (@lub_comp_eq _ _ (take_env n) g); auto.
       * (* init *)
         rewrite take_env_bot; auto.
       * (* itération *)
       intros env Hle.
       change (fcontit ?a ?b) with (a b).
-      rewrite FIXP_eq, <- lp_node; auto.
-  - rewrite find_node_other in Hfind; auto.
-    eapply IHnds; auto.
-    + apply wt_global_cons in Hwt; auto.
-    + inv Hwl; auto.
-    + inv Hord; auto.
-    + intros f' ndf' envI' Hfind'.
-      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
-      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-    + apply Hfind.
+      rewrite FIXP_eq, <- lp_node; eauto using wt_global_node.
 Qed.
 
 End LP.
