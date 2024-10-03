@@ -287,9 +287,7 @@ Section Abs_indep_node.
     (envG : Dprodi FI).
 
   Hypothesis Hnode :
-    forall f n envI,
-      (* TODO: hypothèse qui va sauter avec une induction sur le point fixe global ? *)
-      find_node f G = Some n ->
+    forall f envI,
       envG f (APP_env abs_env envI) <= APP_env abs_env (envG f envI).
 
 
@@ -462,7 +460,7 @@ Section Abs_indep_node.
       rewrite 2 sreset_eq, <- np_of_env_abs.
       rewrite <- abs_indep_sreset_aux, <- sbools_of_abs.
       apply fcont_monotonic, fcont_le_compat3; eauto 3 using env_of_np_abs.
-      eapply Ole_trans, (Hnode _ n); eauto 4 using env_of_np_abs.
+      eapply Ole_trans, Hnode; eauto using env_of_np_abs.
   Qed.
 
   Corollary abs_indep_exps :
@@ -525,7 +523,6 @@ Section Abs_indep_node.
 
 End Abs_indep_node.
 
-
 Theorem abs_indep_global :
     forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
@@ -533,61 +530,33 @@ Theorem abs_indep_global :
       denot_global G f (APP_env abs_env envI)
       <= APP_env abs_env (denot_global G f envI).
 Proof.
-  intros * Hwt f envI.
-  apply wt_global_wl_global in Hwt as Hwl.
-  apply wl_global_Ordered_nodes in Hwl as Hord.
-  destruct (find_node f G) eqn:Hfind.
-  2:{ (* si find_node = None, c'est gagné *)
-    unfold denot_global.
-    rewrite <- PROJ_simpl, 2 FIXP_eq, PROJ_simpl,
-      2 denot_global_eq, Hfind.
-    apply Dbot. }
-  (* TODO: ce schéma (set envG, HenvG, etc. semble récurrent, en faire une tactique ? *)
-  remember (denot_global G) as envG eqn:HG.
-  assert (forall f nd envI,
-             find_node f G = Some nd ->
-             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
-  { intros * Hf; subst.
-    unfold denot_global.
-    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
-  clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
-  revert Hfind.
-  revert f envI n.
-  destruct G as [tys exts nds].
-  induction nds as [|a nds]; intros.
-  { inv Hfind. }
-  destruct (ident_eq_dec (n_name a) f); subst.
-  - (* cas qui nous intéresse *)
-    rewrite 2 HenvG; auto using find_node_now.
-    rewrite <- denot_node_cons; eauto 3 using find_node_not_Is_node_in, find_node_now.
+  intros * Hwt.
+  unfold denot_global.
+  (* point fixe global *)
+  rewrite FIXP_fixp.
+  apply fixp_ind.
+  - (* admissible *)
+    intros ????.
+    setoid_rewrite lub_fun_eq.
+    setoid_rewrite lub_comp_eq; auto.
+    apply lub_le_compat.
+    apply fmon_le_intro; intro m.
+    setoid_rewrite H; auto.
+  - (* bot *)
+    intros; apply Dbot.
+  - intros envG HenvG f envI.
+    change (fcontit ?a ?b) with (a b).
+    rewrite 2 denot_global_eq.
+    destruct (find_node f G) eqn:Hfind; auto.
     rewrite FIXP_fixp.
+    (* point fixe sur le nœud *)
     apply fixp_ind; auto.
-    + (* admissibilité, pas trop dur : *)
-      intros f Hf; exact (lub_le Hf).
-    + (* itération *)
-      intros aenv Hle.
+    * (* admissibilité, pas trop dur : *)
+      intros ? Hf; exact (lub_le Hf).
+    * (* itération *)
+      intros env Hle.
       rewrite FIXP_eq.
-      apply wt_global_uncons in Hwt as Wt.
-      apply wt_global_cons in Hwt.
-      inversion_clear Hwl as [|?? [Wl]]; simpl in Wl.
-      apply abs_le_node; auto.
-      (* reste l'hypothèse de récurrence sur les nœuds *)
-      clear dependent envI.
-      intros f2 n2 envI2 Hfind2.
-      eapply IHnds; auto; [ now eauto using Ordered_nodes_cons | | eassumption ].
-      (* et que HenvG tient toujours *)
-      intros f' ndf' envI' Hfind'.
-      rewrite HenvG, <- denot_node_cons;
-        eauto using find_node_uncons, find_node_later_not_Is_node_in.
-  - rewrite find_node_other in Hfind; auto.
-    eapply IHnds; auto.
-    + apply wt_global_cons in Hwt; auto.
-    + inv Hwl; auto.
-    + inv Hord; auto.
-    + intros f' ndf' envI' Hfind'.
-      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
-      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-    + apply Hfind.
+      rewrite <- abs_le_node; eauto 2 using wt_global_node.
 Qed.
 
 End ABS_INDEP.
