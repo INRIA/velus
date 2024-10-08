@@ -49,6 +49,32 @@ Proof.
   take (typeof _ = _) and rewrite it; auto.
 Qed.
 
+(* TODO: move, ajouter à Vélus *)
+Theorem find_node_in_nodes :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall f n,
+      find_node f G = Some n ->
+      In n (nodes G).
+Proof.
+  intros  * Hfind.
+  unfold find_node in *.
+  apply option_map_inv in Hfind as ((?&?)& Hfind & ?); subst.
+  apply find_unit_In in Hfind as []; subst; simpl; auto.
+Qed.
+
+(* TODO: move, ajouter à Vélus *)
+Theorem find_node_name :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    forall f n,
+      find_node f G = Some n ->
+      f = n_name n.
+Proof.
+  intros  * Hfind.
+  unfold find_node in *.
+  apply option_map_inv in Hfind as ((?&?)& Hfind & ?); subst.
+  apply find_unit_In in Hfind as []; subst; simpl; auto.
+Qed.
+
 Section Static_env_node.
 
   Lemma NoDup_senv :
@@ -3790,13 +3816,15 @@ Qed.
    mais on aura besoin de l'avoir à chaque itération *)
 Lemma op_correct_exp_le :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envI env env',
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
     env <= env' ->
+    envI <= envI' ->
     forall e,
-      op_correct_exp G ins envG envI env' e ->
+      op_correct_exp G ins envG' envI' env' e ->
       op_correct_exp G ins envG envI env e.
 Proof.
-  intros * Le.
+  intros * Le1 Le2 Le3.
   induction e using exp_ind2; intros Hop; inv Hop;
     constructor; eauto using Forall_impl_inside.
   - (* unop *)
@@ -3804,11 +3832,15 @@ Proof.
     specialize (H3 ty Hty).
     rewrite forall_nprod_k_iff in *.
     intros k d Hk.
-    eapply DSForall_le, H3; eauto.
+    eapply DSForall_le, (H3 k d); auto.
+    apply fcont_monotonic.
+    apply fcont_le_compat3; auto.
   - (* binop *)
     intros ty1 ty2 Hty1 Hty2.
     eapply DSForall_le in H5. apply H5.
     all: auto.
+    apply fcont_le_compat2; apply fcont_monotonic;
+      auto using fcont_le_compat3.
   - (* merge *)
     simpl_Forall; auto.
   - (* case *)
@@ -3819,12 +3851,15 @@ Qed.
 
 Lemma op_correct_block_le :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envI env env' b,
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
     env <= env' ->
-    op_correct_block G ins envG envI env' b ->
+    envI <= envI' ->
+    forall b,
+    op_correct_block G ins envG' envI' env' b ->
     op_correct_block G ins envG envI env b.
 Proof.
-  intros * Le.
+  intros * Le1 Le2 Le3 ?.
   unfold op_correct_block.
   cases.
   apply Forall_impl.
@@ -3833,14 +3868,17 @@ Qed.
 
 Lemma op_correct_node_le :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envI env env' n,
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
     env <= env' ->
-    op_correct_node G ins envG envI env' n ->
+    envI <= envI' ->
+    forall n,
+    op_correct_node G ins envG' envI' env' n ->
     op_correct_node G ins envG envI env n.
 Proof.
   unfold op_correct_node.
-  intros * ?; cases.
-  apply Forall_impl.
+  intros * ????; cases.
+  apply Forall_impl; intros.
   eauto using op_correct_block_le.
 Qed.
 
@@ -3953,70 +3991,39 @@ Theorem noerrors_prog :
       wf_env Γ ins envI bs 0 ->
       wf_env Γ ins envI bs (denot_global G f envI).
 Proof.
-  intros * Wtg Wcg Ocg * Hfind ??? Hle Hins.
-  unfold op_correct_global in Ocg.
-  assert (Ordered_nodes G) as Hord.
-  now apply wl_global_Ordered_nodes, wt_global_wl_global.
-  remember (denot_global G) as envG eqn:HG.
-  assert (forall f nd envI,
-             find_node f G = Some nd ->
-             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
-  { intros * Hf; subst.
-    unfold denot_global.
-    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
-  clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
-  revert dependent n. revert f envI. revert bs.
-  destruct G as [tys exts nds].
-  induction nds as [|a nds]; intros. inv Hfind.
-  destruct (ident_eq_dec (n_name a) f); subst.
-  - (* cas qui nous intéresse *)
-    rewrite find_node_now in Hfind; inv Hfind; auto.
-    inversion_clear Ocg as [|?? Hoc Hocs].
-    specialize (Hoc envI).
-    (* specialize (Hoc envI bs (wf_env_loc _ _ _ _ Hins)). *)
-    revert Hoc. fold ins.
-    rewrite HenvG; auto using find_node_now.
-    rewrite <- denot_node_cons;
-      eauto using find_node_not_Is_node_in, find_node_now.
-    rewrite FIXP_fixp.
-    intro Hoc.
-    apply op_correct_node_cons in Hoc; eauto using find_node_not_Is_node_in, find_node_now.
-    apply fixp_inv2_le with
-      (Q := fun env =>
-              op_correct_node {| types := tys; externs := exts; nodes := nds |} ins envG envI env n
-      ); eauto using wf_env_admissible, oc_node_admissible_rev, wf_env_0_ext.
-    intros env Hsafe Hl Hoc2.
-    apply Ordered_nodes_cons in Hord as Hord'.
-    apply wt_global_cons in Wtg as Wtg'.
-    destruct Wtg as [? Wtp] eqn:HH; clear HH. (* trouver un autre moyen de garder Wtg *)
-    inv Wcg. inv Wtp. (* inv Rg. *)
-    apply safe_node; auto; try tauto.
-    (* reste l'hypothèse de récurrence sur les nœuds *)
-    clear dependent envI; clear bs env.
-    intros f2 n2 envI2 Hfind ?? bs2 Hbs2 Hins2.
-    apply wf_env_loc.
-    apply IHnds; auto using wf_env_0_ext.
-    + (* montrons que op_correct tient toujours *)
-      clear - Hocs Hord.
-      eapply Forall_impl_In; eauto.
-      intros * Hin HH *.
-      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
-    + (* et que HenvG aussi *)
-      intros f' ndf' envI' Hfind'.
-      eapply find_node_uncons with (nd := n) in Hfind' as ?; auto.
-      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-  - rewrite find_node_other in Hfind; auto.
-    apply IHnds; auto.
-    + eauto using wt_global_cons.
-    + eauto using wc_global_cons.
-    + clear - Ocg Hord. inv Ocg.
-      eapply Forall_impl_In; eauto.
-      intros * Hin HH *.
-      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
-    + eauto using Ordered_nodes_cons.
-    + intros f' ndf' envI' Hfind'.
-      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
-      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+  intros * Wtg Wcg.
+  unfold op_correct_global.
+  unfold denot_global.
+  rewrite FIXP_fixp.
+  (* point fixe global *)
+  eapply fixp_ind_le; auto.
+  { (* admissible *)
+    intros ? HH Hf ???????.
+    apply wf_env_admissible; intro k.
+    apply HH; auto.
+    eapply Forall_impl, Hf; cbv beta; intros * Hop envI'.
+    eapply op_correct_node_le, Hop; auto.
+    apply fcont_app_le_compat; auto.
+    apply (le_lub f k). }
+  (* étape d'induction *)
+  intros envG HenvG HenvG_le * Ocg ?? envI Hfind ? Hbs Hins.
+  change (fcontit ?a ?b) with (a b) in *.
+  eapply Forall_In in Ocg as Hoc; eauto using find_node_in_nodes.
+  specialize (Hoc envI); revert Hoc.
+  erewrite 2 denot_global_eq, <- find_node_name, Hfind; eauto 1.
+  rewrite FIXP_fixp; intro Hoc.
+  (* point fixe sur le nœud *)
+  apply fixp_inv2_le with
+    (Q := fun env => op_correct_node G (List.map fst (n_in n)) envG envI env n
+    ); eauto using wf_env_admissible, oc_node_admissible_rev.
+  { eapply op_correct_node_le, Hoc; auto. }
+  intros env Henv Henv_le Hoc'.
+  apply safe_node; eauto using wc_global_node, wt_global_node.
+  (* hypothèse d'induction globale *)
+  intros f' n' Hfind' ?? bs' envI' Hbs' Hins'.
+  apply wf_env_loc, HenvG; auto using wf_env_0_ext.
+  eapply Forall_impl, Ocg; cbv beta; intros ? HH ?.
+  eapply op_correct_node_le, HH; auto using fcont_app_le_compat.
 Qed.
 
 End LDENOTSAFE.
