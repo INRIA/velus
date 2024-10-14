@@ -943,33 +943,31 @@ Section SDfuns_safe.
 
   (* TODO: refaire les autres avec DSle_rec_eq, c'est 1000 fois mieux *)
   Lemma cl_swhenv :
-    forall tx tn xs ck x ty k,
+    forall xs ck x ty k,
       let cs := denot_var ins envI env x in
-      ty_DS (Tenum tx tn) cs
-      /\ safe_DS xs /\ cl_DS ck xs
+      safe_DS xs /\ cl_DS ck xs
       /\ safe_DS cs /\ cl_DS ck cs ->
       cl_DS (Con ck x (ty, k)) (swhenv k xs cs).
   Proof.
     unfold cl_DS, swhenv.
-    intros * (Tc & Sx & Cx & Sc & Cc); simpl (denot_clock _).
+    intros * (Sx & Cx & Sc & Cc); simpl (denot_clock _).
     eapply DSle_rec_eq with
       (R := fun U V => exists xs cs cks,
-                ty_DS (Tenum tx tn) cs
-                /\ safe_DS cs
+                safe_DS cs
                 /\ safe_DS xs
                 /\ AC cs <= cks
                 /\ AC xs <= cks
                 /\ U == AC (swhen _ _ _ k xs cs)
                 /\ V == ZIP (sample k) cs cks).
-    3: eauto 10.
+    3: eauto 9.
     { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
     clear.
-    intros u U V (xs & cs & cks & Tc & Sc & Sx & Cc & Cx & HU & HV).
+    intros u U V (xs & cs & cks & Sc & Sx & Cc & Cx & HU & HV).
     destruct (@is_cons_elim _ xs) as (x & xs' &Hx).
     { eapply proj1, swhen_cons, AC_is_cons; now rewrite <- HU. }
     destruct (@is_cons_elim _ cs) as (c & cs' &Hc).
     { eapply proj2, swhen_cons, AC_is_cons; now rewrite <- HU. }
-    rewrite Hc, Hx in *. inv Sx. inv Sc. inv Tc.
+    rewrite Hc, Hx in *. inv Sx. inv Sc.
     rewrite swhen_eq, AC_cons in *.
     apply DSle_cons_elim in Cx as HH; destruct HH as (? & Hcs &?).
     rewrite Hcs, zip_cons in *.
