@@ -2976,7 +2976,7 @@ Section Node_safe.
     setoid_rewrite sresetf_aux_eq.
     destruct vr.
     - (* signal true *)
-      apply Hco'; eauto; now constructor.
+      apply Hco'; eauto.
     - (* signal false *)
       apply wf_env_APP; auto.
       apply Hco'; auto.
