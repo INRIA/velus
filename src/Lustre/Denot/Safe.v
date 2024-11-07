@@ -15,7 +15,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
-Require Import CommonDS SDfuns SD CheckOp OpErr Restr CommonList2.
+Require Import CommonDS SDfuns SD CheckOp OpErr Restr CommonList2 ResetMask.
 
 (* TODO: peut-être qu'il faudra prouver la sûreté du typage indépendamment
    des autres propriétés cl_DS et safe_op. Ça pourrait être utile dans une
@@ -73,6 +73,18 @@ Proof.
   unfold find_node in *.
   apply option_map_inv in Hfind as ((?&?)& Hfind & ?); subst.
   apply find_unit_In in Hfind as []; subst; simpl; auto.
+Qed.
+
+Lemma wc_env_in :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall f (n : node),
+    wc_global G ->
+    find_node f G = Some n ->
+    wc_env (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
+Proof.
+  intros * Hwc Hfind.
+  eapply wc_find_node in Hfind as (? & Hc); eauto.
+  now inv Hc.
 Qed.
 
 Section Static_env_node.
@@ -204,6 +216,20 @@ Section Static_env_node.
     intros * Hin.
     apply in_map_iff in Hin as ((?&((ty,?),?)&?)&?&?); simpl in *; subst.
     exists ty.
+    econstructor.
+    rewrite in_map_iff.
+    esplit; split; now eauto.
+    reflexivity.
+  Qed.
+
+  Lemma In_HasClock :
+    forall x l, In x (List.map fst l) ->
+           exists ck, HasClock (senv_of_decls l) x ck.
+  Proof.
+    unfold senv_of_decls.
+    intros * Hin.
+    apply in_map_iff in Hin as ((?&((?,ck),?)&?)&?&?); simpl in *; subst.
+    exists ck.
     econstructor.
     rewrite in_map_iff.
     esplit; split; now eauto.
@@ -2092,6 +2118,25 @@ Section wf_var.
       cases.
   Qed.
 
+  Lemma wf_var_bot:
+    forall ty ck ins envI bs env,
+      wf_var ty ck ins envI bs env 0.
+  Proof.
+    cofix Cof; intros.
+    rewrite DS_inv; now constructor.
+  Qed.
+
+  Lemma wf_env_bot :
+    forall Γ ins bs,
+      wf_env Γ ins 0 bs 0.
+  Proof.
+    clear.
+    intros.
+    apply wfv_wfe.
+    unfold denot_var.
+    intros; cases; apply wf_var_bot.
+  Qed.
+
 End wf_var.
 
 
@@ -3810,105 +3855,13 @@ Proof.
   auto.
 Qed.
 
-(* op_correct est donné par hypothèse sur l'environment final,
-   mais on aura besoin de l'avoir à chaque itération *)
-Lemma op_correct_exp_le :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envG' envI envI' env env',
-    envG <= envG' ->
-    env <= env' ->
-    envI <= envI' ->
-    forall e,
-      op_correct_exp G ins envG' envI' env' e ->
-      op_correct_exp G ins envG envI env e.
-Proof.
-  intros * Le1 Le2 Le3.
-  induction e using exp_ind2; intros Hop; inv Hop;
-    constructor; eauto using Forall_impl_inside.
-  - (* unop *)
-    intros ty Hty.
-    specialize (H3 ty Hty).
-    rewrite forall_nprod_k_iff in *.
-    intros k d Hk.
-    eapply DSForall_le, (H3 k d); auto.
-    apply fcont_monotonic.
-    apply fcont_le_compat3; auto.
-  - (* binop *)
-    intros ty1 ty2 Hty1 Hty2.
-    eapply DSForall_le in H5. apply H5.
-    all: auto.
-    apply fcont_le_compat2; apply fcont_monotonic;
-      auto using fcont_le_compat3.
-  - (* merge *)
-    simpl_Forall; auto.
-  - (* case *)
-    simpl_Forall; auto.
-  - (* case défaut *)
-    simpl_Forall; auto.
-Qed.
-
-Lemma op_correct_block_le :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envG' envI envI' env env',
-    envG <= envG' ->
-    env <= env' ->
-    envI <= envI' ->
-    forall b,
-    op_correct_block G ins envG' envI' env' b ->
-    op_correct_block G ins envG envI env b.
-Proof.
-  intros * Le1 Le2 Le3 ?.
-  unfold op_correct_block.
-  cases.
-  apply Forall_impl.
-  eauto using op_correct_exp_le.
-Qed.
-
-Lemma op_correct_node_le :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envG' envI envI' env env',
-    envG <= envG' ->
-    env <= env' ->
-    envI <= envI' ->
-    forall n,
-    op_correct_node G ins envG' envI' env' n ->
-    op_correct_node G ins envG envI env n.
-Proof.
-  unfold op_correct_node.
-  intros * ????; cases.
-  apply Forall_impl; intros.
-  eauto using op_correct_block_le.
-Qed.
-
-(* TODO: useless? *)
-Lemma oc_exp_admissible_rev :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envI e,
-    admissible_rev _ (fun env => op_correct_exp G ins envG envI env e).
-Proof.
-  intros ?????????.
-  eauto using op_correct_exp_le.
-Qed.
-
-(* TODO: useless? *)
-Lemma oc_exps_admissible_rev :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall ins envG envI es,
-    admissible_rev _ (fun env => Forall (op_correct_exp G ins envG envI env) es).
-Proof.
-  intros ???????? Hf.
-  induction es; intros; auto.
-  inv Hf.
-  constructor; eauto using op_correct_exp_le.
-Qed.
-
 Lemma oc_node_admissible_rev :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envI n,
     admissible_rev _ (fun env => op_correct_node G ins envG envI env n).
 Proof.
   intros ???????? Hoc.
-  eauto using op_correct_node_le.
+  eauto using op_correct_node_le_compat.
 Qed.
 
 End Rev.
@@ -4000,7 +3953,7 @@ Proof.
     apply wf_env_admissible; intro k.
     apply HH; auto.
     eapply Forall_impl, Hf; cbv beta; intros * Hop envI'.
-    eapply op_correct_node_le, Hop; auto.
+    eapply op_correct_node_le_compat, Hop; auto.
     apply fcont_app_le_compat; auto.
     apply (le_lub f k). }
   (* étape d'induction *)
@@ -4014,15 +3967,270 @@ Proof.
   apply fixp_inv2_le with
     (Q := fun env => op_correct_node G (List.map fst (n_in n)) envG envI env n
     ); eauto using wf_env_admissible, oc_node_admissible_rev.
-  { eapply op_correct_node_le, Hoc; auto. }
+  { eapply op_correct_node_le_compat, Hoc; auto. }
   intros env Henv Henv_le Hoc'.
   apply safe_node; eauto using wc_global_node, wt_global_node.
   (* hypothèse d'induction globale *)
   intros f' n' Hfind' ?? bs' envI' Hbs' Hins'.
   apply wf_env_loc, HenvG; auto using wf_env_0_ext.
   eapply Forall_impl, Ocg; cbv beta; intros ? HH ?.
-  eapply op_correct_node_le, HH; auto using fcont_app_le_compat.
+  eapply op_correct_node_le_compat, HH; auto using fcont_app_le_compat.
 Qed.
+
+
+(** As a consequence of clock typing correctness, we prove that the
+    absences of inputs and outputs are aligned *)
+Section Abs_aligned.
+
+Lemma denot_clock_abs :
+  forall ins ck,
+    let abs_env := fun _ : ident => DS_const abs in
+    denot_clock ins abs_env (DS_const false) abs_env ck == DS_const false.
+Proof.
+  clear.
+  induction ck as [|??? []]; simpl; auto.
+  rewrite IHck.
+  unfold denot_var.
+  cases; now rewrite zip_const, MAP_map, map_DS_const.
+Qed.
+
+Lemma wf_env_abs_ins :
+  forall Γ ins,
+    (forall x ck, HasClock Γ x ck -> In x ins -> (forall y, Is_free_in_clock y ck -> In y ins)) ->
+    wf_env Γ ins (fun _ : ident => DS_const abs) (DS_const false) 0.
+Proof.
+  clear.
+  intros * Hfr ??? Hty Hck.
+  unfold denot_var; cases_eqn Hmem.
+  - repeat split; try apply DSForall_const; auto.
+    apply mem_ident_spec in Hmem.
+    unfold cl_DS, AC.
+    erewrite denot_clock_ins, denot_clock_abs, MAP_map, map_DS_const; eauto.
+  - repeat split; try apply DSForall_bot.
+    unfold cl_DS, AC.
+    now rewrite MAP_map, map_bot.
+Qed.
+
+Lemma wf_env_smask0 :
+  forall Γ ins envI bs k rs,
+    (forall x ck, HasClock Γ x ck -> In x ins -> (forall y, Is_free_in_clock y ck -> In y ins)) ->
+    wf_env Γ ins envI bs 0 ->
+    wf_env Γ ins
+      (smask_env k rs envI)
+      (MAP bool_of_sbool (smask k rs (MAP pres bs)))
+      0.
+Proof.
+  intros * Hfr Hwf.
+  unfold smask_env.
+  rewrite FIXP_fixp.
+  revert Hwf.
+  revert k envI rs bs.
+  apply fixp_ind.
+  - red; intros; eapply wf_env_admissible_ins; simpl; now eauto.
+  - intros; apply wf_env_bot.
+  - intros fmask_env HR **.
+    (* on attend une valeur sur rs, cf. [safe_sreset] *)
+    apply wfv_wfe.
+    intros x ty ck Hty Hck.
+    cbv zeta.
+    destruct (mem_ident x ins) eqn:Hmem.
+    (* si x n'est pas une entrée, c'est ok *)
+    2: unfold denot_var; rewrite Hmem; apply wf_var_bot.
+    remember_ds (denot_var ins _ _ x) as xs.
+    revert dependent xs.
+    cofix Cof; intros.
+    destruct xs.
+    { constructor; rewrite <- eqEps in Hxs; eauto. }
+    clear Cof.
+    rewrite Hxs.
+    eapply wfe_wfv; eauto.
+    destruct (@is_cons_elim _ rs) as (vr & rs' & Hrs).
+    { unfold denot_var in Hxs.
+      rewrite Hmem in Hxs.
+      now apply symmetry, cons_is_cons, DScase_is_cons in Hxs. }
+    apply wf_env_rem in Hwf as Hwfr.
+    rewrite REM_env_bot in Hwfr.
+    rewrite Hrs, (smask_envf_eq fmask_env k), smask_eq.
+    cases.
+    1: rewrite MAP_map, map_DS_const; now auto using wf_env_abs_ins.
+    all: rewrite 2 MAP_map, rem_map, <- APP_env_bot.
+    1,2: rewrite app_map, bool_of_sbool_pres; now eauto using wf_env_APP_.
+    all: rewrite map_eq_cons, <- (app_cons _ (DS_const false)), <- DS_const_eq;
+      apply wf_env_APP_; eauto using wf_env_abs_ins.
+Qed.
+
+Lemma bss_abs :
+  forall I A l,
+    @bss I A l abs_env == DS_const false.
+Proof.
+  induction l; auto.
+  unfold abs_env, abss.
+  rewrite bss_cons, IHl.
+  unfold AC.
+  now rewrite MAP_map, map_DS_const, zip_const, MAP_map, map_DS_const.
+Qed.
+
+Lemma denot_clock_bs_abs :
+  forall ins envI env ck,
+    denot_clock ins envI (DS_const false) env ck <= DS_const false.
+Proof.
+  induction ck as [|???[]]; auto.
+  simpl (denot_clock _ _ _ _ _).
+  eapply Ole_trans with (y := ZIP _ _ (DS_const false)); auto.
+  rewrite zip_const2, MAP_map.
+  (* TOOD: un lemme pour la suite ? *)
+  remember_ds (map _ _) as y; revert Hy.
+  generalize (denot_var ins envI env i).
+  revert y; clear; cofix Cof; intros.
+  destruct y.
+  - constructor.
+    rewrite <- eqEps in *; eapply Cof; eauto.
+  - apply symmetry, map_eq_cons_elim in Hy as (?&?&?&?&?).
+    unfold sample in *.
+    econstructor; [| eapply Cof]; eauto.
+    rewrite DS_const_eq at 2.
+      cases; subst; rewrite ?Bool.andb_false_r; auto.
+Qed.
+
+Lemma AC_le_abss :
+  forall A (xs : DS (sampl A)),
+    safe_DS xs ->
+    AC xs <= DS_const false ->
+    xs <= abss.
+Proof.
+  cofix Cof; intros * Hsf Hac.
+  destruct xs.
+  - constructor.
+    rewrite <- eqEps in Hsf, Hac.
+    now apply Cof.
+  - rewrite AC_cons, DS_const_eq in Hac.
+    apply Con_le_simpl in Hac as [].
+    inv Hsf.
+    cases; try congruence.
+    econstructor; [| apply Cof]; auto.
+    unfold abss at 2.
+    rewrite DS_const_eq; auto.
+Qed.
+
+(* (* commenter : cette propriété a l'air évidente mais *)
+(*  avec les erreurs c'est hyper chiant *) *)
+(* Lemma wf_align : *)
+(*   forall G, *)
+(*     restr_global G -> *)
+(*     forall f n, *)
+(*     find_node f G = Some n -> *)
+(*     forall envI, *)
+(*     let ins := List.map fst (n_in n) in *)
+(*     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in *)
+(*     wf_env Γ ins envI (bss ins envI) (denot_global G f envI) -> *)
+(*     abs_align envI (denot_global G f envI). *)
+(* Proof. *)
+(*   intros * Hrg ?? Hfind ??? Hwf k. *)
+(*   pose proof (Hr := restr_global_find _ _ _ Hrg Hfind). *)
+(*   pose proof (Hin := denot_in G f n Hfind Hr envI). *)
+(*   pose proof (Hout := not_out_abs G f n Hfind Hr envI). *)
+(*   revert Hin Hout Hwf. *)
+(*   generalize (denot_global G f envI) as env. *)
+(*   revert envI. *)
+(*   induction k; intros envI env ??? Hk. *)
+(*   - rewrite nrem_env_0 in *. *)
+(*     rewrite Hk, bss_abs in Hwf. *)
+(*     unfold abs_env; intro x. *)
+(*     specialize (Hwf x). *)
+(*     unfold denot_var in Hwf. *)
+(*     destruct (mem_ident x ins) eqn:Hmem. *)
+(*     { (* si x est dans ins *) *)
+(*       apply mem_ident_spec in Hmem. *)
+(*       rewrite Hin; auto. } *)
+(*     destruct (mem_ident x (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n)))) eqn:Hmem2. *)
+(*     { (* si x est dans out ou vars, seul cas intéressant *) *)
+(*       assert (exists ty ck, HasType Γ x ty /\ HasClock Γ x ck) as (ty & ck & Hty & Hck). *)
+(*       { apply mem_ident_spec, in_app_iff in Hmem2 as [Hx|Hx]. *)
+(*         + apply In_HasClock in Hx as HH1. *)
+(*           apply In_HasType' in Hx as HH2. *)
+(*           destruct HH1 as (ck, Hck). *)
+(*           destruct HH2 as (ty, Hty). *)
+(*           eauto 8 using HasClock_app_r,  HasClock_app_l, HasType_app_r, HasType_app_l. *)
+(*         + apply in_map_iff in Hx as ([? a]&?&?); simpl in *; subst. *)
+(*           exists (typ a), (clo a). *)
+(*           split; econstructor; eauto using in_app_weak, in_app_weak'. } *)
+(*       specialize (Hwf ty ck Hty Hck); destruct Hwf as (_ & Hcl & Hsf). *)
+(*       unfold cl_DS in *. *)
+(*       eapply AC_le_abss, Ole_trans, denot_clock_bs_abs; eauto. } *)
+(*     { (* sinon *) *)
+(*       apply mem_ident_false in Hmem2. *)
+(*       rewrite in_app_iff in Hmem2. *)
+(*       destruct (Hout x) as [->]; eauto. *)
+(*     } *)
+(*   - apply wf_env_rem in Hwf; rewrite rem_bss in Hwf. *)
+(*     apply IHk in Hwf; auto. *)
+(*     + now rewrite nrem_rem_env in Hwf. *)
+(*     + intros; rewrite REM_env_eq, Hin, rem_eq_bot; auto. *)
+(*     + intros; rewrite REM_env_eq. *)
+(*       rewrite (Hout x), rem_eq_bot; auto. *)
+(*     + now rewrite nrem_rem_env. *)
+(* Qed. *)
+
+Theorem wf_alignLE :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    restr_global G ->
+    forall f n,
+    find_node f G = Some n ->
+    forall envI,
+    let ins := List.map fst (n_in n) in
+    let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
+    wf_env Γ ins envI (bss ins envI) (denot_global G f envI) ->
+    abs_alignLE envI (denot_global G f envI).
+Proof.
+  intros * Hrg ?? Hfind ??? Hwf k.
+  (* pose proof (Hr := restr_global_find _ _ _ Hrg Hfind). *)
+  pose proof (Hin := denot_in G f n Hfind envI).
+  pose proof (Hout := not_out_bot G f n Hfind envI).
+  revert Hin Hout Hwf.
+  generalize (denot_global G f envI) as env.
+  revert envI.
+  induction k; intros envI env ??? Hk.
+  - rewrite nrem_env_0 in *.
+    (* rewrite Hk, bss_abs in Hwf. *)
+    unfold abs_env; intro x.
+    specialize (Hwf x).
+    unfold denot_var in Hwf.
+    destruct (mem_ident x ins) eqn:Hmem.
+    { (* si x est dans ins *)
+      apply mem_ident_spec in Hmem.
+      rewrite Hin; auto. }
+    destruct (mem_ident x (List.map fst (n_out n) ++ List.map fst (get_locals (n_block n)))) eqn:Hmem2.
+    { (* si x est dans out ou vars, seul cas intéressant *)
+      assert (exists ty ck, HasType Γ x ty /\ HasClock Γ x ck) as (ty & ck & Hty & Hck).
+      { apply mem_ident_spec, in_app_iff in Hmem2 as [Hx|Hx].
+        + apply In_HasClock in Hx as HH1.
+          apply In_HasType' in Hx as HH2.
+          destruct HH1 as (ck, Hck).
+          destruct HH2 as (ty, Hty).
+          eauto 8 using HasClock_app_r,  HasClock_app_l, HasType_app_r, HasType_app_l.
+        + apply in_map_iff in Hx as ([? a]&?&?); simpl in *; subst.
+          exists (typ a), (clo a).
+          split; econstructor; eauto using in_app_weak, in_app_weak'. }
+      specialize (Hwf ty ck Hty Hck); destruct Hwf as (_ & Hcl & Hsf).
+      unfold cl_DS in *.
+      rewrite denot_clock_eq, Hk, bss_abs, <- denot_clock_eq in Hcl.
+      eapply AC_le_abss, Ole_trans, denot_clock_bs_abs; eauto. }
+    { (* sinon *)
+      apply mem_ident_false in Hmem2.
+      rewrite in_app_iff in Hmem2.
+      destruct (Hout x) as [->]; eauto.
+    }
+  - apply wf_env_rem in Hwf; rewrite rem_bss in Hwf.
+    apply IHk in Hwf; auto.
+    + now rewrite nrem_rem_env in Hwf.
+    + intros; rewrite REM_env_eq, Hin, rem_eq_bot; auto.
+    + intros; rewrite REM_env_eq.
+      rewrite (Hout x), rem_eq_bot; auto.
+    + now rewrite nrem_rem_env.
+Qed.
+
+End Abs_aligned.
+
 
 End LDENOTSAFE.
 

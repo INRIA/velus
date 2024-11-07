@@ -201,6 +201,20 @@ Proof.
   split; eauto using ds_eq_Oeq, Oeq_ds_eq.
 Qed.
 
+Global Instance : Reflexive ds_eq.
+Proof.
+  intro; now apply Oeq_ds_eq.
+Qed.
+
+Global Add Parametric Morphism : ds_eq
+       with signature @Oeq (DS D) ==> @Oeq (DS D) ==> iff
+         as DS_eq_morph.
+Proof.
+  clear.
+  intros * Eq1 * Eq2.
+  split; intro Heq; rewrite ds_eq_Oeq_iff in *; eauto.
+Qed.
+
 End DS_eq.
 
 (* remember with [@Oeq (DS _)] instead of [eq] *)
@@ -281,6 +295,13 @@ Proof.
   constructor; rewrite ?rem_cons; auto.
 Qed.
 
+Lemma first_DS_const :
+  forall D (c : D), first (DS_const c) == cons c 0.
+Proof.
+  intros.
+  now rewrite DS_const_eq, first_cons at 1.
+Qed.
+
 Lemma map_DS_const :
   forall {A B} (f : A -> B) c,
     map f (DS_const c) == DS_const (f c).
@@ -330,6 +351,37 @@ Proof.
   destruct (DSle_decomp (decompCon _ _) Hle) as (?&H&?).
   apply decompCon_eq in H.
   inversion H; subst; auto.
+Qed.
+
+Lemma app_rem_app :
+  forall A (f : DS A -C-> DS A) (x y : DS A),
+    app x (f (rem (app x y))) == app x (f y).
+Proof.
+  clear.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V =>
+            U == V
+            \/ exists x y,
+              U == app x (f (rem (app x y)))
+              /\ V == app x (f y)).
+  3: right; exists x, y; auto.
+  { intros * ? Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto. }
+  clear.
+  intros U V Hc [Heq | (x & y & Hu & Hv)].
+  { setoid_rewrite Heq; auto. }
+  destruct (@is_cons_elim _ x) as (vx & x' & Hx).
+  { destruct Hc; eapply app_is_cons; [rewrite <- Hu| rewrite <- Hv]; auto. }
+  rewrite Hx, app_cons, rem_app in Hu; auto.
+  rewrite Hx, app_cons in Hv.
+  split.
+  - rewrite Hu, Hv; auto.
+  - setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    auto.
 Qed.
 
 Lemma app_rem :
@@ -1030,6 +1082,16 @@ Proof.
   now rewrite nrem_rem, IHn1, nrem_rem.
 Qed.
 
+Lemma infinite_nrem :
+  forall s,
+    infinite s ->
+    forall n, is_cons (nrem n s).
+Proof.
+  intros * H n.
+  revert H; revert s.
+  induction n; simpl; intros; inversion H; auto.
+Qed.
+
 Lemma take_nrem_eq :
   forall n1 n2 (x y : DS A),
     take n1 x == take n1 y ->
@@ -1302,11 +1364,22 @@ Proof.
 Qed.
 
 Lemma nrem_rem_env :
-  forall k X, nrem_env k (REM_env X) == REM_env (nrem_env k X).
+  forall k X, nrem_env k (REM_env X) = REM_env (nrem_env k X).
 Proof.
   induction k; auto; intros; simpl.
   autorewrite with cpodb.
   rewrite IHk; auto.
+Qed.
+
+Lemma nrem_env_eq :
+  forall n (X:DS_prod SI) i,
+    nrem_env n X i = nrem n (X i).
+Proof.
+  induction n; auto.
+  intros.
+  simpl.
+  rewrite fcont_comp_simpl, <- PROJ_simpl.
+  now rewrite <- nrem_rem_env, PROJ_simpl, IHn.
 Qed.
 
 Lemma nrem_env_inf :
@@ -1316,6 +1389,15 @@ Lemma nrem_env_inf :
 Proof.
   induction n; simpl; intros * HH; auto.
   apply REM_env_inf, IHn, HH.
+Qed.
+
+Lemma nrem_env_inf_dom :
+  forall n (X:DS_prod SI) l,
+    infinite_dom X l ->
+    infinite_dom (nrem_env n X) l.
+Proof.
+  induction n; simpl; intros * HH; auto.
+  apply REM_env_inf_dom, IHn, HH.
 Qed.
 
 (** Prendre la tête dans env1, la queue dans env2 *)
@@ -1392,6 +1474,17 @@ Proof.
   rewrite app_cons.
   constructor; auto.
   now rewrite rem_cons.
+Qed.
+
+Lemma app_env_inf_dom:
+  forall X Y l,
+    infinite_dom X l -> infinite_dom Y l -> infinite_dom (APP_env X Y) l.
+Proof.
+  unfold infinite_dom.
+  intros * H ?? Hin.
+  rewrite APP_env_eq.
+  apply infinite_app; auto.
+  apply H, Hin.
 Qed.
 
 (** Couper les queues *)
@@ -1971,6 +2064,34 @@ Section Zip.
       (R := fun U V => exists xs,
                 U == ZIP (DS_const a) xs
                 /\ V == MAP (bop a) xs).
+    3: eauto.
+    - intros ????(?&?&?&?)??. repeat esplit; eauto.
+    - clear. intros U V Hc (xs & Hu & Hv).
+      assert (is_cons xs) as Hcx.
+      { rewrite Hu, Hv in Hc.
+        destruct Hc as [Hc|Hc].
+        + apply zip_is_cons in Hc; tauto.
+        + apply map_is_cons in Hc; tauto. }
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      rewrite Hx in Hu, Hv.
+      rewrite MAP_map, map_eq_cons in Hv.
+      rewrite DS_const_eq, zip_cons in Hu.
+      setoid_rewrite Hu.
+      setoid_rewrite Hv.
+      split.
+      + autorewrite with cpodb; auto.
+      + exists xs'. rewrite 2 rem_cons; auto.
+  Qed.
+
+  Lemma zip_const2 :
+    forall a U,
+      ZIP U (DS_const a) == MAP (fun u => bop u a) U.
+  Proof.
+    intros.
+    eapply DS_bisimulation_allin1 with
+      (R := fun U V => exists xs,
+                U == ZIP xs (DS_const a)
+                /\ V == MAP (fun u => bop u a) xs).
     3: eauto.
     - intros ????(?&?&?&?)??. repeat esplit; eauto.
     - clear. intros U V Hc (xs & Hu & Hv).

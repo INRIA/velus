@@ -102,7 +102,7 @@ src/Lustre/Denot/CheckOp.v
 src/Lustre/Denot/OpErr.v
 src/Lustre/Denot/Abs.v
 src/Lustre/Denot/Lp.v
-src/Lustre/Denot/Reset.v
+src/Lustre/Denot/ResetMask.v
 src/Lustre/Denot/Safe.v
 src/Lustre/Denot/SDtoRel.v
 src/Lustre/Denot/ResetLs.v

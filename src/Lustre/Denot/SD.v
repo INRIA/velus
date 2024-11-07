@@ -264,6 +264,62 @@ Proof.
     setoid_rewrite IHl; now auto with arith.
 Qed.
 
+Lemma np_of_env_eq :
+  forall l env,
+    np_of_env l env
+    = match l with
+      | [] => 0
+      | i :: l => nprod_cons (env i) (np_of_env l env)
+      end.
+Proof.
+  induction l; auto.
+Qed.
+
+Lemma np_of_env_le_eq :
+  forall l env1 env2,
+    env1 <= env2 ->
+    infinite_dom env1 l ->
+    np_of_env l env1 == np_of_env l env2.
+Proof.
+  unfold infinite_dom.
+  induction l; simpl; intros * Hle Hinf; auto.
+  simpl; autorewrite with cpodb.
+  apply nprod_cons_Oeq_compat; auto.
+  apply infinite_le_eq, Hinf; auto.
+Qed.
+
+Lemma np_of_env_ext :
+  forall l env1 env2,
+    (forall x, In x l -> env1 x == env2 x) ->
+    np_of_env l env1 == np_of_env l env2.
+Proof.
+  induction l as [|i l]; intros * Hin; auto; simpl in Hin.
+  rewrite 2 (np_of_env_eq (i :: l)).
+  apply nprod_cons_Oeq_compat.
+  - apply Hin; auto.
+  - apply IHl; auto.
+    intros; apply Hin; auto.
+Qed.
+
+(* TODO: trouver une autre formulation,
+   en fait c'est juste pour passer à l'inégalité
+ *)
+Lemma np_of_env_le_eq' :
+  forall l env1 env2,
+    np_of_env l env1 <= np_of_env l env2 ->
+    infinite_dom env1 l ->
+    np_of_env l env1 == np_of_env l env2.
+Proof.
+  unfold infinite_dom.
+  induction l as [|? []]; intros * Hle Hinf; auto.
+  - cbn in *; apply infinite_le_eq, Hinf; auto.
+  - simpl in Hinf.
+    rewrite 2 (np_of_env_eq (a :: i :: l)) in *.
+    destruct Hle.
+    apply nprod_cons_Oeq_compat; auto.
+    apply infinite_le_eq, Hinf; auto.
+Qed.
+
 Lemma forall_np_of_env :
   forall (P : DS (sampl value) -> Prop) l env,
     (forall x, P (env x)) ->
@@ -289,6 +345,48 @@ Proof.
   - constructor.
     + apply Hp. now constructor.
     + apply IHl. clear - Hp. firstorder.
+Qed.
+
+Lemma inf_dom_np_of_env :
+  forall  l env,
+    infinite_dom env l ->
+    forall_nprod (@infinite _) (np_of_env l env).
+Proof.
+  unfold infinite_dom.
+  induction l; intros * Hinf.
+  - constructor.
+  - simpl in Hinf.
+    apply forall_nprod_cons; eauto.
+    apply Hinf; auto.
+Qed.
+
+Lemma np_of_env_of_np :
+  forall l np,
+    0 < length l ->
+    NoDup l ->
+    np_of_env l (env_of_np l np) == np.
+Proof.
+  intros * Hl Nd.
+  destruct l as [| x l]. now inv Hl.
+  apply nprod_eq.
+  intros k d Hk.
+  erewrite (nth_np_of_env x d (x :: l)); auto.
+  rewrite env_of_np_eq.
+  setoid_rewrite mem_nth_nth; auto.
+  now erewrite get_nth_indep.
+Qed.
+
+Lemma env_of_np_of_env_proj :
+  forall (env:DS_prod SI) l i,
+    In i l ->
+    env_of_np l (np_of_env l env) i = env i.
+Proof.
+  intros * Hin.
+  rewrite env_of_np_eq.
+  cases_eqn Hmem.
+  - eapply mem_nth_Some in Hmem as [? HH].
+    unshelve (erewrite nth_np_of_env, HH); eauto.
+  - exfalso; now eauto using mem_nth_nin.
 Qed.
 
 End Denot_env.

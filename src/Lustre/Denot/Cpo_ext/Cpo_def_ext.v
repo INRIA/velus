@@ -300,3 +300,19 @@ Add Parametric Morphism (D1 D2 D3 : cpo) : (uncurry (D1:=D1) (D2:=D2) (D3:=D3))
   unfold uncurry.
   now rewrite H.
 Qed.
+
+(** Morphisms that allows to rewrite under <= *)
+Add Parametric Morphism (D1 D2:cpo)(hh : D1-C->D2) : hh
+       with signature Ole (o:=D1) ++> Ole (o:=D2)
+         as fcontit_le_morph.
+Proof.
+  apply fcont_monotonic.
+Qed.
+
+Add Parametric Morphism (D1 D2:cpo) : (@fconti_fun D1 D2)
+       with signature @Ole (fcont_cpo D1 D2) ++> @Ole D1  ++> @Ole D2
+         as fcontit_le_morph2.
+Proof.
+  intros * Le1 * Le2.
+  now apply fcont_app_le_compat.
+Qed.

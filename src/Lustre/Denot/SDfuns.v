@@ -1958,6 +1958,22 @@ Section Sreset.
     now apply DScase_is_cons in Hc.
   Qed.
 
+  Lemma take_sreset_aux_false :
+    forall n f R (X Y : DS_prod SI),
+      take n R == take n (DS_const false) ->
+      take_env n (sreset_aux f R X Y) == take_env n Y.
+  Proof.
+    induction n; intros * Heq; auto.
+    rewrite 2 (take_eq (S n)), DS_const_eq, app_cons, rem_cons in Heq.
+    destruct (@is_cons_elim _ R) as (r & R' & Hr).
+    { eapply app_is_cons; now rewrite Heq. }
+    rewrite Hr, app_cons, rem_cons, sreset_aux_eq in *.
+    apply Con_eq_simpl in Heq as []; subst; simpl.
+    rewrite 2 (take_env_eq (S n)), app_app_env.
+    setoid_rewrite <- (IHn f R' (REM_env X)) at 2; auto.
+    now rewrite app_rem_take_env.
+  Qed.
+
   (* on n'échantillonne pas la condition de reset pour des questions
      de commodité dans les preuves *)
   Definition sreset :

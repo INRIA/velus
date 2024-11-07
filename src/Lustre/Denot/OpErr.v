@@ -2,7 +2,7 @@ From Coq Require Import List.
 Import ListNotations.
 
 From Velus Require Import Common Operators Clocks StaticEnv LSyntax LTyping LOrdered.
-From Velus Require Import Cpo SDfuns CommonDS.
+From Velus Require Import Cpo SDfuns CommonDS CommonList2.
 From Velus Require Import SD Restr CheckOp.
 
 (** * Operators failure
@@ -369,11 +369,15 @@ Proof.
   solve_Exists.
 Qed.
 
-
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
-    with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
-                     @Oeq (DS_prod SI) ==> @eq exp ==> Basics.impl
-      as op_correct_exp_morph_impl.
+Lemma op_correct_exp_oeq_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG' == envG ->
+    env' == env ->
+    envI' == envI ->
+    forall e,
+      op_correct_exp G ins envG' envI' env' e ->
+      op_correct_exp G ins envG envI env e.
 Proof.
   intros * Eq1 * Eq2 * Eq3 e.
   induction e using exp_ind2; intro Hoc; inv Hoc.
@@ -402,13 +406,54 @@ Proof.
     constructor; simpl_Forall; auto.
 Qed.
 
+Lemma op_correct_block_oeq_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG' == envG ->
+    env' == env ->
+    envI' == envI ->
+    forall b,
+      op_correct_block G ins envG' envI' env' b ->
+      op_correct_block G ins envG envI env b.
+Proof.
+  intros * ????.
+  unfold op_correct_block.
+  cases; try tauto.
+  intro Hf; simpl_Forall; eauto using op_correct_exp_oeq_compat.
+Qed.
+
+Lemma op_correct_node_oeq_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG' == envG ->
+    env' == env ->
+    envI' == envI ->
+    forall n,
+      op_correct_node G ins envG' envI' env' n ->
+      op_correct_node G ins envG envI env n.
+Proof.
+  intros * Eq1 * Eq2 * Eq3 *.
+  unfold op_correct_node.
+  cases; try tauto.
+  intro HH; simpl_Forall.
+  eapply op_correct_block_oeq_compat in HH; eauto.
+Qed.
+
+
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
+    with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
+                     @Oeq (DS_prod SI) ==> @eq exp ==> Basics.impl
+      as op_correct_exp_morph_impl.
+Proof.
+  intros; intro Hop; eapply op_correct_exp_oeq_compat, Hop; auto.
+Qed.
+
 Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq exp ==> iff
       as op_correct_exp_morph.
 Proof.
-  intros.
-  split; apply op_correct_exp_morph_impl; auto.
+  split; intro Hop; eapply op_correct_exp_oeq_compat, Hop; auto.
 Qed.
 
 Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_block G ins)
@@ -416,10 +461,7 @@ Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_c
                      @Oeq (DS_prod SI) ==> @eq block ==> iff
       as op_correct_block_morph.
 Proof.
-  intros.
-  unfold op_correct_block.
-  cases; try tauto.
-  split; intros Hf; simpl_Forall; eapply op_correct_exp_morph in Hf; eauto.
+  split; intro Hop; eapply op_correct_block_oeq_compat, Hop; auto.
 Qed.
 
 Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_node G ins)
@@ -427,11 +469,83 @@ Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_c
                      @Oeq (DS_prod SI) ==> @eq node ==> iff
       as op_correct_node_morph.
 Proof.
-  intros * Eq1 * Eq2 * Eq3 *.
+  split; intro Hop; eapply op_correct_node_oeq_compat, Hop; auto.
+Qed.
+
+Lemma op_correct_exp_le_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
+    env <= env' ->
+    envI <= envI' ->
+    forall e,
+      op_correct_exp G ins envG' envI' env' e ->
+      op_correct_exp G ins envG envI env e.
+Proof.
+  intros * Le1 Le2 Le3.
+  induction e using exp_ind2; intros Hop; inv Hop;
+    constructor; eauto using Forall_impl_inside.
+  - (* unop *)
+    intros ty Hty.
+    specialize (H3 ty Hty).
+    rewrite forall_nprod_k_iff in *.
+    intros k d Hk.
+    eapply DSForall_le, (H3 k d); auto.
+    apply fcont_monotonic.
+    apply fcont_le_compat3; auto.
+  - (* binop *)
+    intros ty1 ty2 Hty1 Hty2.
+    eapply DSForall_le in H5. apply H5.
+    all: auto.
+    apply fcont_le_compat2; apply fcont_monotonic;
+      auto using fcont_le_compat3.
+  - (* merge *)
+    simpl_Forall; auto.
+  - (* case *)
+    simpl_Forall; auto.
+  - (* case défaut *)
+    simpl_Forall; auto.
+Qed.
+
+Lemma op_correct_block_le_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
+    env <= env' ->
+    envI <= envI' ->
+    forall b,
+    op_correct_block G ins envG' envI' env' b ->
+    op_correct_block G ins envG envI env b.
+Proof.
+  intros * Le1 Le2 Le3 ?.
+  unfold op_correct_block.
+  cases.
+  apply Forall_impl.
+  eauto using op_correct_exp_le_compat.
+Qed.
+
+Lemma op_correct_node_le_compat :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall ins envG envG' envI envI' env env',
+    envG <= envG' ->
+    env <= env' ->
+    envI <= envI' ->
+    forall n,
+    op_correct_node G ins envG' envI' env' n ->
+    op_correct_node G ins envG envI env n.
+Proof.
   unfold op_correct_node.
-  cases; try tauto.
-  split; intros * HH; simpl_Forall.
-  all: eapply op_correct_block_morph in HH; eauto.
+  intros * ????; cases.
+  apply Forall_impl; intros.
+  eauto using op_correct_block_le_compat.
+Qed.
+
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_node G ins)
+    with signature @Ole (Dprodi FI) ==> @Ole (DS_prod SI) ==>
+                     @Ole (DS_prod SI) ==> @eq node ==> Basics.flip Basics.impl
+      as op_correct_node_le_morph.
+Proof.
+  intros; intro Hop; eapply op_correct_node_le_compat, Hop; auto.
 Qed.
 
 
