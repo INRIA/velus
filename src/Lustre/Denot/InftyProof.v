@@ -223,17 +223,6 @@ Module Type LDENOTINF
     - apply IHess; auto.
   Qed.
 
-  (* TODO: inutile? *)
-  Lemma P_exps_impl' :
-    forall (Q_exp P_exp : exp -> nat -> Prop) es k,
-      P_exps Q_exp es k ->
-      P_exps (fun e k => Q_exp e k -> P_exp e k) es k ->
-      P_exps P_exp es k.
-  Proof.
-    intros * Hpq Hq.
-    induction Hpq; inv Hq; constructor; auto; lia.
-  Qed.
-
   Lemma P_exps_impl :
     forall Q (P_exp : exp -> nat -> Prop) es k,
       Forall Q es ->
@@ -242,20 +231,6 @@ Module Type LDENOTINF
   Proof.
     induction es as [|a es]; intros * Hf Hp; simpl_Forall. inv Hp.
     destruct (Nat.lt_ge_cases k (numstreams a)); inv Hp; auto using P_exps.
-  Qed.
-
-  (* TODO: semble foireux *)
-  Lemma Forall_P_exps' :
-    forall (P_exp : exp -> Prop) es k,
-      Forall P_exp es ->
-      k < list_sum (map numstreams es) ->
-      P_exps (fun e _ => P_exp e) es k.
-  Proof.
-    induction es as [|e es]; simpl; intros * Hf Hk. inv Hk.
-    inv Hf.
-    destruct (Nat.lt_ge_cases k (numstreams e)); auto using P_exps.
-    constructor 2; auto.
-    apply IHes; auto; lia.
   Qed.
 
   Lemma Forall_P_exps :
@@ -313,92 +288,86 @@ Module Type LDENOTINF
          end;
          now (apply is_ncons_DS_const || apply is_consn_DS_const)).
 
+  Lemma P_vars_env_of_np :
+    forall n l m (mp : nprod m),
+      forall_nprod (is_ncons n) mp ->
+      P_vars n (env_of_np l mp) l.
+  Proof.
+    clear.
+    unfold P_vars, P_var.
+    intros.
+    rewrite PROJ_simpl.
+    rewrite env_of_np_eq.
+    destruct (mem_nth l x) as [i|] eqn:Hmem.
+    - apply forall_nprod_k_def; auto; solve_err.
+    - apply mem_nth_nin in Hmem; tauto.
+  Qed.
 
+  Lemma P_vars_app :
+    forall n X Y l,
+      P_vars 1 X l ->
+      P_vars n Y l ->
+      P_vars (S n) (APP_env X Y) l.
+  Proof.
+    clear.
+    unfold P_vars, P_var.
+    setoid_rewrite PROJ_simpl.
+    simpl; intros * Px Py x Hin.
+    rewrite APP_env_eq.
+    destruct n; simpl; auto.
+    rewrite rem_app; auto; apply Py, Hin.
+  Qed.
 
-      (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
-      Set Nested Proofs Allowed.
-      (* TODO: move, attention au solve_err *)
-      Lemma P_vars_env_of_np :
-          forall n l m (mp : nprod m),
-            forall_nprod (is_ncons n) mp ->
-            P_vars n (env_of_np l mp) l.
-        Proof.
-          clear.
-          unfold P_vars, P_var.
-          intros.
-          rewrite PROJ_simpl.
-          rewrite env_of_np_eq.
-          destruct (mem_nth l x) as [i|] eqn:Hmem.
-          - apply forall_nprod_k_def; auto; solve_err.
-          - apply mem_nth_nin in Hmem; tauto.
-        Qed.
+  Lemma P_vars_1 :
+    forall n X l,
+      P_vars (S n) X l ->
+      P_vars 1 X l.
+  Proof.
+    induction n; auto using P_vars_S.
+  Qed.
 
-        Lemma P_vars_app :
-          forall n X Y l,
-            P_vars 1 X l ->
-            P_vars n Y l ->
-            P_vars (S n) (APP_env X Y) l.
-        Proof.
-          clear.
-          unfold P_vars, P_var.
-          setoid_rewrite PROJ_simpl.
-          simpl; intros * Px Py x Hin.
-          rewrite APP_env_eq.
-          destruct n; simpl; auto.
-          rewrite rem_app; auto; apply Py, Hin.
-        Qed.
-        Lemma P_vars_1 :
-          forall n X l,
-            P_vars (S n) X l ->
-            P_vars 1 X l.
-        Proof.
-          induction n; auto using P_vars_S.
-        Qed.
+  Lemma is_cons_sreset_aux :
+    forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X Y,
+      (forall envI, P_vars 1 envI ins -> P_vars 1 (f envI) outs) ->
+      is_cons R ->
+      P_vars 1 X ins ->
+      P_vars 1 Y outs ->
+      P_vars 1 (sreset_aux f R X Y) outs.
+  Proof.
+    clear.
+    intros * Cf Cr Cx Cy.
+    apply is_cons_elim in Cr as (vr & R' & Hr).
+    rewrite Hr, sreset_aux_eq.
+    destruct vr; [rewrite sreset_aux_eq |];
+      apply P_vars_app; auto using P_vars_O.
+  Qed.
 
-          Lemma is_cons_sreset_aux :
-            forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X Y,
-              (forall envI, P_vars 1 envI ins -> P_vars 1 (f envI) outs) ->
-              is_cons R ->
-              P_vars 1 X ins ->
-              P_vars 1 Y outs ->
-              P_vars 1 (sreset_aux f R X Y) outs.
-          Proof.
-            clear.
-            intros * Cf Cr Cx Cy.
-            apply is_cons_elim in Cr as (vr & R' & Hr).
-            rewrite Hr, sreset_aux_eq.
-            destruct vr; [rewrite sreset_aux_eq |];
-              apply P_vars_app; auto using P_vars_O.
-          Qed.
-
-      Lemma is_ncons_sreset :
-        forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X,
-          (forall n envI, P_vars n envI ins -> P_vars n (f envI) outs) ->
-          forall n,
-            is_ncons n R ->
-            P_vars n X ins ->
-            P_vars n (sreset f R X) outs.
-      Proof.
-        clear.
-        intros * Cf n Cr Cx.
-        rewrite sreset_eq.
-        assert (Hy : P_vars n (f X) outs) by auto.
-        remember (_ f X) as Y eqn:HH; clear HH.
-        revert dependent R.
-        revert dependent X.
-        revert dependent Y.
-        induction n as [|[]]; intros; eauto using is_cons_sreset_aux.
-        apply is_ncons_is_cons in Cr as Hr.
-        apply is_cons_elim in Hr as (vr & R' & Hr).
-        rewrite Hr, sreset_aux_eq in *.
-        simpl in Cr; rewrite rem_cons in Cr.
-        destruct vr; [rewrite sreset_aux_eq |].
-        all: apply P_vars_app; eauto using P_vars_1.
-        apply IHn; auto.
-        now apply (Cf (S (S n))).
-      Qed.
-      (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
-
+  Lemma is_ncons_sreset :
+    forall (f:DS_prod SI -C-> DS_prod SI) ins outs R X,
+      (forall n envI, P_vars n envI ins -> P_vars n (f envI) outs) ->
+      forall n,
+        is_ncons n R ->
+        P_vars n X ins ->
+        P_vars n (sreset f R X) outs.
+  Proof.
+    clear.
+    intros * Cf n Cr Cx.
+    rewrite sreset_eq.
+    assert (Hy : P_vars n (f X) outs) by auto.
+    remember (_ f X) as Y eqn:HH; clear HH.
+    revert dependent R.
+    revert dependent X.
+    revert dependent Y.
+    induction n as [|[]]; intros; eauto using is_cons_sreset_aux.
+    apply is_ncons_is_cons in Cr as Hr.
+    apply is_cons_elim in Hr as (vr & R' & Hr).
+    rewrite Hr, sreset_aux_eq in *.
+    simpl in Cr; rewrite rem_cons in Cr.
+    destruct vr; [rewrite sreset_aux_eq |].
+    all: apply P_vars_app; eauto using P_vars_1.
+    apply IHn; auto.
+    now apply (Cf (S (S n))).
+  Qed.
 
   Lemma is_ncons_bss :
     forall n (env : DS_prod SI) l,
@@ -849,11 +818,7 @@ Module Type LDENOTINF
       rewrite fst_InMembers; auto.
   Qed.
 
-  (** L'étape d'induction pour P_var sur les nœuds, qui utilise [exp_S].
-      On le prouve direcement pour toute variable et pas seulement
-      dans [n_out nd], grâce à [denot_blocks] qui initialise son
-      accumulateur avec des flots infinis. *)
-  (* TODO: màj du commentaire s'il n'est plus vrai *)
+  (** L'étape d'induction pour P_var sur les nœuds, qui utilise [exp_S]. *)
   Lemma denot_S :
     forall nd envI n,
       restr_node nd ->
@@ -1062,39 +1027,6 @@ Proof.
     apply zip_inf.
     + apply map_inf; auto.
     + apply (IHn _ Ht).
-Qed.
-
-(* TODO: move? *)
-Lemma bss_inf_dom :
-  forall I A l env,
-    infinite_dom env l ->
-    infinite (@bss A I l env).
-Proof.
-  induction l as [|?[]]; simpl; intros * Hinf.
-  - apply DS_const_inf.
-  - autorewrite with cpodb.
-    apply map_inf, Hinf; now left.
-  - autorewrite with cpodb.
-    unfold infinite_dom in *; simpl in Hinf.
-    apply zip_inf; auto.
-    apply map_inf, Hinf; now left.
-Qed.
-
-(* TODO: virer l'ancien, le laisser ici ? *)
-Lemma forall_forall_denot_expss :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall A ins (ess : list (A * list exp)) n envG envI env (P : DS (sampl value) -> Prop),
-    Forall (fun es => length (annots (snd es)) = n) ess ->
-    Forall (fun es => forall_nprod P (denot_exps G ins (snd es) envG envI env)) ess ->
-    forall_nprod (forall_nprod P) (denot_expss G ins ess n envG envI env).
-Proof.
-  induction ess as [|[]]; intros * Hlen Hf; inv Hf.
-  - simpl; auto.
-  - rewrite denot_expss_eq.
-    inv Hlen.
-    unfold eq_rect in *.
-    cases; eauto using forall_nprod_cons.
-    rewrite annots_numstreams in *; contradiction.
 Qed.
 
 (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour

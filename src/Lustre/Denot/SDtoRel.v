@@ -58,7 +58,7 @@ Proof.
   split; rewrite Eq1, Eq2, Eq3; auto.
 Qed.
 
-(* TODO: move *)
+(* TODO: ajouter à Vélus *)
 Lemma sem_var_restrict :
   forall H Γ x s,
     IsVar Γ x ->
@@ -73,7 +73,7 @@ Proof.
   apply vars_of_senv_Var; auto.
 Qed.
 
-(* TODO: move *)
+(* TODO: ajouter à Vélus *)
 Lemma vars_of_senv_app :
   forall Γ1 Γ2,
     vars_of_senv (Γ1 ++ Γ2) = vars_of_senv Γ1 ++ vars_of_senv Γ2.
@@ -83,7 +83,7 @@ Proof.
   now rewrite flat_map_app.
 Qed.
 
-(* TODO: move *)
+(* TODO: ajouter à Vélus *)
 Lemma union_restrict :
   forall Γ1 Γ2 H,
     history_equiv (restrict H Γ1 + restrict H Γ2) (restrict H (Γ1 ++ Γ2)).
@@ -100,7 +100,7 @@ Proof.
   all: congruence.
 Qed.
 
-(* TODO: move *)
+(* TODO: ajouter à Vélus *)
 Lemma dom_restrict :
   forall H Γ,
     dom_lb H Γ ->
@@ -301,8 +301,6 @@ Section Sem_alt.
     apply Smerge with xs vsst; auto.
   Qed.
 
-  (* TODO: dans l'autre sens !! *)
-
   Lemma ScaseTotal_alt :
     forall {PSyn Prefs} (G : @global PSyn Prefs),
     forall H b e ess tys ck os,
@@ -360,8 +358,6 @@ Section Sem_alt.
     simpl_Forall; auto.
   Qed.
 
-
-  (* TODO: réorganiser, remplacer ? *)
 Lemma EqSts_concat_eq :
   forall (s : list (Stream svalue)) (ss : list (list (Stream svalue))),
     EqSts s (concat ss) ->
@@ -480,8 +476,7 @@ Qed.
 
 End Sem_alt.
 
-
-(* TODO: faire disparaître tout ça *)
+(* piqué ailleurs *)
 Section FromLClockedSemantics.
 Lemma clocks_of_false :
   forall ss,
@@ -800,7 +795,7 @@ Proof.
   apply wl_global_Ordered_nodes in Hord.
   destruct (ident_eq_dec f (n_name n')); subst.
   rewrite find_node_now in Hfind; auto; inv Hfind.
-  { (* TODO: en extraire un lemme, mais comment ? *)
+  { (* FIXME: en extraire un lemme, mais comment ? *)
   subst ss os.
   eapply Snode with (H := fun _ => Some (Streams.const absent));
     eauto using find_node_now.
@@ -1654,7 +1649,6 @@ Proof.
       now rewrite <- Eqnp, Ss_of_nprod_length.
 Qed.
 
-(* TODO: si ça marche, bouger et nettoyer *)
 Section BOOLS_OFS.
 
   (* TODO: move to Vélus ? *)
@@ -2040,7 +2034,6 @@ Proof.
   all: auto.
 Qed.
 
-(* TODO: move *)
 Lemma bss_env_inf :
   forall l env,
     (forall_nprod (@infinite _) (np_of_env l env)) ->
@@ -2072,7 +2065,6 @@ Proof.
 Qed.
 
 
-(* TODO: voir l'interaction avec infinite_dom *)
 Section Inf_Dom.
 
 Definition inf_dom Γ ins envI env :=
@@ -2089,7 +2081,7 @@ Proof.
   tauto.
 Qed.
 
-(* TODO: pourquoi on en a besoin ??
+(* FIXME: pourquoi on en a besoin ??
 c'est juste une spécialisation de inf_dom_morph ???? *)
 Global Add Parametric Morphism Γ ins envI : (inf_dom Γ ins envI)
        with signature @Oeq (DS_prod SI) ==> iff
@@ -2249,7 +2241,7 @@ Hypothesis InfG :
 
 Hypothesis AbsG :
   forall f X,
-    (* TODO: on pourrait avoir une égalité avec inf_dom ???  *)
+    (* remarque: on pourrait avoir une égalité avec inf_dom *)
     envG f (APP_env abs_env X) <= APP_env abs_env (envG f X).
 
 Hypothesis Hlp :
@@ -2821,7 +2813,7 @@ Proof.
     apply Forall_concat in it.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0; auto.
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
-    revert Infe (* He *) Hs H0. (* TODO: comparer avec HEAD pour voir pourquoi le problème n'apparaissait pas avant *)
+    revert Infe (* He *) Hs H0.
     save_denot_exp se Hse.
     revert He; gen_infinite_exp.
     setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.

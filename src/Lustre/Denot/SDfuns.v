@@ -1,12 +1,12 @@
 From Coq Require Import BinPos List.
 Import List ListNotations.
-From Velus Require Import CommonTactics.
+From Velus Require Import CommonTactics Common.Common.
 From Velus Require Import Lustre.Denot.Cpo.
 
 (** * Streams operations for the Lustre synchronous semantics *)
 
 Inductive error :=
-| error_Ty  (* method not undersood error, memory corruption (no typing yet)    TODO: change name*)
+| error_Ty  (* method not undersood error, memory corruption (no typing yet) *)
 | error_Cl  (* runtime scheduling error *)
 | error_Op  (* opérateur (débordement, div par 0, undef, etc.) *)
 .
@@ -159,6 +159,21 @@ Section Abstract_clock.
     - autorewrite with cpodb.
       apply zip_inf; auto.
       apply map_inf, Hinf.
+  Qed.
+
+  Lemma bss_inf_dom :
+    forall l env,
+      infinite_dom env l ->
+      infinite (bss l env).
+  Proof.
+    induction l as [|?[]]; simpl; intros * Hinf.
+    - apply DS_const_inf.
+    - autorewrite with cpodb.
+      apply map_inf, Hinf; now left.
+    - autorewrite with cpodb.
+      unfold infinite_dom in *; simpl in Hinf.
+      apply zip_inf; auto.
+      apply map_inf, Hinf; now left.
   Qed.
 
   Lemma bss_switch_env :
@@ -742,15 +757,10 @@ Section SStream_functions.
       de tag. (quel flot correspond à quel tag ?).
    *)
 
-  (* TODO: move, déjà présent dans Vélus... *)
-  Definition or_default {A} (d: A) (o: option A) : A :=
-    match o with Some a => a | None => d end.
-
   Definition is_tag (i : enumtag) (x : sampl B) : sampl bool :=
     match x with
     | pres v => or_default (err error_Ty)
                  (option_map (fun j => pres (tag_eqb i j)) (tag_of_val v))
-    (* TODO: comment faire ces deux cas en un seul ? *)
     | abs => abs
     | err e => err e
     end.
@@ -1452,7 +1462,7 @@ Section SStream_functions.
       It gives a nice definition with functional environments but is is very
       unlikely to work well in proofs of SDtoRel.
 
-      TODO question légitime : pourquoi on ne ferait pas comme ça ?
+question légitime : pourquoi on ne ferait pas comme ça ?
       c'est pénible pour les raisonnements plus tard (pas d'inversion possible)
       mais c'est plus simple à exprimer ici, et le résultat final devrait être
       le même : si bien cadencé, alors on a la sémantique relationnelle.
@@ -1945,6 +1955,15 @@ Section Sreset.
     intros.
     assert (Heq:=FIXP_eq sresetf_aux).
     rewrite <- sresetf_aux_eq, <- Heq; auto.
+  Qed.
+
+  Lemma sreset_aux_bot : forall f X Y, sreset_aux f 0 X Y == 0.
+  Proof.
+    intros.
+    unfold sreset_aux.
+    apply Oprodi_eq_intro; intro i.
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+    now apply DScase_bot_eq.
   Qed.
 
   Lemma is_cons_sreset_aux :

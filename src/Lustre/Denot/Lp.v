@@ -23,42 +23,8 @@ Module Type LP
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
-       (* TODO: tenter fixp_ind global? *)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Den   : SD            Ids Op OpAux Cks Senv Syn Lord).
-
-
-
-  (*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx TODO: move ? *)
-
-      (* FIXME: partagé avec Abs.v *)
-      Lemma np_of_env_cons :
-        forall i l env,
-          np_of_env (i :: l) env
-          = nprod_cons (env i) (np_of_env l env).
-      Proof.
-        trivial.
-      Qed.
-          Lemma sreset_aux_bot : forall f (X Y:DS_prod SI), sreset_aux f 0 X Y == 0.
-          Proof.
-            intros.
-            unfold sreset_aux.
-            apply Oprodi_eq_intro; intro i.
-            rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-            now apply DScase_bot_eq.
-          Qed.
-
-
-  Lemma Fold_eq :
-    forall A B (F : B -C-> A -C-> A) a n (np : @nprod B n),
-      nprod_Fold F a np =
-        match n return nprod n -> _ with
-        | O => fun _ => a
-        | S n => fun np => F (nprod_hd np) (nprod_Fold F a (nprod_tl np))
-        end np.
-  Proof.
-    destruct n; reflexivity.
-  Qed.
 
 
 (** ** On montre que chaque opérateur du langage a cette propriété *)
@@ -127,11 +93,11 @@ Proof.
   unfold sbools_of; autorewrite with cpodb.
   induction m as [|[|m]].
   - inv Hle.
-  - rewrite 4 Fold_eq, take_zip, 2 lift_hd.
+  - rewrite 4 Fold_eq', take_zip, 2 lift_hd.
     rewrite <- zip_take_const.
     unfold sbool_of; rewrite 2 MAP_map, take_map.
     auto.
-  - rewrite 2 Fold_eq with (n:=S (S m)), take_zip, 3 lift_hd, 3 lift_tl.
+  - rewrite 2 Fold_eq' with (n:=S (S m)), take_zip, 3 lift_hd, 3 lift_tl.
     rewrite IHm; auto with arith.
     unfold sbool_of; rewrite 2 MAP_map, take_map.
     auto.
@@ -168,7 +134,6 @@ Proof.
   { now rewrite fby1_bot1. }
   remember_ds (fby1 oa (take _ _) (take _ _)) as U.
   remember_ds (take _ (fby1 oa xs ys)) as V.
-  (* TODO: le cofix simple, en faire une méthode générale pour trouver un cons ? *)
   revert dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
@@ -243,7 +208,6 @@ Proof.
   { now rewrite fby_bot. }
   remember_ds (fby (take _ _) (take _ _)) as U.
   remember_ds (take _ (fby xs ys)) as V.
-  (* TODO: le cofix simple, en faire une méthode générale pour trouver un cons ? *)
   revert dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
@@ -442,11 +406,6 @@ Proof.
       apply fcont_stable, nprod_cons_Oeq_compat; auto.
       rewrite 2 lift_lift.
       apply lift_ext; destruct m; auto.
-Qed.
-
-(* TODO: comment faire ça sans lemme ? *)
-Lemma Dprodi_le_elim : forall (I:Type)(D:I->cpo) (p q : Dprodi D), p<=q -> forall i, p i <= q i.
-  intros ???? H; apply H.
 Qed.
 
 (* FIXME: pour l'instant on fait le reset en deux temps, mais comment faire mieux ?

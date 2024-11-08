@@ -236,9 +236,6 @@ Proof.
   simpl_Forall; auto using check_node_ok.
 Qed.
 
-
-(** TODO: virer le reste ??*)
-
 (* Lemma locals_restr_blocks : *)
 (*   forall (blks : list block), *)
 (*     Forall restr_block blks -> *)

@@ -313,6 +313,15 @@ Proof.
   split; destruct n; cbn; tauto.
 Qed.
 
+Lemma forall_nprod_bot :
+  forall n,
+    P 0 ->
+    @forall_nprod n 0.
+Proof.
+  induction n as [|[]]; intros; try split; auto.
+  now apply IHn.
+Qed.
+
 Lemma k_forall_nprod :
   forall {n} (np : nprod n),
     (forall k d, k < n -> P (get_nth k d np)) ->
@@ -957,6 +966,41 @@ Proof.
   autorewrite with cpodb.
   now setoid_rewrite <- IHn.
 Qed.
+
+
+Section Nprod_Fold.
+
+  Context {A B : cpo}.
+
+  Fixpoint nprod_Fold {n} : (B -C-> A -C-> A) -C-> A -C-> @nprod B n -C-> A.
+    destruct n.
+    - apply CTE, CTE.
+    - apply curry, curry.
+      refine ((ID _ @3_ _) _ _).
+      + exact ((FST _ _ @_ FST _ _)).
+      + exact (nprod_hd @_ SND _ _).
+      + exact ((nprod_Fold n @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
+  Defined.
+
+  Lemma Fold_eq :
+    forall F a n (np : nprod (S n)),
+      nprod_Fold F a np = F (nprod_hd np) (nprod_Fold F a (nprod_tl np)).
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma Fold_eq' :
+    forall F a n (np : @nprod B n),
+      nprod_Fold F a np =
+        match n return nprod n -> _ with
+        | O => fun _ => a
+        | S n => fun np => F (nprod_hd np) (nprod_Fold F a (nprod_tl np))
+        end np.
+  Proof.
+    destruct n; reflexivity.
+  Qed.
+
+End Nprod_Fold.
 
 
 (** ** A kind of List.fold_right for nprod *)

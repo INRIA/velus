@@ -235,6 +235,9 @@ Lemma wDMAPi : forall (I:Type)(Di Dj:I->cpo)(f:forall i, Dprodi Di -c> Dj i),
   apply Ole_trans with (lub (c:=Dj i) (Fcontit (Dprodi Di) (Dj i) (f i) @ h)); eauto.
 Defined.
 
+Lemma Dprodi_le_elim : forall (I:Type)(D:I->cpo) (p q : Dprodi D), p<=q -> forall i, p i <= q i.
+  intros ???? H; apply H.
+Qed.
 
 (** *** Some kind of distributivity for Dprodi  *)
 Definition Dprodi_distr :

@@ -809,7 +809,7 @@ Section SDfuns_safe.
       eapply Cof with _ xs' ys'; eauto.
   Qed.
 
-  (* TODO: refaire avec DSle_rec_eq ??? *)
+  (* TODO: refaire avec DSle_rec_eq ? *)
   Lemma cl_fby :
     forall ck xs ys,
       safe_DS xs /\ cl_DS ck xs -> (* pour une meilleure unification plus tard... *)
@@ -1736,7 +1736,6 @@ Section SDfuns_safe.
 
   (** ** Résultats généraux sur les expressions *)
 
-  (* TODO: généraliser... ? *)
   Lemma Forall_ty_exp :
     forall es,
       Forall (fun e => Forall2 ty_DS (typeof e) (list_of_nprod (denot_exp G ins e envG envI env))) es ->
@@ -1749,7 +1748,6 @@ Section SDfuns_safe.
       apply Forall2_app; auto.
   Qed.
 
-  (* TODO: généraliser... ? *)
   Lemma Forall_cl_exp :
     forall es,
       Forall (fun e => Forall2 cl_DS (clockof e) (list_of_nprod (denot_exp G ins e envG envI env))) es ->
@@ -2183,7 +2181,7 @@ End Cont_alt.
 
 Section Admissibility.
 
-  (* TODO: comment généraliser admissible_and plus joliment que ça? *)
+  (* FIXME: comment généraliser admissible_and plus joliment que ça? *)
   Lemma admissible_and3 :
   forall T U V (D:cpo) (P Q : T -> U -> V -> D -> Prop),
     admissible (fun d => forall x y z, P x y z d) ->
@@ -2528,7 +2526,7 @@ Section Node_safe.
   Hypothesis
     (WCG : wc_global G).
 
-    (* TODO: prendre note du problème suivant dans le cahier :
+    (* prendre note du problème suivant:
       node f (x y : int) return (z : int)
       let
         z = x;
@@ -3334,7 +3332,7 @@ Section Node_safe.
       2:{ unfold decl in *;
           take (length a = _ ) and rewrite it, map_length in *; congruence. }
       unfold eq_rect; cases; simpl.
-      (* !!!!! TODO remarque: Hnode est utilisé par safe_sreset  *)
+      (* remarque: Hnode est utilisé par safe_sreset  *)
       (* on choisit bien [[bck]] comme majorant de bss *)
       pose proof (safe_sreset f n
                     (env_of_np (idents (n_in n)) ss)
@@ -3512,7 +3510,7 @@ Section Node_safe.
             (sreset (envG f) (sbools_of rs) (env_of_np (idents (n_in n)) ses)) ck
           <= denot_clock ins envI bs env' ck') as Hcks.
     {
-      (* TODO: lemme? Simplifier ? *)
+      (* FIXME: Simplifier ? *)
       clear - Wcio WIin WIout Hle Ncs Wci Cls ND Hsub Hfind Hl Hlout' Henv'.
       induction ck as [|??? []]; intros * Hin Hck.
       - inv Hck.
@@ -3554,7 +3552,7 @@ Section Node_safe.
         erewrite nth_np_of_env, nth_error_nth in Kth; eauto 1; now subst.
     }
     set (envN := sreset (envG f) _ _) in *.
-    (* TODO: la suite ressemble méchamment à la fin de inst_cl_env *)
+    (* FIXME: la suite ressemble méchamment à la fin de inst_cl_env *)
     unfold denot_var in *.
     apply Forall2_forall2.
     change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
@@ -3865,24 +3863,6 @@ Proof.
 Qed.
 
 End Rev.
-
-(* Notes sur op_correct (avec Tim) :
-   TODO: comment gérer les hypothèses sur envI ??
-   avec un prédicat en paramètre ?
-   seulement sur le nœud main ?
- *)
-(* TODO: c'est sans doute beaucoup trop fort, c'est une obligation
-   impossible à prouver *)
-(* Definition op_correct_global (G : global) : Prop := *)
-(*   let envG := denot_global G in *)
-(*   Forall (fun n => *)
-(*             (* hypothèses de typage/cadencement aussi ? *) *)
-(*             let ins := List.map fst n.(n_in) in *)
-(*             let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in *)
-(*             forall envI bs, *)
-(*               wf_env Γ ins envI bs 0 -> *)
-(*               op_correct G ins envG envI bs (envG (n_name n) envI) n) *)
-(*     (nodes G). *)
 
 (* on peut affaiblir [wf_env] en ignorant les variables locales *)
 Lemma wf_env_loc :

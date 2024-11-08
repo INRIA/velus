@@ -22,7 +22,7 @@ Module Type SD
 (* TODO: move somewhere else? *)
 Section LSyntax_facts.
 
-(* TODO: définition un peu foireuse, qui doit correspondre aux
+(* définition un peu foireuse, qui doit correspondre aux
    inversions de wt_block... *)
 Definition get_locals (blk : block) : static_env :=
   match blk with
@@ -158,7 +158,6 @@ Qed.
 End LSyntax_facts.
 
 (** We always use this specialized version of mem_nth *)
-(* TODO: c'est vraiment une bonne idée de redéfinir des trucs, comme ça ? *)
 Definition mem_nth := mem_nth ident ident_eq_dec.
 
 Definition errTy : DS (sampl value) := DS_const (err error_Ty).
@@ -275,6 +274,14 @@ Proof.
   induction l; auto.
 Qed.
 
+Lemma np_of_env_cons :
+  forall i l env,
+    np_of_env (i :: l) env
+    = nprod_cons (env i) (np_of_env l env).
+Proof.
+  trivial.
+Qed.
+
 Lemma np_of_env_le_eq :
   forall l env1 env2,
     env1 <= env2 ->
@@ -299,25 +306,6 @@ Proof.
   - apply Hin; auto.
   - apply IHl; auto.
     intros; apply Hin; auto.
-Qed.
-
-(* TODO: trouver une autre formulation,
-   en fait c'est juste pour passer à l'inégalité
- *)
-Lemma np_of_env_le_eq' :
-  forall l env1 env2,
-    np_of_env l env1 <= np_of_env l env2 ->
-    infinite_dom env1 l ->
-    np_of_env l env1 == np_of_env l env2.
-Proof.
-  unfold infinite_dom.
-  induction l as [|? []]; intros * Hle Hinf; auto.
-  - cbn in *; apply infinite_le_eq, Hinf; auto.
-  - simpl in Hinf.
-    rewrite 2 (np_of_env_eq (a :: i :: l)) in *.
-    destruct Hle.
-    apply nprod_cons_Oeq_compat; auto.
-    apply infinite_le_eq, Hinf; auto.
 Qed.
 
 Lemma forall_np_of_env :
@@ -397,31 +385,6 @@ Section Denot_node.
 Context {PSyn : list decl -> block -> Prop}.
 Context {Prefs : PS.t}.
 Variable (G : @global PSyn Prefs).
-
-(* TODO: c'est un test, bouger!! *)
-Section Nprod_Fold.
-
-  Context {A B : cpo}.
-
-  Fixpoint nprod_Fold {n} : (B -C-> A -C-> A) -C-> A -C-> @nprod B n -C-> A.
-    destruct n.
-    - apply CTE, CTE.
-    - apply curry, curry.
-      refine ((ID _ @3_ _) _ _).
-      + exact ((FST _ _ @_ FST _ _)).
-      + exact (nprod_hd @_ SND _ _).
-      + exact ((nprod_Fold n @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
-  Defined.
-
-  Lemma Fold_eq :
-    forall F a n (np : nprod (S n)),
-      nprod_Fold F a np = F (nprod_hd np) (nprod_Fold F a (nprod_tl np)).
-  Proof.
-    trivial.
-  Qed.
-
-End Nprod_Fold.
-
 
 Definition sbool_of : DS (sampl value) -C-> DS bool :=
   MAP (fun v => match v with
@@ -672,16 +635,6 @@ Proof.
   reflexivity.
 Qed.
 
-(* TODO: move if useful *)
-Lemma forall_nprod_bot :
-  forall D n (P : _ -> Prop),
-    P 0 ->
-    @forall_nprod D P n 0.
-Proof.
-  induction n as [|[]]; intros; try split; auto.
-  now apply IHn.
-Qed.
-
 Lemma forall_denot_expss :
   forall A ins (ess : list (A * list exp)) n envG envI env (P : nprod n -> Prop),
     Forall (fun es =>
@@ -699,7 +652,7 @@ Proof.
     cases; eauto using forall_nprod_cons, forall_nprod_bot.
 Qed.
 
-Lemma forall_forall_denot_expss :
+Lemma forall_forall_denot_expss_ :
   forall A ins (ess : list (A * list exp)) n envG envI env (P : DS (sampl value) -> Prop),
     P 0 ->
     Forall (fun es => forall_nprod P (denot_exps ins (snd es) envG envI env)) ess ->
@@ -710,6 +663,21 @@ Proof.
   - rewrite denot_expss_eq.
     unfold eq_rect in *.
     cases; eauto using forall_nprod_cons, forall_nprod_bot.
+Qed.
+
+Lemma forall_forall_denot_expss :
+  forall A ins (ess : list (A * list exp)) n envG envI env (P : DS (sampl value) -> Prop),
+    Forall (fun es => length (annots (snd es)) = n) ess ->
+    Forall (fun es => forall_nprod P (denot_exps ins (snd es) envG envI env)) ess ->
+    forall_nprod (forall_nprod P) (denot_expss ins ess n envG envI env).
+Proof.
+  induction ess as [|[]]; intros * Hlen Hf; inv Hf.
+  - simpl; auto.
+  - rewrite denot_expss_eq.
+    inv Hlen.
+    unfold eq_rect in *.
+    cases; eauto using forall_nprod_cons.
+    rewrite annots_numstreams in *; contradiction.
 Qed.
 
 Lemma Forall_denot_expss :
@@ -755,7 +723,6 @@ Qed.
 Definition denot_var ins envI env x : DS (sampl value) :=
   if mem_ident x ins then envI x else env x.
 
-(* TODO: wrapper pour tests d'égalité des longueurs *)
 Lemma denot_exp_eq :
   forall ins e envG envI env,
     denot_exp ins e envG envI env =
@@ -953,7 +920,7 @@ Qed.
 
 Global Opaque denot_exp.
 
-(* TODO: comprendre pourquoi on ne peut pas faire les deux en un ?????? *)
+(* FIXME: comprendre pourquoi on ne peut pas faire les deux en un ?????? *)
 Global Add Parametric Morphism ins : (denot_var ins)
     with signature @Oeq (DS_prod SI) ==> @eq (DS_prod SI) ==> @eq ident ==> @Oeq (DS (sampl value))
       as denot_var_morph1.
@@ -990,121 +957,8 @@ Proof.
   now apply mem_ident_spec in Hmem.
 Qed.
 
-(* Definition denot_equation (ins : list ident) (e : equation) : *)
-(*   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI. *)
-(*   destruct e as (xs,es). *)
-(*   pose proof (ss := denot_exps_ (denot_exp_ ins) es). *)
-(*   apply curry, curry, curry, Dprodi_DISTR. *)
-(*   intro x. *)
-(*   destruct (mem_ident x ins). *)
-(*   (* si x est une entrée *) *)
-(*   exact (PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _). *)
-(*   (* sinon on le prend dans les ss *) *)
-(*   exact (PROJ (DS_fam SI) x @_ env_of_np xs @_ ss). *)
-(* Defined. *)
-
-(* Section Equation_spec. *)
-
-(* Lemma denot_equation_Oeq : *)
-(*   forall ins xs es envG envI bs env, *)
-(*     denot_equation ins (xs,es) envG envI bs env *)
-(*     == denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)). *)
-(* Proof. *)
-(*   intros. *)
-(*   apply Oprodi_eq_intro; intro x. *)
-(*   unfold denot_equation, denot_var. *)
-(*   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb. *)
-(*   autorewrite with cpodb using (simpl (snd _); simpl (fst _)). *)
-(*   cases. *)
-(* Qed. *)
-
-(* (* parfois plut utile car c'est une égalité *) *)
-(* Lemma denot_equation_eq : *)
-(*   forall ins xs es envG envI bs env x, *)
-(*     denot_equation ins (xs,es) envG envI bs env x *)
-(*     = denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)) x. *)
-(* Proof. *)
-(*   intros. *)
-(*   unfold denot_equation, denot_var. *)
-(*   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb. *)
-(*   autorewrite with cpodb using (simpl (snd _); simpl (fst _)). *)
-(*   cases. *)
-(* Qed. *)
-
-(* Global Opaque denot_equation. *)
-
-(* Lemma denot_equation_input : *)
-(*   forall e ins envG envI bs env x, *)
-(*     wl_equation G e -> *)
-(*     In x ins -> *)
-(*     denot_equation ins e envG envI bs env x = envI x. *)
-(* Proof. *)
-(*   intros * Hwt Hx. *)
-(*   apply mem_ident_spec in Hx. *)
-(*   destruct e as (xs,es). *)
-(*   destruct Hwt as [? Hwt]. *)
-(*   rewrite annots_numstreams in Hwt. *)
-(*   rewrite denot_equation_eq. *)
-(*   unfold denot_var. *)
-(*   cases; congruence. *)
-(* Qed. *)
-
-(* End Equation_spec. *)
-
-(* (* 1ère version : construction directe de l'environnement en parcourant *)
-(*  l'équation *) *)
-(*     Definition denot_equation' (e : equation) : *)
-(*       DS_prod type_vars -C-> DS bool -C-> DS_prod type_vars. *)
-(*       destruct e as (xs,es). *)
-(*       (* vérification des tailles *) *)
-(*       destruct (Nat.eq_dec *)
-(*                   (length xs) *)
-(*                   (list_sum (List.map numstreams es)) *)
-(*                ) as [Heq|]. *)
-(*       (* 2: exact (CTE _ _ 0). (* TODO : error_Ty *) *) *)
-(*       2:{ (* TODO: plus joli *) *)
-(*         apply curry, Dprodi_DISTR. *)
-(*         intro. apply CTE. unfold type_vars. simpl. *)
-(*         cases. exact errTy. exact (DS_const tt). } *)
-(*       (* calcul des expressions *) *)
-(*       apply curry. *)
-(*       assert (Dprod (DS_prod type_vars) (DS bool) -C-> nprod (list_sum (List.map numstreams es))) as ss. *)
-(*       { clear Heq. induction es as [|a]; simpl (list_sum _). *)
-(*         + exact (CTE _ _ (DS_const tt)). *)
-(*         + exact ((nprod_app _ _ @2_ (uncurry (denot_exp a))) IHes). } *)
-(*       (* on construit le produit variable par variable *) *)
-(*       apply Dprodi_DISTR. *)
-(*       intro x. *)
-(*       destruct (existsb (ident_eqb x) (List.map fst vars)) eqn:Hx. *)
-(*       2:{ unfold DS_fam, type_vars at 2. *)
-(*           rewrite Hx. *)
-(*           exact (CTE _ _ (DS_const tt)). (* TODO: plutôt error_Ty ? *) *)
-(*       } *)
-(*       (* si la variable apparaît dans xs on prend la valeur calculée, *)
-(*          sinon celle de l'environment *) *)
-(*       remember (list_sum (List.map numstreams es)) as n eqn:Hn. clear Hn. *)
-(*       revert dependent n. *)
-(*       induction xs as [| y xs]; intros. *)
-(*       - exact (PROJ _ x @_ FST _ _). *)
-(*       - destruct n. inversion Heq. *)
-(*         destruct (ident_eqb x y). *)
-(*         + (* on prend l'expression *) *)
-(*           unfold DS_fam, type_vars at 2. rewrite Hx. *)
-(*           eapply fcont_comp. 2: apply ss. *)
-(*           destruct n. *)
-(*           * exact (ID _). *)
-(*           * exact (FST _ _). *)
-(*         + (* on passe à la suite *) *)
-(*           inversion Heq; subst. *)
-(*           eapply IHxs; eauto. *)
-(*           eapply fcont_comp. 2: apply ss. *)
-(*           destruct (length xs). *)
-(*           * exact (CTE _ _ (DS_const tt)). *)
-(*           * exact (SND _ _). *)
-(*     Defined. *)
 
 (** [env_of_np_ext xs ss env] binds xs to ss in env *)
-(* TODO: move ?? *)
 Definition env_of_np_ext (l : list ident) {n} : nprod n -C-> DS_prod SI -C-> DS_prod SI :=
   curry (Dprodi_DISTR _ _ _
            (fun x => match mem_nth l x with

@@ -15,16 +15,8 @@ Require Import CommonDS SDfuns SD CommonList2.
 
 (** ** Pas de réaction et pas de changement d'état en cas d'absence, soit
  * f (abs.x) = abs.f(x)
- * remarque (pour la thèse) : ça n'est pas vrai en signal,
- * à cause de la construction default *)
+ * remarque : ça n'est pas vrai en signal, à cause de la construction default *)
 
-(* TODO: expliquer le <= ? , renommage général dans ce fichier !! *)
-(* TODO: trouver un nom au prédicat. Propositions :
-   - stutter independence
-   - absence commutation
-   - postpone
-   - stall (voiture qui cale ?)
- *)
 Module Type ABS_INDEP
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
@@ -36,18 +28,6 @@ Module Type ABS_INDEP
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Den   : SD        Ids Op OpAux Cks Senv Syn Lord).
 
-
-(* TODO: mettre dans SD.v *)
-(* XXXXXXXXXXXXXXXXXXXXXXXXX *)
-Lemma np_of_env_cons :
-  forall i l env,
-    np_of_env (i :: l) env
-    = nprod_cons (env i) (np_of_env l env).
-Proof.
-  trivial.
-Qed.
-
-(* XXXXXXXXXXXXXXXXXXXXXXXXX *)
 
 (** ** Résultats généraux sur l'indépendance aux absences *)
 

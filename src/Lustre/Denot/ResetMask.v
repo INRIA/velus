@@ -2,40 +2,17 @@ From Velus Require Import Common.CommonTactics.
 Require Import Cpo.
 Require Import SDfuns.
 
-(* TODO: où mettre ça joliment ? *)
+(** * Facts about resetting and masking *)
+
 Ltac revert_all :=
   repeat match goal with
          | H:_ |- _ => revert H
          end.
+
 Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
   let Hx := fresh "H"x in
   remember s as x eqn:Hx;
   apply Oeq_refl_eq in Hx.
-
-(* TODO: mettre ça dans SDfuns ? *)
-Definition bool_of_sbool : sampl bool -> bool :=
-  fun v => match v with
-        | pres true => true
-        | _ => false
-        end.
-
-(* TODO: mettre ça dans SDfuns ? *)
-Lemma bool_of_sbool_pres :
-  forall s, map bool_of_sbool (map pres s) == s.
-Proof.
-  intros.
-  apply DS_bisimulation_allin1 with
-    (R := fun U V => U == map bool_of_sbool (map pres V)); auto.
-  { intros * -> ? <-; auto. }
-  clear; intros U V Hc Hu.
-  destruct (@is_cons_elim _ V) as (v & V' & Hv).
-  { destruct Hc; auto.
-    eapply map_is_cons, map_is_cons; now rewrite <- Hu. }
-  rewrite Hv, Hu in *.
-  autorewrite with cpodb; split; auto.
-  unfold bool_of_sbool; cases.
-Qed.
-
 
 (** ** Mask de flot en version dénotationnelle *)
 Section Smask.
@@ -168,6 +145,28 @@ Proof.
 Qed.
 
 End Smask.
+
+Definition bool_of_sbool : sampl bool -> bool :=
+  fun v => match v with
+        | pres true => true
+        | _ => false
+        end.
+
+Lemma bool_of_sbool_pres :
+  forall s, map bool_of_sbool (map pres s) == s.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V => U == map bool_of_sbool (map pres V)); auto.
+  { intros * -> ? <-; auto. }
+  clear; intros U V Hc Hu.
+  destruct (@is_cons_elim _ V) as (v & V' & Hv).
+  { destruct Hc; auto.
+    eapply map_is_cons, map_is_cons; now rewrite <- Hu. }
+  rewrite Hv, Hu in *.
+  autorewrite with cpodb; split; auto.
+  unfold bool_of_sbool; cases.
+Qed.
 
 Lemma AC_smask :
   forall A k rs (xs : DS (sampl A)),
@@ -575,7 +574,6 @@ Qed.
 
 End Abs_align.
 
-(* TODO: move ? *)
 Lemma take_bool_dec :
   forall n R,
     infinite R ->
@@ -860,7 +858,6 @@ Qed.
 End Abs_alingnLE.
 
 
-(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
 Section Smask_sreset2.
 
   (* la fonction de nœud qu'on va passer à sreset *)
@@ -873,7 +870,6 @@ Hypothesis Hlp :
 
 Hypothesis AbsG :
   forall X,
-    (* TODO: on pourrait avoir une égalité avec inf_dom ???  *)
     f (APP_env abs_env X) <= APP_env abs_env (f X).
 
 Hypothesis InfG :
@@ -955,7 +951,7 @@ Proof.
         eauto using REM_env_inf_dom, abs_alignLE_le, rem_app_env_le with arith.
 Qed.
 
-(* TEST: relâchement du abs_alignLE *)
+(* relâchement du abs_alignLE *)
 Lemma smask_sreset0'' :
   forall R X,
     infinite_dom X ins ->
@@ -1143,303 +1139,5 @@ Proof.
 Qed.
 
 End Smask_sreset2.
-
-
-(* (* TODO: on pourrait l'utiliser partout (Abs, Lp, ???) *) *)
-(* Section Env_le. *)
-
-(*   CoInductive env_le : DS_prod SI -> DS_prod SI -> Prop := *)
-(*   | Ee : *)
-(*     forall X Y, *)
-(*       FIRST_env X <= FIRST_env Y -> *)
-(*       env_le (REM_env X) (REM_env Y) -> *)
-(*       env_le X Y. *)
-
-(*   Lemma Ole_env_le : forall X Y, X <= Y -> env_le X Y. *)
-(*   Proof. *)
-(*     cofix Cof; intros; apply Ee; auto. *)
-(*   Qed. *)
-
-(*   Lemma env_le_Ole : forall X Y, env_le X Y -> X <= Y. *)
-(*   Proof. *)
-(*     clear. *)
-(*     intros * Hle i. *)
-(*     remember_ds (X i) as U. *)
-(*     remember_ds (Y i) as V. *)
-(*     revert_all; cofix Cof; intros. *)
-(*     destruct U as [|u U]. *)
-(*     { constructor; rewrite <- eqEps in *; eapply Cof; eauto. } *)
-(*     inversion_clear Hle as [?? Hf Hl]. *)
-(*     specialize (Hf i). *)
-(*     rewrite 2 FIRST_env_eq, <- HU, first_cons in Hf. *)
-(*     edestruct (@is_cons_elim _ (Y i)) as (y & Yi' & Hy). *)
-(*     { eapply first_is_cons, is_cons_le_compat; eauto. } *)
-(*     rewrite Hy, first_cons in Hf. *)
-(*     apply Con_le_simpl in Hf as []; subst. *)
-(*     edestruct (cons_decomp _ y V) as (V' & Hd & ?). *)
-(*     { now rewrite HV, Hy. } *)
-(*     apply DSleCon with V'; auto. *)
-(*     apply (Cof _ _ Hl). *)
-(*     - now rewrite REM_env_eq, <- HU, rem_cons. *)
-(*     - apply decomp_eqCon in Hd. *)
-(*       now rewrite REM_env_eq, <- HV, Hd, rem_cons. *)
-(*   Qed. *)
-
-(*   Lemma env_le_ok : forall X Y, X <= Y <-> env_le X Y. *)
-(*   Proof. *)
-(*     split; auto using Ole_env_le, env_le_Ole. *)
-(*   Qed. *)
-
-(*   Global Add Parametric Morphism : env_le *)
-(*          with signature @Oeq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> iff *)
-(*            as env_le_morph. *)
-(*   Proof. *)
-(*     intros * Eq1 * Eq2. *)
-(*     split; intros Heq%env_le_ok; apply env_le_ok; now rewrite <- Eq1, <- Eq2 in *. *)
-(*   Qed. *)
-
-(* End Env_le. *)
-
-(* (* TEST : smask_sreset sans infinité, avec infériorité *) *)
-(* Section Smask_sreset_le. *)
-
-(* Variable (f : DS_prod SI -C-> DS_prod SI). *)
-(* Variables (ins outs: list I). *)
-
-(* Hypothesis Hlp : *)
-(*   forall X n, *)
-(*     f (take_env n X) == take_env n (f X). *)
-
-(* Corollary fbot : f 0 == 0. *)
-(*   change 0 with (@take_env _ SI O 0). *)
-(*   now rewrite Hlp. *)
-(* Qed. *)
-
-(* Hypothesis AbsG : *)
-(*   forall X, *)
-(*     f (APP_env abs_env X) <= APP_env abs_env (f X). *)
-
-(* (* TODO: move *) *)
-(* Lemma take_env_Ole : *)
-(*   forall (X Y  : DS_prod SI), (forall n, take_env n X <= take_env n Y) -> X <= Y. *)
-(* Proof. *)
-(*   intros; intro. *)
-(*   apply take_n_Ole; intro. *)
-(*   specialize (H n i). *)
-(*   rewrite 2 take_env_proj in *; auto. *)
-(* Qed. *)
-
-
-(* Lemma take_bool_dec_le : *)
-(*   forall n R, *)
-(*     take n R <= take n (DS_const false) *)
-(*     \/ exists m, m < n *)
-(*            /\ take m R == take m (DS_const false) *)
-(*            /\ first (nrem m R) == cons true 0. *)
-(* Proof. *)
-(*   clear. *)
-(*   induction n; intros; auto. *)
-(*   rewrite 2 (take_eq (S n)). *)
-(*   rewrite DS_const_eq at 1 2. *)
-(*   rewrite rem_cons, app_cons. *)
-(* Admitted. *)
-
-(* Lemma take_smask_env_false_le : *)
-(*   forall n R X, *)
-(*     take n R <= take n (DS_const false) -> *)
-(*     take_env n (smask_env O R X) <= take_env n X. *)
-(* Proof. *)
-(*   clear. *)
-(*   induction n; intros * Heq; auto. *)
-(*   rewrite 2 (take_eq (S n)), DS_const_eq, app_cons, rem_cons in Heq. *)
-(* Admitted. *)
-
-(* Lemma smask_sreset0_le : *)
-(*   forall R X, *)
-(*     abs_alignLE (smask_env O R X) (f (smask_env O R X)) -> *)
-(*     f (smask_env O R X) <= smask_env O R (sreset_aux f R X (f X)). *)
-(* Proof. *)
-(*   clear - Hlp AbsG. *)
-(*   intros * Habs. *)
-
-(*   apply take_env_Ole; intro n. *)
-
-(*   sreset_aux *)
-(*   destruct (take_bool_dec_le n R) as [Hr | (m & Hle & Hr & Hf)]. *)
-(*   - *)
-(*     rewrite <- Hlp. *)
-(*     rewrite take_smask_env_false_le; auto. *)
-(* . *)
-
-(*     rewrite  *)
-
-(*     rewrite <- Hlp. *)
-(*     rewrite take_smask_env_false_le; auto. *)
-(*     rewrite Hlp; auto. *)
-
-(*     rewrite (take_sreset_aux_false _ f _ _). *)
-
-(*     rewrite take_smask_env_false, (take_sreset_aux_false _ f _ _), Hlp; auto. *)
-(*     now apply take_smask_env_false. *)
-(*   - pose proof (Ht := Hlp (smask_env O R X) X m (take_smask_env_false m R X Hr)). *)
-(*     specialize (InfG X Infx) as Infy. *)
-(*     revert Ht Habs Infy. *)
-(*     generalize (f X); intros Y. *)
-(*     specialize (InfG (smask_env O R X) (smask_env_all_inf _ _ _ Infr Infx)) as Infz. *)
-(*     revert Infz. *)
-(*     generalize (f (smask_env O R X)); intros Z. *)
-(*     revert Hr Hf Infr Infx Hle. *)
-(*     revert R X Y Z n. *)
-(*     induction m; intros; *)
-(*       inversion_clear Infr as [Cr InfR]; *)
-(*       destruct (is_cons_elim Cr) as (r & R' & Hr'). *)
-(*     + simpl in Hf. *)
-(*       rewrite Hr', first_cons, smask_env_eq in *. *)
-(*       apply Con_eq_simpl in Hf as []; subst. *)
-(*       apply abs_align_abs, all_infinite_le_eq in Habs as ->; auto. *)
-(*     + destruct n;[lia|]. *)
-(*       apply abs_align_rem in Habs. *)
-(*       rewrite 2 (take_eq (S m)), Hr', rem_cons, smask_env_eq in *. *)
-(*       rewrite DS_const_eq, 2 app_cons in Hr. *)
-(*       apply Con_eq_simpl in Hr as []; subst; simpl in *. *)
-(*       rewrite 2 (take_env_eq (S n)). *)
-(*       rewrite rem_cons, sreset_aux_eq, 3 app_app_env, 2 rem_app_env in *. *)
-(*       apply first_env_eq_compat in Ht as Hft. *)
-(*       apply rem_env_eq_compat in Ht as Hrt. *)
-(*       rewrite 2 (take_env_eq (S m)) in Hft, Hrt. *)
-(*       rewrite 2 first_app_env in Hft. *)
-(*       rewrite 2 rem_app_env in Hrt; auto using all_infinite_all_cons. *)
-(*       rewrite <- (app_app_first_env Y), <- (app_app_first_env Z), Hft, IHm; auto with arith. *)
-(*       all: auto using all_infinite_all_cons, REM_env_inf. *)
-
-
-
-(*   eapply DSle_rec. *)
-
-
-(*   remember_ds (f (smask_env _ _ _)) as U. *)
-(*   remember_ds (smask_env O R (sreset_aux f R X (f X))) as V. *)
-
-(*   revert_all; cofix Cof; intros; intro x. *)
-(*   eapply Cof in HV. *)
-(*   specialize (HV x). *)
-(*   Guarded. *)
-(*   destruct (U x). *)
-(*   { constructor. *)
-(*     apply Cof. *)
-
-(*     rewrite <- eqEps in HH. *)
-
-
-(*   apply env_le_ok. *)
-(*   revert_all; cofix Cof; intros. *)
-(*   constructor. *)
-(*   - (* first *) *)
-(*     rewrite HU, HV in *. *)
-(*     clear HU HV; clear U V. *)
-    
-
-
-(*   destruct (take_bool_dec n R Infr) as [Hr | (m & Hle & Hr & Hf)]. *)
-(*   - (* si R est faux pour toujours *) *)
-(*     setoid_rewrite take_smask_false; auto. *)
-(*     rewrite <- 2 (take_env_proj _ _ i), <- 2 (PROJ_simpl i). *)
-(*     rewrite (take_sreset_aux_false n f R X (f X)); auto. *)
-(*     rewrite <- Hlp2; auto. *)
-(*     rewrite take_smask_env_false; auto. *)
-(*   - (* sinon il est vrai au bout de m instants *) *)
-(*     (* on prépare une récurrence sur m *) *)
-(*     pose proof (Ht := Hlp2 (smask_env O R X) X m (take_smask_env_false m R X Hr)). *)
-(*     specialize (InfG X Infx) as Infy. *)
-(*     apply Oprodi_eq_elim with (i := i) in Ht. *)
-(*     revert Ht Habs Infy. *)
-(*     generalize (f X); intros Y. *)
-(*     specialize (InfG (smask_env O R X) (smask_env_inf _ _ _ _ Infr Infx)) as Infz. *)
-(*     revert Infz. *)
-(*     generalize (f (smask_env O R X)); intros Z. *)
-(*     revert Hr Hf Infr Infx Hle Ini. *)
-(*     revert R X Y Z n i. *)
-(*     induction m; intros; *)
-(*       inversion_clear Infr as [Cr InfR]; *)
-(*       destruct (is_cons_elim Cr) as (r & R' & Hr'). *)
-(*     + simpl in Hf. *)
-(*       rewrite <- 2 (PROJ_simpl i) in *. *)
-(*       rewrite Hr', smask_eq, smask_env_eq, first_cons in *. *)
-(*       apply Con_eq_simpl in Hf as []; subst. *)
-(*       apply abs_alignLE_abs, infinite_le_eq with (s := Z i) in Habs; auto. *)
-(*       rewrite PROJ_simpl, Habs; auto. *)
-(*     + destruct n;[lia|]. *)
-(*       rewrite <- 2 (PROJ_simpl i). *)
-(*       rewrite Hr' in *. *)
-(*       rewrite DS_const_eq, 2 take_cons in Hr. *)
-
-
-
-(*   remember_ds (f (smask_env _ _ _)) as U. *)
-(*   remember_ds (smask_env O R (sreset_aux f R X (f X))) as V. *)
-(*   revert_all; cofix Cof; intros. *)
-
-(* Qed. *)
-
-(* Lemma smask_sreset_le : *)
-(*   forall k R X, *)
-(*     abs_alignLE (smask_env k R X) (f (smask_env k R X)) -> *)
-(*     f (smask_env k R X) <= smask_env k R (sreset f R X). *)
-(* Proof. *)
-(*   intros * Hal. *)
-(*   rewrite sreset_eq. *)
-(*   destruct k. *)
-(*   (* k = 0, cas de base *) *)
-(*   { apply smask_sreset0_le; auto. } *)
-(*   (* on va raisonner par co-induction grâce à [env_eq] *) *)
-(*   remember_ds X as Xn. *)
-(*   remember (_ f Xn) as Y eqn:HH. *)
-(*   (* tout ce qu'on a besoin de savoir sur Xn et Y : *) *)
-(*   assert (exists X n, Xn == nrem_env n X *)
-(*                  /\ Y == nrem_env n (f X) *)
-(*                  /\ all_infinite X) as Hy *)
-(*       by (exists X, O; subst; rewrite HXn in *; split; eauto). *)
-(*   clear HH HXn X. *)
-(*   apply env_eq_ok. *)
-(*   remember_ds (f _) as U. *)
-(*   remember_ds (smask_env _ _ (_ _)) as V. *)
-(*   revert HV HU Infr Infx Hy Hal. *)
-(*   revert k R Xn Y U V. *)
-(*   cofix Cof; intros. *)
-(*   inversion_clear Infr as [Cr InfR]. *)
-(*   destruct (is_cons_elim Cr) as (r & R' & Hr). *)
-(*   rewrite Hr in HU, HV, Hal. *)
-(*   rewrite Hr, rem_cons in InfR. *)
-(*   destruct Hy as (X & n & Hxn & Hy & InfX). *)
-(*   rewrite Hxn in HU, HV. *)
-(*   rewrite Hy in HV. *)
-(*   rewrite sreset_aux_eq in HV. *)
-(*   rewrite smask_env_eq in HU, HV, Hal. *)
-(*   cases. *)
-(*   (* encore le cas de base... *) *)
-(*   { rewrite HV, HU, Hxn in *; clear HU HV Hxn. *)
-(*     pose proof (Hsm := smask_sreset0 (cons false R') (nrem_env n X)). *)
-(*     rewrite smask_env_eq in Hsm at 3. *)
-(*     rewrite Hsm, smask_env_eq; auto using infinite_cons, Oeq_env_eq. *)
-(*     now rewrite smask_env_eq. } *)
-(*   all: rewrite AbsG in HU; auto using smask_env_all_inf, nrem_env_inf, REM_env_inf. *)
-(*   all: constructor; [| rewrite HU, HV, 2 first_app_env; auto]. *)
-(*   all: apply abs_align_rem in Hal. *)
-(*   all: rewrite HU, 2 rem_app_env, Hxn in Hal; eauto 1 using all_cons_abs_env. *)
-(*   - eapply Cof; rewrite ?HU, ?HV, ?rem_app_env; *)
-(*       eauto using all_cons_abs_env, nrem_env_inf, all_infinite_all_cons, REM_env_inf. *)
-(*     exists X, (S n); eauto. *)
-(*   - rewrite sreset_aux_eq in HV. *)
-(*     eapply Cof; rewrite ?HU, ?HV, ?rem_app_env; *)
-(*       eauto using all_cons_abs_env, nrem_env_inf, all_infinite_all_cons, REM_env_inf. *)
-(*     exists (nrem_env n X), 1; eauto using nrem_env_inf. *)
-(*   - eapply Cof; rewrite ?HU, ?HV, ?rem_app_env; *)
-(*       eauto using all_cons_abs_env, nrem_env_inf, all_infinite_all_cons, REM_env_inf. *)
-(*     exists X, (S n); eauto. *)
-(* Qed. *)
-
-
-
-(* End Smask_sreset_le. *)
 
 End Env.

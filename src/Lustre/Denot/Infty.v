@@ -4,7 +4,6 @@ Require Import SDfuns CommonDS.
 
 (** * Infinity of streams defined in SDfuns  *)
 
-(* TODO: à terme, virer *)
 Ltac solve_err :=
   try match goal with
     | |- context [ DS_const _ ] =>
