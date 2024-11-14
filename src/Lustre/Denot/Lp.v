@@ -13,7 +13,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 Require Import CommonDS SDfuns SD CommonList2.
 
 
-(** ** Propriété de préservation des longueurs *)
+(** ** Propriété de commutativité du préfixe *)
 
 Module Type LP
        (Import Ids   : IDS)
@@ -27,8 +27,7 @@ Module Type LP
        (Import Den   : SD            Ids Op OpAux Cks Senv Syn Lord).
 
 
-(** ** On montre que chaque opérateur du langage a cette propriété *)
-
+(** Utilities  *)
 Lemma take_np_of_env :
   forall l env n,
     0 < length l ->
@@ -66,6 +65,8 @@ Proof.
   cases_eqn HH; apply mem_nth_Some in HH; auto.
   erewrite nth_lift; auto.
 Qed.
+
+(** ** On montre que chaque opérateur du langage a cette propriété *)
 
 Lemma take_bss :
   forall l n (env : DS_prod SI),
