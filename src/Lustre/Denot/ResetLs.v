@@ -33,21 +33,6 @@ Import ListNotations.
     y = merge c (f(x when c)) (reset_f((x, r) when not c));
   tel
  *)
-
-
-(* en Vélus ?? :
-
-   c = if r then false else (true fby c)
-
-   ou bien, pour faire le même premier instant que LS
-   (évite une récurrence instantanée dans le reset)
-
-   c = true -> if r then false else (true fby c)
-
-   mieux :
-   c = true -> not r and (true fby c)
- *)
-
 Arguments PROJ {I Di}.
 Arguments FST {D1 D2}.
 Arguments SND {D1 D2}.
@@ -397,13 +382,12 @@ Proof.
   rewrite DSCASE_simpl.
   setoid_rewrite DScase_cons.
   destruct c as [|[]|].
-(* FIXME: beaucoup trop lent : *)
-(*   - apply cons_eq_compat; reflexivity. *)
-(*   - apply app_eq_compat; reflexivity. *)
-(*   - apply app_eq_compat; reflexivity. *)
-(*   - reflexivity. *)
-(* Qed. *)
-Admitted.
+  - apply cons_eq_compat; reflexivity.
+  - apply app_eq_compat; reflexivity.
+  - apply app_eq_compat; reflexivity.
+  - reflexivity.
+Qed.
+
 
 Global Opaque merge.
 
