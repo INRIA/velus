@@ -4,6 +4,10 @@ Import List.ListNotations.
 From Velus Require Import Lustre.Denot.Cpo CommonTactics.
 Require Import CommonDS SDfuns.
 
+(** * Effactement des absences dans les flots
+ * pour obtenir une sémantique de Kahn *)
+
+(** définitions identiques à celles de Safe.v *)
 Definition safe_DS {A} : DS (sampl A) -> Prop :=
   DSForall (fun v => match v with err _ => False | _ => True end).
 
@@ -20,6 +24,8 @@ Definition safe_op {A} : DS (sampl A) -> Prop :=
 Lemma nabs_dec : forall A (x : sampl A), {x <> abs} + {~ x <> abs}.
 Proof. intros ? []; auto; now left. Qed.
 
+
+(** ** Fonction d'effacement des absences d'un flot *)
 Definition ea {A} : DS (sampl A) -C-> DS (sampl A).
   refine (FILTER (fun v => v <> abs) _).
   intros []; auto; now left.
@@ -53,6 +59,7 @@ Lemma isConP_is_cons :
 Proof.
   induction 1; auto; now constructor.
 Qed.
+
 
 Theorem erase_unop :
   forall A B (op:A->option B) (xs : DS (sampl A)),
