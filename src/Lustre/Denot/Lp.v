@@ -495,30 +495,16 @@ Proof.
   now apply take_sreset_aux.
 Qed.
 
-      (* FIXME: prouvé dans Reset.v *)
-      Lemma take_sreset_aux_false :
-        forall n f R (X Y : DS_prod SI),
-          take n R == take n (DS_const false) ->
-          take_env n (sreset_aux f R X Y) == take_env n Y.
-        clear.
-      Admitted.
-      Corollary sreset_aux_false :
-        forall f R (X Y : DS_prod SI),
-          R == DS_const false ->
-          sreset_aux f R X Y == Y.
-      Proof.
-        intros * Hr.
-        apply take_env_Oeq.
-        intros.
-        apply take_sreset_aux_false, fcont_stable, Hr.
-      Qed.
-
-        (* Lemma fcont_app_le_compat : forall (D1 D2:cpo) (f g : D1 -c> D2) (x y : D1), *)
-        (*     f <= g -> x <= y -> f x <= g y. *)
-        (* Proof. *)
-        (*   intros. *)
-        (*   apply Ole_trans with (f y); auto. *)
-        (* Qed. *)
+Lemma sreset_aux_false :
+  forall f R (X Y : DS_prod SI),
+    R == DS_const false ->
+    sreset_aux f R X Y == Y.
+Proof.
+  intros * Hr.
+  apply take_env_Oeq.
+  intros.
+  apply take_sreset_aux_false, fcont_stable, Hr.
+Qed.
 
 
 (** ** Raisonnement sur les nœuds *)
