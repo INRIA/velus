@@ -182,19 +182,16 @@ Proof.
       do 2 esplit; rewrite Hu, Hv, 2 rem_cons; eauto.
 Qed.
 
-
-
-Theorem erase_fby_inf :
-  forall A (xs ys : DS (sampl A)),
-    infinite (fby xs ys) ->
-    safe_DS (fby xs ys) ->
-    ea (fby xs ys) == app (ea xs) (ea ys).
+Theorem erase_sbinop :
+  forall A B C (op:A->B->option C) xs ys,
+    safe_DS (sbinop op xs ys) ->
+    sbinop op (ea xs) (ea ys) == ea (sbinop op xs ys).
 Proof.
-  (* TODO !! *)
-Admitted.
+  split; auto using erase_sbinop_1, erase_sbinop_2.
+Qed.
 
 
-Theorem erase_fby1 :
+Lemma erase_fby1 :
   forall A v (xs ys : DS (sampl A)),
     safe_DS (fby1 (Some v) xs ys) ->
     ea (fby1 (Some v) xs ys) <= cons (pres v) (ea ys).
@@ -382,3 +379,17 @@ Proof.
       [eapply map_is_cons, isConP_is_cons, ea_is_cons; rewrite <- HU; eauto
       | rewrite Hxs, map_eq_cons in *; now inversion Hs'].
 Qed.
+
+
+(* FAUX. Par ex :
+     xs = A 0 A A A A ...
+     ys = A 1 A A A A ...
+     ea (fby xs ys) = 0
+     app (ea xs) (ea ys) = 0 1
+ *)
+Theorem erase_fby_inf :
+  forall A (xs ys : DS (sampl A)),
+    infinite (fby xs ys) ->
+    safe_DS (fby xs ys) ->
+    ea (fby xs ys) == app (ea xs) (ea ys).
+Abort.
