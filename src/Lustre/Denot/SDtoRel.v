@@ -2257,6 +2257,7 @@ Hypothesis Wfg :
     let ins := List.map fst n.(n_in) in
     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
     forall bs, bss ins envI <= bs ->
+          (* no_rte_node G ins envG envI (envG f envI) n -> *)
           wf_env Γ ins envI bs 0 ->
           wf_env Γ ins envI bs (envG f envI).
 
@@ -2283,6 +2284,12 @@ Hypothesis Hnode :
        set (Info := forall_np_of_env _ _ _ (InfG _ _ infI)) *)
     forall Infi Info,
     sem_node G f (Ss_of_nprod xs Infi) (Ss_of_nprod os Info).
+
+(* Hypothesis Hnorte : *)
+(*   forall f n envI, *)
+(*     find_node f G = Some n -> *)
+(*     let ins := List.map fst (n_in n) in *)
+(*     no_rte_node G ins envG envI (envG f envI) n. *)
 
 
 (** On le laisse ici car il dépend des hypothèses de section *)
@@ -3159,7 +3166,263 @@ Proof.
     now rewrite FIXP_eq, denot_node_eq, denot_top_block_eq, <- it at 1.
 Qed.
 
+Lemma ok_sem_node_test :
+  forall (n : node),
+    restr_node n ->
+    wc_node G n ->
+    wt_node G n ->
+    let f := n_name n in
+    let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
+    let ins := map fst (n_in n) in
+    forall envI,
+    let bs := bss ins envI in
+    let envn := FIXP _ (denot_node G n envG envI) in
+    let ss := np_of_env ins envI in
+    let os := np_of_env (List.map fst (n_out n)) envn in
+    wf_env Γ ins envI bs envn ->
+    no_rte_node G ins envG envI envn n ->
+    inf_dom Γ ins envI envn ->
+    forall infI infO,
+      sem_node G f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
+Proof.
+Admitted.
+
 End Ok_node.
+
+Section TESTMAIN.
+
+Definition no_rte_global_main {PSyn Prefs} (G : @global PSyn Prefs) main envI :=
+  let envG := denot_global G in
+  Forall (fun n =>
+            let ins := List.map fst n.(n_in) in
+            if ident_eqb (n_name n) main
+            then no_rte_node G ins envG envI (envG (n_name n) envI) n
+            else forall envI, no_rte_node G ins envG envI (envG (n_name n) envI) n)
+    (nodes G).
+
+(* commenter : nécessite malheureusement ordered_nodes *)
+Theorem noerrors_prog :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    wt_global G ->
+    wc_global G ->
+    forall f n envI,
+      no_rte_global_main G f envI ->
+      find_node f G = Some n ->
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
+      forall bs, bss ins envI <= bs ->
+      wf_env Γ ins envI bs 0 ->
+      wf_env Γ ins envI bs (denot_global G f envI).
+Proof.
+  intros * Wtg Wcg * Norte Hfind ??? Hle Hins.
+  unfold no_rte_global_main in Norte.
+  assert (Ordered_nodes G) as Hord.
+  now apply wl_global_Ordered_nodes, wt_global_wl_global.
+  remember (denot_global G) as envG eqn:HG.
+  assert (forall f nd envI,
+             find_node f G = Some nd ->
+             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
+  { intros * Hf; subst.
+    unfold denot_global.
+    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
+  clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
+  revert Norte.
+  revert dependent n. revert f envI. revert bs.
+  destruct G as [tys exts nds].
+  induction nds as [|a nds]; intros. inv Hfind.
+  destruct (ident_eq_dec (n_name a) f); subst.
+  - (* cas qui nous intéresse *)
+    rewrite find_node_now in Hfind; inv Hfind; auto.
+    inversion_clear Norte as [|?? Hoc Hocs].
+    rewrite ident_eqb_refl in Hoc.
+    (* specialize (Hoc envI bs (wf_env_loc _ _ _ _ Hins)). *)
+    revert Hoc. fold ins.
+    rewrite HenvG; auto using find_node_now.
+    rewrite <- denot_node_cons;
+      eauto using find_node_not_Is_node_in, find_node_now.
+    rewrite FIXP_fixp.
+    intro Hoc.
+    apply no_rte_node_cons in Hoc; eauto using find_node_not_Is_node_in, find_node_now.
+    apply fixp_inv2_le with
+      (Q := fun env =>
+              no_rte_node {| types := tys; externs := exts; nodes := nds |} ins envG envI env n
+      ); eauto using wf_env_admissible, oc_node_admissible_rev, wf_env_0_ext.
+    intros env Hsafe Hl Hoc2.
+    apply Ordered_nodes_cons in Hord as Hord'.
+    apply wt_global_cons in Wtg as Wtg'.
+    destruct Wtg as [? Wtp] eqn:HH; clear HH. (* trouver un autre moyen de garder Wtg *)
+    inv Wcg. inv Wtp. (* inv Rg. *)
+    apply safe_node; auto; try tauto.
+    (* reste l'hypothèse de récurrence sur les nœuds *)
+    intros f2 n2 Hfind ?? bs2 envI2 Hbs2 Hins2.
+    apply wf_env_loc.
+    apply IHnds; auto using wf_env_0_ext.
+    + (* montrons que HenvG tient toujours *)
+      intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := n) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + (* montrons que no_rte tient toujours *)
+      simpl (nodes _).
+      take (wc_node _ _ /\ _) and destruct it as [? Hnn].
+      clear - Hocs Hnn Hord.
+      simpl_Forall.
+      rewrite <- ident_eqb_neq, ident_eqb_sym in Hnn.
+      rewrite Hnn in Hocs.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+  - rewrite find_node_other in Hfind; auto.
+    apply IHnds; auto.
+    + eauto using wt_global_cons.
+    + eauto using wc_global_cons.
+    + eauto using Ordered_nodes_cons.
+    + intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + clear - Norte Hord. inv Norte.
+      eapply Forall_impl_In; eauto.
+      simpl; intros * Hin HH *.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+Qed.
+
+
+Theorem _ok_global :
+  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    restr_global G ->
+    wt_global G ->
+    wc_global G ->
+    Forall node_causal (nodes G) ->
+    forall f n envI,
+      no_rte_global_main G f envI ->
+      find_node f G = Some n ->
+      let ins := map fst (n_in n) in
+      let outs := map fst (n_out n) in
+      let xs := np_of_env ins envI in
+      let os := np_of_env outs (denot_global G f envI) in
+      wf_ins n envI (bss ins envI) ->
+      infinite_dom envI ins ->
+      exists InfI InfO,
+        sem_node G f (Ss_of_nprod xs InfI) (Ss_of_nprod os InfO).
+Proof.
+  intros ???? Rg Wtg Wcg Causg ??? Norte Hfind ???? Hins InfI.
+  assert (Ordered_nodes G) as Hord.
+  { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
+  pose proof (SafeG := noerrors_prog G Wtg Wcg (* f n envI Norte Hfind *)).
+  unfold no_rte_global_main in Norte, SafeG.
+  pose proof (Halign := wf_alignLE G Rg).
+  remember (denot_global G) as envG eqn:HG.
+  assert (InfG : forall f nd envI,
+       find_node f G = Some nd ->
+       infinite_dom envI (map fst (n_in nd)) ->
+       infinite_dom (envG f envI) (map fst (n_out nd) ++ map fst (get_locals (n_block nd)))).
+  { subst envG. eauto using denot_inf. }
+  assert (AbsG : forall f envI,
+             envG f (APP_env abs_env envI) <= APP_env abs_env (envG f envI)).
+  { intros; subst;  auto using abs_indep_global. }
+  assert (Hlp : forall f X n, envG f (take_env n X) == take_env n (envG f X)).
+  { intros; subst; auto using lp_global. }
+  assert (HenvG : forall f nd envI,
+             find_node f G = Some nd ->
+             envG f envI == FIXP _ (denot_node G nd envG envI)).
+  { intros * Hf; subst.
+    unfold denot_global.
+    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
+  (* HenvG est tout ce qu'il faut savoir sur la définition de envG *)
+  clear HG.
+  pose proof (InfG _ _ _ Hfind InfI) as Infol.
+  apply infinite_dom_app_l in Infol.
+  exists (inf_dom_np_of_env _ _ InfI), (inf_dom_np_of_env _ _ Infol).
+  remember (inf_dom_np_of_env _ _ _) as Infi eqn:HH; clear HH.
+  remember (inf_dom_np_of_env _ _ _) as Info eqn:HH; clear HH.
+  fold xs os in Info, Infi.
+
+  eapply ok_sem_node_test.
+  revert dependent n.
+  revert dependent envI.
+  revert f.
+  destruct G as [tys exts nds].
+  induction nds as [|a nds]; intros. { inv Hfind. }
+  destruct (ident_eq_dec (n_name a) f); subst.
+  - (* cas du nœud courant *)
+    rewrite find_node_now in Hfind; auto; inv Hfind.
+    subst os outs.
+    edestruct (Ss_of_nprod_eq _ Info) as [Inf3 ->].
+    { rewrite HenvG, <- denot_node_cons;
+        eauto using find_node_not_Is_node_in, find_node_now.
+    }
+    apply wt_global_uncons in Wtg as Wtn.
+    apply wt_global_cons in Wtg as Wtg'.
+    apply wc_global_uncons in Wcg as Wcn.
+    inversion Rg; subst.
+    inversion Wcg; subst.
+    inversion Wtg; subst.
+    eapply ok_sem_node_test in Wtg' as Hsem;
+      eauto using wf_env_loc, wf_env_0_ext, infinite_dom_app_l, find_node_uncons.
+    { eapply Hsem; eauto.
+      all: rewrite (denot_node_cons _ n);
+        eauto using find_node_not_Is_node_in, find_node_now.
+      all: rewrite <- HenvG; auto using find_node_now.
+      - (* wf_env *)
+        eapply SafeG; auto using find_node_now, wf_env_loc, wf_env_0_ext.
+      - (* no_rte *)
+        inversion_clear Norte as [|?? Nort].
+        rewrite ident_eqb_refl in Nort.
+        apply (no_rte_node_cons n); eauto using find_node_not_Is_node_in, find_node_now.
+      - (* inf_dom *)
+        eapply inf_dom_decomp in InfG; eauto using find_node_now.
+        now rewrite 2 map_app, map_fst_senv_of_ins, map_fst_senv_of_decls.
+    }{(* wf_env *)
+      clear IHnds. clear AbsG . clear dependent xs.  simpl (nodes _ ) in *.
+      intros f' n' envI' Hfind' ins' Γ' bs' Hbs' Hins'.
+      eapply SafeG; eauto using find_node_uncons.
+    }
+    (* plus qu'à utiliser IHnds *)
+    inv Causg. inversion Hord; subst.
+    intros; apply IHnds; auto.
+    + admit.
+    + eauto using find_node_uncons.
+    + eauto using find_node_uncons.
+    + intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := n) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + admit.
+    + eauto using infinite_dom_np.
+    + eauto using infinite_dom_np.
+  - (* cas de récurrence *)
+    rewrite find_node_other in Hfind; auto.
+    apply sem_node_cons'; auto.
+    apply IHnds; auto.
+    + now inv Rg.
+    + eauto using wt_global_cons.
+    + eauto using wc_global_cons.
+    + now inv Causg.
+    + eauto using Ordered_nodes_cons.
+    + clear IHnds.
+      intros.
+      eapply SafeG; auto.
+      eapply Forall_impl_In, H; simpl; intros.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+
+
+
+      (*   clear - Norte Hord. inv Norte. *)
+    (*   eapply Forall_impl_In; eauto. *)
+    (*   intros * Hin HH ?. *)
+    (*   eapply no_rte_node_cons in HH; eauto using Ordered_nodes_nin. *)
+      admit.
+    + admit.
+    + intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := a) in Hfind' as ?; eauto.
+    + intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + inversion_clear Norte as [|??? Nort].
+      eapply Forall_impl_In, Nort; simpl; intros.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+Qed.
+
+
+End TESTMAIN.
+
 
 
 
