@@ -7,7 +7,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 
-(** * Little static analysis to decide [OpErr.op_correct] *)
+(** * Little static analysis to decide [OpErr.no_rte] *)
 
 (* we keep it outside of [OpErr], otherwise the extraction of [check_global]
  * recursively extracts the CPO library (because of functors...) *)

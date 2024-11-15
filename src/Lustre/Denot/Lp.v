@@ -703,7 +703,7 @@ Section LP_node.
       (* clear - Eq1 Eq2 Hnode. *)
       destruct (list_sum (List.map numstreams er)).
       + (* s'il n'y a pas de signal reset *)
-        rewrite take_sreset_aux_false, sreset_aux_false; auto.
+        rewrite (take_sreset_aux_false _ (envG f)), sreset_aux_false; auto.
         rewrite <- Hnode, <- take_env_of_np, Eq1; auto; congruence.
       + (* sinon *)
         rewrite <- take_sreset_aux, <- take_env_of_np.

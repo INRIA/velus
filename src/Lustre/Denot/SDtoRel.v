@@ -2478,7 +2478,7 @@ Lemma ok_sem_Eapp :
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI env) es ->
+      Forall (no_rte_exp G ins envG envI env) es ->
       Forall (fun e => forall Infe,
                   sem_exp G H (S_of_DS id bs bsi) e
                     (Ss_of_nprod (denot_exp G ins e envG envI env) Infe)) es ->
@@ -2486,7 +2486,7 @@ Lemma ok_sem_Eapp :
       Forall (wt_exp G Γ) er ->
       Forall (fun e => typeof e = [bool_velus_type]) er ->
       Forall (wc_exp G Γ) er ->
-      Forall (op_correct_exp G ins envG envI env) er ->
+      Forall (no_rte_exp G ins envG envI env) er ->
       Forall (fun e => forall Infe,
                   sem_exp G H (S_of_DS id bs bsi) e
                     (Ss_of_nprod (denot_exp G ins e envG envI env) Infe)) er ->
@@ -2626,7 +2626,7 @@ Lemma safe_exp :
       restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
-      op_correct_exp G ins envG envI env e ->
+      no_rte_exp G ins envG envI env e ->
       let ss := denot_exp G ins e envG envI env in
       forall_nprod safe_DS ss.
 Proof.
@@ -2642,7 +2642,7 @@ Lemma ok_sem_exp :
     (* let H := hist_of_envs ins envI InfI env Inf in *)
     let H := hist_of_envs Γ ins envI env InfΓ in
     forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
-      op_correct_exp G ins envG envI env e ->
+      no_rte_exp G ins envG envI env e ->
       let ss := denot_exp G ins e envG envI env in
       forall Infe,
       (* let Infe := infinite_exp _ _ _ _ _ _ InfG bsi InfI Inf _ in *)
@@ -2716,7 +2716,7 @@ Proof.
     apply Forall_impl_inside with (P := wt_exp _ _) in H0, H1; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0, H1; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0, H1; auto.
     unshelve eapply sem_sub_exps in H0 as (s0ss & Eq0 & Sem0), H1 as (sss & Eq1 & Sem);
       eauto using infinite_exps.
     econstructor; eauto.
@@ -2748,7 +2748,7 @@ Proof.
     apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0; auto.
     unshelve eapply sem_sub_exps in H0 as (s0ss & Eq0 & Sem0);
       eauto using infinite_exps.
     econstructor; simpl; eauto.
@@ -2785,7 +2785,7 @@ Proof.
     take (Forall restr_exp _) and rewrite map_map in it.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
     apply Forall_concat in it.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0; auto.
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
     eapply Smerge_alt2 with (d:= (Streams.const absent)) in H0; simpl; eauto.
     + unshelve apply sem_hist_of_envs; auto using denot_var_inf.
@@ -2811,7 +2811,7 @@ Proof.
     take (Forall restr_exp _) and rewrite map_map in it.
     apply Forall_impl_inside with (P := restr_exp) in H0; auto.
     apply Forall_concat in it.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0; auto.
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
     revert Infe (* He *) Hs H0.
     save_denot_exp se Hse.
@@ -2841,7 +2841,7 @@ Proof.
     apply Forall_impl_inside with (P := wt_exp _ _) in H0, H1; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0, H1; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0, H1; auto.
     rewrite Forall_concat, Forall_map in H36, H40. (* pour Forall wl & wx... *)
     apply Forall_concat in H7. (* Forall (Forall restr)) *)
     unshelve eapply Forall_concat, sem_sub_expss in H0; eauto using infinite_expss.
@@ -2897,7 +2897,7 @@ Proof.
     apply Forall_impl_inside with (P := wt_exp _ _) in H0,H1; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H0,H1; auto.
     apply Forall_impl_inside with (P := restr_exp) in H0,H1; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0,H1; auto.
+    apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0,H1; auto.
     eapply ok_sem_Eapp; eauto using wc_env_in.
 Qed.
 
@@ -2910,7 +2910,7 @@ Corollary ok_sem_exps :
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI env) es ->
+      Forall (no_rte_exp G ins envG envI env) es ->
       Forall (fun e => forall Infe,
                   sem_exp G H (S_of_DS id bs bsi) e
                     (Ss_of_nprod (denot_exp G ins e envG envI env) Infe)) es.
@@ -2948,7 +2948,7 @@ Lemma ok_sem_equation :
     wt_equation G Γ (xs,es) ->
     NoDup (ins ++ xs) ->
     wf_env Γ ins envI bs env ->
-    Forall (op_correct_exp G ins envG envI env) es ->
+    Forall (no_rte_exp G ins envG envI env) es ->
     (* hypothèse sur [env] qui doit satisfaire les contraintes
        de l'équation; typiquement obtenue avec [denot_blocks_equs] *)
     Forall2 (fun x (s : DS (sampl value)) => s == PROJ _ x env) xs
@@ -2963,7 +2963,7 @@ Proof.
     repeat take (Forall _ [_]) and inv it.
     take (wt_exp _ _ _) and apply wt_exp_wl_exp in it as Hwl.
     inv it. inv Hwl.
-    take (op_correct_exp _ _ _ _ _ _) and inv it.
+    take (no_rte_exp _ _ _ _ _ _) and inv it.
     take (restr_exp _) and inv it.
     take (find_node _ _ = _) and rewrite it in *.
     repeat take (Some _ = Some _) and inv it.
@@ -3003,7 +3003,7 @@ Lemma ok_sem_blocks :
     NoDup (flat_map get_defined blks ++ ins) ->
     Forall (wt_block G Γ) blks ->
     Forall (wc_block G Γ) blks ->
-    Forall (op_correct_block G ins envG envI env) blks ->
+    Forall (no_rte_block G ins envG envI env) blks ->
     forall InfΓ,
       Forall (sem_block G (hist_of_envs Γ ins envI env InfΓ) (S_of_DS id bs bsi)) blks.
 Proof.
@@ -3053,7 +3053,7 @@ Lemma ok_sem_node :
     let ss := np_of_env ins envI in
     let os := np_of_env (List.map fst (n_out n)) envn in
     wf_env Γ ins envI bs envn ->
-    op_correct_node G ins envG envI envn n ->
+    no_rte_node G ins envG envI envn n ->
     inf_dom Γ ins envI envn ->
     forall infI infO,
       sem_node (Global tys exts (n :: nds)) f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
@@ -3106,7 +3106,7 @@ Proof.
     inversion_clear Hr as [?? Hrtb (? & Vdc & Perm)].
     inv Hrtb.
     constructor.
-    unfold op_correct_node in Hoc.
+    unfold no_rte_node in Hoc.
     pose proof (n_nodup n) as [Nd Ndl].
     take (_ = n_block n) and rewrite <- it in *.
     take (wt_block _ _ _) and inv it.
@@ -3169,7 +3169,7 @@ Theorem _ok_global :
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    op_correct_global G ->
+    no_rte_global G ->
     Forall node_causal (nodes G) ->
     forall f n envI,
       find_node f G = Some n ->
@@ -3183,7 +3183,7 @@ Theorem _ok_global :
         sem_node G f (Ss_of_nprod xs InfI) (Ss_of_nprod os InfO).
 Proof.
   intros ???? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins InfI.
-  unfold op_correct_global in Ocg.
+  unfold no_rte_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
   pose proof (SafeG := noerrors_prog G Wtg Wcg Ocg).
@@ -3239,8 +3239,8 @@ Proof.
         eauto using find_node_not_Is_node_in, find_node_now.
       all: rewrite <- HenvG; auto using find_node_now,
         wf_env_loc, wf_env_0_ext.
-      - (* op_correct *)
-        inv Ocg. apply (op_correct_node_cons n);
+      - (* no_rte *)
+        inv Ocg. apply (no_rte_node_cons n);
           eauto using find_node_not_Is_node_in, find_node_now.
       - (* inf_dom *)
         eapply inf_dom_decomp in InfG; eauto using find_node_now.
@@ -3252,7 +3252,7 @@ Proof.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
       intros * Hin HH ?.
-      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
+      eapply no_rte_node_cons in HH; eauto using Ordered_nodes_nin.
     + eauto using find_node_uncons.
     + eauto using find_node_uncons.
     + eauto using find_node_uncons.
@@ -3271,7 +3271,7 @@ Proof.
     + clear - Ocg Hord. inv Ocg.
       eapply Forall_impl_In; eauto.
       intros * Hin HH ?.
-      eapply op_correct_node_cons in HH; eauto using Ordered_nodes_nin.
+      eapply no_rte_node_cons in HH; eauto using Ordered_nodes_nin.
     + now inv Causg.
     + eauto using Ordered_nodes_cons.
     + intros f' ndf' envI' Hfind'.
@@ -3292,7 +3292,7 @@ Corollary _ok_global2 :
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    op_correct_global G ->
+    no_rte_global G ->
     Forall node_causal (nodes G) ->
     forall f n (ss : nprod (length (n_in n))),
       find_node f G = Some n ->
@@ -3329,7 +3329,7 @@ Theorem ok_global :
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    (* op_correct_global G -> *)
+    (* no_rte_global G -> *)
     check_global G = true ->
     Forall node_causal (nodes G) ->
     forall f n, find_node f G = Some n ->

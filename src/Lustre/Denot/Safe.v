@@ -19,7 +19,7 @@ Require Import CommonDS SDfuns SD CheckOp OpErr Restr CommonList2 ResetMask.
 
 (* TODO: peut-être qu'il faudra prouver la sûreté du typage indépendamment
    des autres propriétés cl_DS et safe_op. Ça pourrait être utile dans une
-   analyse statique plus fine pour obtenir op_correct. cf. CheckOp.v
+   analyse statique plus fine pour obtenir no_rte. cf. CheckOp.v
  *)
 
 Module Type LDENOTSAFE
@@ -3039,7 +3039,7 @@ Section Node_safe.
     forall (e : exp),
       wt_exp G Γ e ->
       wc_exp G Γ e ->
-      op_correct_exp G ins envG envI env e ->
+      no_rte_exp G ins envG envI env e ->
       let ss := denot_exp G ins e envG envI env in
       Forall2 ty_DS (typeof e) (list_of_nprod ss)
       /\ Forall2 (cl_DS ins envI bs env) (clockof e) (list_of_nprod ss)
@@ -3109,7 +3109,7 @@ Section Node_safe.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H, H0; auto.
       apply Forall_and_inv in H as [Wt0 H'], H0 as [Wt H0'].
       apply Forall_and_inv in H' as [Wc0 Sf0], H0' as [Wc Sf].
       apply Forall_ty_exp in Wt0, Wt.
@@ -3137,7 +3137,7 @@ Section Node_safe.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H; auto.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       apply Forall_ty_exp in Wt.
@@ -3165,7 +3165,7 @@ Section Node_safe.
       rewrite <- Forall_map, Forall_concat in *.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H; auto.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       rewrite <- Forall_concat in *.
@@ -3204,7 +3204,7 @@ Section Node_safe.
       (* pour les expressions par défaut *)
       apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H0; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H0; auto.
       apply Forall_and_inv in H0 as [Wtd % Forall_ty_exp H'].
       apply Forall_and_inv in H' as [Wcd % Forall_cl_exp
                                      Sfd % forall_denot_exps (* % forall_nprod_Forall *)].
@@ -3212,7 +3212,7 @@ Section Node_safe.
       rewrite <- Forall_map with (f := snd), Forall_concat in *.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H; auto.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       rewrite <- Forall_concat in *.
@@ -3266,7 +3266,7 @@ Section Node_safe.
       rewrite <- Forall_map, Forall_concat in *.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H; auto.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       rewrite <- Forall_concat in *.
@@ -3308,7 +3308,7 @@ Section Node_safe.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := no_rte_exp _ _ _ _ _) in H, H0; auto.
       apply Forall_and_inv in H as [Wt H'], H0 as [Wt2 H'2].
       apply Forall_and_inv in H' as [Wc Sf], H'2 as [Wc2 Sf2].
       apply Forall_ty_exp in Wt, Wt2.
@@ -3355,7 +3355,7 @@ Section Node_safe.
     forall (e : exp),
       wt_exp G Γ e ->
       wc_exp G Γ e ->
-      op_correct_exp G ins envG envI env e ->
+      no_rte_exp G ins envG envI env e ->
       let ss := denot_exp G ins e envG envI env in
       forall_nprod safe_DS ss.
   Proof.
@@ -3370,7 +3370,7 @@ Section Node_safe.
     forall (es : list exp),
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI env) es ->
+      Forall (no_rte_exp G ins envG envI env) es ->
       let ss := denot_exps G ins es envG envI env in
       Forall2 ty_DS (typesof es) (list_of_nprod ss)
       /\ Forall2 (cl_DS ins envI bs env) (clocksof es) (list_of_nprod ss)
@@ -3393,7 +3393,7 @@ Section Node_safe.
     forall (es : list exp),
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI env) es ->
+      Forall (no_rte_exp G ins envG envI env) es ->
       let ss := denot_exps G ins es envG envI env in
       forall_nprod safe_DS ss.
   Proof.
@@ -3426,10 +3426,10 @@ Section Node_safe.
       bss ins envI <= bs ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp G ins envG envI env) es ->
+      Forall (no_rte_exp G ins envG envI env) es ->
       Forall (wt_exp G Γ) er ->
       Forall (wc_exp G Γ) er ->
-      Forall (op_correct_exp G ins envG envI env) er ->
+      Forall (no_rte_exp G ins envG envI env) er ->
       (* bazar ***************************************************)
       find_node f G = Some n ->
       NoDup (xs ++ ins) ->
@@ -3651,13 +3651,13 @@ Section Node_safe.
       env <= denot_node G n envG envI env ->
       wc_node G n ->
       wt_node G n ->
-      op_correct_node G ins envG envI env n ->
+      no_rte_node G ins envG envI env n ->
       wf_env Γ ins envI bs env ->
       wf_env Γ ins envI bs (denot_node G n envG envI env).
   Proof.
     intros * Hbs Hle Wc Wt Hop Hsafe.
     revert Hle Hop Hsafe.
-    revert Γ; unfold op_correct_node.
+    revert Γ; unfold no_rte_node.
     rewrite denot_node_eq, denot_top_block_eq.
     cases_eqn Hnd; simpl (get_locals _); intros.
     (* cas restreints : *)
@@ -3731,7 +3731,7 @@ Section Node_safe.
       take (wc_equation _ _ _) and inv it.
       - (* cas merdique *)
         repeat (take (Forall _ [_]) and inv it).
-        take (op_correct_exp _ _ _ _ _ _) and inv it.
+        take (no_rte_exp _ _ _ _ _ _) and inv it.
         take (wt_exp _ _ _) and inv it.
         take (find_node _ _ = _) and rewrite it in *.
         take (Some _ = Some _) and inv it.
@@ -3798,7 +3798,7 @@ Section Rev.
 
   (** Dans la suite on souhaite utiliser fixp_ind pour établir un résultat
       sur l'environnement env := FIXP (denot_equation ...).
-      Or pour appliquer safe_exp on a besoin de op_correct_exp, qui est
+      Or pour appliquer safe_exp on a besoin de no_rte_exp, qui est
       supposé prouvé pour env. [fixp_inv2] permet de transporter cette
       hypothèse à chaque itération du point fixe. Il faut cependant montrer
       qu'elle est admissible "en arrière" :
@@ -3856,10 +3856,10 @@ Qed.
 Lemma oc_node_admissible_rev :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envI n,
-    admissible_rev _ (fun env => op_correct_node G ins envG envI env n).
+    admissible_rev _ (fun env => no_rte_node G ins envG envI env n).
 Proof.
   intros ???????? Hoc.
-  eauto using op_correct_node_le_compat.
+  eauto using no_rte_node_le_compat.
 Qed.
 
 End Rev.
@@ -3913,7 +3913,7 @@ Theorem noerrors_prog :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
     wt_global G ->
     wc_global G ->
-    op_correct_global G ->
+    no_rte_global G ->
     forall f n envI,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
@@ -3923,7 +3923,7 @@ Theorem noerrors_prog :
       wf_env Γ ins envI bs (denot_global G f envI).
 Proof.
   intros * Wtg Wcg.
-  unfold op_correct_global.
+  unfold no_rte_global.
   unfold denot_global.
   rewrite FIXP_fixp.
   (* point fixe global *)
@@ -3933,7 +3933,7 @@ Proof.
     apply wf_env_admissible; intro k.
     apply HH; auto.
     eapply Forall_impl, Hf; cbv beta; intros * Hop envI'.
-    eapply op_correct_node_le_compat, Hop; auto.
+    eapply no_rte_node_le_compat, Hop; auto.
     apply fcont_app_le_compat; auto.
     apply (le_lub f k). }
   (* étape d'induction *)
@@ -3945,16 +3945,16 @@ Proof.
   rewrite FIXP_fixp; intro Hoc.
   (* point fixe sur le nœud *)
   apply fixp_inv2_le with
-    (Q := fun env => op_correct_node G (List.map fst (n_in n)) envG envI env n
+    (Q := fun env => no_rte_node G (List.map fst (n_in n)) envG envI env n
     ); eauto using wf_env_admissible, oc_node_admissible_rev.
-  { eapply op_correct_node_le_compat, Hoc; auto. }
+  { eapply no_rte_node_le_compat, Hoc; auto. }
   intros env Henv Henv_le Hoc'.
   apply safe_node; eauto using wc_global_node, wt_global_node.
   (* hypothèse d'induction globale *)
   intros f' n' Hfind' ?? bs' envI' Hbs' Hins'.
   apply wf_env_loc, HenvG; auto using wf_env_0_ext.
   eapply Forall_impl, Ocg; cbv beta; intros ? HH ?.
-  eapply op_correct_node_le_compat, HH; auto using fcont_app_le_compat.
+  eapply no_rte_node_le_compat, HH; auto using fcont_app_le_compat.
 Qed.
 
 

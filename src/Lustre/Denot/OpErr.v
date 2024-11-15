@@ -12,7 +12,7 @@ From Velus Require Import SD Restr CheckOp.
     overflows in modulo/shifting, etc. The precise behaviour of these operators is
     described in [CompCert/cfrontend/Cop.v].
 
-    This file introduces the [op_correct] predicate that describes the (minimal?)
+    This file introduces the [no_rte] predicate that describes the (minimal?)
     set of assumptions required on a Lustre program for its denotation to be
     free of [error_Op].
  *)
@@ -73,7 +73,7 @@ Proof.
 Qed.
 
 
-Section Op_correct_node.
+Section Norte_node.
 
 Context {PSyn : list decl -> block -> Prop}.
 Context {Prefs : PS.t}.
@@ -85,29 +85,29 @@ Variables
   (envI : DS_prod SI)
   (env : DS_prod SI).
 
-Inductive op_correct_exp : exp -> Prop :=
+Inductive no_rte_exp : exp -> Prop :=
 | opc_Econst :
   forall c,
-    op_correct_exp (Econst c)
+    no_rte_exp (Econst c)
 | opc_Eenum :
   forall c ty,
-    op_correct_exp (Eenum c ty)
+    no_rte_exp (Eenum c ty)
 | opc_Evar :
   forall x ann,
-    op_correct_exp (Evar x ann)
+    no_rte_exp (Evar x ann)
 | opc_Eunop :
   forall op e ann,
-    op_correct_exp e ->
+    no_rte_exp e ->
     (forall (* ss *) ty,
         typeof e = [ty] ->
         (* denot_exp ins e envI env = ss -> *)
         forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) (denot_exp G ins e envG envI env)
     ) ->
-    op_correct_exp (Eunop op e ann)
+    no_rte_exp (Eunop op e ann)
 | opc_Ebinop :
   forall op e1 e2 ann,
-    op_correct_exp e1 ->
-    op_correct_exp e2 ->
+    no_rte_exp e1 ->
+    no_rte_exp e2 ->
     (forall ty1 ty2,
         typeof e1 = [ty1] ->
         typeof e2 = [ty2] ->
@@ -120,81 +120,81 @@ Inductive op_correct_exp : exp -> Prop :=
              sem_binop op v1 ty1 v2 ty2 <> None)
           (ZIP pair (nprod_hd_def errTy ss1) (nprod_hd_def errTy ss2))
     ) ->
-    op_correct_exp (Ebinop op e1 e2 ann)
+    no_rte_exp (Ebinop op e1 e2 ann)
 | opc_Efby :
   forall e0s es anns,
-    Forall op_correct_exp e0s ->
-    Forall op_correct_exp es ->
-    op_correct_exp (Efby e0s es anns)
+    Forall no_rte_exp e0s ->
+    Forall no_rte_exp es ->
+    no_rte_exp (Efby e0s es anns)
 | opc_Ewhen :
   forall es x k anns,
-    Forall op_correct_exp es ->
-    op_correct_exp (Ewhen es x k anns)
+    Forall no_rte_exp es ->
+    no_rte_exp (Ewhen es x k anns)
 | opc_Merge :
   forall ess x anns,
-    Forall (fun es => Forall op_correct_exp (snd es)) ess ->
-    op_correct_exp (Emerge x ess anns)
+    Forall (fun es => Forall no_rte_exp (snd es)) ess ->
+    no_rte_exp (Emerge x ess anns)
 | opc_Case :
   forall e ess anns,
-    op_correct_exp e ->
-    Forall (fun es => Forall op_correct_exp (snd es)) ess ->
-    op_correct_exp (Ecase e ess None anns)
+    no_rte_exp e ->
+    Forall (fun es => Forall no_rte_exp (snd es)) ess ->
+    no_rte_exp (Ecase e ess None anns)
 | opc_Case_def :
   forall e ess eds anns,
-    op_correct_exp e ->
-    Forall (fun es => Forall op_correct_exp (snd es)) ess ->
-    Forall op_correct_exp eds ->
-    op_correct_exp (Ecase e ess (Some eds) anns)
+    no_rte_exp e ->
+    Forall (fun es => Forall no_rte_exp (snd es)) ess ->
+    Forall no_rte_exp eds ->
+    no_rte_exp (Ecase e ess (Some eds) anns)
 | opc_Eapp :
   forall f es er anns,
-    Forall op_correct_exp es ->
-    Forall op_correct_exp er ->
-    op_correct_exp (Eapp f es er anns)
+    Forall no_rte_exp es ->
+    Forall no_rte_exp er ->
+    no_rte_exp (Eapp f es er anns)
 .
 
-Definition op_correct_block (b : block) : Prop :=
+Definition no_rte_block (b : block) : Prop :=
   match b with
-  | Beq (xs,es) => Forall op_correct_exp es
+  | Beq (xs,es) => Forall no_rte_exp es
   | _ => True
   end.
 
-Definition op_correct_node (n : @node PSyn Prefs) : Prop :=
+Definition no_rte_node (n : @node PSyn Prefs) : Prop :=
   match n.(n_block) with
-  | Blocal (Scope vars blks) => Forall op_correct_block blks
+  | Blocal (Scope vars blks) => Forall no_rte_block blks
   | _ => True
   end.
 
-End Op_correct_node.
+End Norte_node.
 
 (* TODO: c'est trop fort pour l'instant.
    Comment ne parler que du nœud main ?
    Et propager les valeurs dans les appels de fonction ? *)
-Definition op_correct_global {PSyn Prefs} (G : @global PSyn Prefs) : Prop :=
+Definition no_rte_global {PSyn Prefs} (G : @global PSyn Prefs) : Prop :=
   let envG := denot_global G in
   Forall (fun n => forall envI,
               let ins := List.map fst n.(n_in) in
-              op_correct_node G ins envG envI (envG (n_name n) envI) n)
+              no_rte_node G ins envG envI (envG (n_name n) envI) n)
     (nodes G).
 
 
-(** ** Facts about op_correct  *)
+(** ** Facts about no_rte  *)
 
-Lemma op_correct_exp_cons :
+Lemma no_rte_exp_cons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall e nds tys exts ins envG envI env,
     ~ Is_node_in_exp nd.(n_name) e ->
-    op_correct_exp (Global tys exts (nd :: nds)) ins envG envI env e ->
-    op_correct_exp (Global tys exts (nds)) ins envG envI env e.
+    no_rte_exp (Global tys exts (nd :: nds)) ins envG envI env e ->
+    no_rte_exp (Global tys exts (nds)) ins envG envI env e.
 Proof.
   induction e using exp_ind2; intros * Hnin Hop; inv Hop;
-    eauto using @op_correct_exp.
+    eauto using @no_rte_exp.
   - (* Eunop *)
     setoid_rewrite <- denot_exp_cons in H3;
-      eauto 6 using @op_correct_exp, Is_node_in_exp.
+      eauto 6 using @no_rte_exp, Is_node_in_exp.
   - (* Ebinop *)
     simpl in *.
     setoid_rewrite <- denot_exp_cons in H5;
-      eauto 12 using @op_correct_exp, Is_node_in_exp.
+      eauto 12 using @no_rte_exp, Is_node_in_exp.
   - (* Efby *)
     constructor; simpl_Forall.
     + eapply H; eauto.
@@ -238,36 +238,36 @@ Proof.
       contradict Hnin; constructor; right; solve_Exists.
 Qed.
 
-Lemma op_correct_block_cons :
+Lemma no_rte_block_cons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall b nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) b ->
-    op_correct_block (Global tys exts (nd :: nds)) ins envG envI env b ->
-    op_correct_block (Global tys exts (nds)) ins envG envI env b.
+    no_rte_block (Global tys exts (nd :: nds)) ins envG envI env b ->
+    no_rte_block (Global tys exts (nds)) ins envG envI env b.
 Proof.
-  unfold op_correct_block.
+  unfold no_rte_block.
   intros * Hnin Hop; cases.
   eapply Forall_impl_In in Hop; eauto.
   intros * Hin.
-  apply op_correct_exp_cons.
+  apply no_rte_exp_cons.
   contradict Hnin.
   constructor.
   unfold Is_node_in_eq.
   solve_Exists.
 Qed.
 
-Lemma op_correct_node_cons :
+Lemma no_rte_node_cons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall n nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
-    op_correct_node (Global tys exts (nd :: nds)) ins envG envI env n ->
-    op_correct_node (Global tys exts nds) ins envG envI env n.
+    no_rte_node (Global tys exts (nd :: nds)) ins envG envI env n ->
+    no_rte_node (Global tys exts nds) ins envG envI env n.
 Proof.
-  unfold op_correct_node.
+  unfold no_rte_node.
   intros * Hnin Hop; cases.
   eapply Forall_impl_In in Hop; eauto.
   intros * Hin.
-  apply op_correct_block_cons.
+  apply no_rte_block_cons.
   contradict Hnin.
   constructor; constructor.
   solve_Exists.
@@ -275,22 +275,22 @@ Qed.
 
 (** *** The other way *)
 
-Lemma op_correct_exp_uncons :
+Lemma no_rte_exp_uncons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall e nds tys exts ins envG envI env,
     ~ Is_node_in_exp nd.(n_name) e ->
-    op_correct_exp (Global tys exts (nds)) ins envG envI env e ->
-    op_correct_exp (Global tys exts (nd :: nds)) ins envG envI env e.
+    no_rte_exp (Global tys exts (nds)) ins envG envI env e ->
+    no_rte_exp (Global tys exts (nd :: nds)) ins envG envI env e.
 Proof.
   induction e using exp_ind2; intros * Hnin Hop; inv Hop;
-    eauto using @op_correct_exp.
+    eauto using @no_rte_exp.
   - (* Eunop *)
     setoid_rewrite denot_exp_cons in H3;
-      eauto 6 using @op_correct_exp, Is_node_in_exp.
+      eauto 6 using @no_rte_exp, Is_node_in_exp.
   - (* Ebinop *)
     simpl in *.
     setoid_rewrite denot_exp_cons in H5;
-      eauto 12 using @op_correct_exp, Is_node_in_exp.
+      eauto 12 using @no_rte_exp, Is_node_in_exp.
   - (* Efby *)
     constructor; simpl_Forall.
     + eapply H; eauto.
@@ -334,61 +334,61 @@ Proof.
       contradict Hnin; constructor; right; solve_Exists.
 Qed.
 
-Lemma op_correct_block_uncons :
+Lemma no_rte_block_uncons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall b nds tys exts ins envG envI env,
     ~ Is_node_in_block nd.(n_name) b ->
-    op_correct_block (Global tys exts (nds)) ins envG envI env b ->
-    op_correct_block (Global tys exts (nd :: nds)) ins envG envI env b.
+    no_rte_block (Global tys exts (nds)) ins envG envI env b ->
+    no_rte_block (Global tys exts (nd :: nds)) ins envG envI env b.
 Proof.
-  unfold op_correct_block.
+  unfold no_rte_block.
   intros * Hnin Hop; cases.
   eapply Forall_impl_In in Hop; eauto.
   intros * Hin.
-  apply op_correct_exp_uncons.
+  apply no_rte_exp_uncons.
   contradict Hnin.
   constructor.
   unfold Is_node_in_eq.
   solve_Exists.
 Qed.
 
-Lemma op_correct_node_uncons :
+Lemma no_rte_node_uncons :
   forall {PSyn Prefs} (nd : @node PSyn Prefs),
   forall n nds tys exts ins envG envI env,
     ~ Is_node_in nd.(n_name) n ->
-    op_correct_node (Global tys exts nds) ins envG envI env n ->
-    op_correct_node (Global tys exts (nd :: nds)) ins envG envI env n.
+    no_rte_node (Global tys exts nds) ins envG envI env n ->
+    no_rte_node (Global tys exts (nd :: nds)) ins envG envI env n.
 Proof.
-  unfold op_correct_node, Is_node_in.
+  unfold no_rte_node, Is_node_in.
   intros * Hnin Hop; cases.
   eapply Forall_impl_In in Hop; eauto.
   intros * Hin.
-  apply op_correct_block_uncons.
+  apply no_rte_block_uncons.
   contradict Hnin.
   constructor; constructor.
   solve_Exists.
 Qed.
 
-Lemma op_correct_exp_oeq_compat :
+Lemma no_rte_exp_oeq_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG' == envG ->
     env' == env ->
     envI' == envI ->
     forall e,
-      op_correct_exp G ins envG' envI' env' e ->
-      op_correct_exp G ins envG envI env e.
+      no_rte_exp G ins envG' envI' env' e ->
+      no_rte_exp G ins envG envI env e.
 Proof.
   intros * Eq1 * Eq2 * Eq3 e.
   induction e using exp_ind2; intro Hoc; inv Hoc.
   all: try now (constructor; eauto).
   - (* Eunop *)
-    take (op_correct_exp _ _ _ _ _ _) and apply IHe in it.
+    take (no_rte_exp _ _ _ _ _ _) and apply IHe in it.
     constructor; intros; eauto.
     rewrite <- Eq1, <- Eq2, <- Eq3; auto.
   - (* Ebinop *)
-    take (op_correct_exp _ _ _ _ _ e1) and apply IHe1 in it.
-    take (op_correct_exp _ _ _ _ _ e2) and apply IHe2 in it.
+    take (no_rte_exp _ _ _ _ _ e1) and apply IHe1 in it.
+    take (no_rte_exp _ _ _ _ _ e2) and apply IHe2 in it.
     constructor; intros; eauto.
     subst ss1 ss2.
     rewrite <- Eq1, <- Eq2, <- Eq3; auto.
@@ -406,81 +406,81 @@ Proof.
     constructor; simpl_Forall; auto.
 Qed.
 
-Lemma op_correct_block_oeq_compat :
+Lemma no_rte_block_oeq_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG' == envG ->
     env' == env ->
     envI' == envI ->
     forall b,
-      op_correct_block G ins envG' envI' env' b ->
-      op_correct_block G ins envG envI env b.
+      no_rte_block G ins envG' envI' env' b ->
+      no_rte_block G ins envG envI env b.
 Proof.
   intros * ????.
-  unfold op_correct_block.
+  unfold no_rte_block.
   cases; try tauto.
-  intro Hf; simpl_Forall; eauto using op_correct_exp_oeq_compat.
+  intro Hf; simpl_Forall; eauto using no_rte_exp_oeq_compat.
 Qed.
 
-Lemma op_correct_node_oeq_compat :
+Lemma no_rte_node_oeq_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG' == envG ->
     env' == env ->
     envI' == envI ->
     forall n,
-      op_correct_node G ins envG' envI' env' n ->
-      op_correct_node G ins envG envI env n.
+      no_rte_node G ins envG' envI' env' n ->
+      no_rte_node G ins envG envI env n.
 Proof.
   intros * Eq1 * Eq2 * Eq3 *.
-  unfold op_correct_node.
+  unfold no_rte_node.
   cases; try tauto.
   intro HH; simpl_Forall.
-  eapply op_correct_block_oeq_compat in HH; eauto.
+  eapply no_rte_block_oeq_compat in HH; eauto.
 Qed.
 
 
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (no_rte_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq exp ==> Basics.impl
-      as op_correct_exp_morph_impl.
+      as no_rte_exp_morph_impl.
 Proof.
-  intros; intro Hop; eapply op_correct_exp_oeq_compat, Hop; auto.
+  intros; intro Hop; eapply no_rte_exp_oeq_compat, Hop; auto.
 Qed.
 
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_exp G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (no_rte_exp G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq exp ==> iff
-      as op_correct_exp_morph.
+      as no_rte_exp_morph.
 Proof.
-  split; intro Hop; eapply op_correct_exp_oeq_compat, Hop; auto.
+  split; intro Hop; eapply no_rte_exp_oeq_compat, Hop; auto.
 Qed.
 
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_block G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (no_rte_block G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq block ==> iff
-      as op_correct_block_morph.
+      as no_rte_block_morph.
 Proof.
-  split; intro Hop; eapply op_correct_block_oeq_compat, Hop; auto.
+  split; intro Hop; eapply no_rte_block_oeq_compat, Hop; auto.
 Qed.
 
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_node G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (no_rte_node G ins)
     with signature @Oeq (Dprodi FI) ==> @Oeq (DS_prod SI) ==>
                      @Oeq (DS_prod SI) ==> @eq node ==> iff
-      as op_correct_node_morph.
+      as no_rte_node_morph.
 Proof.
-  split; intro Hop; eapply op_correct_node_oeq_compat, Hop; auto.
+  split; intro Hop; eapply no_rte_node_oeq_compat, Hop; auto.
 Qed.
 
-Lemma op_correct_exp_le_compat :
+Lemma no_rte_exp_le_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG <= envG' ->
     env <= env' ->
     envI <= envI' ->
     forall e,
-      op_correct_exp G ins envG' envI' env' e ->
-      op_correct_exp G ins envG envI env e.
+      no_rte_exp G ins envG' envI' env' e ->
+      no_rte_exp G ins envG envI env e.
 Proof.
   intros * Le1 Le2 Le3.
   induction e using exp_ind2; intros Hop; inv Hop;
@@ -507,45 +507,45 @@ Proof.
     simpl_Forall; auto.
 Qed.
 
-Lemma op_correct_block_le_compat :
+Lemma no_rte_block_le_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG <= envG' ->
     env <= env' ->
     envI <= envI' ->
     forall b,
-    op_correct_block G ins envG' envI' env' b ->
-    op_correct_block G ins envG envI env b.
+    no_rte_block G ins envG' envI' env' b ->
+    no_rte_block G ins envG envI env b.
 Proof.
   intros * Le1 Le2 Le3 ?.
-  unfold op_correct_block.
+  unfold no_rte_block.
   cases.
   apply Forall_impl.
-  eauto using op_correct_exp_le_compat.
+  eauto using no_rte_exp_le_compat.
 Qed.
 
-Lemma op_correct_node_le_compat :
+Lemma no_rte_node_le_compat :
   forall {PSyn Prefs} (G : @global PSyn Prefs),
   forall ins envG envG' envI envI' env env',
     envG <= envG' ->
     env <= env' ->
     envI <= envI' ->
     forall n,
-    op_correct_node G ins envG' envI' env' n ->
-    op_correct_node G ins envG envI env n.
+    no_rte_node G ins envG' envI' env' n ->
+    no_rte_node G ins envG envI env n.
 Proof.
-  unfold op_correct_node.
+  unfold no_rte_node.
   intros * ????; cases.
   apply Forall_impl; intros.
-  eauto using op_correct_block_le_compat.
+  eauto using no_rte_block_le_compat.
 Qed.
 
-Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (op_correct_node G ins)
+Global Add Parametric Morphism {PSyn Prefs} (G : @global PSyn Prefs) ins : (no_rte_node G ins)
     with signature @Ole (Dprodi FI) ==> @Ole (DS_prod SI) ==>
                      @Ole (DS_prod SI) ==> @eq node ==> Basics.flip Basics.impl
-      as op_correct_node_le_morph.
+      as no_rte_node_le_morph.
 Proof.
-  intros; intro Hop; eapply op_correct_node_le_compat, Hop; auto.
+  intros; intro Hop; eapply no_rte_node_le_compat, Hop; auto.
 Qed.
 
 
@@ -557,7 +557,7 @@ Theorem check_exp_ok :
   forall e, restr_exp e ->
        wt_exp G Γ e ->
        check_exp e = true ->
-       op_correct_exp G ins envG envI env e.
+       no_rte_exp G ins envG envI env e.
 Proof.
   intros *.
   induction e using exp_ind2; simpl; intros Hr Hwt Hchk; inv Hr; inv Hwt.
@@ -640,7 +640,7 @@ Lemma check_block_ok :
   forall b, restr_block b ->
        wt_block G Γ b ->
        check_block b = true ->
-       op_correct_block G ins envG envI env b.
+       no_rte_block G ins envG envI env b.
 Proof.
   destruct b; simpl; intros * Hr Hwt Hc; try tauto.
   destruct e.
@@ -656,9 +656,9 @@ Lemma check_node_ok :
     restr_node n ->
     wt_node G n ->
     check_node n = true ->
-    op_correct_node G ins envG envI env n.
+    no_rte_node G ins envG envI env n.
 Proof.
-  unfold check_node, check_top_block, op_correct_node.
+  unfold check_node, check_top_block, no_rte_node.
   intros * Hr Hwt Hc.
   inv Hr; inv Hwt.
   cases.
@@ -674,9 +674,9 @@ Theorem check_global_ok :
     restr_global G ->
     wt_global G ->
     check_global G = true ->
-    op_correct_global G.
+    no_rte_global G.
 Proof.
-  unfold check_global, op_correct_global, restr_global.
+  unfold check_global, no_rte_global, restr_global.
   intros * Hr Hwt Hc%forallb_Forall.
   generalize (denot_global G); intro envG.
   assert (Ordered_nodes G) as Hord.
@@ -686,11 +686,11 @@ Proof.
   inv Hr. inv Hc.
   apply wt_global_uncons in Hwt as Hwtn.
   constructor; intros; auto.
-  - eapply check_node_ok, op_correct_node_uncons in Hwtn; eauto.
+  - eapply check_node_ok, no_rte_node_uncons in Hwtn; eauto.
     eapply find_node_not_Is_node_in; eauto using find_node_now.
   - eapply IHnds in H2; eauto using wt_global_cons, Ordered_nodes_cons.
     simpl_Forall.
-    eapply op_correct_node_uncons in H2; eauto using Ordered_nodes_nin.
+    eapply no_rte_node_uncons in H2; eauto using Ordered_nodes_nin.
 Qed.
 
 End OP_ERR.
