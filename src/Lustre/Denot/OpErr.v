@@ -166,15 +166,46 @@ Definition no_rte_node (n : @node PSyn Prefs) : Prop :=
 
 End Norte_node.
 
-(* TODO: c'est trop fort pour l'instant.
-   Comment ne parler que du nœud main ?
-   Et propager les valeurs dans les appels de fonction ? *)
+
+(** A first definition of [no_rte] for global programs:
+    it is very strong (and thus not satisfactory) because [no_rte_node]
+    must hold for every input in every node *)
 Definition no_rte_global {PSyn Prefs} (G : @global PSyn Prefs) : Prop :=
   let envG := denot_global G in
   Forall (fun n => forall envI,
               let ins := List.map fst n.(n_in) in
               no_rte_node G ins envG envI (envG (n_name n) envI) n)
     (nodes G).
+
+(** [no_rte_node] should hold with inputs [envI] for the main node,
+    and with any inputs for other nodes. *)
+Definition no_rte_global_main {PSyn Prefs} (G : @global PSyn Prefs) main envI :=
+  let envG := denot_global G in
+  Forall (fun n =>
+            let ins := List.map fst n.(n_in) in
+            if ident_eqb (n_name n) main
+            then no_rte_node G ins envG envI (envG (n_name n) envI) n
+            else forall envI, no_rte_node G ins envG envI (envG (n_name n) envI) n)
+    (nodes G).
+
+(* À terme, il faudrait affiner cette approche en rendant les prédicats
+   no_rte_exp et no_rte_node mutuellement récursifs, permettant ainsi de tenir
+   compte des valeurs des flots lors des instanciations de nœuds.
+   Mais cela compliquerait considérablement les preuves dans Safe.v et SDtorel.v :
+   - il faut introduire mask dans [no_rte_exp] pour tenir compte des instances
+     réinitialisées, et donc refaire des preuves mask/reset dans Safe...
+   - il faut faire un raisonnement global par induction mutuelle sur [no_rte]
+     dans SDtorel, c'est infernal.
+*)
+
+Lemma no_rte_global_main_global :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    no_rte_global G -> forall f envI, no_rte_global_main G f envI.
+Proof.
+  unfold no_rte_global, no_rte_global_main.
+  intros * Hf *.
+  eapply Forall_impl, Hf; intros; cases.
+Qed.
 
 
 (** ** Facts about no_rte  *)

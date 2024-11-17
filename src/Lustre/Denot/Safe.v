@@ -3958,6 +3958,90 @@ Proof.
 Qed.
 
 
+(** the same theorem but with the weaker [no_rte_node_main] hypothesis *)
+Theorem noerrors_prog_main :
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    wt_global G ->
+    wc_global G ->
+    forall f n envI,
+      no_rte_global_main G f envI ->
+      find_node f G = Some n ->
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
+      forall bs, bss ins envI <= bs ->
+      wf_env Γ ins envI bs 0 ->
+      wf_env Γ ins envI bs (denot_global G f envI).
+Proof.
+  intros * Wtg Wcg * Norte Hfind ??? Hle Hins.
+  unfold no_rte_global_main in Norte.
+  assert (Ordered_nodes G) as Hord.
+  now apply wl_global_Ordered_nodes, wt_global_wl_global.
+  remember (denot_global G) as envG eqn:HG.
+  assert (forall f nd envI,
+             find_node f G = Some nd ->
+             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
+  { intros * Hf; subst.
+    unfold denot_global.
+    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
+  clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
+  revert Norte.
+  revert dependent n. revert f envI. revert bs.
+  destruct G as [tys exts nds].
+  induction nds as [|a nds]; intros. inv Hfind.
+  destruct (ident_eq_dec (n_name a) f); subst.
+  - (* cas qui nous intéresse *)
+    rewrite find_node_now in Hfind; inv Hfind; auto.
+    inversion_clear Norte as [|?? Hoc Hocs].
+    rewrite ident_eqb_refl in Hoc.
+    (* specialize (Hoc envI bs (wf_env_loc _ _ _ _ Hins)). *)
+    revert Hoc. fold ins.
+    rewrite HenvG; auto using find_node_now.
+    rewrite <- denot_node_cons;
+      eauto using find_node_not_Is_node_in, find_node_now.
+    rewrite FIXP_fixp.
+    intro Hoc.
+    apply no_rte_node_cons in Hoc; eauto using find_node_not_Is_node_in, find_node_now.
+    apply fixp_inv2_le with
+      (Q := fun env =>
+              no_rte_node {| types := tys; externs := exts; nodes := nds |} ins envG envI env n
+      ); eauto using wf_env_admissible, oc_node_admissible_rev, wf_env_0_ext.
+    intros env Hsafe Hl Hoc2.
+    apply Ordered_nodes_cons in Hord as Hord'.
+    apply wt_global_cons in Wtg as Wtg'.
+    destruct Wtg as [? Wtp] eqn:HH; clear HH. (* trouver un autre moyen de garder Wtg *)
+    inv Wcg. inv Wtp. (* inv Rg. *)
+    apply safe_node; auto; try tauto.
+    (* reste l'hypothèse de récurrence sur les nœuds *)
+    intros f2 n2 Hfind ?? bs2 envI2 Hbs2 Hins2.
+    apply wf_env_loc.
+    apply IHnds; auto using wf_env_0_ext.
+    + (* montrons que HenvG tient toujours *)
+      intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := n) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + (* montrons que no_rte tient toujours *)
+      simpl (nodes _).
+      take (wc_node _ _ /\ _) and destruct it as [? Hnn].
+      clear - Hocs Hnn Hord.
+      simpl_Forall.
+      rewrite <- ident_eqb_neq, ident_eqb_sym in Hnn.
+      rewrite Hnn in Hocs.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+  - rewrite find_node_other in Hfind; auto.
+    apply IHnds; auto.
+    + eauto using wt_global_cons.
+    + eauto using wc_global_cons.
+    + eauto using Ordered_nodes_cons.
+    + intros f' ndf' envI' Hfind'.
+      eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
+      rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    + clear - Norte Hord. inv Norte.
+      eapply Forall_impl_In; eauto.
+      simpl; intros * Hin HH *.
+      cases_eqn HH; intros; eapply no_rte_node_cons; eauto using Ordered_nodes_nin.
+Qed.
+
+
 (** As a consequence of clock typing correctness, we prove that the
     absences of inputs and outputs are aligned *)
 Section Abs_aligned.
