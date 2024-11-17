@@ -3314,12 +3314,16 @@ Proof.
   destruct (n_nodup n); eauto using NoDup_app_weaken.
 Qed.
 
-Definition wf_inputs {PSyn Prefs} (n : @node PSyn Prefs) (ss : nprod (length (n_in n))) :=
+Definition wf_inputs
+  (* on laisse {m} arbitraire pour simplifier l'appel dans
+     src/VelusCorrectnessNew *)
+  {PSyn Prefs} (n : @node PSyn Prefs) {m} (ss : nprod m) :=
   let ins := idents (n_in n) in
   let envI := env_of_np ins ss in
   let bs := bss ins envI in
   let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
-  wf_env Γ ins envI bs 0.
+  m = length (n_in n)
+  /\  wf_env Γ ins envI bs 0.
 
 (** Witness of the relational semantics *)
 Theorem ok_global :
@@ -3332,14 +3336,15 @@ Theorem ok_global :
     check_global G = true ->
     Forall node_causal (nodes G) ->
     forall f n, find_node f G = Some n ->
-    forall (xs : nprod (length (n_in n))) InfXs,
+    forall m (xs : nprod m) InfXs,
       wf_inputs n xs ->
       exists (os : nprod ((length (n_out n)))) InfO,
         sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
 Proof.
-  intros ???? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
+  intros ???? Hr Hwt Hwc Hoc Hcaus Hfind ????? Hins.
   apply check_global_ok in Hoc; auto.
-  unshelve eapply _ok_global2 with (InfSs := InfXs) in Hins; eauto.
+  destruct Hins as [? Hwf]; subst.
+  unshelve eapply _ok_global2 with (InfSs := InfXs) in Hwf; eauto.
   { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;
       eauto using inf_dom_env_of_np. }
   unfold decl.
