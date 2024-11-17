@@ -2257,7 +2257,6 @@ Hypothesis Wfg :
     let ins := List.map fst n.(n_in) in
     let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ get_locals (n_block n) in
     forall bs, bss ins envI <= bs ->
-          (* no_rte_node G ins envG envI (envG f envI) n -> *)
           wf_env Γ ins envI bs 0 ->
           wf_env Γ ins envI bs (envG f envI).
 
@@ -2284,12 +2283,6 @@ Hypothesis Hnode :
        set (Info := forall_np_of_env _ _ _ (InfG _ _ infI)) *)
     forall Infi Info,
     sem_node G f (Ss_of_nprod xs Infi) (Ss_of_nprod os Info).
-
-(* Hypothesis Hnorte : *)
-(*   forall f n envI, *)
-(*     find_node f G = Some n -> *)
-(*     let ins := List.map fst (n_in n) in *)
-(*     no_rte_node G ins envG envI (envG f envI) n. *)
 
 
 (** On le laisse ici car il dépend des hypothèses de section *)
