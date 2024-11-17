@@ -227,3 +227,4 @@ src/Velus.v
 src/NLCorrectness.v
 src/VelusWorld.v
 src/VelusCorrectness.v
+src/VelusCorrectnessNew.v
