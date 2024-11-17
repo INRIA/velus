@@ -3352,7 +3352,8 @@ Proof.
 Qed.
 
 
-(** the same theorems but with the weaker [no_rte_node_main] hypothesis *)
+(** ** the same theorems but with the weaker [no_rte_node_main] hypothesis *)
+
 Theorem _ok_global_main :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
   forall {PSyn Prefs} (G : @global PSyn Prefs),
@@ -3610,6 +3611,31 @@ Proof.
   intros; apply _Ss_of_nprod_eq, np_of_env_of_np.
   rewrite map_length; apply n_ingt0.
   destruct (n_nodup n); eauto using NoDup_app_weaken.
+Qed.
+
+
+(** Witness of the relational semantics *)
+Theorem ok_global_main :
+  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+    restr_global G ->
+    wt_global G ->
+    wc_global G ->
+    Forall node_causal (nodes G) ->
+    forall f n, find_node f G = Some n ->
+    forall m (xs : nprod m) InfXs,
+      no_rte_global_main G f (env_of_np (List.map fst (n_in n)) xs) ->
+      wf_inputs n xs ->
+      exists (os : nprod ((length (n_out n)))) InfO,
+        sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
+Proof.
+  intros ???? Hr Hwt Hwc Hcaus Hfind ????? Hoc Hins.
+  destruct Hins as [? Hwf]; subst.
+  unshelve eapply _ok_global_main2 with (InfSs := InfXs) in Hwf; eauto.
+  { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;
+      eauto using inf_dom_env_of_np. }
+  unfold decl.
+  rewrite <- (map_length fst (n_out n)); eauto.
 Qed.
 
 End SDTOREL.
