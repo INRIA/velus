@@ -1,5 +1,6 @@
 All files in this distribution except those in the top-level "examples" and
-"CompCert" subdirectories are part of the Vélus verified Lustre compiler.
+"CompCert" subdirectories, and the "src/Lustre/Denot/Cpo" subdirectory are
+part of the Vélus verified Lustre compiler.
 
 The Vélus verified Lustre compiler is Copyright by Institut National de
 Recherche en Informatique et en Automatique (Inria).
