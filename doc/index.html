@@ -1,0 +1,318 @@
+<!-- note: we use a modified version of coq2html to handle
+     definitions by tactics, very frequent using the CPO library.
+
+diff --git a/coq2html.mll b/coq2html.mll
+index 31204f2..8b7487c 100644
+--- a/coq2html.mll
++++ b/coq2html.mll
+@@ -245,7 +245,9 @@ let start_proof s kwd =
+   fprintf !oc "<div class=\"proofscript\" id=\"proof%d\">\n" !proof_counter
+ 
+ let end_proof kwd =
+-  fprintf !oc "%s</div>\n" kwd;
++  if !in_proof
++  then fprintf !oc "%s</div>\n" kwd
++  else (fprintf !oc "%s\n" kwd; newline());
+   in_proof := false
+ 
+ (* Like Str.global_replace but don't interpret '\1' etc in replacement text *)
+  -->
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>Références au code Coq</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+<style type="text/css">
+body {
+  color: black; background: white;
+  margin-left: 5%; margin-right: 5%;
+}
+h2 { margin-left: -5%;}
+h3 { margin-left: -3%; }
+h1,h2,h3 { font-family: sans-serif; }
+hr { margin-left: -5%; margin-right:-5%; }
+a:visited {color : #416DFF; text-decoration : none; font-weight : bold}
+a:link {color : #416DFF; text-decoration : none; font-weight : bold}
+a:hover {color : Red; text-decoration : underline; }
+a:active {color : Red; text-decoration : underline; }
+</style>
+
+</head>
+<body>
+
+<h2>Références au développement Coq, par section</h2>
+
+<p><em>
+    Les conventions de nommage diffèrent parfois entre la thèse et le code
+    source. Les liens donnés ici se réfèrent aux noms imprimés dans la thèse
+    (les noms du code sont mis entre parenthèses).
+</em></p>
+
+<p><em>Le développement complet est disponible
+    <a href="https://github.com/INRIA/velus/tree/paul-thesis">ici</a>.
+</em></p>
+
+<h3>2.1.4 Le langage d’entrée, syntaxe et typage</h3>
+
+<ul>
+<li>On définit un sous-ensemble de
+  la <a href="html/Velus.Lustre.LSyntax.html">syntaxe complète</a> de Vélus à l'aide des prédicats suivants:
+  <ul>
+     <li> <a href="html/Velus.Lustre.Denot.Restr.html#LRESTR.restr_exp">restr_exp</a>: expressions</li>
+    <li> <a href="html/Velus.Lustre.Denot.Restr.html#LRESTR.restr_block">restr_block</a>: équations</li>
+    <li> <a href="html/Velus.Lustre.Denot.Restr.html#LRESTR.restr_block">restr_node</a>: nœuds</li>
+    <li> <a href="html/Velus.Lustre.Denot.Restr.html#LRESTR.restr_global">restr_global</a>: programmes</li>
+</ul>
+<li> Les <a href="html/Velus.ObcToClight.Interface.html#Op.unop">opérateurs</a> arithmétiques et logiques, hérités de CompCert. </li>
+<li> Le type des <a href="html/Velus.Clocks.html#CLOCKS.clock">horloges</a> </li>
+<li> Les règles de <a href="html/Velus.Lustre.LTyping.html#LTYPING.wt_exp">typage</a> </li>
+<li> Les règles de <a href="html/Velus.Lustre.LClocking.html#LCLOCKING.wc_exp">typage des horloges</a>
+</ul>
+
+
+<h3>2.1.5 Sémantique synchrone relationnelle</h3>
+<ul>
+  <li> <a href="html/Velus.Operators.html#OPERATORS.value">value</a> : le type abstrait des valeurs, et son <a href="html/Velus.ObcToClight.Interface.html#Op.value">instance</a> dans CompCert</li>
+     <li> <a href="html/Velus.Operators.html#OPERATORS_AUX.svalue">svalue</a> : le type des valeurs synchrones</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html">LSemantics</a> : les règles de la sémantique relationnelle</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">sem_node</a> : la sémantique d'un nœud, et la fonction <a href="html/Velus.CoindStreams.html#COINDSTREAMS.clocks_of">base-of (clocks_of)</a> </li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">sem_equation</a> : la sémantique d'une équation</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</a> : la sémantique d'une constante, et la fonction <a href="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</a></li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sbinop">Sbinop</a> : la sémantique d'une opération binaire, la fonction <a href="html/Velus.CoindStreams.html#COINDSTREAMS.lift2">lift2</a> et la fonction <a href="html/Velus.ObcToClight.Interface.html#Op.sem_binop">sem_binop</a>  </li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby">fby</a>/<a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby1">fby1</a> : les prédicats relationnels du délai initialisé</li>
+</ul>
+
+<h3>2.1.7 Correction de la compilation</h3>
+
+<ul>
+    <li> <a href="html/Velus.VelusCorrectness.html#behavior_asm">behavior_asm</a> : correction de la compilation </li>
+    <li> <a href="html/Velus.Lustre.LSemDeterminism.html#LSEMDETERMINISM.det_global">det_global</a> : déterminisme de la sémantique relationnelle</li>
+</ul>
+
+<h3>2.2.2 Modèle synchrone à types dépendants</h3>
+<p>Importé de <a href="https://www.di.ens.fr/~pouzet/lucid-synchrone/lucid_in_coq/">Boulmé et Hamon</a>, adapté à la nouvelle syntaxe de Coq par <a href="https://www.lri.fr/~keller/etudes.html"> Chantal Keller</a></p>
+<ul>
+  <li> <a href="html/lscoq/sampled_streams.html#samplStr">Str (samplStr)</a> : le type des flots cadencés</li>
+  <li> <a href="html/lscoq/lucid_ops.html#sp_when">sp_when</a> : l'opérateur d'échantillonnage</li>
+  <li> <a href="html/lscoq/sp_rec.html#rec1">rec1</a> : l'opérateur de point fixe</li>
+</ul>
+
+
+
+<h3>3.1 La bibliothèque CPO et nos extensions</h3>
+<p>Importé de <a href="https://www.lri.fr/~paulin/KahnNetworks/HTML/all-gal.html">C. Paulin-Mohring</a></p>
+<p>Définitions génériques</p>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#ord">ord</a> : type ordonné</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#monotonic">monotonic</a> : fonctions monotones</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#cpo">cpo</a> : CPO</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#continuous">continuous</a> : fonctions continues</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#FIXP">FIXP</a> : opérateur de point fixe, lui-même fonction continue</li>
+</ul>
+
+Définitions de flots
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#DStr">Steam_ε (DStr)</a> : le type des flots</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#DS_bot">DS_bot</a> : le flot vide (Eps pour toujours)</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#DS">DS</a> : le CPO des flots finis et infinis</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#infinite">infinite</a> : la propriété d'infinitude</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#REM">REM</a> : la primitive tl</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#MAP">MAP</a> : la primitive map définie comme un point fixe</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#APP">APP</a> : le fby en sémantique de Kahn</li>
+  <li>
+    <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#FIRST">first</a>,
+    <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#FILTER">filter</a>,
+    <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#ZIP">zip</a>,
+    <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#take">take</a>
+ </li>
+</ul>
+
+Principes de preuve
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo.Cpo_streams_type.html#DS_bisimulation">bi-simulation</a></li>
+  <li> le <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#take_Oeq">take-lemma</a></li>
+  <li> le principe de <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#infinite_le_eq">préfixe infini</a></li>
+  <li> le principe d'<a href="html/Velus.Lustre.Denot.Cpo.Cpo_def.html#fixp_ind">induction</a> de Scott</li>
+  <li> l'expression des propriétés de <a href="html/Velus.Lustre.Denot.CommonDS.html#DSForall">sûreté</a></li>
+</ul>
+
+
+<h3>3.2.1 Flots avec erreurs</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sampl">sevalue (sampl)</a> : le type des valeurs synchrones possiblement erronées</li>
+</ul>
+
+<h3>3.2.2 propriétés et conversions</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.sval_of_sampl">val_val (sval_of_sampl)</a> : conversion des valeurs</li>
+  <li> <a href="html/Velus.Lustre.Denot.CommonDS.html#S_of_DS">S_of_Se</a> : conversion d'un flot de Kahn en flot de Coq</li>
+  <li> <a href="html/Velus.Lustre.Denot.CommonDS.html#DS_of_S">Se_of_S</a> : conversion inverse</li>
+  <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.safe_DS">safe (safe_DS)</a> : un flot sans erreurs</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.S_of_DSv">⌈·⌉ (S_of_DSv)</a> : conversion des flots</li>
+  <li> <a href="html/Velus.Lustre.Denot.EraseAbs.html#ea">⌊·⌋ (ea)</a> : effacement des absences</li>
+</ul>
+
+
+<h3>3.3 Sémantique des opérateurs de flots</h3>
+Constantes
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</a> : constantes dans Vélus</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sconst">sconst</a> : flot constant dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_const">ok_const</a> : lemme de correspondance</li>
+</ul>
+
+Opérateurs unaires
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.lift1">lift1</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sunop">sunop</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_unop">lemme 3.1 (ok_unop)</a> : lemme de correspondance</li>
+  <li> <a href="html/Velus.Lustre.Denot.EraseAbs.html#erase_unop">lemme 3.2 (erase_unop)</a> : effacement des absences</li>
+</ul>
+
+Opérateurs binaires
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.lift2">lift2</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#sbinop">sbinop</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_binop">lemme 3.3 (ok_binop)</a> : lemme de correspondance</li>
+  <li> <a href="html/Velus.Lustre.Denot.EraseAbs.html#erase_sbinop">lemme 3.4 (erase_sbinop)</a> : effacement des absences</li>
+</ul>
+
+Délai initialisé
+<ul>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby">fby</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#fby_eq">fby</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_fby">lemme 3.5 (ok_fby)</a> : lemme de correspondance</li>
+  <li> <a href="html/Velus.Lustre.Denot.EraseAbs.html#erase_fby">lemme 3.6 (erase_fby)</a> : effacement des absences</li>
+</ul>
+
+Échantillonnage
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.when">when</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#swhen">swhen</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_when">lemme 3.7 (ok_when)</a> : lemme de correspondance</li>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#smerge">smerge</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_merge">lemme 3.8 (ok_merge)</a> : lemme de correspondance</li>
+</ul>
+
+Conditionnelle
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.case">case</a> : règle relationnelle</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#scase">scase</a> : opérateur dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_case">lemme 3.9 (ok_case)</a> : lemme de correspondance</li>
+</ul>
+
+
+
+<h3>3.4 Réinitialisation modulaire</h3>
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.mask">mask</a> : l'opérateur relationnel de masquage</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sapp">Sapp</a> : la règle de la sémantique relationnelle pour les instances réinitialisées</li>
+  <li> <a href="html/Velus.Lustre.Denot.ResetLs.html#reset_eq">reset</a> : caractérisation du reset à la Lucid Synchrone</li>
+  <li> <a href="html/Velus.Lustre.Denot.ResetLs.html#merge_eq">merge</a> : un merge adapté à la récursion instantanée</li>
+  <li> <a href="html/Velus.Lustre.Denot.ResetLs.html#sreset_eq">sreset</a> : caractérisation du reset dénotationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.ResetMask.html#smask_sreset">lemme 3.14 (smask_sreset)</a> : correspondance du reset dénotationnel et relationnel</li>
+  <li> <a href="html/Velus.Lustre.Denot.ResetLs.html#RESET_OK.reset_match">lemme 3.15 (reset_match)</a> : correspondance des deux caractérisations</li>
+</ul>
+<!-- Les trois propriétés requises: -->
+<!-- <ul> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.ResetMask.html#Env.Smask_sreset1.AbsG">AbsG</a> : indépendance à l'absence initiale</li> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.ResetMask.htmlAbsG">AbsG</a> : indépendance à l'absence initiale</li> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP.lp_global">lp_global</a>: commutation with stream prefixes</li> -->
+<!-- </ul> -->
+<!-- Three main properties: -->
+<!-- <ul> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.Abs.html#ABS_INDEP.abs_indep_global">abs_indep_global</a>: no reaction to absences</li> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.abs_alignLE">abs_alignLE</a>: alignment of absences</li> -->
+<!--   <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP.lp_global">lp_global</a>: commutation with stream prefixes</li> -->
+<!-- </ul> -->
+
+<h3>3.5 Interprétation et composition</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.SD.html#SD.SI">SEnv (DS_prod SI)</a> : le type des environnements de flots</li>
+  <li> <a href="html/Velus.Lustre.Denot.SD.html#SD.FI">FEnv (Dprodi FI)</a> : le type des environnements de fonctions de flots</li>
+  <li> <a href="html/Velus.Lustre.Denot.SD.html#SD.denot_node">denotN (denot_node)</a> : la dénotation d'un nœud</li>
+  <li> <a href="html/Velus.Lustre.Denot.SD.html#SD.denot_global">denotG (denot_global)</a> : la dénotation d'un programme</li>
+  <li> <a href="html/Velus.Lustre.Denot.SD.html#SD.denot_exp_eq">denotE (denot_exp_eq)</a> : la dénotation des expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_sem_exp">lemme 3.16</a> : correction de la dénotation des expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDtoRel.html#SDTOREL.ok_sem_node">théorème 3.17</a> : correction de la dénotation des nœuds</li>
+</ul>
+
+
+<h3>4.1 Infinitude des flots et causalité</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.LCausality.html#LCAUSALITY.causal_ind">théorème 4.1</a> : principe d'induction causale</li>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#nrem_inf_iff">théorème 4.2</a> : condition d'infinitude</li>
+  <li> <a href="html/Velus.Lustre.Denot.Infty.html#Ncons_ops">propriétés 4.1</a> : productivité des opérateurs synchrones</li>
+  <li> <a href="html/Velus.Lustre.Denot.Infty.html#is_ncons_S_fby">propriété 4.2 (is_ncons_S_fby)</a> : productivité du délai</li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.exp_n">lemme 4.3 (exp_n)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.exp_S">lemme 4.4 (exp_S)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_S">lemme 4.5 (denot_S)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_n">lemme 4.6 (denot_n)</a></li>
+  <li> <a href="html/Velus.Lustre.Denot.InftyProof.html#LDENOTINF.denot_inf">théorème 4.7 (denot_inf)</a></li>
+</ul>
+
+<h3>4.2 Commutativité du préfixe</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.Cpo_ext.DS_ext.html#take_Ole">propriété 4.8</a> : premier point</li>
+  <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP">propriétés 4.3</a> : commutativité du préfixe avec les opérateurs synchrones</li>
+  <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP.lp_exp">lemme 4.11</a> : expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP.lp_node">lemme 4.12</a> : nœuds</li>
+  <li> <a href="html/Velus.Lustre.Denot.Lp.html#LP.lp_global">théorème 4.13</a> : correction</li>
+</ul>
+
+<h3>4.3 Indépendance à l'absence initiale</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.Abs.html#ABS_INDEP.abs_indep_global">théorème 4.14</a> : correction</li>
+</ul>
+
+
+<h3>4.4 Sûreté du typage</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#AC">définition 4.1, clock-of (AC)</a> : horloge abstraite (booléenne) d'un flot</li>
+  <li> <a href="html/Velus.Lustre.Denot.SDfuns.html#bss">définition 4.2, base-of (bss)</a> : flot d'horloge  de base</li>
+  <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.denot_clock">définition 4.3, denotC (denot_clock)</a> : interprétation d'une annotation d'horloge</li>
+  <li> <a href="html/Velus.ObcToClight.Interface.html#Op.wt_value">wt_value</a></li>
+  <li> figure 4.1 : typage des
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.ty_sconst"> constantes</a>,
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.ty_sunop"> opérations unaires</a>,
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.ty_sbinop"> opérations binaires</a>,
+    etc.
+  </li>
+  <li> figure 4.2 : typage des horloges des
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.cl_sconst"> constantes</a>,
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.cl_sunop"> opérations unaires</a>,
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.cl_sbinop"> opérations binaires</a>,
+    <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.cl_swhenv"> échantillonnages</a>,
+    etc.
+  </li>
+  <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.wf_env">définition 4.4 (wf_env)</a> : environnements bien formés</li>
+  <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.safe_sreset">lemme 4.15</a> : sûreté de la réinitialisation</li>
+
+  <li>
+    <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.no_rte_exp">no-rte-exp</a>,
+    <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.no_rte_node">no-rte-node</a>,
+    <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.no_rte_global_main">no-run-time-errors</a>.
+  </li>
+  <li> <a href="html/Velus.Lustre.Denot.Safe.html#LDENOTSAFE.noerrors_prog_main">théorème 4.16</a> : sûreté du typage</li>
+</ul>
+
+<h3>5.1 Correction du compilateur</h3>
+<ul>
+  <li> <a href="html/Velus.VelusCorrectness.html#behavior_asm">behavior_asm</a> : correction de la compilation, avant </li>
+  <li> <a href="html/Velus.VelusCorrectnessNew.html#behavior_asm_new">behavior_asm_new</a> : correction de la compilation, après </li>
+</ul>
+
+<h3>5.2 Détection statique des erreurs à l’exécution</h3>
+<ul>
+  <li> <a href="html/Velus.ObcToClight.Interface.html#Op.check_unop">check_unop</a> : classification des opérateurs unaires de CompCert</li>
+  <li> <a href="html/Velus.ObcToClight.Interface.html#Op.check_binop">check_binop</a> : classification des opérateurs binaires de CompCert</li>
+  <li> <a href="html/Velus.Lustre.Denot.CheckOp.html#CHECKOP.check_exp">check_exp</a> : la procédure check-ops pour les expressions</li>
+  <li> <a href="html/Velus.Lustre.Denot.OpErr.html#OP_ERR.check_global_ok">théorème 5.1 (check_global_ok)</a> : correction de la procédure</li>
+  <li> <a href="html/Velus.VelusCorrectnessNew.html#behavior_asm_new_check">behavior_asm_new_check</a> : correction de la compilation avec heuristique </li>
+</ul>
+
+</BODY>
+</HTML>
