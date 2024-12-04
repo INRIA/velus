@@ -106,6 +106,7 @@ src/Lustre/Denot/ResetMask.v
 src/Lustre/Denot/Safe.v
 src/Lustre/Denot/SDtoRel.v
 src/Lustre/Denot/ResetLs.v
+src/Lustre/Denot/EraseAbs.v
 src/Lustre/Denot/Denot.v
 
 src/CoreExpr/CESyntax.v
