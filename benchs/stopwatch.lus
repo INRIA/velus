@@ -9,10 +9,15 @@ var
     isWatch : bool; -- is in clock mode ?
     isSet, isSetEnd : bool;
     m, s, d : int; -- chrono timers
-    wh, wm, w, ws : int; -- clock timers;
+    wh, wm, w, ws : int; -- clock timers
 let
-    last m = 0; last s = 0; last d = 0;
-    last wh = 0; last wm = 0; last w = 0; last ws = 0;
+    last m = 0;
+    last s = 0;
+    last d = 0;
+    last wh = 0;
+    last wm = 0;
+    last w = 0;
+    last ws = 0;
     w = 0 fby (w + 1) mod 100;
     ws = 0 -> (if (w < (0 fby w))
                then (0 fby w) + 1 else (0 fby w)) mod 60;
@@ -20,7 +25,6 @@ let
     automaton initially Stop
     state Stop do
       isStart = false;
-      (m, s, d) = (last m, last s, last d);
     unless stst and not isWatch continue Start
          | rst and not isLap and not isWatch then Stop
 
@@ -64,7 +68,9 @@ let
     unless md and not isSet continue DisplayStopWatch
     state DisplayStopWatch
     var lm, ls, ld : int; do
-      last lm = 0; last ls = 0; last ld = 0;
+      last lm = 0;
+      last ls = 0;
+      last ld = 0;
       isWatch = false;
       hh, mm, ss = (lm, ls, ld);
 

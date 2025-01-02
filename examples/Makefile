@@ -1,7 +1,5 @@
 .PRECIOUS: %.s
 
-# Velus
-
 VELUS=../velus
 VELUS_OPT=-lib -dsch -dobc
 
@@ -36,7 +34,7 @@ EXAMPLES = \
 	abro.lus \
 	colors.lus \
 	chrono.lus \
-	stepper-motor.lus \
+	stepper-motor.lus
 
 ## Main targets
 
@@ -48,9 +46,12 @@ cleanall: clean
 	@rm -f $(EXAMPLES:.lus=.exe)
 
 clean:
-	@rm -f *.exe
-	@rm -f *.parsed.lus *.n.lus *.stc *.obc
-	@rm -f *.light.c *.sync.c *.s *.o
+	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.s)
+	@rm -f $(EXAMPLES:.lus=.sync.c)
+	@rm -f $(EXAMPLES:.lus=.parsed.lus) $(EXAMPLES:.lus=.n.lus)
+	@rm -f $(EXAMPLES:.lus=.stc) $(EXAMPLES:.lus=.obc)
+	@rm -f $(EXAMPLES:.lus=.o)
+	@rm -f $(EXAMPLES:.lus=.sync.o)
 
 %.s: %.lus
 	$(VELUS) $(VELUS_OPT) -sync $<

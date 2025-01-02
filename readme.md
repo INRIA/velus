@@ -17,6 +17,23 @@ reports syntax errors with a line number and character offset. We will
 implement more helpful messages when we have finalized one or two remaining
 details of the final language.
 
+## Artifact notes
+
+In this artifact, we provide the totality of the source code of Vélus.
+Vélus depends on a tweaked version of CompCert, which is also provided.
+We have anonymized this distribution by removing the names of the authors of the
+submission from the source code.
+The artifact can be compiled and executed using the instructions below.
+
+The `stepper-motor` example presented in the submission is available in the
+`examples/stepper-motor/` subdirectory. 
+We have already provided the code produced by the compiler after each pass in
+the same directory.
+
+The `doc/` folder contains the documentation generated from the Coq source files.
+The `index.html` file cross-references the Coq definitions relevant to the different sections of the submission.
+It also points to the different parts of the compiler outlined in figure 14 of the submission.
+
 ## Using the compiler
 
 To run the compiler:
@@ -31,6 +48,18 @@ will compile the Lustre program in examples/count.lus into an assembler
 program examples/count.s.
 
 The compiler also accepts the options
+
+* -dnolast
+  Output the Lustre code after compilation of last declarations into <file>.nolast.lus
+
+* -dnoauto
+  Output the Lustre code after compilation of state machines into <file>.noauto.lus
+
+* -dnoswitch
+  Output the Lustre code after compilation of switch blocks into <file>.noswitch.lus
+
+* -dnolocal
+  Output the Lustre code after inlining of local scopes into <file>.nolocal.lus
 
 * -dnlustre
   Output the normalized NLustre code into <file>.n.lus

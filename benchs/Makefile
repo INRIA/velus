@@ -74,12 +74,19 @@ clean:
 	@rm -rf *.hept.* *.hept-gcc.*
 	@rm -f *.bkp *.ff
 
+%.s: %.lus
+	$(VELUS) $(VELUS_OPT) -sync $<
+
+%.exe: %.s
+	$(CCOMP) $(V) $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
+	    -o $@ $(@:.exe=.sync.c) $<
+
 %.velus.s: %.lus
 	$(VELUS) $(VELUS_OPT) -nomain $<
 	mv $(<:.lus=.s) $@
 	sed -i.bkp -e 's/\$$/_/g' $@
 
-%.velus.exe: main.c %.velus.s
+%.velus.exe: %.velus.s
 	$(CCOMP) $(V) $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
 	    -o $@ $^
 
@@ -120,7 +127,7 @@ clean:
 
 wcet: velus.wcet hept.wcet hept-gcc.wcet hept-gcci.wcet
 
-velus: $(EXAMPLES:.lus=.exe)
+velus: $(EXAMPLES:.lus=.velus.exe)
 velus.wcet: $(EXAMPLES:.lus=.velus.wcet)
 
 hept: $(EXAMPLES:.lus=.hept.exe)

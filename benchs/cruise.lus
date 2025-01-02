@@ -40,18 +40,17 @@ tel
 node cruiseControl (onn, off, resume : bool; speed : real;
                     set, quickAccel, quickDecel : bool;
                     accel, brake : real)
-returns (cruiseSpeed : real; throttleCmd : real);
+returns (cruiseSpeed, throttleCmd : real);
 var braking, accelerator : bool;
 let
-    last cruiseSpeed = 0.0;
     braking = brake > 0.0;
     accelerator = accel > 0.0;
+    last cruiseSpeed = 0.0;
 
     automaton
       initially Off
       state Off do
         throttleCmd = accel;
-        cruiseSpeed = last cruiseSpeed
       until onn then On
 
       state On do
@@ -76,7 +75,6 @@ let
 
         state Interrupt do
           throttleCmd = accel;
-          cruiseSpeed = last cruiseSpeed
         until resume then Regulation
         end;
 

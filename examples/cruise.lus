@@ -51,7 +51,6 @@ let
       initially Off
       state Off do
         throttleCmd = accel;
-        cruise_speed = last cruise_speed
       until onn then On
 
       state On do
@@ -76,7 +75,6 @@ let
 
         state Interrupt do
           throttleCmd = accel;
-          cruise_speed = last cruise_speed
         until resume then Regulation
         end;
 

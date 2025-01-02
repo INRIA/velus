@@ -25,14 +25,14 @@ let
     end
 tel
 
-node drive_sequence(step : bool) returns (motA, motB : bool)
+node drive_sequence(step : bool) returns (motorA, motorB : bool)
+var last motA : bool = true; last motB : bool = false;
 let
-    last motA = true;
-    last motB = true;
     switch step
     | true do (motA, motB) = (not (last motB), last motA)
-    | false do
+    | false do (motA, motB) = (last motA, last motB)
     end;
+    (motorA, motorB) = (motA, motB);
 tel
 
 node feed_pause(pause : bool) returns (enable, step : bool)
