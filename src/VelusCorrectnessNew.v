@@ -187,6 +187,21 @@ End Streams_conversion.
 (** Properties of streams with only present values *)
 Section PSTR.
 
+Lemma pStr_EqSts :
+  forall ss1 ss2,
+    EqSts (pStr ss1) (pStr ss2)->
+    EqSts ss1 ss2.
+Proof.
+  unfold EqSts, pStr.
+  intros * H.
+  rewrite Forall2_map_1, Forall2_map_2 in H.
+  eapply Forall2_impl_In, H; simpl; intros; eauto.
+  apply ntheq_eqst; intro n.
+  eapply (eqst_ntheq n) in H2.
+  rewrite 2 Str_nth_map in H2.
+  now injection H2.
+Qed.
+
 Definition all_pres : Stream svalue -> Prop :=
   SForall (fun v => match v with absent => False | present _ => True end).
 
@@ -466,73 +481,103 @@ Local Ltac unfold_l_to_nl Hltonl :=
   Errors.monadInv Hcaus.
 
 
-(** New correctness theorem *)
-Theorem behavior_asm_new :
-  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
-  forall D G Gp P main ins n,
-    Restr.restr_global G -> (** we restric to EMSOFT'21 syntax *)
-    elab_declarations D = OK (exist _ G Gp) ->
-    lustre_to_asm (Some main) G = OK P ->
-    wt_ins G main ins ->
-    wc_ins G main (pStr ins) ->
-    (* causality analysis is done on (complete_global G) only,
-       so we need to suppose it for G *)
-    Forall node_causal (nodes G) ->
-    (* hypothesis on the main node *)
-    find_node main (G) = Some n ->
-    Forall (fun '(_,(_,ck,_)) => ck = Cks.Cbase) (n_in n) ->
-    Forall (fun '(_,(_,ck,_,_)) => ck = Cks.Cbase) (n_out n) ->
+Section Theorems.
+
+  Variables
+    (D : list LustreAst.declaration)
+    (G : @global (fun _ _ => True) elab_prefs)
+    (Gp : wt_global G /\ wc_global G)
+    (P : Asm.program)
+    (main : ident)
+    (ins : list (Stream value))
+    (n : @node (fun _ _ => True) elab_prefs).
+
+  Hypothesis
+    (Restr :  Restr.restr_global G) (** we restric to EMSOFT'21 syntax *)
+    (HasCausInj : forall Γ x cx, HasCaus Γ x cx -> cx = x) (* related *)
+    (Elab :   elab_declarations D = OK (exist _ G Gp))
+    (Comp :   lustre_to_asm (Some main) G = OK P)     (* compilation succeeds *)
+    (Hwti :   wt_ins G main ins)
+    (Hwci :   wc_ins G main (pStr ins))
+    (Hcau :   Forall node_causal (nodes G))
+    (Hfind :  find_node main (G) = Some n)
+    (Hckin :  Forall (fun '(_,(_,ck,_)) => ck = Cks.Cbase) (n_in n))
+    (Hckout : Forall (fun '(_,(_,ck,_,_)) => ck = Cks.Cbase) (n_out n)).
+
+  Theorem behavior_asm_exists :
     no_rte_global_main G main (env_of_np (List.map fst (n_in n)) (nprod_of_Ss (pStr ins))) ->
     exists outs,
       Sem.sem_node (G) main (pStr ins) (pStr outs)
-    /\ exists T, program_behaves (Asm.semantics P) (Reacts T)
-           /\ bisim_IO G main ins outs T.
-Proof.
-  intros ? * Restr Elab Comp Hwti Hwci Hcau Hfind Hckin Hckout Norte.
-  assert (Comp2 := Comp).
-  unfold lustre_to_asm in Comp. simpl in Comp.
-  destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
-  destruct Gp as (Hwc&Hwt).
-  unfold_l_to_nl Comp'.
-  eapply check_causality_correct in EQ; eauto with ltyping; simpl in EQ.
-  pose (xs := nprod_of_Ss (pStr ins)).
-  eapply ok_global_main with (xs := xs) (InfXs := nprod_of_Ss_inf _) in Norte as (outs & InfO & Hsem); eauto using wt_wc_wf_inputs.
-  subst xs.
-  rewrite Ss_of_nprod_of_Ss in Hsem.
-  apply complete_global_sem in Hsem  as HsemC; auto.
-  apply wc_ins_complete in Hwci as ?.
-  eapply sem_node_sem_node_ck in HsemC as Hsemck; eauto.
-  apply find_node_complete in Hfind.
-  eapply sem_node_outs, pStr_all_pres in Hsemck as (?& Heqouts);
-    eauto using all_pres_pStr.
-  rewrite Heqouts in Hsem.
-  eapply behavior_asm in Hsem as Ht; eauto.
-Qed.
+      /\ exists T, program_behaves (Asm.semantics P) (Reacts T)
+             /\ bisim_IO G main ins outs T.
+  Proof.
+    intros Norte.
+    assert (Comp2 := Comp).
+    unfold lustre_to_asm in Comp. simpl in Comp.
+    destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
+    destruct Gp as (Hwc&Hwt).
+    unfold_l_to_nl Comp'.
+    eapply check_causality_correct in EQ; eauto with ltyping; simpl in EQ.
+    pose (xs := nprod_of_Ss (pStr ins)).
+    eapply ok_global_main with (xs := xs) (InfXs := nprod_of_Ss_inf _) in Norte as (outs & InfO & Hsem); eauto using wt_wc_wf_inputs.
+    subst xs.
+    rewrite Ss_of_nprod_of_Ss in Hsem.
+    apply complete_global_sem in Hsem  as HsemC; auto.
+    apply wc_ins_complete in Hwci as ?.
+    eapply sem_node_sem_node_ck in HsemC as Hsemck; eauto.
+    apply find_node_complete in Hfind.
+    eapply sem_node_outs, pStr_all_pres in Hsemck as (?& Heqouts);
+      eauto using all_pres_pStr.
+    rewrite Heqouts in Hsem.
+    eapply behavior_asm in Hsem as Ht; eauto.
+  Qed.
 
 
-(** Correction with no-run-time-errors check *)
-Corollary behavior_asm_new_check :
-  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> cx = x),
-  forall D G Gp P main ins n,
-    Restr.restr_global G -> (** we restric to EMSOFT'21 syntax *)
-    elab_declarations D = OK (exist _ G Gp) ->
-    lustre_to_asm (Some main) G = OK P ->
-    wt_ins G main ins ->
-    wc_ins G main (pStr ins) ->
-    Forall node_causal (nodes G) ->
+  (** We introduce a local notion of streams unicity *)
+  Definition unique_sts {A} (P : list (Stream A)->Prop) (x:list (Stream A)) : Prop :=
+    P x /\ forall (x':list (Stream A)), P x' -> EqSts x x'.
+  Local Notation "'exists' ! x , p" := (ex (unique_sts (fun x => p))) (at level 200).
+
+  Corollary behavior_asm_new_uniq :
+    no_rte_global_main G main (env_of_np (List.map fst (n_in n)) (nprod_of_Ss (pStr ins))) ->
+    exists ! outs,
+      Sem.sem_node (G) main (pStr ins) (pStr outs)
+      /\ exists T, program_behaves (Asm.semantics P) (Reacts T)
+             /\ bisim_IO G main ins outs T.
+  Proof.
+    intro Norte.
+    eapply behavior_asm_exists in Norte as HH; eauto.
+    destruct HH as (outs & Hsem & HsemOk).
+    clear Hcau. (* this time we need causality on the complete node *)
+    exists outs; split; auto.
+    (* uniqueness *)
+    intros outs' (Hsem' &  HsemOk').
+    (* to obtain causality on (complete_global G) : *)
+    unfold lustre_to_asm in Comp. simpl in Comp.
+    destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
+    destruct Gp as (Hwc&Hwt).
+    unfold_l_to_nl Comp'.
+    eapply check_causality_correct in EQ; eauto with ltyping; simpl in EQ.
+    apply complete_global_sem in Hsem, Hsem'; auto.
+    eapply det_global
+      with (ins := pStr ins) (outs1 := pStr outs)  (outs2 := pStr outs')
+      in Hsem'; auto.
+    apply pStr_EqSts, Hsem'.
+  Qed.
+
+
+  (** Correction with no-run-time-errors check *)
+  Corollary behavior_asm_new_check :
     CheckOp.check_global G = true -> (** check for run-time errors *)
-    (* hypothesis on the main node *)
-    find_node main (G) = Some n ->
-    Forall (fun '(_,(_,ck,_)) => ck = Cks.Cbase) (n_in n) ->
-    Forall (fun '(_,(_,ck,_,_)) => ck = Cks.Cbase) (n_out n) ->
     exists outs,
       Sem.sem_node (G) main (pStr ins) (pStr outs)
-    /\ exists T, program_behaves (Asm.semantics P) (Reacts T)
-           /\ bisim_IO G main ins outs T.
-Proof.
-  intros ? * Restr Elab Comp Hwti Hwci Hcau Hchk Hfind Hckin Hckout.
-  eapply behavior_asm_new; eauto.
-  destruct Gp.
-  apply no_rte_global_main_global, check_global_ok; auto.
-Qed.
+      /\ exists T, program_behaves (Asm.semantics P) (Reacts T)
+             /\ bisim_IO G main ins outs T.
+  Proof.
+    intros Hchk.
+    eapply behavior_asm_exists; eauto.
+    destruct Gp.
+    apply no_rte_global_main_global, check_global_ok; auto.
+  Qed.
 
+End Theorems.
