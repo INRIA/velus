@@ -1600,7 +1600,7 @@ Module Type UCORRECTNESS
               destruct (numstreams a); simpl in *; auto. right.
               apply In_nth_error in Nth1 as (?&Nth3).
               apply combine_nth_error in Nth3 as (NthL&NthR).
-              apply nth_error_skipn in NthL. apply nth_error_skipn in NthR.
+              rewrite nth_error_skipn in NthL. rewrite nth_error_skipn in NthR.
               eapply nth_error_In, combine_nth_error; eauto.
       Qed.
 

@@ -2,3 +2,4 @@
 	path = CompCert
 	url = https://github.com/inria-parkas/CompCert.git
 	ignore = dirty
+	branch = v3.16-velus

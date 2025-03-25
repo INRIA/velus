@@ -20,7 +20,7 @@ Import List.ListNotations.
 Class ProgramUnit (U: Type) := { name: U -> ident }.
 
 Class ProgramStateUnit (U T: Type) :=
-  { ProgramStateUnitProgramUnit :> ProgramUnit U;
+  { ProgramStateUnitProgramUnit :: ProgramUnit U;
     state_variables    : U -> list (ident * T);
     instance_variables : U -> list (ident * ident)
   }.
@@ -542,7 +542,7 @@ Section Transformation.
 
   Class TransformStateUnit (U U': Type) {T: Type}
         `{P: ProgramStateUnit U T} `{P': ProgramStateUnit U' T} :=
-    { TransformStateUnitTransformUnit :> TransformUnit U U';
+    { TransformStateUnitTransformUnit :: TransformUnit U U';
       transform_unit_conservative_state :
         forall u, Permutation (state_variables (transform_unit u)) (state_variables u)
              /\ Permutation (instance_variables (transform_unit u)) (instance_variables u)

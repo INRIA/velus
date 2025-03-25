@@ -488,7 +488,7 @@ Module Type TRTYPING
         inv Hvars; inv H0; L.inv_VarsDefined.
         inv Hnd2; inv H1. apply Forall2_ignore2 in Hvars. simpl_Forall.
         do 2 esplit; eauto.
-        eapply NoDup_concat; eauto. rewrite Hperm0, Hperm.
+        eapply Common.CommonList.NoDup_concat; eauto. rewrite Hperm0, Hperm.
         apply NoDup_app'; eauto using NoDup_app_r.
         - apply fst_NoDupMembers; auto.
         - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.

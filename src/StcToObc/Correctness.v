@@ -800,8 +800,8 @@ Module Type CORRECTNESS
       pose proof (sem_var_instant_det _ _ _ _ Hvs Hxsem) as Hpvc.
       subst; inv Heqp.
       now rewrite Env.find_gsss_opt.
-    + pose proof (Forall2_length _ _ _ Hvar) as Hlenyss.
-      pose proof (Forall2_length _ _ _ Hovals) as Hlenovals.
+    + pose proof (@Forall2_length _ _ _ _ _ Hvar) as Hlenyss.
+      pose proof (@Forall2_length _ _ _ _ _ Hovals) as Hlenovals.
       destruct vs; try discriminate.
       destruct ovs; try discriminate.
       rewrite Env.find_gsso_opt; auto.

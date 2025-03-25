@@ -878,7 +878,6 @@ Qed.
 Lemma lub_cont2_comp2_eq : forall (D1 D2 D3:cpo) (F : D1 -m> D2 -M-> D3),
       continuous2 F -> forall (f : natO-m>D1) (g :natO-m>D2), F (lub f) (lub g) == lub ((F@2 f) g).
 intros; apply lub_comp2_eq; auto.
-intro; apply (continuous2_app H).
 Qed.
 
 Lemma continuous_sym : forall (D1 D2:cpo) (F : D1-m> D1 -M-> D2),
@@ -902,7 +901,6 @@ Lemma continuous_comp : forall (D1 D2 D3:cpo) (f:D2-m>D3)(g:D1-m>D2),
 red; intros.
 rewrite fmon_comp_simpl.
 apply Ole_trans with (f (lub (g@h))); auto.
-apply Ole_trans with (lub (f@(g@h))); auto.
 Qed.
 Global Hint Resolve continuous_comp : core.
 
@@ -1402,11 +1400,7 @@ Definition PROD_map :  forall (D1 D2 D3 D4:cpo)(f:D1-c>D3)(g:D2-c>D4) ,
 intros; exists (Prod_map (fcontit f) (fcontit g)); red; intros; rewrite Prod_map_simpl.
 split; simpl.
 apply Ole_trans with (f (lub (Fst D1 D2 @ h))); trivial.
-rewrite (fcont_continuous f).
-apply lub_le_compat; intros; intro; simpl; auto.
 apply Ole_trans with (g (lub (Snd D1 D2 @ h))); trivial.
-rewrite (fcont_continuous g).
-apply lub_le_compat; intros; intro; simpl; auto.
 Defined.
 
 Lemma PROD_map_simpl :  forall (D1 D2 D3 D4:cpo)(f:D1-c>D3)(g:D2-c>D4)(p:Dprod D1 D2),
@@ -2046,13 +2040,13 @@ Definition norm (O:ord) (x:O) (k:nat) (f: natk_ord O k) : natk_ord O k :=
 Lemma norm_simpl_lt : forall (O:ord) (x:O) (k:nat) (f: natk_ord O k) (n:nat),
        n < k -> norm x f n = f n.
 unfold norm; intros; case (le_lt_dec k n); auto.
-intros; casetype False; lia.
+lia.
 Qed.
 
 Lemma norm_simpl_le : forall (O:ord) (x:O) (k:nat) (f: natk_ord O k) (n:nat),
        (k <= n)%nat -> norm x f n = x.
 unfold norm; intros; case (le_lt_dec k n); auto.
-intros; casetype False; lia.
+lia.
 Qed.
 
 Definition natk_mon_shift : forall (O1 O2 : ord)(x:O2) (k:nat),

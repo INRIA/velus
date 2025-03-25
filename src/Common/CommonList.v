@@ -179,7 +179,6 @@ Section Extra.
     intros; subst.
     revert x.
     induction l; simpl; intros; auto.
-    rewrite IHl; auto.
   Qed.
 
   Lemma map_last:

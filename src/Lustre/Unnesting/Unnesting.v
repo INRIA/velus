@@ -917,8 +917,7 @@ Module Type UNNESTING
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
-    - constructor.
-    - simpl. constructor; eauto.
+    constructor; eauto.
   Qed.
 
   Fact unnest_arrow_annot' : forall anns e0s es,
@@ -928,8 +927,7 @@ Module Type UNNESTING
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
-    - constructor.
-    - simpl. constructor; eauto.
+    constructor; eauto.
   Qed.
 
   Fact unnest_merge_annot : forall ckid es tys ck,

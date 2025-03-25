@@ -589,9 +589,8 @@ Module Type LSEMDETERMINISM
         + eapply H8; eauto; congruence.
         + eapply H5; eauto; congruence.
       - (* when *)
-        repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
+        inversion_clear Hs1 as [| | | | | | | | | ?????????? Hse1 Hsv1 Hwhen1| | | |].
+        inversion_clear Hs2 as [| | | | | | | | | ?????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply det_exps_n' in H; eauto.
         take (HasType _ _ _) and inv it; simpl_In.
         edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
@@ -599,9 +598,9 @@ Module Type LSEMDETERMINISM
         clear - H Hsv1 Hwhen1 Hwhen2.
         rewrite_Forall_forall. congruence.
         eapply when_detn. 2:eauto.
-        + eapply e1 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply w0; eauto; congruence.
-        + eapply w; eauto; congruence.
+        + eapply H2 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
+        + eapply H12; eauto; congruence.
+        + eapply H4; eauto; congruence.
       - (* merge *)
         repeat simpl_In.
         inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].

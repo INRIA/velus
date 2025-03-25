@@ -1015,10 +1015,11 @@ Module Type LCLOCKING
              apply oconcat_map_check_exp' in it as (? & ?); auto.
         take (forall2b _ _ _ = true) and rename it into FA2; apply forall2b_Forall2 in FA2.
         subst; simpl; repeat split; auto. constructor; auto.
-        2:pose proof (Forall2_length _ _ _ FA2) as Hlen; auto.
-        apply Forall2_ignore2 in FA2.
-        apply Forall_impl_In with (2:=FA2). intros ? ? (? & HH).
-        now rewrite equiv_decb_equiv in HH; inv HH.
+        + apply Forall2_ignore2 in FA2.
+          apply Forall_impl_In with (2:=FA2). intros ? ? (? & HH).
+          now rewrite equiv_decb_equiv in HH; inv HH.
+        + symmetry.
+          apply (@Forall2_length _ _ _ _ _ FA2).
       - (* Emerge *)
         take (Forall _ es) and (repeat setoid_rewrite Forall_forall in it).
         take (omap _ _ = Some _) and

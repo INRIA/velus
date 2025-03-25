@@ -683,23 +683,19 @@ Qed.
 Remark types_pres':
   forall f es,
     Forall2 (fun e x => Clight.typeof e = translate_type (snd x)) es f.(m_in) ->
-    type_of_params (map translate_param f.(m_in)) =
-    list_type_to_typelist (map Clight.typeof es).
+    type_of_params (map translate_param f.(m_in)) = (map Clight.typeof es).
 Proof.
   intro f.
   induction (m_in f) as [|(x, t)]; intros * Heq;
     inversion_clear Heq as [|? ? ? ? Ht]; simpl; auto.
-  f_equal; auto.
 Qed.
 
 Lemma type_of_params_make_in_arg:
   forall xs,
-    type_of_params (map translate_param xs) =
-    list_type_to_typelist (map Clight.typeof (map make_in_arg xs)).
+    type_of_params (map translate_param xs) = map Clight.typeof (map make_in_arg xs).
 Proof.
   unfold translate_param, make_in_arg.
   induction xs as [|(x, t)]; simpl; auto.
-  f_equal; auto.
 Qed.
 
 Lemma NoDupMembers_translate_param:
@@ -832,11 +828,11 @@ Qed.
 Remark eval_exprlist_app:
   forall tge e le m es es' vs vs',
     eval_exprlist tge e le m es
-                  (list_type_to_typelist (map Clight.typeof es)) vs ->
+                  (map Clight.typeof es) vs ->
     eval_exprlist tge e le m es'
-                  (list_type_to_typelist (map Clight.typeof es')) vs' ->
+                  (map Clight.typeof es') vs' ->
     eval_exprlist tge e le m (es ++ es')
-                  (list_type_to_typelist (map Clight.typeof (es ++ es'))) (vs ++ vs').
+                  (map Clight.typeof (es ++ es')) (vs ++ vs').
 Proof.
   induction es; intros * Ev Ev'; inv Ev; auto.
     repeat rewrite <-app_comm_cons.
@@ -1098,7 +1094,7 @@ Lemma load_in_spec:
                  (fun '(x, t) s =>
                     let typtr := Tpointer (translate_type t) noattr in
                     let load := Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t))
-                                         (Tcons typtr Tnil)
+                                         [typtr]
                                          [Eaddrof (Evar (prefix_glob x) (translate_type t)) typtr]
                     in Ssequence load s)
                  Sskip ins)
@@ -1112,7 +1108,7 @@ Proof.
                           Ssequence
                             s
                             (Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t0))
-                                      (Tcons (Tpointer (translate_type t0) noattr) Tnil)
+                                      [Tpointer (translate_type t0) noattr]
                                       [Eaddrof (Evar (prefix_glob x) (translate_type t0))
                                                (Tpointer (translate_type t0) noattr)]))
                        ins s)
@@ -1122,7 +1118,7 @@ Proof.
                                     (fun '(x, t0) s =>
                                        Ssequence
                                          (Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t0))
-                                                   (Tcons (Tpointer (translate_type t0) noattr) Tnil)
+                                                   [Tpointer (translate_type t0) noattr]
                                                    [Eaddrof (Evar (prefix_glob x) (translate_type t0))
                                                             (Tpointer (translate_type t0) noattr)]) s)
                                     Sskip ins))
@@ -1142,7 +1138,7 @@ Lemma write_multiple_outs_spec:
                  (fun '(x, t) s =>
                     let typtr := Tpointer (translate_type t) noattr in
                     let write := Sbuiltin None (AST.EF_vstore (type_to_chunk t))
-                                          (Tcons typtr (Tcons (translate_type t) Tnil))
+                                          [typtr; translate_type t]
                                           [Eaddrof (Evar (prefix_glob x) (translate_type t)) typtr;
                                           Efield (Evar out_struct t_struct) x (translate_type t)]
                     in Ssequence write s)
@@ -1157,8 +1153,7 @@ Proof.
                           Ssequence
                             s
                             (Sbuiltin None (AST.EF_vstore (type_to_chunk t0))
-                                      (Tcons (Tpointer (translate_type t0) noattr)
-                                             (Tcons (translate_type t0) Tnil))
+                                      [Tpointer (translate_type t0) noattr; translate_type t0]
                                       [Eaddrof (Evar (prefix_glob x) (translate_type t0))
                                                (Tpointer (translate_type t0) noattr);
                                        Efield (Evar (prefix out step)
@@ -1171,8 +1166,7 @@ Proof.
                                     (fun '(x, t0) s =>
                                        Ssequence
                                          (Sbuiltin None (AST.EF_vstore (type_to_chunk t0))
-                                                   (Tcons (Tpointer (translate_type t0) noattr)
-                                                          (Tcons (translate_type t0) Tnil))
+                                                   [Tpointer (translate_type t0) noattr; translate_type t0]
                                                    [Eaddrof (Evar (prefix_glob x) (translate_type t0))
                                                             (Tpointer (translate_type t0) noattr);
                                                     Efield (Evar (prefix out step)
@@ -1428,8 +1422,8 @@ Section TranslateOk.
       In (f, AST.Gfun
                (External (AST.EF_external
                             (pos_to_str f)
-                            {| AST.sig_args := map typ_of_type (map cltype tyin); AST.sig_res := rettype_of_type (cltype tyout); AST.sig_cc := AST.cc_default |})
-                  (list_type_to_typelist (map cltype tyin))
+                            {| AST.sig_args := map argtype_of_type (map cltype tyin); AST.sig_res := rettype_of_type (cltype tyout); AST.sig_cc := AST.cc_default |})
+                  (map cltype tyin)
                   (cltype tyout) AST.cc_default)) (AST.prog_defs tprog).
   Proof.
     intros * Hin.

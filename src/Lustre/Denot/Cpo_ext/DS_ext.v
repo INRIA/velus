@@ -2404,10 +2404,8 @@ End Zip3.
 (** Une ancienne version de take, avec prédicat d'infinité *)
 Module Inf_Take.
 
-Context {A : Type}.
-
 (** *** Take the prefix of length [n] from an infinite stream *)
-Fixpoint take (n : nat) (s : DS A) (si : infinite s) : DS A :=
+Fixpoint take {A : Type} (n : nat) (s : DS A) (si : infinite s) : DS A :=
   match n with
   | O => 0
   | S n => match si with
@@ -2415,7 +2413,7 @@ Fixpoint take (n : nat) (s : DS A) (si : infinite s) : DS A :=
           end
   end.
 
-Lemma take_1 : forall (s : DS A) (si : infinite s),
+Lemma take_1 {A : Type} : forall (s : DS A) (si : infinite s),
     take 1 s si == first s.
 Proof.
   simpl.
@@ -2423,7 +2421,7 @@ Proof.
   now rewrite app_bot_right_first.
 Qed.
 
-Lemma take_le :
+Lemma take_le {A : Type} :
   forall n (s : DS A) (si : infinite s),
     take n s si <= take (S n) s si.
 Proof.
@@ -2433,7 +2431,7 @@ Proof.
     apply app_mon_right, IHn.
 Qed.
 
-Lemma _take_eq :
+Lemma _take_eq {A : Type} :
   forall n (xs : DS A) xsi ys ysi,
     xs == ys ->
     take n xs xsi == take n ys ysi.
@@ -2443,7 +2441,7 @@ Proof.
   rewrite Heq, IHn at 1; auto.
 Qed.
 
-Lemma take_eq :
+Lemma take_eq {A : Type} :
   forall n (xs : DS A) xsi ys,
     xs == ys ->
     exists ysi,
@@ -2454,7 +2452,7 @@ Proof.
   now apply _take_eq.
 Qed.
 
-Lemma take_cons :
+Lemma take_cons {A : Type} :
   forall n x (xs : DS A) xsi,
     take (S n) (cons x xs) xsi == cons x (take n xs (cons_infinite _ _ _ xsi)).
 Proof.
@@ -2464,7 +2462,7 @@ Proof.
   apply cons_eq_compat, _take_eq; auto.
 Qed.
 
-Lemma take_app :
+Lemma take_app {A : Type} :
   forall n (xs ys : DS A) inf inf2,
     take (S n) (app xs ys) inf == app xs (take n ys inf2).
 Proof.
@@ -2474,7 +2472,7 @@ Proof.
   eapply app_eq_compat, _take_eq, rem_app, app_is_cons; eauto.
 Qed.
 
-Lemma rem_take :
+Lemma rem_take {A : Type} :
   forall n (xs : DS A) inf inf2,
     rem (take (S n) xs inf) == take n (rem xs) inf2.
 Proof.
@@ -2483,7 +2481,7 @@ Proof.
   rewrite rem_app, _take_eq; auto.
 Qed.
 
-Lemma n_eq :
+Lemma n_eq {A : Type} :
   forall (s t : DS A) (si : infinite s) (ti : infinite t),
     (forall n, take n s si == take n t ti) ->
     s == t.

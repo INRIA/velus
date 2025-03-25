@@ -1,3 +1,5 @@
+Require Import Coq.Arith.Compare.
+
 Require Import List.
 Require Import Cpo SDfuns CommonDS.
 Open Scope bool_scope.
@@ -1065,7 +1067,7 @@ Proof.
     unfold AC in *; rewrite Hac, 2 MAP_map, map_comp; apply map_ext; intros []; auto.
   - (* partie false *)
     clear Ht1.
-    apply Lt.le_lt_or_eq_stt in Hlt as [Hlt|]; subst.
+    apply le_decide in Hlt as [Hlt|]; subst.
     2: now rewrite Nat.sub_diag.
     rewrite nrem_when, take_when, Ht2.
     rewrite (when_false _ (map _ _)), map_comp, <- take_map; cycle 1.

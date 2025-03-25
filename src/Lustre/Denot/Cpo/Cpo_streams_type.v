@@ -547,7 +547,6 @@ case (IH n) with (p:=S p) (c:=cpred c); auto with arith; clear IH.
 intros tlc (H1,(m,H3)).
 exists tlc; split; auto.
 exists m; intro l; apply Oeq_trans with (cpred c (l + m)); auto.
-unfold cpred; simpl; auto.
 Qed.
 
 Lemma DS_lubCon_inv : forall D a (s:DS_ord D) (c:natO -m> DS_ord D),

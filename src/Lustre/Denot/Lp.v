@@ -815,8 +815,9 @@ Proof.
       rewrite FIXP_fixp.
       apply fixp_ind; auto.
       * (* admissibilité *)
-       intros g Hf.
-       rewrite (@lub_comp_eq _ _ (take_env n) g); auto.
+        intros g Hf.
+        rewrite (@lub_comp_eq _ _ (take_env n) g); auto.
+        apply fcontinuous.
       * (* init *)
         rewrite take_env_bot; auto.
       * (* itération *)

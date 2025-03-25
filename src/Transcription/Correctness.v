@@ -1653,7 +1653,7 @@ Module Type CORRECTNESS
     induction bcks; intros * Hnormed Hwt Hwc HwcG Henvs Hsemnode Hinv Heqs Hsem;
       inv Hnormed; inv Hwt; inv Hwc; inv Hsem; simpl in *; monadInv Heqs; auto.
     - constructor; eauto.
-      eapply sem_blocktoeq; eauto. simpl; constructor.
+      eapply sem_blocktoeq; eauto.
       eapply bools_ofs_empty.
       intros [|].
       + eapply sem_block_ck_morph; eauto.

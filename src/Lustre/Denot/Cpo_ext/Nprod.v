@@ -319,7 +319,6 @@ Lemma forall_nprod_bot :
     @forall_nprod n 0.
 Proof.
   induction n as [|[]]; intros; try split; auto.
-  now apply IHn.
 Qed.
 
 Lemma k_forall_nprod :
@@ -558,7 +557,6 @@ Lemma list_of_nprod_nth :
     nth k (list_of_nprod np) d = get_nth k d np.
 Proof.
   induction n; destruct k; simpl; intros; auto.
-  now rewrite IHn.
 Qed.
 
 Lemma list_of_nprod_nth_error :
@@ -709,7 +707,6 @@ Proof.
     induction n as [|[]]; auto.
     inversion Hf.
     constructor; auto.
-    now apply IHn.
 Qed.
 
 Lemma lift_nprod_const :

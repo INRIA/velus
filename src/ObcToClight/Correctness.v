@@ -503,12 +503,12 @@ Section PRESERVATION.
           Forall (wt_exp prog owner.(c_mems) (meth_vars caller)) es ->
           Forall2 (fun e v => exp_eval me ve e (Some v)) es vs ->
           Clight.eval_exprlist tge e le m es'
-                               (list_type_to_typelist (map Clight.typeof es'))
+                               (map Clight.typeof es')
                                (map value_to_cvalue vs).
       Proof.
         Hint Constructors Clight.eval_exprlist : clight.
         intros * WF EV; subst es'.
-        induction EV; inv WF; simpl; try rewrite list_type_to_typelist_cons; econstructor;
+        induction EV; inv WF; simpl; econstructor;
           ((eapply expr_correct; eauto)
            || (erewrite type_pres; eauto; apply sem_cast_same'; eauto with obctyping clight)
            || auto).
@@ -539,7 +539,7 @@ Section PRESERVATION.
                 ** P1 ->
           eval_expr tge e le1 m1 ae (value_to_cvalue v) ->
           exists m' le',
-            exec_stmt_fe function_entry2 tge e le1 m1
+            exec_stmt function_entry2 tge e le1 m1
                       (assign owner caller x (translate_type ty) ae)
                       E0 le' m' Out_normal
             /\ m' |= outputrep gcenv owner caller (Env.add x v ve1) le' outb_co
@@ -564,7 +564,7 @@ Section PRESERVATION.
           (* only one output: x is a temporary *)
           + inversion_clear Hin' as [Eq|Eq]; inv Eq.
             exists m1, (PTree.set x (value_to_cvalue v) le1);
-              rewrite PTree.gso; intuition. unfold exec_stmt_fe. eauto using exec_stmt.
+              rewrite PTree.gso; intuition. eauto using exec_stmt.
             eapply sep_imp; eauto.
             * eapply outputrep_assign_singleton_mem; eauto.
             * rewrite varsrep_add; eauto.
@@ -590,7 +590,7 @@ Section PRESERVATION.
             rewrite PTree.gso; intuition; auto.
           + unfold assign.
             destruct_list caller.(m_out) : Houts; try rewrite E;
-              unfold exec_stmt_fe; eauto using exec_stmt.
+              eauto using exec_stmt.
           + rewrite varsrep_add in Hmem.
             eapply outputrep_assign_var_mem; eauto using output_match.
       Qed.
@@ -598,7 +598,7 @@ Section PRESERVATION.
       Corollary exec_assign_match_states:
           eval_expr tge e le m ae (value_to_cvalue v) ->
           exists m' le',
-            exec_stmt_fe function_entry2 tge e le m
+            exec_stmt function_entry2 tge e le m
                       (assign owner caller x (translate_type ty) ae)
                       E0 le' m' Out_normal
             /\ m' |= match_states gcenv prog owner caller (me, Env.add x v ve) (e, le') sb sofs outb_co
@@ -608,7 +608,7 @@ Section PRESERVATION.
         apply match_states_conj in Hmem as (Hmem & ?).
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23 in Hmem.
         edestruct exec_assign
-          (* with (P_stmt := fun m' le' => exec_stmt_fe function_entry2 tge e le m (assign owner caller x (translate_type ty) ae) E0 le' m' Out_normal) *)
+          (* with (P_stmt := fun m' le' => exec_stmt function_entry2 tge e le m (assign owner caller x (translate_type ty) ae) E0 le' m' Out_normal) *)
           as (m' & le' & ?&?&?); eauto.
         exists m', le'; split; auto.
         apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
@@ -700,7 +700,7 @@ Section PRESERVATION.
           wt_values vs outs ->
           Forall2 (fun xt v => Env.find (fst xt) ve_callee = Some v) outs vs ->
           exists m' le',
-            exec_stmt_fe function_entry2 tge e le m1
+            exec_stmt function_entry2 tge e le m1
                       (funcall_assign owner caller xs o tyo outs)
                       E0 le' m' Out_normal
             /\ m' |= fieldsrep gcenv ve_callee (co_members instco) instb
@@ -714,7 +714,7 @@ Section PRESERVATION.
         induction outs as [|(x, t)]; intros * Hmem ??? Incl Hins WTvs Hvs;
           inversion_clear Hins as [|y]; inv WTvs; inv Hvs; simpl.
         - rewrite Env.adds_nil_l.
-          exists m1, le; intuition; unfold exec_stmt_fe;  eauto using exec_stmt.
+          exists m1, le; intuition; eauto using exec_stmt.
         - setoid_rewrite funcall_assign_spec; simpl.
           apply incl_cons' in Incl as (?&?).
           rewrite sep_swap, sep_swap23 in Hmem.
@@ -728,7 +728,7 @@ Section PRESERVATION.
           edestruct IHouts as (m' & le' & Exec & ?); eauto.
           change E0 with (Eapp E0 E0).
           setoid_rewrite funcall_assign_spec in Exec.
-          exists m', le'; intuition; unfold exec_stmt_fe; eauto using exec_stmt.
+          exists m', le'; intuition; eauto using exec_stmt.
       Qed.
 
       Corollary exec_funcall_assign:
@@ -738,7 +738,7 @@ Section PRESERVATION.
           wt_values vs callee.(m_out) ->
           Forall2 (fun xt v => Env.find (fst xt) ve_callee = Some v) callee.(m_out) vs ->
           exists m' le',
-            exec_stmt_fe function_entry2 tge e le m1
+            exec_stmt function_entry2 tge e le m1
                       (funcall_assign owner caller xs o tyo callee.(m_out))
                       E0 le' m' Out_normal
             /\ m' |= fieldsrep gcenv ve_callee (co_members instco) instb
@@ -776,7 +776,7 @@ Section PRESERVATION.
                    m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
                    exists m' fd,
                      method_spec c f prog fd
-                     /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                     /\ eval_funcall function_entry2 tge m (Internal fd)
                                        (Vptr sb sofs :: map value_to_cvalue vs) E0 m' Vundef
                      /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
                  )
@@ -784,7 +784,7 @@ Section PRESERVATION.
                     m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
                     exists m' fd rv,
                       method_spec c f prog fd
-                      /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                      /\ eval_funcall function_entry2 tge m (Internal fd)
                                         (Vptr sb sofs :: map value_to_cvalue vs) E0 m' (value_to_cvalue rv)
                       /\ rvs = [rv]
                       /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
@@ -797,7 +797,7 @@ Section PRESERVATION.
                            ** P ->
                       exists ve_f m' fd,
                         method_spec c f prog fd
-                        /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                        /\ eval_funcall function_entry2 tge m (Internal fd)
                                           (Vptr sb sofs :: var_ptr instb :: map value_to_cvalue vs) E0 m' Vundef
                         /\ Forall2 (fun xt v => Env.find (fst xt) ve_f = Some v) outs rvs
                         /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs)
@@ -821,10 +821,10 @@ Section PRESERVATION.
         NoDup ys ->
         In (o, cid) (c_objs owner) ->
         Forall2 (fun e xt => Clight.typeof e = translate_type (snd xt)) es callee.(m_in) ->
-        eval_exprlist tge e le m es (list_type_to_typelist (map Clight.typeof es)) (map value_to_cvalue vs) ->
+        eval_exprlist tge e le m es (map Clight.typeof es) (map value_to_cvalue vs) ->
         wt_memory me_o' prog'' c.(c_mems) c.(c_objs) ->
         exists m' le',
-          exec_stmt_fe function_entry2 tge e le m
+          exec_stmt function_entry2 tge e le m
                     (binded_funcall (rev_prog prog) owner caller ys cid o fid es)
                     E0 le' m' Out_normal /\
           m' |= match_states gcenv prog owner caller
@@ -858,11 +858,11 @@ Section PRESERVATION.
       assert (type_of_fundef (Internal fun_f)
               = Tfunction
                   (case_out callee
-                            (Tcons (type_of_inst_p cid) (list_type_to_typelist (map Clight.typeof es)))
-                            (fun _ _ => Tcons (type_of_inst_p cid) (list_type_to_typelist (map Clight.typeof es)))
-                            (fun _ => Tcons (type_of_inst_p cid)
-                                         (Tcons (type_of_inst_p (prefix_fun fid cid))
-                                                (list_type_to_typelist (map Clight.typeof es)))))
+                            ((type_of_inst_p cid) :: (map Clight.typeof es))
+                            (fun _ _ => (type_of_inst_p cid) :: (map Clight.typeof es))
+                            (fun _ => (type_of_inst_p cid) ::
+                                         ((type_of_inst_p (prefix_fun fid cid)) ::
+                                                (map Clight.typeof es))))
                   (case_out callee Tvoid (fun _ t => translate_type t) (fun _ => Tvoid))
                   AST.cc_default) as Type_f.
       { simpl; unfold type_of_function.
@@ -1037,7 +1037,7 @@ Section PRESERVATION.
           rewrite <-Hout.
           eapply exec_Sseq_1; eauto.
           change le with (set_opttemp None Vundef le).
-          econstructor; simpl; eauto; rewrite ? list_type_to_typelist_cons;
+          econstructor; simpl; eauto;
             eauto using eval_exprlist.
         + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
           erewrite find_class_name; eauto.
@@ -1087,7 +1087,7 @@ Section PRESERVATION.
         m |= match_states gcenv prog owner caller (me, ve) (e, le) sb sofs outb_co
              ** P ->
         exists m' le',
-          exec_stmt_fe function_entry2 tge e le m
+          exec_stmt function_entry2 tge e le m
                     (translate_stmt (rev_prog prog) owner caller s)
                     E0 le' m' Out_normal
           /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co
@@ -1115,7 +1115,7 @@ Section PRESERVATION.
                  (NoNaked    : No_Naked_Vars s)
                  (WTs        : wt_stmt prog' owner.(c_objs) owner.(c_mems) (meth_vars caller) s),
                exists m' le',
-                 exec_stmt_fe function_entry2 tge e le m
+                 exec_stmt function_entry2 tge e le m
                            (translate_stmt (rev_prog prog) owner caller s) E0 le' m' Out_normal
                  /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co ** P)
          /\
@@ -1240,7 +1240,7 @@ Section PRESERVATION.
                 Some (AST.Gfun
                         (External
                            (AST.EF_external (pos_to_str f) sig)
-                           (list_type_to_typelist (map Clight.typeof (map (translate_exp owner caller) es)))
+                           (map Clight.typeof (map (translate_exp owner caller) es))
                            (cltype tyout) AST.cc_default))) as ProgFind.
       { apply AST.prog_defmap_norepet.
         - eapply prog_defs_norepet; eauto.
@@ -1281,7 +1281,7 @@ Section PRESERVATION.
       clear Hmem.
       edestruct IH2 as (m' & le' &?&?); eauto.
       change E0 with (Eapp E0 (Eapp E0 E0)).
-      exists m', le'; intuition; unfold exec_stmt_fe; eauto using exec_stmt.
+      exists m', le'; intuition; eauto using exec_stmt.
 
     (* switch e ss d *)
     - apply occurs_in_switch in Occurs.
@@ -1563,7 +1563,7 @@ Section PRESERVATION.
       out_step_env e ->
       wt_values vs main_step.(m_in) ->
       exists le',
-        exec_stmt_fe function_entry2 tge e le m
+        exec_stmt function_entry2 tge e le m
                   (load_in main_step.(m_in))
                   (load_events vs main_step.(m_in))
                   le' m Out_normal
@@ -1586,9 +1586,9 @@ Section PRESERVATION.
       destruct Findx as (bx & Findx & Volx).
       rewrite load_events_cons.
       assert (exists le',
-                 exec_stmt_fe function_entry2 tge e le m
+                 exec_stmt function_entry2 tge e le m
                            (Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t))
-                                     (Ctypes.Tcons (Tpointer (translate_type t) noattr) Ctypes.Tnil)
+                                     [Tpointer (translate_type t) noattr]
                                      [Eaddrof (Evar (prefix_glob x) (translate_type t)) (Tpointer (translate_type t) noattr)])
                            [load_event_of_value v (x, t)] le' m Out_normal
                  /\ le' ! x = Some (value_to_cvalue v)
@@ -1616,7 +1616,7 @@ Section PRESERVATION.
         by (intros; apply Good, in_cons; auto).
       edestruct IHl with (le := le') as (le'' & ? & Hgss & Hgso); eauto.
       exists le''; repeat split.
-      + unfold exec_stmt_fe in *; rewrite load_in_spec in *; simpl fold_right;
+      + rewrite load_in_spec in *; simpl fold_right;
           eauto using exec_stmt.
       + econstructor; eauto.
         rewrite Hgso; auto.
@@ -1637,7 +1637,7 @@ Section PRESERVATION.
         e ! out_step = Some (step_b, t_out_step) ->
         Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs ->
         m |= fieldsrep gcenv ve (co_members step_co) step_b ->
-        exec_stmt_fe function_entry2 tge e le m
+        exec_stmt function_entry2 tge e le m
                   (write_multiple_outs main_node outs)
                   (store_events rvs outs)
                   le m Out_normal.
@@ -1648,7 +1648,6 @@ Section PRESERVATION.
     assert (Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst outs)) as Good
         by (rewrite Forall_map; apply Forall_incl with (2 := Incl), Forall_forall, m_good_out).
 
-    unfold exec_stmt_fe.
     induction outs as [|(x, t)]; intros * Nodup He WTrvs Hrco Findstr Hrvs Hm.
     - rewrite store_events_nil; constructor.
     - inversion_clear Vol as [|? ? Findx];  destruct Findx as (bx & Findx & Volx).
@@ -1694,7 +1693,7 @@ Section PRESERVATION.
                     /\ e ! out_step = Some (step_b, t_out_step)
                     /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs
                     /\ m |= fieldsrep gcenv ve (co_members step_co) step_b) ->
-      exec_stmt_fe function_entry2 tge e le m
+      exec_stmt function_entry2 tge e le m
                 (write_out main_node main_step.(m_out))
                 (store_events rvs main_step.(m_out))
                 le m Out_normal.
@@ -1705,7 +1704,6 @@ Section PRESERVATION.
     assert (length rvs = length main_step.(m_out)) as Length by (eapply Forall2_length; eauto).
 
     unfold case_out in Hrep.
-    unfold exec_stmt_fe.
     destruct_list (m_out main_step) as (y, t) (y', t') outs : Out;
       destruct_list rvs as rv rv' rvs' : Rvs; contr.
 
@@ -1764,16 +1762,16 @@ Section PRESERVATION.
         forall n m m',
           let ins_n := map value_to_cvalue (ins n) in
           case_out main_step
-                   (eval_funcall_fe function_entry2 tge m (Internal step_f)
+                   (eval_funcall function_entry2 tge m (Internal step_f)
                                  (var_ptr sb :: ins_n) E0 m' Vundef)
                    (fun _ _ =>
                       exists v,
                         outs n = [v]
-                        /\ eval_funcall_fe function_entry2 tge m (Internal step_f)
+                        /\ eval_funcall function_entry2 tge m (Internal step_f)
                                        (var_ptr sb :: ins_n) E0 m' (value_to_cvalue v))
                    (fun ys =>
                       exists ve step_b step_co,
-                        eval_funcall_fe function_entry2 tge m (Internal step_f)
+                        eval_funcall function_entry2 tge m (Internal step_f)
                                      (var_ptr sb :: var_ptr step_b :: ins_n) E0 m' Vundef
                           /\ gcenv ! (prefix_fun step main_node) = Some step_co
                         /\ e ! out_step = Some (step_b, t_out_step)
@@ -1796,16 +1794,16 @@ Section PRESERVATION.
           R n m ->
           exists m',
             case_out main_step
-                     (eval_funcall_fe function_entry2 tge m (Internal step_f)
+                     (eval_funcall function_entry2 tge m (Internal step_f)
                                    (var_ptr sb :: ins_n) E0 m' Vundef)
                      (fun _ _ =>
                       exists v,
                         outs n = [v]
-                        /\ eval_funcall_fe function_entry2 tge m (Internal step_f)
+                        /\ eval_funcall function_entry2 tge m (Internal step_f)
                                        (var_ptr sb :: ins_n) E0 m' (value_to_cvalue v))
                      (fun ys =>
                         exists ve step_b step_co,
-                          eval_funcall_fe function_entry2 tge m (Internal step_f)
+                          eval_funcall function_entry2 tge m (Internal step_f)
                                        (var_ptr sb :: var_ptr step_b :: ins_n) E0 m' Vundef
                           /\ gcenv ! (prefix_fun step main_node) = Some step_co
                           /\ e ! out_step = Some (step_b, t_out_step)
@@ -1873,7 +1871,7 @@ Section PRESERVATION.
       forall e n m_n le_n,
         dostep e n m_n ->
         exists le_Sn m_Sn,
-          exec_stmt_fe function_entry2 tge e le_n m_n
+          exec_stmt function_entry2 tge e le_n m_n
                        (main_loop_body false main_node main_step)
                        (load_events (ins n) (m_in main_step)
                          ++ E0
@@ -1907,8 +1905,7 @@ Section PRESERVATION.
                  Forall2 (fun v xt => le1 ! (fst xt) = Some (value_to_cvalue v)) vs main_step.(m_in) ->
                  eval_exprlist tge e le1 m_n
                                (map make_in_arg main_step.(m_in))
-                               (list_type_to_typelist
-                                  (map Clight.typeof (map make_in_arg (m_in main_step))))
+                               (map Clight.typeof (map make_in_arg (m_in main_step)))
                                (map value_to_cvalue vs)).
       { clear.
         induction main_step.(m_in) as [|(x, t)];
@@ -1924,7 +1921,7 @@ Section PRESERVATION.
 
       (* step call *)
       assert (exists le2,
-                 exec_stmt_fe function_entry2 tge e le1 m_n
+                 exec_stmt function_entry2 tge e le1 m_n
                            (step_call main_node (map make_in_arg (m_in main_step)) (m_out main_step))
                            E0 le2 m_Sn Out_normal
                  /\ match main_step.(m_out), outs n with
@@ -2020,7 +2017,7 @@ Section PRESERVATION.
 
       Lemma dostep_imp:
         exists m0,
-          eval_funcall_fe function_entry2 tge m_main (Internal reset_f)
+          eval_funcall function_entry2 tge m_main (Internal reset_f)
                           [var_ptr sb] E0 m0 Vundef
           /\ dostep e 0 m0.
       Proof.
@@ -2117,7 +2114,7 @@ Section PRESERVATION.
 
       Corollary exec_reset:
         exists m0,
-          exec_stmt_fe function_entry2 tge e
+          exec_stmt function_entry2 tge e
                        le_main m_main (reset_call main_node) E0
                        le_main m0 Out_normal
           /\ dostep e 0 m0.

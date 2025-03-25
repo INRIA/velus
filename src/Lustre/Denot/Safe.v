@@ -622,7 +622,7 @@ Section SDfuns_safe.
       rewrite Hc, AC_cons in *.
       apply Con_le_simpl in Hcl1 as [], Hcl2 as []; subst.
       constructor.
-      + cases_eqn HH.
+      + cases_eqn HH; discriminate.
       + eapply Cof in Ht; eauto.
   Qed.
 
@@ -791,7 +791,7 @@ Section SDfuns_safe.
     cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as []; subst.
     all: econstructor; eauto; clear Hdec cs.
-    - revert_all; intros A Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+    - revert_all; intros A Cof; cofix Cof'. intros v ys xs' cs' ? Sy ? [] Ht ? ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with _ ys xs'; eauto. }
       destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
       { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
@@ -799,14 +799,15 @@ Section SDfuns_safe.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with _ xs' ys'; eauto.
-    - revert_all; intros A Cof; cofix Cof'; intros * v ys Sy [] ?? Ht ??? Cx' ?.
+    - revert_all; intros A Cof; cofix Cof'. intros ? ys ? xs' cs' ? Sy ? [] Ht ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
       { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
       rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
-      eapply Cof with _ xs' ys'; eauto.
+      intros.
+      eapply (Cof _ a0 xs' ys'); auto.
   Qed.
 
   (* TODO: refaire avec DSle_rec_eq ? *)
@@ -833,7 +834,7 @@ Section SDfuns_safe.
     cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as [? Ht]; subst.
     all: econstructor; eauto; clear Hdec cs.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+    - revert_all; intro Cof; cofix Cof'. intros ys xs' cs' ? Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons, AC_is_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -841,7 +842,7 @@ Section SDfuns_safe.
       rewrite fbyA_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with xs' ys'; eauto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ?? Ht ??? Cx' ?.
+    - revert_all; intro Cof; cofix Cof'. intros ys ? xs' cs' ? Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
       apply uncons in Hcy as (vy & ys' & Hdec).
@@ -872,7 +873,7 @@ Section SDfuns_safe.
     rewrite fby1_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
-    - revert_all; intros A Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+    - revert_all; intros A Cof; cofix Cof'. intros v cs ys xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with v cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -883,7 +884,7 @@ Section SDfuns_safe.
       apply rem_le_compat in Cx', Cy.
       rewrite rem_cons in Cx', Cy.
       eapply Cof with v (rem cs) xs' ys'; auto.
-    - revert_all; intros A Cof; cofix Cof'; intros * ??? Sy Cy [] ? xs' Cx' Ht ? Sx'.
+    - revert_all; intros A Cof; cofix Cof'. intros ? cs ys ? xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -914,7 +915,7 @@ Section SDfuns_safe.
     rewrite fby_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+    - revert_all; intro Cof; cofix Cof'. intros cs ys xs' Cx' Sy Cy [] Ht ? Sx'.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -925,7 +926,7 @@ Section SDfuns_safe.
       apply rem_le_compat in Cx', Cy.
       rewrite rem_cons in Cx', Cy.
       eapply Cof with (rem cs) xs' ys'; auto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] v xs' Cx' Ht ? Sx'.
+    - revert_all; intro Cof; cofix Cof'. intros cs ys ? xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -1005,7 +1006,11 @@ Section SDfuns_safe.
     all: try take (err _ = err _) and inv it.
     all: try take (pres _ = pres _) and inv it.
     all: try (take ((_ =? _) = _) and rewrite it in * ).
-    all: esplit; split; [ apply HV | exists xs', cs'; eauto 8 ].
+    all: esplit; split; [ | exists xs', cs'; eauto 8 ].
+    all: rewrite HV.
+    all: apply cons_eq_compat; auto.
+    destruct a; [ reflexivity | ].
+    apply Bool.andb_false_r.
   Qed.
 
   Lemma safe_swhenv :
