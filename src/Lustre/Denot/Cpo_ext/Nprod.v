@@ -846,7 +846,7 @@ Lemma forall_nprod_lift2 :
 Proof.
   intros f P1 P2 P3 Hf.
   induction n as [|[]]; intros * H1 H2; auto.
-  - cbn in *; intuition.
+  - cbn in *; auto with *.
   - destruct np, np', H1, H2.
     rewrite lift2_simpl.
     constructor.
@@ -865,7 +865,7 @@ Lemma forall_nprod_llift :
 Proof.
   intros A F d ?? Hf.
   induction n as [|[]]; intros * H; auto.
-  - cbn in *; intuition.
+  - cbn in *; auto with *.
   - destruct np, H.
     rewrite llift_simpl.
     constructor.

@@ -216,7 +216,7 @@ Module Type CORRECTNESS
       Forall2 (LCS.sem_exp_ck G H b) es ss ->
       Forall2 (NLSC.sem_exp H b) les (concat ss).
   Proof.
-    intros * Hmmap Hwt Hsem. revert dependent les.
+    intros * Hmmap Hwt Hsem. generalize dependent les.
     induction Hsem; intros. inv Hmmap. simpl. auto.
     apply mmap_cons in Hmmap.
     destruct Hmmap as [ x' [le' [Hle [Htolexp  Hmmap]]]]. inv Hwt.
@@ -294,7 +294,7 @@ Module Type CORRECTNESS
   Proof.
     intros * Hwt Hfst Heq Hcase.
     assert (length vs' = length tn) as Hlen.
-    { erewrite <-map_length, Hfst, seq_length; auto. }
+    { erewrite <-length_map, Hfst, length_seq; auto. }
     rewrite case_spec in *. intros n.
     specialize (Hcase n) as [(Hc&Hf&Hd&Hs)|[(?&?&Hc&Habs&Hpres&Hd&Hs)|(?&?&Hc&Habs&Hneq&Hd&Hs)]]; simpl in *.
     - left. repeat split; auto.
@@ -316,7 +316,7 @@ Module Type CORRECTNESS
       + eapply Forall2_singl, SForall_forall in Hwt. rewrite Hc in Hwt; inv Hwt; simpl in *.
         assert (Hnth:=H1). rewrite <-Hlen in Hnth. eapply nth_In with (d:=(0, Streams.const absent)) in Hnth.
         rewrite combine_fst_snd in Hnth at 1. rewrite Hfst, combine_nth, seq_nth in Hnth; auto; simpl in *.
-        2:rewrite seq_length, map_length; auto.
+        2:rewrite length_seq, length_map; auto.
         apply Exists_exists. do 2 esplit; eauto; simpl. split; auto.
         eapply Heq in Hnth as [Hin|(?&Hnin&?)]; subst; auto.
         eapply Forall_forall in Hneq; eauto; simpl in *. congruence.
@@ -392,7 +392,7 @@ Module Type CORRECTNESS
       length (complete_sem (seq 0 n) ys d) = n.
   Proof.
     intros * Hnd Hs Hincl.
-    erewrite <-map_length, complete_sem_fst, seq_length; eauto.
+    erewrite <-length_map, complete_sem_fst, length_seq; eauto.
   Qed.
 
   Lemma complete_branches_sem H b : forall n es d ys vd,
@@ -513,9 +513,9 @@ Module Type CORRECTNESS
       econstructor; eauto.
       + eapply Forall2_map_1, Forall2_map_2; eauto.
       + replace (seq 0 (Datatypes.length (map snd s'))) with (map fst s').
-        2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
+        2:{ eapply Forall2_length in Hf. rewrite <-Heq, length_map, <-Hf.
             eapply Permutation_seq_eq.
-            erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ, H11, seq_length. reflexivity.
+            erewrite <-BranchesSort.Permuted_sort, <-length_map, 2 EQ, H11, length_seq. reflexivity.
             eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
             1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
         }
@@ -547,13 +547,13 @@ Module Type CORRECTNESS
       econstructor; eauto.
       + eapply complete_branches_sem; eauto.
       + eapply case_complete, case_Permutation; eauto.
-        (* * rewrite combine_length, seq_length, Nat.min_id, map_length, complete_sem_length; eauto. *)
-        * rewrite combine_map_fst', map_length, complete_sem_length; auto.
-          rewrite seq_length; eauto.
-        * intros ??. rewrite map_length, complete_sem_length; eauto.
+        (* * rewrite length_combine, length_seq, Nat.min_id, length_map, complete_sem_length; eauto. *)
+        * rewrite combine_map_fst', length_map, complete_sem_length; auto.
+          rewrite length_seq; eauto.
+        * intros ??. rewrite length_map, complete_sem_length; eauto.
           erewrite <-complete_sem_fst, <-combine_fst_snd at 1; eauto.
           rewrite complete_sem_In; eauto.
-          rewrite combine_length, map_length, complete_sem_length, seq_length, Nat.min_id; eauto. rewrite in_seq.
+          rewrite length_combine, length_map, complete_sem_length, length_seq, Nat.min_id; eauto. rewrite in_seq.
           split; intros [|(Hlt&?&?)]; subst; auto. 1,2:right; repeat split; auto. 1,2:lia.
     - (* case (total) *)
       inv Hsem; simpl in *. simpl_Forall.
@@ -569,9 +569,9 @@ Module Type CORRECTNESS
       + eapply Forall2_map_1, Forall2_map_2; eauto.
         eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) _ _ ?; simpl; eauto.
       + replace (seq 0 (Datatypes.length (map snd s'))) with (map fst s').
-        2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
+        2:{ eapply Forall2_length in Hf. rewrite <-Heq, length_map, <-Hf.
             eapply Permutation_seq_eq.
-            erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ1, H12, seq_length. reflexivity.
+            erewrite <-BranchesSort.Permuted_sort, <-length_map, 2 EQ1, H12, length_seq. reflexivity.
             eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
             1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
         }
@@ -1462,7 +1462,7 @@ Module Type CORRECTNESS
         {
           apply find_base_clock_bck.
           + rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
-            rewrite map_length. exact (L.n_ingt0 n).
+            rewrite length_map. exact (L.n_ingt0 n).
           + apply LC.WellInstantiated_parent in WIi.
             rewrite L.clocksof_nclocksof, Forall_map.
             eapply Forall_impl; eauto. now simpl.
@@ -1470,7 +1470,7 @@ Module Type CORRECTNESS
         eapply LCS.sc_parent with (ck := bck) in Hse; eauto.
         { rewrite <-concat_map, clocks_of_mask in Hse; auto. }
         { rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
-          rewrite map_length. exact (L.n_ingt0 n). }
+          rewrite length_map. exact (L.n_ingt0 n). }
         { apply LC.WellInstantiated_parent in WIi.
           rewrite L.clocksof_nclocksof, Forall_map.
           eapply Forall_impl; eauto. now simpl. }

@@ -222,7 +222,8 @@ Section StructInBounds.
     apply Z.add_le_mono; auto with zarith.
     apply Z.le_trans with (2:=Hsize).
     rewrite Zplus_0_r_reverse at 1.
-    auto using (Z.ge_le _ _ (sizeof_pos env ty)) with zarith.
+    pose proof (sizeof_pos env ty).
+    lia.
   Qed.
 
   Lemma struct_in_struct_in_bounds:
@@ -925,7 +926,7 @@ Section SubRep.
       inv Eq.
       unfold fieldsrep_of in *.
       destruct ge ! (prefix_fun f' c'); [|destruct Hmem; contradiction].
-      exists oblk, c, ws, xs; intuition.
+      exists oblk, c, ws, xs; auto with *.
     - intros (oblk & c & ws' & xs' & He & Hge & Eq &?).
       (* rewrite Eq. *)
       rewrite sepall_breakout, sep_assoc; eauto.
@@ -1306,7 +1307,7 @@ Section MatchStates.
       rewrite translate_type_access_by_value in Hrep.
       eapply Separation.storev_rule' with (v:=value_to_cvalue v) in Hrep
         as (m' & ? & Hrep); eauto with mem.
-      exists m', b, co, d; intuition; eauto using assign_loc with clight.
+      exists m', b, co, d; intuition eauto using assign_loc with clight.
       rewrite <-OutputMatch; eauto.
       rewrite outputrep_notnil; auto.
       erewrite find_class_name, find_method_name; eauto.
@@ -1390,8 +1391,8 @@ Section MatchStates.
         try (destruct Hmem; contradiction).
       eapply Separation.storev_rule' with (v := value_to_cvalue v) in Hmem as (m' & ? & Hmem);
         eauto with mem.
-      exists m', d; intuition; eauto using assign_loc with clight.
-      apply match_states_conj; intuition; eauto with obctyping.
+      exists m', d; intuition eauto using assign_loc with clight.
+      apply match_states_conj; intuition eauto with obctyping.
       erewrite find_class_name; eauto.
       rewrite staterep_def, Findcl; simpl.
       unfold staterep_mems.
@@ -1704,7 +1705,7 @@ Section FunctionEntry.
                    (make_out_vars (instance_methods f)))
       by (eapply instance_methods_caract; eauto).
     assert (Datatypes.length (map translate_param (m_in f)) = Datatypes.length vs)
-      by (symmetry; rewrite map_length; eapply Forall2_length; eauto).
+      by (symmetry; rewrite length_map; eapply Forall2_length; eauto).
     assert (wt_state prog me vempty c (meth_vars f)) by (split; eauto with typing obctyping).
     assert (NoDup (map fst (m_in f))) by (apply fst_NoDupMembers, m_nodupin).
     assert (Forall2 (fun y xt => In (y, snd xt) (meth_vars f)) (map fst (m_in f)) (m_in f))
@@ -1734,7 +1735,7 @@ Section FunctionEntry.
       exists e_f, le_f, m_f; split.
       + constructor; auto; try congruence.
         rewrite T_f; auto.
-      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+      + apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_nil, <-sepemp_left, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
         apply sep_pure; split; auto.
@@ -1769,7 +1770,7 @@ Section FunctionEntry.
       exists e_f, le_f, m_f; split.
       + constructor; auto; try congruence.
         rewrite T_f; auto.
-      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+      + apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_singleton, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
         repeat rewrite map_app, map_cons, 2 map_app in *.
@@ -1802,10 +1803,10 @@ Section FunctionEntry.
 
       exists e_f, le_f, m_f; split.
       + constructor; auto; congruence.
-      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+      + apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_notnil; eauto.
         erewrite find_class_name, find_method_name; eauto.
-        exists instb, instco; intuition; auto.
+        exists instb, instco; intuition.
         rewrite sep_swap23, sep_swap, sep_swap34, sep_swap23, sep_swap34,
         sep_swap45, sep_swap34, sep_swap23, sep_swap.
         setoid_rewrite sep_pure; split.

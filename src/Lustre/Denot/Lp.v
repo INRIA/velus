@@ -135,7 +135,7 @@ Proof.
   { now rewrite fby1_bot1. }
   remember_ds (fby1 oa (take _ _) (take _ _)) as U.
   remember_ds (take _ (fby1 oa xs ys)) as V.
-  revert dependent U; cofix Cof; intros; destruct U;
+  generalize dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
   edestruct (@is_cons_elim _ xs) as (x & X & Hx).
@@ -148,7 +148,7 @@ Proof.
   all: apply cons_decomp in HV as (V' & Hd & HV);
     econstructor; eauto; clear Hd Hx V xs.
   (* on cherche is_cons y  *)
-  all: revert dependent U; cofix Cof; intros; destruct U;
+  all: generalize dependent U; cofix Cof; intros; destruct U;
     [rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     |clear Cof].
 
@@ -168,7 +168,7 @@ Proof.
   { now rewrite fby1_bot1. }
   remember_ds (fby1 oa (take _ _) (take _ _)) as V.
   remember_ds (take _ (fby1 oa xs ys)) as U.
-  revert dependent U; cofix Cof; intros; destruct U;
+  generalize dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
   edestruct (@is_cons_elim _ xs) as (x & X & Hx).
@@ -181,7 +181,7 @@ Proof.
   all: apply cons_decomp in HV as (V' & Hd & HV);
     econstructor; eauto; clear Hd Hx V xs.
   (* on cherche is_cons y  *)
-  all: revert dependent U; cofix Cof; intros; destruct U;
+  all: generalize dependent U; cofix Cof; intros; destruct U;
     [rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     |clear Cof].
   all: edestruct (@is_cons_elim _ ys) as (y & Y & Hy);
@@ -209,7 +209,7 @@ Proof.
   { now rewrite fby_bot. }
   remember_ds (fby (take _ _) (take _ _)) as U.
   remember_ds (take _ (fby xs ys)) as V.
-  revert dependent U; cofix Cof; intros; destruct U;
+  generalize dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
   edestruct (@is_cons_elim _ xs) as (x & X & Hx).
@@ -222,7 +222,7 @@ Proof.
   all: apply cons_decomp in HV as (V' & Hd & HV);
     econstructor; eauto; clear Hd Hx V xs.
   (* on cherche is_cons y  *)
-  all: revert dependent U; cofix Cof; intros; destruct U;
+  all: generalize dependent U; cofix Cof; intros; destruct U;
     [rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     |clear Cof].
   1: edestruct (@is_cons_elim _ ys) as (y & Y & Hy);
@@ -243,7 +243,7 @@ Proof.
   { now rewrite fby_bot. }
   remember_ds (fby (take _ _) (take _ _)) as V.
   remember_ds (take _ (fby xs ys)) as U.
-  revert dependent U; cofix Cof; intros; destruct U;
+  generalize dependent U; cofix Cof; intros; destruct U;
     [ rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     | clear Cof].
   edestruct (@is_cons_elim _ xs) as (x & X & Hx).
@@ -256,7 +256,7 @@ Proof.
   all: apply cons_decomp in HV as (V' & Hd & HV);
     econstructor; eauto; clear Hd Hx V xs.
   (* on cherche is_cons y  *)
-  all: revert dependent U; cofix Cof; intros; destruct U;
+  all: generalize dependent U; cofix Cof; intros; destruct U;
     [rewrite <- eqEps in HU; eapply DSleEps, Cof; eauto
     |clear Cof].
   1: edestruct (@is_cons_elim _ ys) as (y & Y & Hy);
@@ -693,12 +693,12 @@ Section LP_node.
       take (find_node f G = _) and rewrite it in *.
       repeat take (Some _ = Some _) and inv it.
       assert (Hl : list_sum (List.map numstreams es) = length (idents (n_in n0)))
-        by (now unfold idents; rewrite map_length, annots_numstreams in * ).
+        by (now unfold idents; rewrite length_map, annots_numstreams in * ).
       simpl; take (length a = _) and rewrite it, Hl.
-      unfold eq_rect; cases; try (rewrite map_length in *; tauto).
+      unfold eq_rect; cases; try (rewrite length_map in *; tauto).
       intros t1 t2 t3 t4 Eq1 Eq2.
       rewrite 2 sreset_eq, take_np_of_env.
-      2: rewrite map_length; apply n_outgt0.
+      2: rewrite length_map; apply n_outgt0.
       apply fcont_stable.
       (* clear - Eq1 Eq2 Hnode. *)
       destruct (list_sum (List.map numstreams er)).

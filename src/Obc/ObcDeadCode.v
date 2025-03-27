@@ -182,7 +182,7 @@ Module Type OBCDEADCODE
       cases; eauto using wt_exp_deadcode with obctyping.
     - (* Switch *)
       econstructor; eauto using wt_exp_deadcode.
-      + now rewrite map_length.
+      + now rewrite length_map.
       + intros * In. simpl_In. simpl_Forall. eauto.
     - (* Call *)
       econstructor; eauto using deadcode_find_class, deadcode_find_method.

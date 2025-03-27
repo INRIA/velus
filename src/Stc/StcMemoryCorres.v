@@ -616,7 +616,7 @@ Module Type STCMEMORYCORRES
         + inv Step'.
         + unfold state_corres.
           destruct (ident_eq_dec s0 s).
-          * subst; intuition.
+          * subst; auto with *.
           * rewrite find_inst_gso; auto; apply Insts; auto.
     Qed.
 

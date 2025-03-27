@@ -276,7 +276,7 @@ Module Type NLSYNTAX
     pose proof (n_outgt0 n) as Out.
     unfold vars_defined in Defd.
     apply Permutation_length in Defd.
-    rewrite flat_map_length, app_length, 2 map_length in Defd.
+    rewrite flat_length_map, length_app, 2 length_map in Defd.
     destruct (n_eqs n); simpl in *; lia.
   Qed.
 
@@ -381,7 +381,7 @@ Module Type NLSYNTAX
   (*     In x (gather_mems (eq :: eqs)) *)
   (*     <-> (In x (gather_mem_eq eq) \/ In x (gather_mems eqs)). *)
   (* Proof. *)
-  (*   destruct eq; simpl; split; intuition. *)
+  (*   destruct eq; simpl; split; auto with *. *)
   (* Qed. *)
 
   (* Lemma In_gather_insts_cons: *)
@@ -389,9 +389,9 @@ Module Type NLSYNTAX
   (*     InMembers x (gather_insts (eq :: eqs)) *)
   (*     <-> (InMembers x (gather_inst_eq eq) \/ InMembers x (gather_insts eqs)). *)
   (* Proof. *)
-  (*   destruct eq; simpl; try now intuition. *)
+  (*   destruct eq; simpl; try now auto with *. *)
   (*   destruct l. *)
-  (*   - setoid_rewrite app_nil_l. intuition. *)
+  (*   - setoid_rewrite app_nil_l. auto with *. *)
   (*   - now setoid_rewrite InMembers_app. *)
   (* Qed. *)
 
@@ -460,7 +460,7 @@ Module Type NLSYNTAX
   (* Proof. *)
   (*   induction eqs as [|[]]; simpl; auto; intros * Hin. *)
   (*   - apply in_app; auto. *)
-  (*   - intuition. *)
+  (*   - auto with *. *)
   (* Qed. *)
 
   (* Lemma n_nodup_gather_mems: *)

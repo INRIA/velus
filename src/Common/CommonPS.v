@@ -42,8 +42,8 @@ Lemma not_not_in:
   forall x A, ~~PS.In x A <-> PS.In x A.
 Proof.
   split; intro HH.
-  now apply Decidable.not_not in HH; intuition.
-  now apply Decidable.not_not; intuition.
+  now apply Decidable.not_not in HH; auto with *.
+  now apply Decidable.not_not; auto with *.
 Qed.
 
 Lemma PS_not_inter:
@@ -136,11 +136,11 @@ Proof.
   split; intro HH.
   - rewrite PS.inter_spec in HH.
     setoid_rewrite PS.union_spec in HH.
-    destruct HH as [[H1|H1] [H2|H2]]; intuition.
+    destruct HH as [[H1|H1] [H2|H2]]; auto with *.
   - repeat setoid_rewrite PS.union_spec in HH.
     repeat setoid_rewrite PS.inter_spec in HH.
     destruct HH as [[HH1 HH2]|[[HH1 HH2]|[[HH1 HH2]|[HH1 HH2]]]];
-      intuition.
+      auto with *.
 Qed.
 
 Lemma PS_inter_inter_same:

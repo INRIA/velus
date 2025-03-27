@@ -122,7 +122,7 @@ Module Type EICORRECTNESS
              apply Forall_app in H14 as (Hs1&Hs2)).
           1-2:econstructor.
           2:rewrite map_app; simpl; auto. all:eauto; simpl_Forall; eauto.
-          + now rewrite map_length.
+          + now rewrite length_map.
           + apply in_app_iff in H as [|]; simpl_In; simpl_Forall; eauto.
         - (* case *)
           inv Sem; econstructor; eauto using try_inline_in_exp_sem; simpl_Forall.

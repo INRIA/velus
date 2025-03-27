@@ -631,7 +631,7 @@ Module Export Op <: OPERATORS.
       match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
     - inv WTv. apply Cop.val_casted_single.
       match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
-    - specialize (Hnptr b i); intuition.
+    - specialize (Hnptr b i); auto with *.
   Qed.
 
   (* Solve goal with hypothesis of the form:
@@ -658,8 +658,8 @@ Module Export Op <: OPERATORS.
   Proof.
     intros e x Hom.
     destruct e as [b|]; [destruct b|].
-    - injection Hom; intro; subst; intuition.
-    - injection Hom; intro; subst; intuition.
+    - injection Hom; intro; subst; auto with *.
+    - injection Hom; intro; subst; auto with *.
     - discriminate Hom.
   Qed.
 

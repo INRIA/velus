@@ -148,8 +148,19 @@ Module Type ISVARIABLE
     forall x eq m,
       PS.In x (variable_eq m eq) <-> PS.In x m \/ PS.In x (variable_eq PS.empty eq).
   Proof.
-    destruct eq; simpl;
-      try setoid_rewrite PS.add_spec; try setoid_rewrite ps_adds_spec; intuition.
+    destruct eq; simpl; try setoid_rewrite PS.add_spec; try setoid_rewrite ps_adds_spec; intros m; split; auto.
+    - intros [ H | H ]; auto.
+    - intros [ H | [ H | H ] ]; auto.
+      inversion H.
+    - intros [ H | H ].
+      + auto.
+      + inversion H.
+    - intros [ H | H ]; auto.
+    - intros [ H | [ H | H ] ]; auto.
+      inversion H.
+    - intros [ H | H ].
+      + auto.
+      + inversion H.
   Qed.
 
   Lemma In_fold_left_variable_eq:
@@ -195,7 +206,7 @@ Module Type ISVARIABLE
   Proof.
     intros x eq eqs Hdef.
     apply List.Exists_cons in Hdef.
-    destruct (Is_variable_in_eq_dec x eq); intuition.
+    destruct (Is_variable_in_eq_dec x eq); destruct Hdef; auto with *.
   Qed.
 
   Lemma not_Is_variable_in_cons:
@@ -205,7 +216,8 @@ Module Type ISVARIABLE
   Proof.
     intros x eq eqs. split.
     intro H0; unfold Is_variable_in in H0; auto.
-    destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
+    destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H.
+    destruct H as [ H | [ H H' ] ]; auto.
   Qed.
 
   Lemma Is_variable_in_variables:

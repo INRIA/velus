@@ -31,7 +31,7 @@ intros P Q H H1; case (H 0 H1); intros m (H2,H3); casetype False; lia.
 Qed.
 
 Lemma ord_0 : forall P Q : Dec, P 0 -> ~Q 0 -> ord P Q.
-intros P Q H H1 n; exists 0; destruct n; intuition.
+intros P Q H H1 n; exists 0; destruct n; auto with *.
 Qed.
 
 (** - first elt of P then Q *)
@@ -44,11 +44,11 @@ Defined.
 
 
 Lemma PP_PS : forall (P:Dec) n, PP P (PS P) n <-> P n.
-intros; case n; simpl; intuition.
+intros; case n; simpl; auto with *.
 Qed.
 
 Lemma PS_PP : forall (P Q:Dec) n, PS (PP P Q) n <-> Q n.
-unfold PS,PP; simpl; intuition.
+unfold PS,PP; simpl; auto with *.
 Qed.
 
 Lemma ord_PS : forall P : Dec, ~ P 0 -> ord (PS P) P.
@@ -70,15 +70,15 @@ red; intros.
 case (H (S n)); auto.
 intros m Hm.
 destruct m; intros.
-case H0; intuition.
-exists m; intuition.
+case H0; auto with *.
+exists m; auto with *.
 Qed.
 
 Lemma Acc_ord_equiv : forall P Q : Dec, (forall n, P n <-> Q n) -> Acc ord P -> Acc ord Q.
 intros; destruct H0; intros.
 apply Acc_intro; intros R HR.
 apply H0.
-apply ord_eq_compat with R Q; intuition.
+apply ord_eq_compat with R Q; auto with *.
 case (H n); auto.
 Qed.
 
@@ -202,9 +202,9 @@ induction n.
 left; intros; casetype False; lia.
 case IHn; intro.
 case (H n); intro.
-left; intros; assert (i < n \/ i = n); try lia; intuition; subst; auto.
+left; intros; assert (i < n \/ i = n); try lia; auto with *; subst; auto.
 right; exists n; auto.
-right; case e; intros i H1; exists i; intuition lia.
+right; case e; intros i H1; exists i; auto with * lia.
 Defined.
 
 Definition le_term_dec : forall t u, {le_term t u}+{~ le_term t u}.
@@ -215,7 +215,7 @@ case (dec_finite (P:=fun n => le_term (t n) (t0 n))) with (n:=Ar f0).
 red; auto.
 auto.
 intro; right.
-case e; intros i H; apply not_le_term_Ap_st with i; intuition.
+case e; intros i H; apply not_le_term_Ap_st with i; auto with *.
 Defined.
 
 Definition term_ord : ord.
@@ -304,8 +304,8 @@ Definition le_term_next : forall (T T' : TU_ord) (n:nat), Dec.
 intros; exists (fun k => n<k /\ le_term (T n) (T' k)).
 intro k.
 case (le_lt_dec k n); intro.
-intuition lia.
-case  (le_term_dec (T n) (T' k)); intuition.
+auto with * lia.
+case  (le_term_dec (T n) (T' k)); auto with *.
 Defined.
 
 Definition TUle_next (T T' : TU_ord)  (n:nat)  (p: T <= T'):= minimize (le_term_next T T' n) (p n).
@@ -327,7 +327,7 @@ Lemma TUle_next_incr : forall (T T' : TU_ord) (p q: T <= T') (n m:nat),
 intros; unfold TUle_next.
 apply minimize_incr.
 unfold le_term_next; simpl.
-intuition eauto with arith.
+auto with * eauto with arith.
 apply le_term_trans with (T m); auto.
 apply (fmonotonic T); auto.
 Qed.
@@ -435,7 +435,7 @@ Lemma maxk_le : forall (f:nat -> nat) (k:nat) (def:nat),
       forall p, p < k -> (f p <= maxk f k def)%nat.
 induction k; simpl; intros.
 absurd (p < 0); auto with arith.
-assert (p < k \/ p = k); intuition (try lia); subst;
+assert (p < k \/ p = k); auto with * (try lia); subst;
 case (le_lt_dec (maxk f k def) (f k)); intros; auto with arith.
 apply Nat.le_trans with (maxk f k def); auto.
 Qed.

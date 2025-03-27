@@ -311,7 +311,7 @@ environment.
     induction xs; simpl.
     - constructor; constructor.
     - rewrite Bool.orb_false_iff, Forall_cons2, IHxs, nequiv_decb_false, equiv_decb_equiv;
-        intuition.
+        auto with *.
   Qed.
 
   Lemma clock_of_instant_true:
@@ -483,7 +483,7 @@ environment.
     intros * Hgt0 Hsem n.
     specialize (Hsem n).
     apply Forall2_length in Hsem.
-    rewrite map_length in Hsem.
+    rewrite length_map in Hsem.
     now rewrite Hsem in Hgt0.
   Qed.
 
@@ -657,7 +657,7 @@ environment.
                           end; auto.
     - assert (vs0 = vs).
       { repeat (take (nth_error _ _ = _) and clear it).
-        revert dependent vs0.
+        generalize dependent vs0.
         induction H0; intros; inv H1; inv H5; auto.
         f_equal; auto.
         assert (present y = present y0) as E by auto; inv E; auto.

@@ -246,13 +246,13 @@ Module Type NLINDEXEDSEMANTICS
     intros * (?&B1&B2).
     split; intros Rs.
     - rewrite B2 in Rs. clear B2.
-      eapply Exists_existsb with (P:=fun x => x n = true) in Rs; intuition.
+      eapply Exists_existsb with (P:=fun x => x n = true) in Rs; auto with *.
       induction B1; simpl in *; inv Rs; auto.
       left. specialize (H n) as [(?&?)|[(?&Hy)|(?&?)]]; try congruence.
       rewrite Hy in H1.
       rewrite H; simpl. rewrite equiv_decb_refl; auto.
     - rewrite B2. clear B2.
-      eapply Exists_existsb with (P:=fun x => x n = true); intuition.
+      eapply Exists_existsb with (P:=fun x => x n = true); auto with *.
       induction B1; simpl in *; inv Rs; auto.
       left. specialize (H n) as [(?&?)|[(?&Hy)|(?&?)]].
       1-3:rewrite H in H1; simpl in *; try congruence.

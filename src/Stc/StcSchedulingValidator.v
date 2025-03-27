@@ -209,13 +209,13 @@ Module Type STCSCHEDULINGVALIDATOR
         [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin];
         try (now right; apply VarSpec; auto); auto.
       - rewrite Is_defined_in_defined; simpl.
-        rewrite in_app; intuition.
+        rewrite in_app; auto with *.
       - rewrite Is_defined_in_defined; simpl.
         rewrite in_app.
-        apply VarSpec in H as [|]; intuition.
-        rewrite <-Is_defined_in_defined; intuition.
+        apply VarSpec in H as [|]; auto with *.
+        rewrite <-Is_defined_in_defined; auto with *.
       - rewrite Is_defined_in_defined in H; simpl in H;
-          rewrite in_app in H; destruct H; intuition.
+          rewrite in_app in H; destruct H; auto with *.
         rewrite <-Is_defined_in_defined in H.
         right; apply VarSpec; auto.
     Qed.

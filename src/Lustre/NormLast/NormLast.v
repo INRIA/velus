@@ -1538,7 +1538,7 @@ Module Type NORMLAST
       n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
-    unfold remove_lasts. now rewrite map_length.
+    unfold remove_lasts. now rewrite length_map.
   Qed.
   Next Obligation.
     destruct (normlast_top_block _ _) as (?&?) eqn:Hdl.

@@ -803,11 +803,11 @@ Module Type LSEMDETERMINISM
         eapply det_exps_n in Hse22; eauto using EqStN_weaken.
         assert (length (concat s0ss) = length ann0) as Hlen1.
         { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse11.
+          rewrite <-length_typesof_annots, H5, length_map in Hse11.
           assumption. }
         assert (length (concat s0ss0) = length ann0) as Hlen2.
         { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse21.
+          rewrite <-length_typesof_annots, H5, length_map in Hse21.
           assumption. }
         eapply fby_det_Sn; eauto.
         + eapply Forall2_forall2 in Hse22 as (_&Heq). eapply Heq; eauto.
@@ -825,11 +825,11 @@ Module Type LSEMDETERMINISM
         eapply P_exps_det_exp_inv in He1s; eauto.
         assert (length (concat s0ss) = length ann0) as Hlen1.
         { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse11.
+          rewrite <-length_typesof_annots, H5, length_map in Hse11.
           assumption. }
         assert (length (concat s0ss0) = length ann0) as Hlen2.
         { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse21.
+          rewrite <-length_typesof_annots, H5, length_map in Hse21.
           assumption. }
         eapply arrow_detn. eapply He0s. eapply He1s.
         + eapply Forall3_forall3 in Harrow1 as (_&_&Harrow1). eapply Harrow1; eauto.
@@ -919,7 +919,7 @@ Module Type LSEMDETERMINISM
             rewrite fst_NoDupMembers, Hse1, <-fst_NoDupMembers; auto. congruence.
           * intros ??. instantiate (1:=None). instantiate (1:=None). intros Hnth1 Hnth2.
             erewrite map_nth' with (d':=def_stream) in Hnth1, Hnth2. inv Hnth1. inv Hnth2. auto.
-            1,2:rewrite map_length in H, H1; try setoid_rewrite <-H; try setoid_rewrite <-H1; congruence.
+            1,2:rewrite length_map in H, H1; try setoid_rewrite <-H; try setoid_rewrite <-H1; congruence.
       - (* app *)
         intros ????? Hlen Hes Her ?? Hwt Hsem1 Hsem2. inv Hwt.
         inversion_clear Hsem1 as [| | | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].

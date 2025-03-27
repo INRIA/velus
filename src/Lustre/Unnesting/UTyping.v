@@ -617,10 +617,10 @@ Module Type UTYPING
           remember (unnest_fby _ _ _) as fby.
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length (concat x6) = length a) as Hlen2.
           { eapply mmap2_unnest_exp_length in Hnorm2...
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length fby = length x5).
           { rewrite Heqfby, unnest_fby_length...
             eapply idents_for_anns_length in H3... }
@@ -651,10 +651,10 @@ Module Type UTYPING
           remember (unnest_arrow _ _ _) as fby.
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length (concat x6) = length a) as Hlen2.
           { eapply mmap2_unnest_exp_length in Hnorm2...
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length fby = length x5).
           { rewrite Heqfby, unnest_arrow_length...
             eapply idents_for_anns_length in H3... }
@@ -709,7 +709,7 @@ Module Type UTYPING
           { eapply idents_for_anns_values in H0. rewrite H0, Forall2_map_1.
             subst; eapply unnest_merge_annot; eauto. } rewrite Forall2_map_1 in Htys.
           eapply Forall2_ignore1' with (xs:=x3) in Hwt'.
-          2:{ subst. apply idents_for_anns_length in H0. rewrite map_length in H0.
+          2:{ subst. apply idents_for_anns_length in H0. rewrite length_map in H0.
               rewrite unnest_merge_length... }
           apply mk_equations_Forall; solve_forall; simpl in *.
           repeat constructor... 1:repeat solve_incl.
@@ -754,7 +754,7 @@ Module Type UTYPING
           { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
             subst; eapply unnest_case_annot; eauto. } rewrite Forall2_map_1 in Htys.
           eapply Forall2_ignore1' with (xs:=x4) in Hwt'.
-          2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
+          2:{ subst. apply idents_for_anns_length in H1. rewrite length_map in H1.
               rewrite unnest_case_length... }
           apply mk_equations_Forall; solve_forall.
           repeat constructor... 1:repeat solve_incl.
@@ -803,7 +803,7 @@ Module Type UTYPING
           { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
             subst; eapply unnest_case_annot; eauto. } rewrite Forall2_map_1 in Htys.
           eapply Forall2_ignore1' with (xs:=x6) in Hwt'.
-          2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
+          2:{ subst. apply idents_for_anns_length in H1. rewrite length_map in H1.
               rewrite unnest_case_length... }
           apply mk_equations_Forall; solve_forall.
           repeat constructor... 1:repeat solve_incl.
@@ -821,7 +821,7 @@ Module Type UTYPING
 
         assert (length (find_node_incks G1 f) = length (concat x6)) as Hlen1.
         { unfold find_node_incks. rewrite H7.
-          eapply Forall2_length in H8. rewrite map_length.
+          eapply Forall2_length in H8. rewrite length_map.
           eapply mmap2_unnest_exp_length in Hnorm; eauto with ltyping. rewrite length_typesof_annots in H8.
           congruence. }
         assert (Forall (fun e : exp => numstreams e = 1) (concat x6)) as Hnum.
@@ -929,7 +929,7 @@ Module Type UTYPING
 
         assert (length (find_node_incks G1 i) = length x) as Hlen1.
         { unfold find_node_incks. rewrite H5.
-          eapply Forall2_length in H6. rewrite map_length.
+          eapply Forall2_length in H6. rewrite length_map.
           eapply unnest_exps_length in Hnorm... rewrite length_typesof_annots in H6.
           congruence. }
         assert (Forall (fun e : exp => numstreams e = 1) x) as Hnum.
@@ -988,8 +988,8 @@ Module Type UTYPING
       + inv Hwt.
         apply Forall2_length in H1 as Hlen.
         erewrite <-firstn_skipn with (n:=numstreams a) (l:=xs) in H1. apply Forall2_app_split in H1 as (Hf1&Hf2).
-        2:{ rewrite app_length in Hlen.
-            rewrite firstn_length. rewrite Hlen.
+        2:{ rewrite length_app in Hlen.
+            rewrite length_firstn. rewrite Hlen.
             rewrite length_typeof_numstreams.
             apply Nat.min_l. lia. }
         destruct xs; repeat constructor; simpl; try rewrite app_nil_r...
@@ -1255,7 +1255,7 @@ Module Type UTYPING
         assert (Forall (wt_clock G2.(types) (vars ++ st_senv x4)) (st_clocks x4)) as Hck2.
         { eapply unnest_noops_exps_wt_clock in H2...
           + unfold find_node_incks. rewrite H11.
-            eapply Forall2_length in H12. rewrite map_length.
+            eapply Forall2_length in H12. rewrite length_map.
             eapply mmap2_unnest_exp_length in H1; eauto with ltyping.
             rewrite length_typesof_annots in H12.
             congruence.
@@ -1311,7 +1311,7 @@ Module Type UTYPING
         { clear H1. repeat inv_bind.
           eapply unnest_noops_exps_wt_clock in H0; eauto with norm.
           + unfold find_node_incks. rewrite H8.
-            eapply Forall2_length in H9. rewrite map_length.
+            eapply Forall2_length in H9. rewrite length_map.
             eapply unnest_exps_length in H; eauto with ltyping. rewrite length_typesof_annots in H9.
             congruence.
           + eapply unnest_exps_numstreams; eauto.
@@ -1576,7 +1576,7 @@ Module Type UTYPING
           solve_forall; repeat solve_incl.
           eapply unnest_noops_exps_wt_type in H2; eauto.
           * unfold find_node_incks. rewrite H7.
-            eapply Forall2_length in H8. rewrite map_length.
+            eapply Forall2_length in H8. rewrite length_map.
             eapply mmap2_unnest_exp_length in H1; eauto with ltyping. rewrite length_typesof_annots in H8.
             congruence.
           * eapply mmap2_unnest_exp_numstreams; eauto.
@@ -1621,7 +1621,7 @@ Module Type UTYPING
           eapply Forall_forall in H7; eauto. repeat solve_incl. }
         eapply unnest_noops_exps_wt_type in H0...
         + unfold find_node_incks. rewrite H8.
-          eapply Forall2_length in H9. rewrite map_length.
+          eapply Forall2_length in H9. rewrite length_map.
           eapply unnest_exps_length in H; eauto with ltyping. rewrite length_typesof_annots in H9.
           congruence.
         + eapply unnest_exps_numstreams; eauto.

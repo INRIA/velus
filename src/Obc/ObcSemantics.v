@@ -305,7 +305,7 @@ Module Type OBCSEMANTICS
       Forall2 (exp_eval me ve) es vs2 ->
       vs1 = vs2.
   Proof.
-    intros * Sem1 Sem2; revert dependent vs2; induction Sem1;
+    intros * Sem1 Sem2; generalize dependent vs2; induction Sem1;
       inversion_clear 1; auto.
     f_equal; auto.
     eapply exp_eval_det; eauto.
@@ -317,7 +317,7 @@ Module Type OBCSEMANTICS
       Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs2 ->
       vs1 = vs2.
   Proof.
-    intros * Sem1 Sem2; revert dependent vs2; induction Sem1;
+    intros * Sem1 Sem2; generalize dependent vs2; induction Sem1;
       inversion_clear 1; auto.
     f_equal; auto.
     eapply exp_eval_det in H; eauto. now inv H.
@@ -407,7 +407,7 @@ Module Type OBCSEMANTICS
       intuition.
       match goal with
         H: Forall2 _ ?xs _, H': Forall2 _ ?xs ?ys |- _ =>
-        clear - H H'; revert dependent ys; induction H; intros; inv H'; auto with datatypes
+        clear - H H'; generalize dependent ys; induction H; intros; inv H'; auto with datatypes
       end.
   Qed.
 
@@ -418,7 +418,7 @@ Module Type OBCSEMANTICS
       me1 = me2 /\ ve1 = ve2.
   Proof.
     intros * Sem1 Sem2; apply (proj1 stmt_eval_call_eval_det) with (2 := Sem2) in Sem1; auto.
-    intuition; congruence.
+    split; congruence.
   Qed.
 
   Lemma stmt_eval_fold_left_shift:

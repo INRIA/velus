@@ -191,7 +191,7 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
     Fact st_follows_incl : forall st st',
         st_follows st st' ->
         incl (st_anns st) (st_anns st').
-    Proof. intuition. Qed.
+    Proof. auto with *. Qed.
   End follows.
 
   Section init.
@@ -473,7 +473,7 @@ Module Fresh(Ids : IDS).
         etransitivity; eauto.
     Qed.
 
-    Fact mmap_length : forall a1s a2s st st',
+    Fact mlength_map : forall a1s a2s st st',
         mmap a1s st = (a2s, st') ->
         length a2s = length a1s.
     Proof.

@@ -120,10 +120,10 @@ Module Type CECLOCKINGSEMANTICS
         eauto.
       - apply sem_clock_instant_det with (1:=Hck) in Hck'.
         apply sem_exp_instant_det with (1:=Hle) in Hle'.
-        subst; intuition.
+        subst; auto with *.
       - apply sem_clock_instant_det with (1:=Hck) in Hck'.
         apply sem_exp_instant_det with (1:=Hle) in Hle'.
-        subst; intuition; discriminate.
+        subst; auto with *; discriminate.
     Qed.
 
     Lemma clock_match_instant_cexp:

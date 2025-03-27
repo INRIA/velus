@@ -238,7 +238,7 @@ Module Type UCLOCKING
     assert (length (nclockof e) = length (nclocksof es')) as Hlen.
     { rewrite length_nclockof_numstreams, length_nclocksof_annots, <-length_annot_numstreams.
       apply unnest_exp_annot_length in Hun; eauto with lclocking. }
-    inv Hwc; repeat inv_bind; simpl; repeat rewrite map_length in Hlen.
+    inv Hwc; repeat inv_bind; simpl; repeat rewrite length_map in Hlen.
     - (* const *)
       repeat constructor.
     - (* enum *)
@@ -809,11 +809,11 @@ Module Type UCLOCKING
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
             apply Forall2_length in H9.
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length (concat x6) = length a) as Hlen2.
           { eapply mmap2_unnest_exp_length in Hnorm2...
             apply Forall2_length in H10.
-            repeat simpl_length. erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length. erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length fby = length x5).
           { rewrite Heqfby, unnest_fby_length...
             eapply idents_for_anns_length in H3... }
@@ -845,11 +845,11 @@ Module Type UCLOCKING
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
             apply Forall2_length in H9.
-            repeat simpl_length; erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length; erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length (concat x6) = length a) as Hlen2.
           { eapply mmap2_unnest_exp_length in Hnorm2...
             apply Forall2_length in H10.
-            repeat simpl_length. erewrite <- map_length, <- typesof_annots; solve_length. }
+            repeat simpl_length. erewrite <- length_map, <- typesof_annots; solve_length. }
           assert (length arrow = length x5).
           { rewrite Heqarrow, unnest_arrow_length...
             eapply idents_for_anns_length in H3... }
@@ -974,16 +974,16 @@ Module Type UCLOCKING
 
         assert (length (find_node_incks G1 f) = length (concat x6)) as Hlen1.
         { unfold find_node_incks. rewrite H11.
-          eapply Forall2_length in H12. rewrite map_length.
+          eapply Forall2_length in H12. rewrite length_map.
           eapply mmap2_unnest_exp_length in Hnorm... rewrite length_nclocksof_annots in H12.
-          rewrite map_length in H12. congruence. }
+          rewrite length_map in H12. congruence. }
         assert (Forall (fun e : exp => numstreams e = 1) (concat x6)) as Hnum.
         { eapply mmap2_unnest_exp_numstreams; eauto. }
 
         apply Hiface in H11 as (?&?&?&?&Hin&Hout).
 
         assert (length (n_in n) = length (nclocksof x2)) as Hlen2.
-        { apply Forall2_length in H12. repeat setoid_rewrite map_length in H12. rewrite H12.
+        { apply Forall2_length in H12. repeat setoid_rewrite length_map in H12. rewrite H12.
           eapply unnest_noops_exps_nclocksof2 with (es:=es), Forall2_length in H2. 3:eauto with lclocking. 1-4:eauto.
           rewrite Hlen1...
         }
@@ -991,14 +991,14 @@ Module Type UCLOCKING
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof x2)))) as sub2.
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof x2)) as Hsub2.
-        { apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        { apply Forall2_forall; split. 2:repeat setoid_rewrite length_map; auto.
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof x2))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof x2))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite map_length.
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite length_map.
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.
@@ -1147,9 +1147,9 @@ Module Type UCLOCKING
 
         assert (length (find_node_incks G1 i) = length x) as Hlen1.
         { unfold find_node_incks. rewrite H8.
-          eapply Forall2_length in H9. rewrite map_length.
+          eapply Forall2_length in H9. rewrite length_map.
           eapply unnest_exps_length in Hnorm; eauto...
-          rewrite length_nclocksof_annots, map_length in H9.
+          rewrite length_nclocksof_annots, length_map in H9.
           congruence. }
         assert (Forall (fun e : exp => numstreams e = 1) x) as Hnum.
         { eapply unnest_exps_numstreams; eauto. }
@@ -1157,7 +1157,7 @@ Module Type UCLOCKING
         apply Hiface in H8 as (?&?&?&?&Hin&Hout).
 
         assert (length (n_in n) = length (nclocksof x2)) as Hlen2.
-        { apply Forall2_length in H9. repeat setoid_rewrite map_length in H9. rewrite H9.
+        { apply Forall2_length in H9. repeat setoid_rewrite length_map in H9. rewrite H9.
           unfold unnest_exps in Hnorm; repeat inv_bind.
           eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,4:eauto. eauto with lclocking.
           rewrite Hlen1; eauto...
@@ -1167,14 +1167,14 @@ Module Type UCLOCKING
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof x2)))) as sub2.
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof x2)) as Hsub2.
-        { apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        { apply Forall2_forall; split. 2:repeat setoid_rewrite length_map; auto.
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof x2))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof x2))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite map_length.
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite length_map.
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.
@@ -1252,7 +1252,7 @@ Module Type UCLOCKING
       inv Hwc.
       - (* app *)
         assert (length xs = length anns) as Hlen.
-        { eapply Forall3_length in H6 as (_&Hlen). rewrite map_length in Hlen; auto. }
+        { eapply Forall3_length in H6 as (_&Hlen). rewrite length_map in Hlen; auto. }
 
         unfold unnest_rhss in H; repeat inv_bind.
         rewrite firstn_all2, skipn_all2. 2,3:setoid_rewrite Hlen; reflexivity.
@@ -1264,9 +1264,9 @@ Module Type UCLOCKING
 
         assert (length (find_node_incks G1 f) = length x1) as Hlen1.
         { unfold find_node_incks. rewrite H4.
-          eapply Forall2_length in H5. rewrite map_length.
+          eapply Forall2_length in H5. rewrite length_map.
           eapply unnest_exps_length in Hnorm...
-          rewrite length_nclocksof_annots, map_length in H5.
+          rewrite length_nclocksof_annots, length_map in H5.
           congruence. }
         assert (Forall (fun e : exp => numstreams e = 1) x1) as Hnum.
         { eapply unnest_exps_numstreams; eauto. }
@@ -1274,7 +1274,7 @@ Module Type UCLOCKING
         apply Hiface in H4 as (?&?&?&?&Hin&Hout).
 
         assert (length (n_in n) = length (nclocksof x4)) as Hlen2.
-        { apply Forall2_length in H5. repeat setoid_rewrite map_length in H5. rewrite H5.
+        { apply Forall2_length in H5. repeat setoid_rewrite length_map in H5. rewrite H5.
           unfold unnest_exps in Hnorm; repeat inv_bind.
           eapply unnest_noops_exps_nclocksof2, Forall2_length in H0. 1,4:eauto. eauto with lclocking.
           rewrite Hlen1...
@@ -1284,14 +1284,14 @@ Module Type UCLOCKING
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof x4)))) as sub2.
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof x4)) as Hsub2.
-        { apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        { apply Forall2_forall; split. 2:repeat setoid_rewrite length_map; auto.
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof x4))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof x4))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite map_length.
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite length_map.
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.
@@ -1354,8 +1354,8 @@ Module Type UCLOCKING
         + inv Hwc2; simpl; auto.
         + inv Hwc1'.
           assert (length (firstn (numstreams a) xs) = length (clockof a)) as Hlen1.
-          { apply Forall2_length in Hwc2. rewrite app_length in Hwc2.
-            rewrite firstn_length, Hwc2, length_clockof_numstreams.
+          { apply Forall2_length in Hwc2. rewrite List.length_app in Hwc2.
+            rewrite length_firstn, Hwc2, length_clockof_numstreams.
             apply Nat.min_l. lia. }
           rewrite <- (firstn_skipn (numstreams a) xs) in Hwc2.
           apply Forall2_app_split in Hwc2 as [Hwc2 Hwc3]...
@@ -1615,9 +1615,9 @@ Module Type UCLOCKING
         assert (Hwenv1:=H1). eapply mmap2_wc_env in Hwenv1... 2:solve_mmap2'.
         assert (Hwenv2:=H2). eapply unnest_noops_exps_wc_env in Hwenv2...
         2:{ unfold find_node_incks. rewrite H11.
-            eapply Forall2_length in H12. rewrite map_length.
+            eapply Forall2_length in H12. rewrite length_map.
             eapply mmap2_unnest_exp_length in H1; eauto with lclocking.
-            rewrite length_nclocksof_annots, map_length in H12.
+            rewrite length_nclocksof_annots, length_map in H12.
             congruence. }
         2:{ eapply mmap2_unnest_exp_numstreams; eauto. }
         2:{ eapply mmap2_unnest_exp_wc in H1 as (?&?); eauto. }
@@ -1683,9 +1683,9 @@ Module Type UCLOCKING
           eapply unnest_exp_wc_env in H4; eauto.
           eapply Forall_forall in H7; eauto. repeat solve_incl.
         + unfold find_node_incks. rewrite H8.
-          eapply Forall2_length in H9. rewrite map_length.
+          eapply Forall2_length in H9. rewrite length_map.
           eapply unnest_exps_length in Hnorm; eauto with lclocking.
-          rewrite length_nclocksof_annots, map_length in H9.
+          rewrite length_nclocksof_annots, length_map in H9.
           congruence.
         + eapply unnest_exps_numstreams; eauto.
         + eapply unnest_exps_wc in Hnorm as (?&?); eauto.
@@ -1723,9 +1723,9 @@ Module Type UCLOCKING
           eapply unnest_exp_wc_env in H11; eauto.
           eapply Forall_forall in H2; eauto. repeat solve_incl.
         + unfold find_node_incks. rewrite H3.
-          eapply Forall2_length in H4. rewrite map_length.
+          eapply Forall2_length in H4. rewrite length_map.
           eapply unnest_exps_length in Hnorm; eauto with lclocking.
-          rewrite length_nclocksof_annots, map_length in H4.
+          rewrite length_nclocksof_annots, length_map in H4.
           congruence.
         + eapply unnest_exps_numstreams; eauto.
         + eapply unnest_exps_wc in Hnorm as (?&?); eauto.

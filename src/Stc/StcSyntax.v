@@ -619,8 +619,8 @@ Module Type STCSYNTAX
       ~ Is_update_last_in x (tc :: tcs) <-> ~ Is_update_last_in_tc x tc /\ ~ Is_update_last_in x tcs.
   Proof.
     split; intros HH.
-    - split; intro; apply HH; unfold Is_update_last_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    - split; intro; apply HH; unfold Is_update_last_in; auto with *.
+    - destruct HH; inversion_clear 1; auto with *.
   Qed.
 
   Lemma last_of_In:
@@ -727,8 +727,8 @@ Module Type STCSYNTAX
       ~ Is_update_next_in x (tc :: tcs) <-> ~ Is_update_next_in_tc x tc /\ ~ Is_update_next_in x tcs.
   Proof.
     split; intros HH.
-    - split; intro; apply HH; unfold Is_update_next_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    - split; intro; apply HH; unfold Is_update_next_in; auto with *.
+    - destruct HH; inversion_clear 1; auto with *.
   Qed.
 
   Lemma next_of_In:
@@ -827,8 +827,8 @@ Module Type STCSYNTAX
       ~ Is_reset_state_in x ck (tc :: tcs) <-> ~ Is_reset_state_in_tc x ck tc /\ ~ Is_reset_state_in x ck tcs.
   Proof.
     split; intros HH.
-    - split; intro; apply HH; unfold Is_reset_state_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    - split; intro; apply HH; unfold Is_reset_state_in; auto with *.
+    - destruct HH; inversion_clear 1; auto with *.
   Qed.
 
   Lemma not_Is_reset_state_in_cons':
@@ -1169,8 +1169,8 @@ Module Type STCSYNTAX
       ~ Is_system_in b (tc :: tcs) <-> ~Is_system_in_tc b tc /\ ~Is_system_in b tcs.
   Proof.
     split; intro HH.
-    - split; intro; apply HH; unfold Is_system_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    - split; intro; apply HH; unfold Is_system_in; auto with *.
+    - destruct HH; inversion_clear 1; auto with *.
   Qed.
 
   Lemma steps_iresets_of_Is_system_in:

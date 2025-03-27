@@ -133,11 +133,11 @@ Module Type EITYPING
       Proof.
         induction ce using cexp_ind2'; intros * Wt; inv Wt; simpl; auto.
         - econstructor; eauto; simpl_Forall; auto.
-          + now rewrite map_length.
+          + now rewrite length_map.
           + erewrite inline_in_cexp_typeofc; eauto.
         - econstructor; eauto using try_inline_in_exp_wt.
           + erewrite try_inline_in_exp_typeof; eauto.
-          + now rewrite map_length.
+          + now rewrite length_map.
           + intros * Hin. simpl_In. simpl_Forall.
             erewrite 2 inline_in_cexp_typeofc; eauto.
           + intros * Hin. simpl_In. simpl_Forall. auto.

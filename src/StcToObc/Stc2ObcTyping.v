@@ -41,9 +41,9 @@ Module Type STC2OBCTYPING
   Proof.
     induction xs; simpl; split; try now intuition eauto using wt_stmt.
     - rewrite IHxs; intros (?& WT); inv WT.
-      rewrite IHxs; intuition.
+      rewrite IHxs; auto with *.
     - rewrite IHxs; intros ((?& WT) &?); inv WT.
-      rewrite IHxs; intuition.
+      rewrite IHxs; auto with *.
   Qed.
 
   Lemma wt_stmt_fold_left_lift:
@@ -54,9 +54,9 @@ Module Type STC2OBCTYPING
   Proof.
     induction xs; simpl; split; try now intuition eauto using wt_stmt.
     - rewrite IHxs; intros (?& WT); inv WT.
-      rewrite IHxs; intuition.
+      rewrite IHxs; auto with *.
     - rewrite IHxs; intros ((?& WT) &?); inv WT.
-      rewrite IHxs; intuition.
+      rewrite IHxs; auto with *.
   Qed.
 
   Section Expressions.
@@ -145,14 +145,14 @@ Module Type STC2OBCTYPING
     Proof.
       induction e using cexp_ind2'; simpl; intros WTe Hv; inversion WTe.
       - subst; unfold tovar.
-        FromMemset; econstructor; simpl; eauto using wt_exp, wt_stmt; try rewrite map_length; auto;
+        FromMemset; econstructor; simpl; eauto using wt_exp, wt_stmt; try rewrite length_map; auto;
           intros * Hin; apply in_map_iff in Hin as (? & E & Hin); inv E;
             repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; auto.
       - take (CE.Typ.wt_exp _ _ _) and apply translate_exp_wt in it.
         subst.
         econstructor; eauto using wt_stmt.
         + now rewrite typeof_correct.
-        + now rewrite map_length.
+        + now rewrite length_map.
         + intros * Hin; apply in_map_iff in Hin as (? & E & Hin);
             apply option_map_inv in E as (?&?&?); subst;
               repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; simpl in *; auto.

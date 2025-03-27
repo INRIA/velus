@@ -769,7 +769,7 @@ Module Type INLINELOCAL
     setoid_rewrite Env.In_find_adds.
     2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
-        eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
+        eapply nth_In with (d:=(xH, xH)). now rewrite length_combine, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?).
     do 2 esplit; eauto.
   Qed.
@@ -790,7 +790,7 @@ Module Type INLINELOCAL
     setoid_rewrite Env.In_find_adds.
     2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
-        eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
+        eapply nth_In with (d:=(xH, xH)). now rewrite length_combine, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?&?&?).
     do 2 esplit; eauto.
   Qed.
@@ -815,7 +815,7 @@ Module Type INLINELOCAL
     setoid_rewrite Env.In_find_adds.
     2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
-        eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
+        eapply nth_In with (d:=(xH, xH)). now rewrite length_combine, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?&?&?&?).
     do 2 esplit; eauto 6.
   Qed.
@@ -1054,13 +1054,13 @@ Module Type INLINELOCAL
   Proof.
     intros * ND Map. eapply Forall2_eq, Forall2_forall2.
     assert (Map':=Map). eapply mmap_values, Forall2_forall2 in Map as (Len&F2).
-    rewrite map_length. split; auto.
+    rewrite length_map. split; auto.
     intros * N Nth1 Nth2; subst.
     erewrite map_nth' with (d':=xH); eauto.
     unfold rename_var. setoid_rewrite Env.In_find_adds'. simpl; eauto.
     - now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
     - erewrite <-combine_nth; eauto. eapply nth_In.
-      now rewrite combine_length, <-Len, Nat.min_id.
+      now rewrite length_combine, <-Len, Nat.min_id.
   Qed.
 
   Lemma reuse_idents_NoDup {A} : forall (locs : list (ident * A)) locs' st st',

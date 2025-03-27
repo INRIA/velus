@@ -165,8 +165,8 @@ rewrite add_inv in H0; destruct x.
 destruct n; simpl in H0.
 discriminate H0.
 case (H n) with (2:=H0); auto; intros t (u,(H1,H2)).
-exists t; exists u; intuition.
-rewrite (unit_eq u); exists y; exists x; intuition.
+exists t; exists u; auto with *.
+rewrite (unit_eq u); exists y; exists x; auto with *.
 rewrite (pred_nthCon (D:=unit) tt (add y x)) in H0.
 injection H0; auto.
 Qed.
@@ -176,7 +176,7 @@ Lemma add_eqCons : forall (s x y:DN), add x y == DNS s ->
                 (x==DNS u /\ y==t  \/  x == t /\ y == DNS u).
 intros s x y H; case (decomp_eq (D:=unit) H); intros v (H1,H2).
 case (add_decomp_elim x y H1); intros t (u, (Heq, H4)).
-exists t; exists u; intuition.
+exists t; exists u; auto with *.
 apply Oeq_trans with v; auto.
 apply Oeq_trans with v; auto.
 Qed.
@@ -342,7 +342,7 @@ exists w; split; auto.
 apply Oeq_trans with (add p q); auto.
 exists n'; exists m'; exists p'; exists q'; split; auto.
 split; auto.
-case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); intuition.
+case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); auto with *.
 case (addS_sym n m H1'); intros s' H1.
 case H3; clear H3; intro H3.
 (* compat m n p q *)
@@ -352,7 +352,7 @@ exists w; split; auto.
 apply Oeq_trans with (add p q); auto.
 exists n'; exists m'; exists p'; exists q'; split; auto.
 split; auto.
-case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); intuition.
+case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); auto with *.
 (* compat m n q p *)
 case (compat_addS H3 H1); intros w H6.
 case (addS_sym q p H6); clear H6 w; intros w H6.
@@ -361,7 +361,7 @@ exists w; split; auto.
 apply Oeq_trans with (add p q); auto.
 exists n'; exists m'; exists p'; exists q'; split; auto.
 split; auto.
-case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); intuition.
+case (compatS H3 (x':=n') (y':=m') (z':=p') (t':=q')); auto with *.
 (* witness *)
 exists n; exists m; exists p; exists q; auto.
 Qed.
@@ -406,7 +406,7 @@ intros; case (addS (x':=n) (x:=DNS n)) with (y:=m); auto; intros (s,H) _.
 case (add_eqCons (DNS n) m H); intros t (u,(H1,H2)).
 apply Oeq_trans with (DNS s); auto.
 apply DNS_eq_compat.
-apply Oeq_trans with (add t u); intuition.
+apply Oeq_trans with (add t u); auto with *.
 apply Oeq_trans with (add u t); auto.
 apply add_eq_compat; auto.
 apply DNS_eq_simpl; auto.
@@ -430,13 +430,13 @@ intros; apply DNeq_rec with
           (R:= fun x y => exists n, x ==  add 0 n /\ y == n).
 (* compatibility with equality *)
 intros x1 x2 y1 y2 (n0,(H1,H2)) H3 H4.
-exists n0; intuition eauto.
+exists n0; auto with * eauto.
 (* Case (add 0 n) is S *)
 clear n; intros s y  (n0,(H1,H2)).
 assert (Ha:add 0 n0 == DNS s); auto.
 case (add_eqCons 0 n0 Ha); intros u (v,(He,[(H3,H4)|(H3,H4)])).
 absurd (DNS v <= 0); auto.
-exists v; intuition.
+exists v; auto with *.
 apply Oeq_trans with n0; auto.
 exists v; split; auto.
 rewrite H3; auto.
@@ -446,7 +446,7 @@ assert (Hle:DNS s <= n0); auto.
 case (addS Hle 0); intros _ (w,Ha).
 case (add_eqCons 0 n0 Ha); intros u (v,(He,[(H3,H4)|(H3,H4)])).
 absurd (DNS v <= 0); auto.
-exists w; intuition.
+exists w; auto with *.
 apply Oeq_trans with (add 0 n0); auto.
 exists v; split.
 rewrite H3; auto.
@@ -463,7 +463,7 @@ apply DNle_rec with
      (R:= fun x y => exists b, exists c, x ==  add b (lub c) /\ y == lub (Add b @c)).
 (* compatibility with equality *)
 intros x1 x2 y1 y2 (b0,(c0,(H1,H2))) H3 H4.
-exists b0; exists c0; intuition eauto.
+exists b0; exists c0; auto with * eauto.
 (* Case (add b (lub c)) is S *)
 clear b c; intros s y  (b,(c,(H1,H2))).
 assert (H1':add b (lub c)==DNS s); auto.

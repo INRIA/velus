@@ -268,7 +268,7 @@ Module Type STCSEMANTICS
         as initial_state_equal_memory.
   Proof.
     intros * E Init.
-    revert dependent P; revert dependent f; revert dependent y.
+    generalize dependent P; generalize dependent f; generalize dependent y.
     induction x as [? IH] using memory_ind'; intros.
     inversion_clear Init as [??????? Spec].
     econstructor; eauto.
@@ -296,7 +296,7 @@ Module Type STCSEMANTICS
       with signature equal_memory ==> Basics.impl
         as state_closed_equal_memory.
   Proof.
-    intros m m' E Closed; revert dependent m'; revert dependent b; revert P ;
+    intros m m' E Closed; generalize dependent m'; generalize dependent b; revert P ;
       induction m as [? IH] using memory_ind'; intros.
     inversion_clear Closed as [??????? Insts].
     econstructor; eauto.
@@ -984,7 +984,7 @@ Module Type STCSEMANTICS
       absent_list ys /\ S' ≋ S.
   Proof.
     intros [] * Ord Sem Abs.
-    revert dependent xs; revert f S S' ys.
+    generalize dependent xs; revert f S S' ys.
     induction systems0 as [|system]; intros;
       inversion_clear Sem as [????????? Find Ins ?? Htcs Closed ClosedI Closed'];
       try now inv Find.
@@ -1031,7 +1031,7 @@ Module Type STCSEMANTICS
     forall states,
       state_closed_states states (empty_memory _).
   Proof.
-    unfold state_closed_states; setoid_rewrite find_val_gempty; intuition.
+    unfold state_closed_states; setoid_rewrite find_val_gempty; auto with *.
   Qed.
 
   Lemma state_closed_empty {prefs}:

@@ -576,8 +576,8 @@ Lemma cs_spec1 :
 Proof.
   intros * Infr Sr Hcs.
   apply take_Oeq; intro n.
-  revert dependent cs.
-  revert dependent rs.
+  generalize dependent cs.
+  generalize dependent rs.
   induction n; intros; auto.
   apply infinite_decomp in Infr as (vr & rs' & Hrs & Infr').
   rewrite Hrs in *.
@@ -958,8 +958,8 @@ Proof.
   intros * Sx Hf.
   pose proof (St := SafeF xs Sx).
   pose proof (Hac := AcF xs); revert St Hac; generalize (f xs); intros.
-  revert dependent t.
-  revert dependent xs.
+  generalize dependent t.
+  generalize dependent xs.
   induction n; simpl (nrem _ _); intros.
   - destruct (@is_cons_elim _ xs) as (vx & xs' & Hxs).
     { apply first_is_cons; rewrite Hf; auto. }

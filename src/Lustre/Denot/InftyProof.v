@@ -355,9 +355,9 @@ Module Type LDENOTINF
     rewrite sreset_eq.
     assert (Hy : P_vars n (f X) outs) by auto.
     remember (_ f X) as Y eqn:HH; clear HH.
-    revert dependent R.
-    revert dependent X.
-    revert dependent Y.
+    generalize dependent R.
+    generalize dependent X.
+    generalize dependent Y.
     induction n as [|[]]; intros; eauto using is_cons_sreset_aux.
     apply is_ncons_is_cons in Cr as Hr.
     apply is_cons_elim in Hr as (vr & R' & Hr).
@@ -406,7 +406,7 @@ Module Type LDENOTINF
         apply mem_ident_false in HH.
         eapply Hn; eauto using HasCausRefl.
     }
-    revert dependent k.
+    generalize dependent k.
     induction e using exp_ind2; simpl; intros.
     all: unfold P_exp; try now inv Hr.
     - (* Econst *)

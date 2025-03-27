@@ -111,7 +111,7 @@ Module Type COMPTYPING
         1:{ simpl_Forall. split; [|split]; eauto with ltyping.
             erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
         1:{ erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
-        1:{ erewrite map_length, map_map with (l:=states), map_ext with (l:=states); eauto.
+        1:{ erewrite length_map, map_map with (l:=states), map_ext with (l:=states); eauto.
             intros; destruct_conjs; auto. }
         1:{ erewrite map_map with (l:=states), map_ext with (l:=states); eauto.
             intros; destruct_conjs; auto. }
@@ -158,7 +158,7 @@ Module Type COMPTYPING
       - (* automaton (strong) *)
         econstructor; eauto with ltyping.
         1:{ erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
-        1:{ erewrite map_length, map_map with (l:=states), map_ext with (l:=states); eauto.
+        1:{ erewrite length_map, map_map with (l:=states), map_ext with (l:=states); eauto.
             intros; destruct_conjs; auto. }
         1:{ erewrite map_map with (l:=states), map_ext with (l:=states); eauto.
             intros; destruct_conjs; auto. }

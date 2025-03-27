@@ -72,7 +72,10 @@ Module Type STCISFREE
       PS.In x (fst (free_in_tc tc (PS.empty, PS.empty)))
       <-> Is_free_in_tc (Var x) tc.
   Proof.
-    intros; rewrite free_in_tc_spec1. intuition.
+    intros; rewrite free_in_tc_spec1.
+    split.
+    - intros [ H | H ]; auto with *.
+    - intros. auto with *.
   Qed.
 
   Lemma free_in_tc_spec2:
@@ -91,7 +94,10 @@ Module Type STCISFREE
       PS.In x (snd (free_in_tc tc (PS.empty, PS.empty)))
       <-> Is_free_in_tc (Last x) tc.
   Proof.
-    intros; rewrite free_in_tc_spec2. intuition.
+    intros; rewrite free_in_tc_spec2.
+    split.
+    - intros [ H | H ]; auto with *.
+    - intros. left. assumption.
   Qed.
 
 End STCISFREE.

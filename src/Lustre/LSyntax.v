@@ -798,7 +798,7 @@ Module Type LSYNTAX
   Fact length_annot_numstreams : forall e,
       length (annot e) = numstreams e.
   Proof.
-    destruct e; simpl; auto; destruct_conjs; auto using map_length.
+    destruct e; simpl; auto; destruct_conjs; auto using length_map.
   Qed.
 
   (** typesof *)
@@ -816,7 +816,7 @@ Module Type LSYNTAX
   Proof.
     intros.
     rewrite typeof_annot.
-    rewrite map_length.
+    rewrite length_map.
     apply length_annot_numstreams.
   Qed.
 
@@ -834,16 +834,16 @@ Module Type LSYNTAX
   Proof.
     intros es.
     rewrite typesof_annots.
-    apply map_length.
+    apply length_map.
   Qed.
 
   Fact annots_numstreams : forall es,
       length (annots es) = list_sum (List.map numstreams es).
   Proof.
     induction es; simpl; auto.
-    rewrite app_length; f_equal; auto.
+    rewrite length_app; f_equal; auto.
     rewrite <- length_typeof_numstreams, typeof_annot.
-    now rewrite map_length.
+    now rewrite length_map.
   Qed.
 
   Fact typeof_concat_typesof : forall l,
@@ -871,7 +871,7 @@ Module Type LSYNTAX
   Proof.
     intros.
     rewrite clockof_annot.
-    repeat rewrite map_length.
+    repeat rewrite length_map.
     apply length_annot_numstreams.
   Qed.
 
@@ -889,7 +889,7 @@ Module Type LSYNTAX
   Proof.
     intros es.
     rewrite clocksof_annots.
-    apply map_length.
+    apply length_map.
   Qed.
 
   Lemma In_clocksof:
@@ -929,7 +929,7 @@ Module Type LSYNTAX
       length (nclockof e) = numstreams e.
   Proof.
     intros.
-    erewrite <-map_length, nclockof_annot, map_length.
+    erewrite <-length_map, nclockof_annot, length_map.
     apply length_annot_numstreams.
   Qed.
 
@@ -946,7 +946,7 @@ Module Type LSYNTAX
       length (nclocksof es) = length (annots es).
   Proof.
     intros es.
-    erewrite <-map_length, nclocksof_annots, map_length. auto.
+    erewrite <-length_map, nclocksof_annots, length_map. auto.
   Qed.
 
   Lemma clockof_nclockof:
@@ -959,7 +959,7 @@ Module Type LSYNTAX
   Lemma nclockof_length :
     forall e, length (nclockof e) = length (clockof e).
   Proof.
-    intros e. rewrite clockof_nclockof, map_length; auto.
+    intros e. rewrite clockof_nclockof, length_map; auto.
   Qed.
 
   Lemma clocksof_nclocksof:

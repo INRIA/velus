@@ -87,17 +87,17 @@ Module Type NLCLOCKING
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                    (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es))))) as sub2.
         assert (length (n_in n) = length (nclocksof (map (init_exp sub) es))) as Hlen2.
-        1:{ apply Forall2_length in H8. repeat setoid_rewrite map_length in H8. rewrite H8.
+        1:{ apply Forall2_length in H8. repeat setoid_rewrite length_map in H8. rewrite H8.
             pose proof (init_exp_nclocksof sub es) as Hncks. apply Forall2_length in Hncks; auto. }
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (init_exp sub) es))) as Hsub2.
-        apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        apply Forall2_forall; split. 2:repeat setoid_rewrite length_map; auto.
         1:{ intros (?&?) (?&?) Hin'.
             assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es)))) as Hin2.
             { repeat setoid_rewrite combine_map_fst in Hin'.
               eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
               rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
             assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es)))) as Hnd1.
-            { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite map_length.
+            { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite length_map.
               pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
             destruct o; simpl; subst.
             + eapply Env.find_In_from_list.
@@ -150,17 +150,17 @@ Module Type NLCLOCKING
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                    (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es))))) as sub2.
         assert (length (n_in n) = length (nclocksof (map (init_exp sub) es))) as Hlen2.
-        { apply Forall2_length in H2. repeat setoid_rewrite map_length in H2. rewrite H2.
+        { apply Forall2_length in H2. repeat setoid_rewrite length_map in H2. rewrite H2.
           pose proof (init_exp_nclocksof sub es) as Hncks. apply Forall2_length in Hncks; auto. }
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (init_exp sub) es))) as Hsub2.
-        { apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        { apply Forall2_forall; split. 2:repeat setoid_rewrite length_map; auto.
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es)))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof (map (init_exp sub) es)))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite map_length.
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers. 2:now rewrite length_map.
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.

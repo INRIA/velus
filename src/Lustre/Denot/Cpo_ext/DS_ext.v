@@ -138,7 +138,7 @@ Lemma decomp_decomp :
     x = x' /\ t = t'.
 Proof.
   clear. intros * [k kth].
-  revert dependent s.
+  generalize dependent s.
   induction k; simpl; intros * Hp Hd; subst.
   - apply decompCon_eq in Hd. now inversion Hd.
   - destruct s; simpl in *.
@@ -721,10 +721,10 @@ Lemma isConP_le_compat : forall D (P : D -> Prop) (x y : DS D),
     x <= y -> isConP P x -> isConP P y.
 Proof.
   intros * Hle Hic.
-  revert dependent y.
+  generalize dependent y.
   induction Hic; intros; inversion_clear Hle; auto;
     destruct H0 as [n];
-    revert dependent y;
+    generalize dependent y;
     induction n; intros; simpl in *; subst; auto using isConP_pred.
 Qed.
 
@@ -1041,7 +1041,7 @@ Lemma inf_nrem :
   forall (s : DS A), infinite s -> forall n, is_ncons n s.
 Proof.
   intros * Hf n.
-  revert dependent s.
+  generalize dependent s.
   induction n as [|[]]; intros; inversion Hf; simpl; auto.
   apply IHn; auto.
 Qed.

@@ -122,7 +122,7 @@ Proof.
   intros P Q HP HQ b ofs.
   specialize (HP b ofs).
   specialize (HQ b ofs).
-  simpl; intuition.
+  simpl; auto with *.
 Qed.
 
 Global Hint Resolve decidable_footprint_sepconj : sep.
@@ -131,7 +131,7 @@ Lemma decidable_ident_eq:
   forall (b b': AST.ident), Decidable.decidable (b = b').
 Proof.
   intros b b'. unfold Decidable.decidable.
-  destruct (peq b' b); intuition.
+  destruct (peq b' b); auto with *.
 Qed.
 
 Lemma decidable_footprint_range:
@@ -179,7 +179,7 @@ Proof.
     assumption.
   - intros b ofs HfQ.
     destruct (Hdec b ofs); [now left|right].
-    split; intuition.
+    split; auto with *.
 Qed.
 
 Lemma disjoint_sepwand:
@@ -187,7 +187,7 @@ Lemma disjoint_sepwand:
 Proof.
   intros P Q b ofs HfP HfPQ.
   destruct HfPQ as [HfnP HfQ].
-  intuition.
+  auto with *.
 Qed.
 
 Lemma merge_disjoint:
@@ -416,7 +416,7 @@ Proof.
     destruct 1 as [HnfP2 HfP3].
     destruct HH as [HHm HHf].
     apply HHf in HfP3.
-    destruct HfP3; intuition.
+    destruct HfP3; auto with *.
 Qed.
 
 Lemma reynolds2:
@@ -502,7 +502,7 @@ Proof.
         destruct (HPfdec b i) as [HfPi|HnfPi].
         now apply HPperm with (1:=HP) (2:=HfPi) (3:=Hi).
         apply Mem.perm_unchanged_on with (1:=Hun).
-        split; [assumption|simpl; now intuition].
+        split; [assumption|simpl; now auto with *].
         now apply Hperm.
       * intros b' ofs.
         destruct 1 as [? HfR].
@@ -537,7 +537,7 @@ Lemma subseteq_footprint_trans:
                 subseteq_footprint Q R ->
                 subseteq_footprint P R.
 Proof.
-  unfold subseteq_footprint. intuition.
+  unfold subseteq_footprint. auto with *.
 Qed.
 
 Add Parametric Relation: massert subseteq_footprint
@@ -618,10 +618,10 @@ Proof.
     + intros b ofs Hfw.
       apply (m_valid _ _ _ ofs HH).
       destruct Hfw as [HnfPQ [HfR|HfS]]; [left|right]; split;
-        try (intro; apply HnfPQ; simpl); intuition.
+        try (intro; apply HnfPQ; simpl); auto with *.
   - intros b ofs.
     destruct 1 as [HnfPQ [HfR|HfS]]; [left|right]; split;
-      try (intro; apply HnfPQ; simpl); intuition.
+      try (intro; apply HnfPQ; simpl); auto with *.
 Qed.
 
 (* * * * * * * * sepall * * * * * * * * * * * * * * *)
@@ -715,8 +715,8 @@ Lemma empty_range:
 Proof.
   intros b lo hi Hgt.
   split; [split|split].
-  - simpl. intuition.
-  - inversion 1. intuition.
+  - simpl. auto with *.
+  - inversion 1. auto with *.
   - intros; exact I.
   - inversion 1.
 Qed.
@@ -1273,7 +1273,7 @@ Section Galloc.
     assert ((prog_defmap p) ! id = Some g) as Hpdm
         by (apply prog_defmap_norepet;
             [now apply NoDup_norepet, fst_NoDupMembers|
-             rewrite Hps; intuition]).
+             rewrite Hps; auto with *]).
     apply Genv.find_def_symbol in Hpdm.
     destruct Hpdm as (b & Hfs & Hfd).
     apply sepall_cons.
@@ -1327,7 +1327,7 @@ Section Galloc.
       apply Genv.global_addresses_distinct with (1:=Hnid') (2:=Hfs) in Hfs'.
       apply Hfs'.
       destruct g, g'; inversion_clear Hf1; inversion_clear Hf2;
-        simpl in *; subst; intuition; now subst b b0.
+        simpl in *; subst; auto with *; now subst b b0.
   Qed.
 
 End Galloc.

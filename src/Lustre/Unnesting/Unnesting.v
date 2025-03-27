@@ -142,17 +142,17 @@ Module Type UNNESTING
      | H : context c [Nat.min ?x1 ?x1] |- _ =>
        repeat setoid_rewrite PeanoNat.Nat.min_id in H
      | H : context c [length (combine _ _)] |- _ =>
-       setoid_rewrite combine_length in H
+       setoid_rewrite length_combine in H
      | H : context c [length (map ?l1 ?l2)] |- _ =>
-       setoid_rewrite map_length in H
+       setoid_rewrite length_map in H
      | |- _ < Nat.min _ _ =>
        apply Nat.min_glb_lt
      | |- context c [Nat.min ?x1 ?x1] =>
        setoid_rewrite PeanoNat.Nat.min_id
      | |- context c [length (combine _ _)] =>
-       setoid_rewrite combine_length
+       setoid_rewrite length_combine
      | |- context c [length (map _ _)] =>
-       setoid_rewrite map_length
+       setoid_rewrite length_map
      | |- context c [typesof _] =>
        rewrite typesof_annots
      | |- context c [clocksof _] =>
@@ -207,7 +207,7 @@ Module Type UNNESTING
   Proof.
     intros.
     apply idents_for_anns_values in H.
-    rewrite <- H. rewrite map_length; auto.
+    rewrite <- H. rewrite length_map; auto.
   Qed.
   Global Hint Resolve idents_for_anns_length : norm.
 
@@ -753,13 +753,13 @@ Module Type UNNESTING
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwl Hnorm;
       destruct_conjs; inv Hwl; repeat inv_bind; auto.
     - (* fby *)
-      simpl in *. rewrite map_length.
+      simpl in *. rewrite length_map.
       apply idents_for_anns_length in H3...
     - (* arrow *)
-      simpl in *. rewrite map_length.
+      simpl in *. rewrite length_map.
       apply idents_for_anns_length in H3...
     - (* when *)
-      unfold unnest_when. rewrite map_length.
+      unfold unnest_when. rewrite length_map.
       eapply mmap2_unnest_exp_length' in H0.
       + solve_length.
       + eapply mmap2_values, Forall3_ignore3 in H0.
@@ -1915,8 +1915,8 @@ Module Type UNNESTING
             eapply mmap2_unnested_eq; eauto; solve_forall).
       rewrite Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hmerge); subst.
-      2:{ apply idents_for_anns_length in H1. rewrite map_length in H1.
-          rewrite unnest_merge_length, map_length... }
+      2:{ apply idents_for_anns_length in H1. rewrite length_map in H1.
+          rewrite unnest_merge_length, length_map... }
       econstructor; eauto.
       eapply Forall_forall in Hmerge; [|eapply unnest_merge_normalized_cexp]; eauto.
       eapply mmap2_normalized_cexps in H0; eauto.
@@ -1932,8 +1932,8 @@ Module Type UNNESTING
            eapply Forall_forall in H11; eauto).
       rewrite Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hcase); subst.
-      2:{ apply idents_for_anns_length in H4. rewrite map_length in H4.
-          rewrite unnest_case_length, map_length... }
+      2:{ apply idents_for_anns_length in H4. rewrite length_map in H4.
+          rewrite unnest_case_length, length_map... }
       econstructor; eauto.
       eapply Forall_forall in Hcase; [|eapply unnest_case_normalized_cexp]; eauto with norm.
       + apply mmap2_normalized_cexp'' in H2; [|solve_forall]; eauto.
@@ -2479,8 +2479,8 @@ Module Type UNNESTING
       1,3:repeat mmap_normal_args_eq.
       rewrite Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hmerge); subst.
-      2:{ apply idents_for_anns_length in H1. rewrite map_length in H1.
-          rewrite unnest_merge_length, map_length... }
+      2:{ apply idents_for_anns_length in H1. rewrite length_map in H1.
+          rewrite unnest_merge_length, length_map... }
       econstructor; eauto.
       eapply Forall_forall in Hmerge; [|eapply unnest_merge_normalized_cexp]; eauto.
       eapply mmap2_normalized_cexps in H0; eauto.
@@ -2493,8 +2493,8 @@ Module Type UNNESTING
            repeat inv_bind; repeat mmap_normal_args_eq).
       rewrite Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hcase); subst.
-      2:{ apply idents_for_anns_length in H4. rewrite map_length in H4.
-          rewrite unnest_case_length, map_length... }
+      2:{ apply idents_for_anns_length in H4. rewrite length_map in H4.
+          rewrite unnest_case_length, length_map... }
       econstructor; eauto.
       eapply Forall_forall in Hcase; [|eapply unnest_case_normalized_cexp]; eauto with norm.
       + apply mmap2_normalized_cexp'' in H2; [|solve_forall]; eauto.
@@ -2576,12 +2576,12 @@ Module Type UNNESTING
     induction es; intros * Len In.
     - destruct vs; simpl in *; try congruence. now inv In.
     - simpl in *.
-      rewrite app_length, length_annot_numstreams in *.
+      rewrite List.length_app, length_annot_numstreams in *.
       destruct vs; inv In.
       + inv H. split; auto.
-        rewrite firstn_length. lia.
+        rewrite length_firstn. lia.
       + edestruct IHes; eauto.
-        rewrite List.skipn_length. lia.
+        rewrite List.length_skipn. lia.
   Qed.
 
   Lemma unnest_equation_normal_args : forall G eq eqs' st st',

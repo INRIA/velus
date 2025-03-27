@@ -680,7 +680,7 @@ Module Type CACORRECTNESS
                  setoid_rewrite Str_nth_map. destruct (stres # n) as [|(?&?)] eqn:Hst; simpl in *; auto.
                  constructor; simpl.
                  eapply eq_ind with (P:=fun x => match x with absent => True | present (e, _) => e < length states end) in it; [|eauto].
-                 rewrite 2 map_length. congruence.
+                 rewrite 2 length_map. congruence.
                + simpl_Forall; eauto.
                + rewrite <-H10. apply fst_InMembers; auto.
                + simpl_Forall. repeat inv_branch. repeat inv_scope. simpl_Forall; eauto.
@@ -943,7 +943,7 @@ Module Type CACORRECTNESS
                  setoid_rewrite Str_nth_map. destruct (stres # n) as [|(?&?)] eqn:Hst; simpl in *; auto.
                  constructor; simpl.
                  eapply eq_ind with (P:=fun x => match x with absent => True | present (e, _) => e < length states end) in it; [|eauto].
-                 simpl in *; auto. now rewrite 2 map_length.
+                 simpl in *; auto. now rewrite 2 length_map.
                + rewrite <-H9. apply fst_InMembers; auto.
                + simpl_Forall; repeat inv_branch. simpl_Forall; auto.
                + simpl_Forall; repeat inv_branch. intros. specialize (H22 k); destruct_conjs.
@@ -1023,7 +1023,7 @@ Module Type CACORRECTNESS
                  setoid_rewrite Str_nth_map. destruct (stres1 # n) as [|(?&?)] eqn:Hst; simpl in *; auto.
                  constructor; simpl.
                  eapply eq_ind with (P:=fun x => match x with absent => True | present (e, _) => e < length states end) in it; [|eauto].
-                 simpl in *; auto. now rewrite 2 map_length.
+                 simpl in *; auto. now rewrite 2 length_map.
                + rewrite <-H9. apply fst_InMembers; auto.
                + simpl_Forall. repeat inv_branch. simpl_Forall; auto.
                + simpl_Forall. repeat inv_branch. intros. specialize (H22 k); destruct_conjs.

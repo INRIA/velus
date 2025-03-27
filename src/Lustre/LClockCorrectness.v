@@ -263,7 +263,7 @@ Module Type LCLOCKCORRECTNESS
       assert (length (clocksof es) = length (concat ss)) as Hlen.
       { rewrite length_clocksof_annots. symmetry.
         eapply sem_exps_numstreams; eauto with ltyping. }
-      eapply Forall2_forall2; split. rewrite map_length; auto.
+      eapply Forall2_forall2; split. rewrite length_map; auto.
       intros * Hn ? ?; subst.
       erewrite map_nth' with (d':=def_stream b). 2:congruence.
       erewrite nth_indep with (d':=Cbase); auto.
@@ -353,7 +353,7 @@ Module Type LCLOCKCORRECTNESS
         intros ? ? _ _ [? ?]. apply ac_fby1 in H; auto. }
       apply Forall2_forall2 in H0 as [_ Hac].
       erewrite <- Hac; eauto.
-      erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, map_length; eauto with ltyping.
+      erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, length_map; eauto with ltyping.
     Qed.
 
     Lemma sc_exp_arrow : forall Γ Γty H b e0s es ann k,
@@ -372,7 +372,7 @@ Module Type LCLOCKCORRECTNESS
         intros ? ? _ _ [? ?]. apply ac_arrow1 in H; auto. }
       apply Forall2_forall2 in H0 as [_ Hac].
       erewrite <- Hac; eauto.
-      erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, map_length; eauto with ltyping.
+      erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, length_map; eauto with ltyping.
     Qed.
 
     Lemma sc_exp_when : forall Γ Γty H b es x tx cx b' ann k,
@@ -485,7 +485,7 @@ Module Type LCLOCKCORRECTNESS
       assert (Hvars:=H11).
       eapply Sem.sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(_, ck) => (ck, None)) ann0) in H20; eauto with lclocking.
       - eapply Forall2_forall2 in H20 as [? Hck].
-        repeat rewrite map_length in *.
+        repeat rewrite length_map in *.
         specialize (Hck Cbase (abstract_clock (def_stream b)) _ _ _ Hlen eq_refl eq_refl).
         rewrite map_nth, map_map in Hck; eauto.
         erewrite map_ext; eauto. intros (?&?); auto.
@@ -581,16 +581,16 @@ Module Type LCLOCKCORRECTNESS
         assert (Hvars:=H24).
         eapply Sem.sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(ck, x) => (ck, Some x)) (combine (map snd anns) xs)) in H24; eauto with lclocking.
         + eapply Forall2_forall2 in H24 as [? Hck].
-          repeat rewrite map_length in *.
+          repeat rewrite length_map in *.
           assert (k < length (combine (map snd anns) xs)) as Hlen2.
-          { apply Forall2_length in H2. rewrite combine_length, H2, 2 map_length, Nat.min_id.
-            now erewrite <-map_length, <-H2. }
+          { apply Forall2_length in H2. rewrite length_combine, H2, 2 length_map, Nat.min_id.
+            now erewrite <-length_map, <-H2. }
           specialize (Hck Cbase (abstract_clock (def_stream b)) _ _ _ Hlen2 eq_refl eq_refl).
           erewrite map_nth, map_map, map_ext, combine_map_fst' in Hck; eauto.
-          1:eapply Forall2_length in H2; rewrite H2, 2 map_length; eauto.
+          1:eapply Forall2_length in H2; rewrite H2, 2 length_map; eauto.
           intros (?&?); auto.
         + apply Forall2_map_1, Forall3_combine'1, Forall3_ignore1'.
-          { apply Forall2_length in H13; auto. rewrite map_length; auto. }
+          { apply Forall2_length in H13; auto. rewrite length_map; auto. }
           eapply Forall2_impl_In; [|eauto]; intros; simpl in *; auto.
         + simpl_Forall; eauto.
         + eapply Forall2_map_2, Forall3_combine'2; eauto.
@@ -2022,7 +2022,7 @@ Module Type LCLOCKCORRECTNESS
       - assert (length vs = numstreams e) as Hlen'.
         { eapply sem_exp_numstreams in Hsem; eauto with lclocking. }
         eapply Forall2_forall2; split.
-        + rewrite map_length.
+        + rewrite length_map.
           rewrite length_clockof_numstreams; auto.
         + intros ? ? ? ? ? Hlen Hnth1 Hnth2; subst.
           rewrite length_clockof_numstreams in Hlen.

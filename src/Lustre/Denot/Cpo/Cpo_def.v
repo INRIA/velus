@@ -1471,7 +1471,7 @@ intros; apply Ole_antisym; case H; auto.
 Qed.
 
 Definition Proj (I:Type)(O:I->ord) (i:I) : Oprodi O -m> O i.
-intros; exists (fun x: Oprodi O=> x i); red; intuition.
+intros; exists (fun x: Oprodi O=> x i); red; auto with *.
 Defined.
 
 Lemma Proj_simpl : forall  (I:Type)(O:I->ord) (i:I) (x:Oprodi O),

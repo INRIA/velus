@@ -384,7 +384,7 @@ Section Abs_indep_node.
       simpl; unfold eq_rect; cases; try congruence.
       intros t1 t2 Le.
       rewrite <- abs_indep_lift_swhenv.
-      auto using (var_abs_le ins x0 envI _ _ Hle).
+      auto using var_abs_le.
     - (* Emerge *)
       inv Hwt. inv Hwl.
       rewrite 2 (denot_exp_eq _ _ (Emerge _ _ _)).
@@ -394,7 +394,7 @@ Section Abs_indep_node.
       gen_sub_exps; intros t1 t2 Le.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
       rewrite lift_lift_nprod, <- abs_indep_lift_smergev.
-      auto using (var_abs_le ins x0 envI _ _ Hle).
+      auto using var_abs_le.
     - destruct d as [des|].
       { (* Ecase défaut *)
       inv Hwt. inv Hwl.
@@ -433,9 +433,9 @@ Section Abs_indep_node.
       take (find_node f G = _) and rewrite it in *.
       repeat take (Some _ = Some _) and inv it.
       assert (Hl : list_sum (List.map numstreams es) = length (idents (n_in n)))
-        by (now unfold idents; rewrite map_length, annots_numstreams in * ).
+        by (now unfold idents; rewrite length_map, annots_numstreams in * ).
       simpl; take (length a = _) and rewrite it, Hl.
-      unfold eq_rect; cases; try (rewrite map_length in *; tauto).
+      unfold eq_rect; cases; try (rewrite length_map in *; tauto).
       intros t1 t2 t3 t4 Le1 Le2.
       rewrite 2 sreset_eq, <- np_of_env_abs.
       rewrite <- abs_indep_sreset_aux, <- sbools_of_abs.

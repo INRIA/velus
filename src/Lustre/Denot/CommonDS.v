@@ -266,7 +266,7 @@ Section DS_Forall.
     - apply decomp_eq in Heq as (t & (k & Hp) & Ht).
       apply (Cof t); auto.
       clear - Hp Hf.
-      revert dependent x.
+      generalize dependent x.
       induction k; simpl; intros; subst.
       + inversion Hf; auto.
       + apply (IHk (pred x)); auto using DSForall_pred.
@@ -356,7 +356,7 @@ Section DS_Forall.
   Proof.
     intros f Hf.
     simpl. unfold DS_lub. generalize 1 as m.
-    revert dependent f.
+    generalize dependent f.
     cofix Cof.
     intros.
     rewrite DS_lubn_inv.
@@ -440,7 +440,7 @@ Lemma DSForall_map :
 Proof.
   clear; intros.
   remember (MAP f s) as fs. apply Oeq_refl_eq in Heqfs.
-  revert dependent s. revert fs.
+  generalize dependent s. revert fs.
   cofix Cof; intros * H Hfs.
   destruct fs.
   - constructor.

@@ -564,7 +564,7 @@ Section PRESERVATION.
           (* only one output: x is a temporary *)
           + inversion_clear Hin' as [Eq|Eq]; inv Eq.
             exists m1, (PTree.set x (value_to_cvalue v) le1);
-              rewrite PTree.gso; intuition. eauto using exec_stmt.
+              rewrite PTree.gso; intuition eauto using exec_stmt.
             eapply sep_imp; eauto.
             * eapply outputrep_assign_singleton_mem; eauto.
             * rewrite varsrep_add; eauto.
@@ -574,7 +574,7 @@ Section PRESERVATION.
             assert (In (x, ty) caller.(m_out)) by now rewrite Houts.
             rewrite E.
             edestruct outputrep_assign_gt1_mem as (m' & ?&?&?& Hco & Hofs &?&?); eauto using output_match.
-            exists m', le1; intuition; auto.
+            exists m', le1; intuition.
             * edestruct evall_out_field with (m1 := m1) as (?&?&?&?& Hco' & Hofs'); eauto.
               rewrite Hco in Hco'; inv Hco'. simpl in Hofs.
               change (prog_comp_env tprog) with gcenv in Hofs; rewrite Hofs in Hofs'; inv Hofs'.
@@ -587,7 +587,7 @@ Section PRESERVATION.
         - assert (~ InMembers x caller.(m_out)) by
               (apply NotIn_NotInMembers; intro; apply mem_assoc_ident_false; auto).
           exists m1, (PTree.set x (value_to_cvalue v) le1);
-            rewrite PTree.gso; intuition; auto.
+            rewrite PTree.gso; intuition.
           + unfold assign.
             destruct_list caller.(m_out) : Houts; try rewrite E;
               eauto using exec_stmt.
@@ -611,7 +611,7 @@ Section PRESERVATION.
           (* with (P_stmt := fun m' le' => exec_stmt function_entry2 tge e le m (assign owner caller x (translate_type ty) ae) E0 le' m' Out_normal) *)
           as (m' & le' & ?&?&?); eauto.
         exists m', le'; split; auto.
-        apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+        apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23; auto.
       Qed.
 
@@ -710,11 +710,11 @@ Section PRESERVATION.
             /\ forall v, le ! (prefix obc2c self) = Some v -> le' ! (prefix obc2c self) = Some v.
       Proof.
         clear Hmem.
-        intro outs; revert dependent m1; clear Hmem1 m1; revert ve le.
+        intro outs; generalize dependent m1; clear Hmem1 m1; revert ve le.
         induction outs as [|(x, t)]; intros * Hmem ??? Incl Hins WTvs Hvs;
           inversion_clear Hins as [|y]; inv WTvs; inv Hvs; simpl.
         - rewrite Env.adds_nil_l.
-          exists m1, le; intuition; eauto using exec_stmt.
+          exists m1, le; auto with *; eauto using exec_stmt.
         - setoid_rewrite funcall_assign_spec; simpl.
           apply incl_cons' in Incl as (?&?).
           rewrite sep_swap, sep_swap23 in Hmem.
@@ -728,7 +728,7 @@ Section PRESERVATION.
           edestruct IHouts as (m' & le' & Exec & ?); eauto.
           change E0 with (Eapp E0 E0).
           setoid_rewrite funcall_assign_spec in Exec.
-          exists m', le'; intuition; eauto using exec_stmt.
+          exists m', le'; intuition eauto using exec_stmt.
       Qed.
 
       Corollary exec_funcall_assign:
@@ -929,10 +929,10 @@ Section PRESERVATION.
           change le with (set_opttemp None Vundef le).
           econstructor; simpl; eauto using eval_exprlist.
         + rewrite Env.adds_opt_nil_l.
-          apply match_states_conj; intuition; eauto with obctyping.
+          apply match_states_conj; intuition eauto with obctyping.
           erewrite find_class_name; eauto.
           eapply staterep_extract; eauto.
-          exists objs, objs', d; intuition; eauto.
+          exists objs, objs', d; intuition eauto.
           eapply sep_imp; eauto.
           * unfold instance_match; rewrite find_inst_gss.
             rewrite Ptrofs.unsigned_repr; auto.
@@ -979,10 +979,10 @@ Section PRESERVATION.
             with (set_opttemp (Some (prefix_temp fid a)) (value_to_cvalue rv) le).
           econstructor; simpl; eauto using eval_exprlist.
         + simpl map; rewrite Env.adds_opt_cons_cons, Env.adds_opt_nil_l.
-          apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+          apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
           * erewrite find_class_name; eauto.
             eapply staterep_extract; eauto.
-            exists objs, objs', d; intuition; eauto.
+            exists objs, objs', d; intuition eauto.
             rewrite sep_swap34, sep_swap23, sep_swap,
             sep_swap67, sep_swap56, sep_swap45, sep_swap34, sep_swap23.
             eapply sep_imp; eauto.
@@ -1039,10 +1039,10 @@ Section PRESERVATION.
           change le with (set_opttemp None Vundef le).
           econstructor; simpl; eauto;
             eauto using eval_exprlist.
-        + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
+        + apply match_states_conj; intuition eauto using m_nodupvars with obctyping.
           erewrite find_class_name; eauto.
           eapply staterep_extract; eauto.
-          exists objs, objs', d; intuition; eauto.
+          exists objs, objs', d; intuition eauto.
           rewrite sep_swap45, sep_swap34, sep_swap23, sep_swap.
           eapply subrep_extract; eauto.
           exists instb, instco, xs, xs'; intuition.
@@ -1216,7 +1216,7 @@ Section PRESERVATION.
       1:{ apply match_states_conj in Hmem; destruct_conjs.
           apply match_states_conj; rewrite PTree.gso.
           2:{ apply prefix_injective'. left. prove_str_to_pos_neq. }
-          intuition; eauto.
+          intuition eauto.
 
           rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23 in H5.
           rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23.
@@ -1281,7 +1281,7 @@ Section PRESERVATION.
       clear Hmem.
       edestruct IH2 as (m' & le' &?&?); eauto.
       change E0 with (Eapp E0 (Eapp E0 E0)).
-      exists m', le'; intuition; eauto using exec_stmt.
+      exists m', le'; auto with *; eauto using exec_stmt.
 
     (* switch e ss d *)
     - apply occurs_in_switch in Occurs.
@@ -1386,7 +1386,7 @@ Section PRESERVATION.
             apply free_exists in Hm' as (m'' & ?& Hm'').
 
       (* no output *)
-      + exists m'', fd; intuition; eauto.
+      + exists m'', fd; intuition eauto.
         * econstructor; eauto.
           -- rewrite Body.
              change E0 with (Eapp E0 E0).
@@ -1406,7 +1406,7 @@ Section PRESERVATION.
         destruct Hm'' as (Hm'' & Eq).
         unfold or_default_with in Eq; cases_eqn E; inv Eq.
 
-        exists m'', fd, rv; intuition; eauto.
+        exists m'', fd, rv; intuition eauto.
         * econstructor; eauto.
           -- rewrite Body.
              change E0 with (Eapp E0 E0).
@@ -1419,7 +1419,7 @@ Section PRESERVATION.
       + (* return values *)
         rewrite Forall2_map_1, Forall2_map_2 in Hrvos.
 
-        exists ve', m'', fd; intuition; eauto.
+        exists ve', m'', fd; intuition eauto.
         * econstructor; eauto.
           -- rewrite Body.
              change E0 with (Eapp E0 E0).
@@ -1969,7 +1969,7 @@ Section PRESERVATION.
       - destruct EvalStep as (?& E & ?).
         rewrite E in *; eauto.
       - destruct EvalStep as (ve & step_b & step_co & ?&?&?&?).
-        exists ve, step_b, step_co; intuition; eauto.
+        exists ve, step_b, step_co; auto with *; eauto.
     Qed.
 
     Section MainCorrectness.
@@ -2076,13 +2076,13 @@ Section PRESERVATION.
                       assert (step_f = step_f') by (eapply method_spec_eq; eauto); subst step_f'.
 
           - exists m_Sn; split; eauto.
-            exists me_Sn; intuition.
+            exists me_Sn; auto with *.
             now rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm_Sn.
           - exists m_Sn; split; eauto.
-            exists me_Sn; intuition.
+            exists me_Sn; auto with *.
             now rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm_Sn.
           - exists m_Sn; split; eauto.
-            + exists ve_f, step_b', step_co'; intuition.
+            + exists ve_f, step_b', step_co'; auto with *.
               now apply sep_proj2, sep_proj1 in Hm_Sn.
             + exists me_Sn, step_b', step_co'; intuition.
               rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm_Sn.
@@ -2103,10 +2103,10 @@ Section PRESERVATION.
                 apply dostep_coind with (R := R); auto;
                   unfold R, case_out; destruct_list (m_out main_step) as (?,?) (?,?) ?;
                                                                                simpl in *; try lia.
-        - exists me0, step_b, step_co; intuition.
-        - exists me0; intuition.
+        - exists me0, step_b, step_co; auto with *.
+        - exists me0; auto with *.
           now rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm0.
-        - exists me0; intuition.
+        - exists me0; auto with *.
           now rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm0.
       Qed.
 

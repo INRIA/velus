@@ -66,8 +66,8 @@ Module Type OBCADDDEFAULTS
 
   Ltac PS_negate :=
     repeat match goal with
-           | H:~(_ /\ _) |- _ => apply Decidable.not_and in H; [|now intuition]
-           | H:~~_ |- _ => apply Decidable.not_not in H; [|now intuition]
+           | H:~(_ /\ _) |- _ => apply Decidable.not_and in H; [| auto with * ]
+           | H:~~_ |- _ => apply Decidable.not_not in H; [| auto with * ]
            | H: context [ ~~PS.In _ _ ] |- _ => rewrite not_not_in in H
            end.
 
@@ -358,8 +358,8 @@ Module Type OBCADDDEFAULTS
           destruct ss as [|os ss'']; simpl.
           - inv Hadd; auto.
           - setoid_rewrite <-fold_left_rev_right in Hadd.
-            rewrite <-rev_length.
-            revert dependent r; revert s a ss'.
+            rewrite <- length_rev.
+            generalize dependent r; revert s a ss'.
             induction (rev ss'') as [|os']; simpl in *; intros.
             + destruct os as [s'|]; simpl in *.
               * destruct (add_defaults_stmt s') as [[[t r_t] s_t] a_t].
@@ -371,9 +371,9 @@ Module Type OBCADDDEFAULTS
               destruct os' as [s'|]; simpl in *.
               * destruct (add_defaults_stmt s') as [[[t r_t] s_t] a_t].
                 inv Hadd.
-                rewrite app_length; simpl; lia.
+                rewrite length_app; simpl; lia.
               * inv Hadd.
-                rewrite app_length; simpl; lia.
+                rewrite length_app; simpl; lia.
         Qed.
 
         Lemma add_defaults_switch_empty_stimes_always:
@@ -427,14 +427,16 @@ Module Type OBCADDDEFAULTS
               inversion_clear IH as [|?? IHos IH'].
               apply Forall_rev in IH'.
               setoid_rewrite CommonList.Exists_rev; simpl.
-              revert dependent r; revert s a ss'.
+              generalize dependent r; revert s a ss'.
               induction (rev ss'') as [|os']; simpl in *; intros.
               + destruct os as [s'|]; simpl in *.
                 * destruct (add_defaults_stmt s') as [[[t r_t] s_t] a_t] eqn: Et.
                   inv Hadd; edestruct IHos; eauto; intuition.
-                  left; simpl; PS_split; intuition.
+                  left; simpl; PS_split.
+                  destruct H1 as [ [ | ] | ]; auto with *.
                 * inv Hadd; edestruct IHos; eauto; intuition.
-                  left; simpl; PS_split; intuition.
+                  left; simpl; PS_split.
+                  destruct H1 as [ [ | ] | ]; auto with *.
               + assert (d' = d'') by cases; subst d''.
                 inversion_clear IH' as [|?? IHos' IH''].
                 destruct (fold_right _ _ _) as [[[ss_l r_l] s_l] aa_l].
@@ -499,7 +501,7 @@ Module Type OBCADDDEFAULTS
               inversion_clear IH as [|?? IHos IH'].
               setoid_rewrite CommonList.Forall_rev in IH'.
               setoid_rewrite Forall2_rev; simpl.
-              revert dependent ss'; revert r s a.
+              generalize dependent ss'; revert r s a.
               induction (rev ss'') as [|os']; simpl in *; intros.
               + destruct os as [s'|]; simpl in *.
                 * destruct (add_defaults_stmt s') as [[[t' r_t'] s_t'] a_t'] eqn: Et'.
@@ -585,7 +587,7 @@ Module Type OBCADDDEFAULTS
             - setoid_rewrite <-fold_left_rev_right in Hadd.
               inversion_clear IH as [|?? IHos IH'].
               rewrite CommonList.Forall_rev in *; simpl.
-              revert dependent ss'; revert dependent s; revert r a.
+              generalize dependent ss'; generalize dependent s; revert r a.
               induction (rev ss'') as [|os']; simpl in *; intros; auto.
               + destruct os as [s'|]; simpl in *.
                 * destruct (add_defaults_stmt s') as [[[t' r_t'] s_t'] a_t'] eqn: Et'.
@@ -747,7 +749,7 @@ Module Type OBCADDDEFAULTS
                 inversion_clear IHss as [|?? IHos IH'].
                 rewrite CommonList.Forall_rev in *.
                 simpl in *.
-                revert dependent ss'; revert dependent s; revert r a.
+                generalize dependent ss'; generalize dependent s; revert r a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
                 + destruct os as [s'|]; simpl in *.
                   * destruct (add_defaults_stmt s') as [[[t' r_t'] s_t'] a_t'] eqn: Et'.
@@ -803,7 +805,7 @@ Module Type OBCADDDEFAULTS
               - repeat split.
                 + rewrite <-add_writes_wt.
                   * econstructor; eauto.
-                    -- intuition.
+                    -- auto with *.
                     -- intros * Hin; eapply Forall_forall in Hin; eauto; auto.
                   * setoid_rewrite <- wf_vars_tyenv'.
                     apply PS_For_all_inter, PS_For_all_diff; auto.
@@ -857,7 +859,7 @@ Module Type OBCADDDEFAULTS
               - setoid_rewrite <-fold_left_rev_right in Hadd.
                 inversion_clear IH as [|?? IHos IH'].
                 rewrite CommonList.Forall_rev in *; simpl in *.
-                revert dependent ss'; revert dependent s; revert dependent r; revert a.
+                generalize dependent ss'; generalize dependent s; generalize dependent r; revert a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
                 + destruct os as [s'|]; simpl in *.
                   * destruct (add_defaults_stmt s') as [[[t' r_t'] s_t'] a_t'] eqn: Et'.
@@ -928,7 +930,7 @@ Module Type OBCADDDEFAULTS
               pose proof (stmt_eval_add_writes_Skip_other _ _ _ _ _ _ HevalW) as HW.
               inv Heval.
               assert (PS.For_all (fun x => type_of_var x <> None) ((s \ a) ∩ required))
-                by (setoid_rewrite <-wf_vars_tyenv'; intros ??; PS_split; intuition).
+                by (setoid_rewrite <-wf_vars_tyenv'; intros ??; PS_split; auto with *).
               eapply add_defaults_branches_inv2 in Hbr; eauto.
               - take (nth_error _ _ = _) and rename it into Hin;
                   apply nth_error_In in Hin.
@@ -948,7 +950,7 @@ Module Type OBCADDDEFAULTS
               - intros x Hin.
                 destruct (PSP.In_dec x ((s \ a) ∩ required)).
                 + eapply stmt_eval_add_writes in HevalW; eauto.
-                + eapply stmt_eval_mono; eauto; intuition.
+                + eapply stmt_eval_mono; eauto; auto with *.
             Qed.
 
           End Inv2.
@@ -1012,7 +1014,7 @@ Module Type OBCADDDEFAULTS
                 inversion_clear IH as [|?? IHos IH'].
                 rewrite CommonList.Forall_rev in NOOss, WTss, IH'.
                 rewrite Forall2_rev; simpl in *.
-                revert dependent ss'; revert dependent s; revert dependent r; revert a.
+                generalize dependent ss'; generalize dependent s; generalize dependent r; revert a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
                 + inversion_clear NOOss as [|?? NOOs]; inversion_clear WTss as [|?? WTs].
                   destruct os as [s'|]; simpl in *.
@@ -1128,7 +1130,7 @@ Module Type OBCADDDEFAULTS
                   as (ve3' & Henv3' & Heval3' & Hmono3 & Hin3'); eauto.
                 + intros ??; apply Hpre.
                   PS_split; intuition.
-                + intros ??; PS_split; intuition.
+                + intros ??; PS_split; auto with *.
                 + edestruct IHos' as (ve4' &?&?); eauto.
                   * split.
                     -- intros x Hrq.
@@ -1414,7 +1416,7 @@ Module Type OBCADDDEFAULTS
 
     - (* * AssignSt i e *)
       inv Hadd.
-      setoid_rewrite PSF.empty_iff; intuition.
+      setoid_rewrite PSF.empty_iff; auto with *.
 
     - apply add_defaults_stmt_switch_spec in Hadd as [(s1 & s2 & E & Hadd)|Hadd].
       (* if-then-else's *)
@@ -1527,10 +1529,11 @@ Module Type OBCADDDEFAULTS
         now eapply H1A, PS.inter_spec; eauto.
         now eapply H2A, PS.inter_spec; eauto.
       + intros x HH; rewrite PS.union_spec.
-        apply H2B, PS.union_spec in HH as [HH|HH]; [now intuition|].
-        apply H1B, PS.union_spec in HH; intuition.
+        apply H2B, PS.union_spec in HH as [HH|HH]; [ auto with * | ].
+        apply H1B, PS.union_spec in HH. 
+        destruct HH; auto with *.
       + repeat setoid_rewrite PS.union_spec. setoid_rewrite PS.diff_spec.
-        intros x [[[Hin ?]|[Hin ?]]|[Hin|Hin]]; intuition.
+        intros x [[[Hin ?]|[Hin ?]]|[Hin|Hin]]; auto with *.
 
     - (* * Call ys clsid o f es *)
       simpl in Hadd.
@@ -1558,7 +1561,7 @@ Module Type OBCADDDEFAULTS
         apply PSF.singleton_iff in Hin; subst; auto with obcinv.
 
     - (* * Skip *)
-      inv Hadd; setoid_rewrite PSF.empty_iff; intuition.
+      inv Hadd; setoid_rewrite PSF.empty_iff; auto with *.
   Qed.
 
   Corollary add_defaults_switch_inv1':
@@ -1682,7 +1685,7 @@ Module Type OBCADDDEFAULTS
       intros t me me' ve ve' rq rq' st al Hadd Heval y Hnin.
 
     - (* * Assign i e *)
-      inv Hadd. inv Heval. rewrite Env.gso; intuition.
+      inv Hadd. inv Heval. rewrite Env.gso; auto with *.
 
     - (* * AssignSt i e *)
       inv Hadd. now inv Heval.
@@ -1725,11 +1728,11 @@ Module Type OBCADDDEFAULTS
       match goal with H:stmt_eval _ _ _ s1 _ |- _ =>
         apply IHs1 with (1:=Hdefs1) (x:=y) in H; [now rewrite H|] end.
       + intro Hin; apply Hnin; clear Hnin.
-        destruct (PSP.In_dec y al2). now intuition.
-        apply PS.union_spec in Hin as [Hin|Hin]; intuition.
+        destruct (PSP.In_dec y al2). destruct Hin; auto with *.
+        apply PS.union_spec in Hin as [Hin|Hin]; auto with *.
       + intro Hin; apply Hnin; clear Hnin.
-        destruct (PSP.In_dec y al1). now intuition.
-        apply PS.union_spec in Hin as [Hin|Hin]; intuition.
+        destruct (PSP.In_dec y al1). destruct Hin; auto with *.
+        apply PS.union_spec in Hin as [Hin|Hin]; auto with *.
 
     - (* * Call ys clsid o f es *)
       simpl in Hadd.
@@ -1739,7 +1742,7 @@ Module Type OBCADDDEFAULTS
       intro Hin; apply Hnin. apply PSF.union_3, ps_of_list_In; auto.
 
     - (* ExternCall *)
-      inv Hadd. inv Heval. rewrite Env.gso; intuition.
+      inv Hadd. inv Heval. rewrite Env.gso; auto with *.
 
     - (* * Skip *)
       now inv Heval.
@@ -2090,7 +2093,7 @@ Module Type OBCADDDEFAULTS
               apply PS_For_all_union;
                 auto using PS_For_all_diff, PS_For_all_inter.
             - apply stmt_eval_mono with (x:=x) in HevalW; auto.
-              intuition.
+              destruct Hrq1; auto with *.
           }
           assert (forall x, x ∈ rq1 -> Env.In x veW') as Hreq1 by auto.
           assert (forall x, x ∈ rq2 -> Env.In x veW') as Hreq2 by auto.
@@ -2343,7 +2346,7 @@ Module Type OBCADDDEFAULTS
     Proof.
       intros p' s rq t rq' st al Hpr Hcall Hno Hwt Hadd
              me ve1 ve2 me' ve2' Hpre Henv Heval.
-      revert t rq rq' st al Hadd ve1 Henv Hpre; revert dependent ve2; revert me ve2' me'.
+      revert t rq rq' st al Hadd ve1 Henv Hpre; generalize dependent ve2; revert me ve2' me'.
       induction s as [| |??? IH| |ys clsid o f es|x|] using stmt_ind2;
         intros; inv Heval.
 
@@ -2421,7 +2424,7 @@ Module Type OBCADDDEFAULTS
               + apply (Hmono21 x).
                 destruct (PSP.In_dec x w) as [Hw|Hnw].
                 * now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
-                * apply (Hmono1 x); apply Hpre1. intuition.
+                * apply (Hmono1 x); apply Hpre1. auto with *.
             - intros; apply Hpre2; PS_split; tauto.
           }
           assert (in1_notin2 rq2 (st2 ∪ al2) ve22' ve0).
@@ -2432,7 +2435,7 @@ Module Type OBCADDDEFAULTS
               + apply (Hmono22 x).
                 destruct (PSP.In_dec x w) as [Hw|Hnw].
                 * now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
-                * apply (Hmono1 x); apply Hpre1. intuition.
+                * apply (Hmono1 x); apply Hpre1. auto with *.
             - intros; apply Hpre2; PS_split; tauto.
           }
 
@@ -2497,7 +2500,7 @@ Module Type OBCADDDEFAULTS
             now rewrite Env.Props.P.F.in_find_iff, Hdefs1, <-Env.Props.P.F.in_find_iff.
           - intros x Hin. apply PS.diff_spec in Hin as (Hin & Hnin).
             apply HI2, PS.union_spec in Hin as [Hin|Hin]; auto. contradiction.
-          - intros x Hin. destruct (PSP.In_dec x always1). now intuition.
+          - intros x Hin. destruct (PSP.In_dec x always1). auto with *.
             PS_split; intuition. }
 
         edestruct IHs2 as (ve2' & Henv2' & Heval2'); eauto using stmt_eval.
@@ -2530,7 +2533,7 @@ Module Type OBCADDDEFAULTS
 
         intros * Hfindc Hfindm Hlvos Hlvos'; split.
         + setoid_rewrite fst_InMembers.
-          rewrite <-(map_length fst m.(m_in)) in Hlvos'.
+          rewrite <-(length_map fst m.(m_in)) in Hlvos'.
           revert Hsome Hlvos'; clear; revert vos'.
           induction (map fst m.(m_in)) as [|x xs IH]; simpl.
           * unfold Env.adds_opt, vempty; simpl; split; intro; try contradiction.
@@ -2671,7 +2674,7 @@ Module Type OBCADDDEFAULTS
         * cut (Env.In y (Env.adds_opt (map fst min) vos vempty)).
           intro Hii; apply stmt_eval_mono with (1:=Heval) in Hii; auto.
           revert Him Hvos Hlvos; clear.
-          rewrite <-(map_length fst). revert vos.
+          rewrite <-(length_map fst). revert vos.
           induction (map fst min) as [|y' ys IH].
           now intros vos Him; apply in_nil in Him.
           intros vos Him Hvos Hlvos.
@@ -2933,7 +2936,7 @@ Module Type OBCADDDEFAULTS
     2:now apply Forall2_map_1, Forall2_same, Forall_forall.
     apply program_refines_by_class' with (1:=WTp); auto.
     apply all_In_Forall2.
-    now unfold add_defaults; simpl; rewrite map_length.
+    now unfold add_defaults; simpl; rewrite length_map.
     intros c1 c2 Hin p1' p2' WTp' WTc Hpr Hadc Hx; subst.
     rewrite add_defaults_class_c_name; split; auto.
     apply in_combine_r in Hin.
@@ -2980,7 +2983,7 @@ Module Type OBCADDDEFAULTS
     - split;
         rewrite Env.adds_opt_is_adds; try apply fst_NoDupMembers, m_nodupin; intro;
           rewrite Env.In_adds_spec, fst_InMembers, Env.Props.P.F.empty_in_iff; intuition;
-            now rewrite map_length in *.
+            now rewrite length_map in *.
     - apply Forall2_same, Forall_forall; auto.
   Qed.
 

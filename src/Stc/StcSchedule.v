@@ -94,7 +94,7 @@ Module Type STCSCHEDULE
       intros * HH; cases_eqn Hoc; inv HH; auto with datatypes.
     Qed.
 
-    Lemma ocombine_length:
+    Lemma olength_combine:
       forall l l' ll,
         ocombine l l' = Some ll ->
         length l = length l'.
@@ -148,7 +148,7 @@ Module Type STCSCHEDULE
     intros f tcs.
     destruct (ocombine (schedule f tcs) tcs) eqn:Hoc; auto.
     rewrite <-SchSort.Permuted_sort.
-    pose proof (ocombine_length _ _ _ Hoc) as Hlen.
+    pose proof (olength_combine _ _ _ Hoc) as Hlen.
     apply ocombine_combine in Hoc.
     rewrite <-Hoc, map_snd_combine; auto.
   Qed.
@@ -414,7 +414,7 @@ Module Type STCSCHEDULE
     econstructor; eauto.
     simpl; intros * Hin.
     apply Insts in Hin as (?&?&?).
-    eexists; intuition; eauto.
+    eexists; auto with *; eauto.
   Qed.
   Global Hint Resolve scheduler_initial_state : stcsem.
 
@@ -429,7 +429,7 @@ Module Type STCSCHEDULE
     econstructor; eauto.
     simpl; intros * Hin; pose proof Hin.
     apply Insts in Hin as (?&?&?).
-    eexists; intuition; eauto.
+    eexists; auto with *; eauto.
   Qed.
   Global Hint Resolve scheduler_state_closed : stcsem.
 
@@ -473,7 +473,7 @@ Module Type STCSCHEDULE
     induction 1 as [|? us [Spec Names]]; simpl; constructor; simpl; auto.
     split; auto.
     - intros * Hin; apply Spec in Hin as (?&?&?& Find).
-      intuition; apply scheduler_find_system in Find; eauto.
+      auto with *; apply scheduler_find_system in Find; eauto.
     - clear - Names; induction us; simpl; inv Names; constructor; auto.
   Qed.
 

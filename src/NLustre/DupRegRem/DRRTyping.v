@@ -82,7 +82,7 @@ Module Type DRRTYPING
     Proof.
       induction e using cexp_ind2'; intros * Hwt; inv Hwt;
         simpl; econstructor; eauto using rename_in_var_wt, rename_in_exp_wt.
-      1,5:rewrite map_length; auto.
+      1,5:rewrite length_map; auto.
       - simpl_Forall.
         rewrite rename_in_cexp_typeofc; auto.
       - simpl_Forall. eauto.

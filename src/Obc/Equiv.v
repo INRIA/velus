@@ -298,7 +298,7 @@ Module Type EQUIV
         destruct (Hpr' _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
         exists c1', p1'''.
         rewrite Hcn.
-        destruct (ident_eq_dec (c_name c2) n); try congruence; intuition.
+        destruct (ident_eq_dec (c_name c2) n); try congruence; auto with *.
   Qed.
 
   Lemma stmt_refines_strengthen:

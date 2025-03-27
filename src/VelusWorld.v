@@ -505,7 +505,7 @@ Section VelusWorld.
     intro n. simpl.
     assert (map prefix_glob (idents node.(n_in)) = map fst (init_stream_state f ins)) as ->.
     { unfold init_stream_state, idents, Basics.compose; rewrite FN.
-      rewrite combine_map_fst', map_map; auto. now rewrite map_length. }
+      rewrite combine_map_fst', map_map; auto. now rewrite length_map. }
     revert Hndm; generalize (init_stream_state f ins); clear.
     induction s as [|(x, sx) s]; simpl; auto. intro Hndm; inv Hndm.
     rewrite ident_eqb_refl, <-IHs; simpl; clear IHs; auto.

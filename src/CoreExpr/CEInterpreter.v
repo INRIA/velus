@@ -162,7 +162,7 @@ Module Type CEINTERPRETER
         try rewrite equiv_decb_refl; auto.
       - subst.
         rewrite map_app; simpl.
-        rewrite nth_error_app2; try rewrite map_length; auto.
+        rewrite nth_error_app2; try rewrite length_map; auto.
         rewrite Nat.sub_diag; auto.
       - clear H0.
         rewrite map_nth_error'.

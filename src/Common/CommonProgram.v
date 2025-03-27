@@ -87,7 +87,7 @@ Section Program.
       apply ltsuffix_cons.
     - destruct IHl as (?&?&?); auto.
       subst.
-      eexists; intuition; eauto; discriminate.
+      eexists; auto with *; eauto; discriminate.
   Qed.
 
   Lemma program_ind:
@@ -170,7 +170,7 @@ Section Program.
   Proof.
     intros * Eq E Hnf.
     unfold find_unit; rewrite E; simpl.
-    revert dependent p; revert p'.
+    generalize dependent p; revert p'.
     induction Hnf as [|u us']; intros; simpl in *; auto.
     - cases; rewrite Eq; auto.
     - erewrite <-IHHnf with (p := update p (us' ++ units p')); eauto.
@@ -202,8 +202,9 @@ Section Program.
     induction (units p) as [|u]; try discriminate.
     intros * Find.
     destruct (ident_eq_dec (name u) f).
-    - inv Find; intuition.
-    - apply IHl in Find; intuition.
+    - inv Find; auto with *.
+    - apply IHl in Find as [ H1 H2 ].
+      split; auto with *.
   Qed.
 
   Lemma find_unit_Exists:
@@ -211,7 +212,7 @@ Section Program.
   Proof.
     intros; unfold find_unit.
     induction (units p) as [|u].
-    - rewrite Exists_nil; intuition.
+    - rewrite Exists_nil; auto with *.
     - destruct (ident_eq_dec (name u) f).
       + split; try discriminate.
         now constructor.
@@ -247,10 +248,10 @@ Section Program.
     induction (units p) as [|u']; try discriminate.
     destruct (ident_eq_dec (name u') f).
     - inv Find; intuition.
-      exists nil; simpl; rewrite units_of_update; intuition.
+      exists nil; simpl; rewrite units_of_update; auto with *.
     - apply IHl in Find as (?& us & -> &?).
       intuition.
-      exists (u' :: us); intuition.
+      exists (u' :: us); auto with *.
   Qed.
 
   Lemma find_unit_None:
@@ -258,9 +259,9 @@ Section Program.
       find_unit f p = None <-> Forall (fun u => f <> name u) (units p).
   Proof.
     unfold find_unit; intros.
-    induction (units p) as [|u]; [intuition|].
+    induction (units p) as [|u]; [auto with *|].
     destruct (ident_eq_dec (name u) f); rewrite Forall_cons2.
-    - split; try discriminate; intuition.
+    - split; try discriminate; auto with *.
     - intuition.
   Qed.
 
@@ -289,10 +290,10 @@ Section Program.
       + split.
         * rewrite IHl; setoid_rewrite units_of_update.
           intros [(us & E &?&?)|(u'' & us & E &?&?)]; inv E.
-          -- right; exists u', (u :: us); intuition.
+          -- right; exists u', (u :: us); auto with *.
              destruct (ident_eq_dec (name u) (name u)); try contradiction.
              now rewrite update_idempotent.
-          -- right; exists u', (u'' :: us); intuition.
+          -- right; exists u', (u'' :: us); auto with *.
              destruct (ident_eq_dec (name u'') f); try contradiction.
              cases; now rewrite update_idempotent in *.
         * intros [(us & E &?&?)|(u'' & us & E &?& Find)]; inv E.
@@ -336,9 +337,10 @@ Section Program.
     intros * ->.
     setoid_rewrite units_of_update.
     destruct (ident_eq_dec (name u) f).
-    - split; intuition.
+    - split; [ auto with * | intuition symmetry ]; [ assumption | ].
+      destruct us; auto with *. 
     - split.
-      + right; intuition.
+      + right; auto with *.
         cases; now rewrite update_idempotent.
       + intros [[]|[? Find]]; try congruence.
         cases; now rewrite update_idempotent in Find.
@@ -421,7 +423,7 @@ Section Program.
           constructor; auto.
       - apply Forall'_app_r in Ord.
         eapply Forall'_impl; eauto; simpl; intros * (Spec &?); split; auto.
-        intros * Called; apply Spec in Called as (?&?&?& Find); intuition.
+        intros * Called; apply Spec in Called as (?&?&?& Find); auto with *.
         rewrite <-E; eauto.
     Qed.
 
@@ -580,7 +582,7 @@ Section Transformation.
       intros ??; induction (units p) as [|u']; simpl; intros * Find; try discriminate.
       rewrite transform_unit_conservative_name in Find.
       destruct (ident_eq_dec (name u') f).
-      - inv Find. do 2 eexists; intuition eauto.
+      - inv Find. do 2 eexists; eauto with *.
         now rewrite update_idempotent, units_of_update, transform_program_without_units_update.
       - destruct ((fix find (p : list U') : option (U' * list U') :=
                      match p with
@@ -621,14 +623,14 @@ Section Transformation.
           apply find_unit_transform_units_forward in Find.
           unfold transform_units in Find; rewrite transform_program_without_units_update, units_of_update in Find.
           rewrite transform_unit_conservative_name, update_idempotent.
-          intuition eauto.
+          eauto with *.
         + apply Forall_map, Forall_forall; intros * Hin.
           eapply Forall_forall in Hin; eauto; simpl in Hin.
           now rewrite 2 transform_unit_conservative_name.
       - eapply Forall'_impl; eauto; simpl; intros * (Spec' &?); split; auto.
         intros * Called; apply Spec' in Called as (?&?&?&Find).
         rewrite update_idempotent in *.
-        intuition eauto.
+        eauto with *.
     Qed.
 
   End Program.

@@ -822,7 +822,7 @@ Module Type CORRECTNESS
                                     P = translate G
                                     /\ S ≋ M n
                                     /\ msem_node G b xss M yss);
-        try now intuition.
+        try now auto with *.
       intros * (?& E & Sem); subst.
       pose proof Sem; apply correctness in Sem; auto.
       exists (next M n); intuition eauto.

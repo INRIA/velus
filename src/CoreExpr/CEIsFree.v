@@ -204,7 +204,7 @@ Module Type CEISFREE
   Proof.
     intros.
     rewrite (free_in_clock_spec x ck PS.empty).
-    split; [intros [HH|HH]|intro HH]; intuition.
+    split; [intros [HH|HH]|intro HH]; auto with *.
   Qed.
 
   Lemma free_in_exp_spec1:
@@ -221,7 +221,11 @@ Module Type CEISFREE
     forall x e, PS.In x (fst (free_in_exp e (PS.empty, PS.empty)))
            <-> Is_free_in_exp (Var x) e.
   Proof.
-    setoid_rewrite (free_in_exp_spec1 _ _ (PS.empty, PS.empty)); intuition.
+    intros.
+    setoid_rewrite (free_in_exp_spec1 _ _ (PS.empty, PS.empty)).
+    split.
+    - intros [ H | H ]; [ assumption | inversion H ].
+    - auto.
   Qed.
 
   Lemma free_in_exp_spec2:
@@ -238,7 +242,11 @@ Module Type CEISFREE
     forall x e, PS.In x (snd (free_in_exp e (PS.empty, PS.empty)))
            <-> Is_free_in_exp (Last x) e.
   Proof.
-    setoid_rewrite (free_in_exp_spec2 _ _ (PS.empty, PS.empty)); intuition.
+    intros.
+    setoid_rewrite (free_in_exp_spec2 _ _ (PS.empty, PS.empty)).
+    split.
+    - intros [ H | H ]; [ assumption | inversion H ].
+    - auto.
   Qed.
 
   Lemma free_in_aexp_spec1:

@@ -68,7 +68,7 @@ Module Type CCCLOCKING
       - (* merge *)
         econstructor; eauto.
         + intros ?. take (l <> []) and eapply it, map_eq_nil; eauto.
-        + rewrite map_length. simpl_Forall; eauto.
+        + rewrite length_map. simpl_Forall; eauto.
       - (* case *)
         econstructor; eauto using rename_exp_wc.
         + intros ?. take (l <> []) and eapply it, map_eq_nil; eauto.
@@ -197,8 +197,8 @@ Module Type CCCLOCKING
   Proof.
     intros []; induction systems0 as [|s]; intros * Wc; inv Wc;
       unfold cut_cycles; simpl; constructor; intuition.
-    - simpl in *.
-      take (wc_system _ _) and apply cut_cycles_wc_system in it as WC; auto.
+    simpl in *.
+    take (wc_system _ _) and apply cut_cycles_wc_system in it as WC; auto.
   Qed.
 
 End CCCLOCKING.

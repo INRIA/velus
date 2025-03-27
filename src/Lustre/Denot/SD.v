@@ -528,14 +528,14 @@ Definition denot_exp_ (ins : list ident)
     destruct p as [i ty].
     (* on calcule (length tys) flots pour chaque liste de sous-expressions *)
     pose (ses := denot_expss_ denot_exp_ ies (length tys)).
-    rewrite <- (map_length fst) in ses.
+    rewrite <- (length_map fst) in ses.
     exact ((lift_nprod @_ (smergev (List.map fst ies)) @2_ denot_var i) ses).
   - (* Ecase *)
     rename l into ies.
     destruct l0 as (tys,ck).
     (* on calcule (length tys) flots pour chaque liste de sous-expressions *)
     pose (ses := denot_expss_ denot_exp_ ies (length tys)).
-    rewrite <- (map_length fst) in ses.
+    rewrite <- (length_map fst) in ses.
     destruct o as [d_es|].
     + (* avec une branche par défaut *)
       revert ses.
@@ -775,11 +775,11 @@ Lemma denot_exp_eq :
           end
       | Emerge (x,_) ies (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI env in
-          let ss := eq_rect_r nprod ss (map_length _ _) in
+          let ss := eq_rect_r nprod ss (length_map _ _) in
           lift_nprod (smergev (List.map fst ies) (denot_var ins envI env x)) ss
       | Ecase ec ies None (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI env in
-          let ss := eq_rect_r nprod ss (map_length _ _) in
+          let ss := eq_rect_r nprod ss (length_map _ _) in
           let cs := denot_exp ins ec envG envI env in
           match numstreams ec as n return nprod n -> _ with
           | 1 => fun cs => lift_nprod (scasev (List.map fst ies) cs) ss
@@ -787,7 +787,7 @@ Lemma denot_exp_eq :
           end cs
       | Ecase ec ies (Some eds) (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI env in
-          let ss := eq_rect_r nprod ss (map_length _ _) in (* branches *)
+          let ss := eq_rect_r nprod ss (length_map _ _) in (* branches *)
           let cs := denot_exp ins ec envG envI env in (* condition *)
           let ds := denot_exps ins eds envG envI env in (* défaut *)
           match numstreams ec as n, Nat.eq_dec (list_sum (List.map numstreams eds)) (length tys) return nprod n -> _ with

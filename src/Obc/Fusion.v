@@ -360,7 +360,10 @@ Module Type FUSION
       <->
       ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
   Proof.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+    intros.
+    split; [ auto with * | ].
+    intros [ H1 H2 ] Hn.
+    inversion Hn; auto.
   Qed.
 
   Lemma Can_write_in_Switch:
@@ -482,8 +485,9 @@ Module Type FUSION
       destruct H1; [left|right]; constructor; apply Exists_exists; eauto.
     - inv Hstmt.
       take (stmt_eval _ _ _ s1 _) and eapply IHs1 in it; eauto.
-      take (stmt_eval _ _ _ s2 _) and eapply IHs2 in it; eauto.
-      1,2:intros * F; specialize (Hfree _ F); now cannot_write.
+      take (stmt_eval _ _ _ s2 _) and eapply IHs2 in it; eauto; intros x F; specialize (Hfree _ F).
+      + intros [ H | H ]; destruct F as [ F | F ]; auto with *.
+      + intros x [ H | H ] [ H' | H' ]; eauto with *.
     - inv Hstmt.
       apply exp_eval_extend_menv_by_obj.
       rewrite exp_eval_adds_opt_extend_venv; auto.
@@ -649,7 +653,7 @@ Module Type FUSION
                | H:Can_write_in _ (zip _ _) |- _ =>
                  (apply IHs1_1 in H || apply IHs1_2 in H); eauto with obctyping obcinv
                | |- Can_write_in _ (Comp _ (zip _ _)) =>
-                 now (apply CWIComp2; apply IHs1_2; eauto with obctyping obcinv; intuition)
+                 now (apply CWIComp2; apply IHs1_2; eauto with obctyping obcinv; auto with *)
                | _ => intuition eauto with obctyping obcinv
                end.
       - constructor.
@@ -721,7 +725,7 @@ Module Type FUSION
                | H:Can_write_in_var _ (zip _ _) |- _ =>
                  (apply IHs1_1 in H || apply IHs1_2 in H); eauto with obctyping obcinv
                | |- Can_write_in_var _ (Comp _ (zip _ _)) =>
-                 now (apply CWIVComp2; apply IHs1_2; eauto with obctyping obcinv; intuition)
+                 now (apply CWIVComp2; apply IHs1_2; eauto with obctyping obcinv; auto with *)
                | _ => intuition eauto with obctyping obcinv
                end.
       - constructor.
@@ -858,7 +862,7 @@ Module Type FUSION
       assert (length ss = length l) as E' by congruence.
       rewrite map2_combine.
       econstructor; eauto with obctyping.
-      - rewrite map_length, combine_length. lia.
+      - rewrite length_map, length_combine. lia.
       - intros * Hin; apply in_map_iff in Hin as ((os1, os2) & Eq & Hin).
         pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
         take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it; eauto.
@@ -901,7 +905,7 @@ Module Type FUSION
     Proof.
       induction s2 using stmt_ind2;
         intros s1 WTs1 WTs2 Fus; inv Fus; simpl; inv WTs2;
-          try (rewrite zip_Comp'; intuition).
+          try (rewrite zip_Comp'; auto with *).
       rewrite Comp_assoc.
       take (Fusible (Comp _ _)) and inv it.
       rewrite IHs2_2; auto.

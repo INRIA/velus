@@ -788,7 +788,7 @@ Module Type LSEMANTICS
         as sem_transitions_morph.
   Proof.
     intros H H' EH ?? Eb ???? Estres Hsem.
-    revert dependent y3.
+    generalize dependent y3.
     induction Hsem; intros * Heq; econstructor; eauto.
     - rewrite <-Heq, <-Eb; auto.
     - now rewrite <-EH, <-Eb.
@@ -1780,7 +1780,7 @@ Module Type LSEMANTICS
              | H:_ = ?l |- _ = ?l => rewrite <-H
              | H:?l = _ |- _ = ?l => rewrite <-H; try reflexivity
              | H:?es <> [] |- _ => destruct es; simpl in *; try congruence; clear H; simpl_Forall
-             | |- length (List.map _ _) = _ => rewrite map_length
+             | |- length (List.map _ _) = _ => rewrite length_map
              | |- length (concat _) = length (concat _) => apply concat_length_eq; simpl_Forall
              end).
       1-3:apply Forall2_swap_args; simpl_Forall; rewrite length_annot_numstreams; eauto.
@@ -1791,7 +1791,7 @@ Module Type LSEMANTICS
         take (forall k, _) and specialize (it 0). inv it.
         simpl_Forall. take (Forall2 _ _ v) and (apply Forall2_length in it).
         rewrite H3 in H14; inv H14.
-        repeat rewrite map_length in *. setoid_rewrite H16. auto.
+        repeat rewrite length_map in *. setoid_rewrite H16. auto.
     Qed.
 
     Corollary sem_exps_numstreams : forall H b es vs,
@@ -1806,7 +1806,7 @@ Module Type LSEMANTICS
       clear Hwt Hsem.
       induction Hf; simpl.
       - reflexivity.
-      - repeat rewrite app_length.
+      - repeat rewrite List.length_app.
         f_equal; auto.
         rewrite length_annot_numstreams. assumption.
     Qed.
@@ -1819,7 +1819,7 @@ Module Type LSEMANTICS
       intros * Hwl Hsem.
       assert (length vs = length (annot e)) as Hlen.
       { rewrite length_annot_numstreams. eapply sem_exp_numstreams; eauto. }
-      inv Hwl; inv Hsem; simpl in *; repeat constructor; repeat rewrite map_length in *.
+      inv Hwl; inv Hsem; simpl in *; repeat constructor; repeat rewrite length_map in *.
       all:simpl_Forall; simpl; auto.
       all:apply Forall2_forall; split; auto.
     Qed.

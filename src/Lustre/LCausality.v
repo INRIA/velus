@@ -602,7 +602,7 @@ Module Type LCAUSALITY
       k < length (annots es).
   Proof.
     induction es; intros * Hf Hfree; inv Hfree; simpl;
-      rewrite app_length, length_annot_numstreams.
+      rewrite List.length_app, length_annot_numstreams.
     - (* now ! *)
       apply PeanoNat.Nat.lt_lt_add_r; auto.
     - (* later *)
@@ -629,14 +629,14 @@ Module Type LCAUSALITY
     - (* arrow *)
       destruct H3 as [?|?]; auto. solve_forall2 H8. solve_forall2 H9.
     - (* when *)
-      rewrite map_length. destruct H2 as [[? ?]|?]; auto.
+      rewrite length_map. destruct H2 as [[? ?]|?]; auto.
       solve_forall2 H7.
     - (* merge *)
-      rewrite map_length. destruct H2 as [[? ?]|?]; auto.
+      rewrite length_map. destruct H2 as [[? ?]|?]; auto.
       simpl_Exists; simpl_Forall.
       solve_forall2 H7.
     - (* case *)
-      rewrite map_length. destruct H3 as [[? ?]|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
+      rewrite length_map. destruct H3 as [[? ?]|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
       + simpl_Exists; simpl_Forall.
         erewrite <-H11; eauto.
         eapply Is_used_inst_list_length'; eauto. simpl_Forall; eauto.
@@ -950,7 +950,7 @@ Module Type LCAUSALITY
       length (collect_used_inst_list cenv cenv' es) = length (annots es).
   Proof.
     induction es; intros * Hf; inv Hf; simpl; auto.
-    repeat rewrite app_length. f_equal; auto.
+    repeat rewrite List.length_app. f_equal; auto.
   Qed.
 
   Fact assemble_brs_used_inst_list_length {A} : forall pss (tys : list A),
@@ -961,16 +961,16 @@ Module Type LCAUSALITY
     intros * Hlen.
     assert (Forall (fun ps => Datatypes.length ps = Datatypes.length (map (fun _ => PS.empty) tys)) pss) as Hlen'.
     { eapply Forall_impl; [|eauto]; intros.
-      rewrite map_length; auto. } clear Hlen.
+      rewrite length_map; auto. } clear Hlen.
     replace (Datatypes.length tys) with (Datatypes.length (map (fun _ => PS.empty) tys))
-      by (rewrite map_length; auto).
+      by (rewrite length_map; auto).
     revert Hlen'. generalize (map (fun _ => PS.empty) tys). clear tys.
     induction pss; intros; inv Hlen'; simpl; auto.
     rewrite IHpss; eauto.
-    - rewrite map_length, combine_length, H1. apply Nat.min_id.
+    - rewrite length_map, length_combine, H1. apply Nat.min_id.
     - eapply Forall_impl; [|eauto].
       intros ? Heq.
-      rewrite map_length, combine_length, Heq, H1.
+      rewrite length_map, length_combine, Heq, H1.
       symmetry. apply Nat.min_id.
   Qed.
 
@@ -988,21 +988,21 @@ Module Type LCAUSALITY
       rewrite <- length_annot_numstreams in H4. rewrite IHe; auto.
     - (* binop *)
       rewrite <- length_annot_numstreams in H6, H7.
-      rewrite map_length, combine_length, IHe1, IHe2, H6, H7; auto.
+      rewrite length_map, length_combine, IHe1, IHe2, H6, H7; auto.
     - (* fby *)
       setoid_rewrite collect_used_inst_list_length'; auto.
       solve_forall H.
     - (* arrow *)
-      rewrite map_length, combine_length.
+      rewrite length_map, length_combine.
       setoid_rewrite collect_used_inst_list_length'.
       rewrite H7, H8. apply PeanoNat.Nat.min_id.
       solve_forall H. solve_forall H0.
     - (* when *)
-      rewrite map_length, map_length.
+      rewrite length_map, length_map.
       setoid_rewrite collect_used_inst_list_length'; auto.
       solve_forall H.
     - (* merge *)
-      rewrite map_length, assemble_brs_used_inst_list_length, map_length; auto.
+      rewrite length_map, assemble_brs_used_inst_list_length, length_map; auto.
       rewrite Forall_map.
       rewrite Forall_forall in *; intros.
       erewrite <- H6; eauto.
@@ -1010,9 +1010,9 @@ Module Type LCAUSALITY
       specialize (H _ H0). specialize (H5 _ H0).
       solve_forall H.
     - (* case *)
-      rewrite map_length, assemble_brs_used_inst_list_length, map_length; auto.
+      rewrite length_map, assemble_brs_used_inst_list_length, length_map; auto.
       constructor.
-      + destruct d; simpl in *. 2:now rewrite map_length.
+      + destruct d; simpl in *. 2:now rewrite length_map.
         erewrite <-H12; eauto. eapply collect_used_inst_list_length'.
         eapply Forall_impl_In; [|eapply H0]; intros.
         eapply Forall_forall in H11; eauto.
@@ -1023,7 +1023,7 @@ Module Type LCAUSALITY
         eapply collect_used_inst_list_length'.
         eapply Forall_impl_In; [|eauto]. intros ? Hin ?.
         eapply Forall_forall in H; eauto.
-    - (* app *) rewrite map_length; auto.
+    - (* app *) rewrite length_map; auto.
   Qed.
 
   Corollary collect_used_inst_list_length {PSyn prefs} : forall (G: @global PSyn prefs) cenv cenv' es,
@@ -1158,9 +1158,9 @@ Module Type LCAUSALITY
         - induction pss; simpl; intros; inv Hlen; auto.
           apply IHpss in H as [H|H]; auto.
           2:{ clear - H2 H3. eapply Forall_impl; [|eauto].
-              intros ? Heq. now rewrite map_length, combine_length, Heq, H2, Nat.min_id. }
+              intros ? Heq. now rewrite length_map, length_combine, Heq, H2, Nat.min_id. }
           rewrite map_nth' with (d':=(PS.empty, PS.empty)) in H.
-          2:{ eapply ps_In_k_lt in H; rewrite map_length in H; auto. }
+          2:{ eapply ps_In_k_lt in H; rewrite length_map in H; auto. }
           rewrite combine_nth in H; auto.
           apply PS.union_spec in H as [H|H]; auto.
         - induction pss; simpl; intros; inv Hlen; auto.
@@ -1168,9 +1168,9 @@ Module Type LCAUSALITY
             inv H.
           + eapply IHpss; eauto.
             1:{ clear - H2 H3. eapply Forall_impl; [|eauto].
-                intros ? Heq. now rewrite map_length, combine_length, Heq, H2, Nat.min_id. }
+                intros ? Heq. now rewrite length_map, length_combine, Heq, H2, Nat.min_id. }
             rewrite map_nth' with (d':=(PS.empty, PS.empty)).
-            2:{ rewrite combine_length.
+            2:{ rewrite length_combine.
                 destruct H. inv H.
                 - apply ps_In_k_lt in H1. now rewrite <-H2, Nat.min_id.
                 - simpl_Exists; simpl_Forall. apply ps_In_k_lt in H1.
@@ -1183,7 +1183,7 @@ Module Type LCAUSALITY
             inv H; auto.
       }
       intros Hex. rewrite H; eauto.
-      simpl_Forall. now rewrite map_length.
+      simpl_Forall. now rewrite length_map.
     Qed.
 
     Fact collect_used_inst_spec {PSyn prefs}: forall (G: @global PSyn prefs) x e k,
@@ -1221,14 +1221,14 @@ Module Type LCAUSALITY
       - (* arrow *)
         erewrite <- collect_used_inst_list_length in H7, H8; eauto.
         erewrite map_nth' with (d':=(PS.empty, PS.empty)).
-        2:(erewrite <- map_length, Hlen2; eauto).
+        2:(erewrite <- length_map, Hlen2; eauto).
         rewrite combine_nth. 2:setoid_rewrite H7; setoid_rewrite H8; auto.
         repeat rewrite PS.union_spec.
         destruct H5; [left|right]; eapply collect_used_inst_list_spec'; eauto.
       - (* when *)
         erewrite <- collect_used_inst_list_length with (cenv:=cenv') (cenv':=cenvl') in H6; eauto.
         erewrite map_nth' with (d':=PS.empty).
-        2:(erewrite <- map_length, Hlen2; eapply Hlen1; eauto).
+        2:(erewrite <- length_map, Hlen2; eapply Hlen1; eauto).
         destruct H4 as [(_&?)|?]; subst.
         * apply PSF.add_1; auto.
           eapply collect_used_var_complete; eauto.
@@ -1240,7 +1240,7 @@ Module Type LCAUSALITY
           erewrite <- H6; eauto.
           eapply collect_used_inst_list_length; eauto. }
         erewrite map_nth' with (d':=PS.empty).
-        2:(erewrite <- map_length, Hlen2; eauto).
+        2:(erewrite <- length_map, Hlen2; eauto).
         apply PSF.add_iff.
         destruct H3 as [(_&?)|Hfree]; subst; eauto using collect_used_var_complete.
         right.
@@ -1252,14 +1252,14 @@ Module Type LCAUSALITY
                                         (fun es0 : list exp => flat_map (collect_used_inst cenv' cenvl') es0) d ::
                                         map (fun es0 => flat_map (collect_used_inst cenv' cenvl') (snd es0)) es)) as Hlen'.
         { constructor.
-          - destruct d; simpl in *. 2:now rewrite map_length.
+          - destruct d; simpl in *. 2:now rewrite length_map.
             erewrite <-H12; eauto.
             eapply collect_used_inst_list_length; eauto.
           - rewrite Forall_map, Forall_forall in *; intros.
             erewrite <- H10; eauto.
             eapply collect_used_inst_list_length; eauto. }
         erewrite map_nth' with (d':=PS.empty).
-        2:(erewrite <- map_length, Hlen2; eauto).
+        2:(erewrite <- length_map, Hlen2; eauto).
         apply PS.union_spec.
         destruct H3 as [(_&Hfree)|[Hfree|(?&?&Hfree)]]; subst; simpl in *.
         2,3:right; apply assemble_brs_used_inst_list_spec; auto.
@@ -1472,7 +1472,7 @@ Module Type LCAUSALITY
     - (* equation *)
       destruct eq; simpl.
       rewrite Env.In_from_list, fst_InMembers, combine_map_fst'.
-      2:{ inv H0. erewrite map_length, collect_used_inst_list_length; eauto. }
+      2:{ inv H0. erewrite length_map, collect_used_inst_list_length; eauto. }
       inv Hdef.
       eapply collect_used_var_complete in H4; eauto.
       solve_In.
@@ -1826,7 +1826,7 @@ Module Type LCAUSALITY
       erewrite <-collect_used_inst_list_length in H5; eauto.
       apply Env.find_In_from_list.
       2:{ rewrite fst_NoDupMembers, combine_map_fst'; eauto.
-          2:rewrite map_length; eauto.
+          2:rewrite length_map; eauto.
           eapply collect_used_var_nodup; eauto.
           solve_NoDup_app.
       }
@@ -2374,7 +2374,7 @@ Module Type LCAUSALITY
       - eapply PeanoNat.Nat.ltb_ge in Hltb.
         eapply P_exps_later; eauto.
         eapply IHes; eauto with lcaus.
-        rewrite app_length, length_annot_numstreams in Hk.
+        rewrite List.length_app, length_annot_numstreams in Hk.
         lia.
     Qed.
 

@@ -236,7 +236,7 @@ case IHn; intros.
 case s; intros d H; left; exists d.
 case H; intros k (H1,H2); exists k; auto with arith.
 case (isEps_dec (c n)); intros.
-case s; intros d H; left; exists d; exists n; intuition.
+case s; intros d H; left; exists d; exists n; auto with *.
 right; intros.
 assert (H0:(k<n \/ k=n)%nat); try lia.
 case H0; intro; subst; auto with arith.
@@ -269,7 +269,7 @@ Lemma chain_Val_eq : forall (c:natO-m> DF_ord) (n n':nat) d d',
 intros; assert (c n <= c n' \/ c n' <= c n).
 assert (n <= n'\/ n' < n)%nat.
 apply Nat.le_gt_cases.
-intuition.
+auto with *.
 case H1; intro.
 assert ((Val d : DF_ord) <= Val d'); auto.
 apply Ole_trans with (c n); auto.
@@ -300,7 +300,7 @@ rewrite (DF_lubn_inv c p).
 case (fVal c p); intros.
 destruct s; auto.
 destruct e.
-rewrite (@chain_Val_eq c n x0 d x); intuition.
+rewrite (@chain_Val_eq c n x0 d x); auto with *.
 apply DFleVal with (S k); auto.
 rewrite pred_nth_Sn_acc; simpl.
 rewrite IHk; auto with arith.
@@ -319,11 +319,11 @@ injection H; intros; subst; auto.
 discriminate H.
 destruct (fVal c p).
 destruct s.
-case e; intros n (H1,H2);  exists n; intuition.
+case e; intros n (H1,H2);  exists n; auto with *.
 simpl in H; rewrite H2; injection H; auto.
 simpl pred_nth at 1; intros.
 case (IHk (S p) (cpred c)); intros; auto.
-exists x; intuition.
+exists x; auto with *.
 rewrite pred_nth_Sn_acc; trivial.
 Qed.
 
@@ -347,7 +347,7 @@ Qed.
 
 Lemma DF_lub_upper : forall c:natO-m> DF_ord, forall n, c n <= DF_lub c.
 intros; apply DFle_rec
-  with (R:= fun x y:DF_ord=>x==c n /\ y==DF_lub c); intuition.
+  with (R:= fun x y:DF_ord=>x==c n /\ y==DF_lub c); auto with *.
 apply Oeq_trans with (Eps x); auto.
 apply Oeq_trans with (Eps y); auto.
 apply Oeq_trans with (Eps x); auto.
@@ -359,7 +359,7 @@ Qed.
 Lemma DF_lub_least : forall (c:natO-m> DF_ord) a,
                       (forall n, c n <= a) -> DF_lub c <= a.
 intros; apply DFle_rec
-  with (R:= fun x y:DF_ord=>x==DF_lub c /\ y == a); intuition.
+  with (R:= fun x y:DF_ord=>x==DF_lub c /\ y == a); auto with *.
 apply Oeq_trans with (Eps x); auto.
 apply Oeq_trans with (Eps y); auto.
 apply Oeq_trans with (Eps x); auto.

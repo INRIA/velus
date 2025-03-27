@@ -94,10 +94,10 @@ Proof.
   rewrite Hu, Hv in *.
   apply ea_is_cons in Hc as Hcp.
   remember_ds (sbinop op xs ys) as rs.
-  revert dependent xs.
-  revert dependent ys.
-  revert dependent U.
-  revert dependent V.
+  generalize dependent xs.
+  generalize dependent ys.
+  generalize dependent U.
+  generalize dependent V.
   induction Hcp; intros.
   { rewrite <- eqEps in *; eauto 2. }
   - assert (a = abs); subst.
@@ -147,7 +147,7 @@ Proof.
   rewrite Hu, Hv in *.
   apply sbinop_is_cons in Hc as [Hc1 Hc2].
   apply ea_is_cons in Hc1.
-  revert dependent ys.
+  generalize dependent ys.
   revert U V.
   induction Hc1; intros.
   - rewrite <- eqEps in *; apply IHHc1; auto.
@@ -223,11 +223,11 @@ Proof.
   - rewrite Hu, Hv in *.
   apply ea_is_cons in Hc as Hcp.
   remember_ds (fby1 (Some v) xs ys) as rs.
-  revert dependent xs.
-  revert dependent ys.
-  revert dependent U.
-  revert dependent V.
-  revert dependent v.
+  generalize dependent xs.
+  generalize dependent ys.
+  generalize dependent U.
+  generalize dependent V.
+  generalize dependent v.
   induction Hcp; intros.
   { rewrite <- eqEps in *; eauto 2. }
   all: destruct (@is_cons_elim _ xs) as (x & xs' & Hxs);
@@ -279,11 +279,11 @@ Proof.
       rename ys' into ys.
   apply ea_is_cons in Hc as Hcp.
   remember_ds (fby1 (Some v) xs ys) as rs.
-  revert dependent xs.
-  revert dependent ys.
-  revert dependent U.
-  revert dependent V.
-  revert dependent v.
+  generalize dependent xs.
+  generalize dependent ys.
+  generalize dependent U.
+  generalize dependent V.
+  generalize dependent v.
   induction Hcp; intros.
   { rewrite <- eqEps in *; eauto 2. }
   all: destruct (@is_cons_elim _ xs) as (x & xs' & Hxs);
@@ -338,8 +338,8 @@ Proof.
   apply cons_is_cons, ea_is_cons in HU2.
   rewrite HU, HV.
   clear HU HV U V u.
-  revert dependent xs.
-  revert dependent ys.
+  generalize dependent xs.
+  generalize dependent ys.
   induction HU2; intros.
   { rewrite <- eqEps in *; auto. }
   all: destruct (@is_cons_elim _ xs) as (x & xs' & Hxs);

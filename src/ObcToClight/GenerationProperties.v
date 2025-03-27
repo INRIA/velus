@@ -219,15 +219,16 @@ Lemma InMembers_rec_instance_methods_temp:
     \/ InMembers x (Env.elements e).
 Proof.
   induction s using stmt_ind2'; simpl; intros; try tauto.
-  - revert e0; revert dependent s.
+  - revert e0; generalize dependent s.
     take (Forall _ _) and induction it as [|[|] ??? IH]; simpl in *; intros; auto.
     rewrite IH, IHs; auto; symmetry; rewrite IH, IHs; auto; tauto.
   - rewrite IHs2, IHs1; symmetry; rewrite IHs2; tauto.
-  - destruct (find_class c prog) as [(cls, ?)|]; [|rewrite Env.Props.P.elements_empty; intuition].
-    destruct (find_method f (c_methods cls)); [|rewrite Env.Props.P.elements_empty; intuition].
+  - destruct (find_class c prog) as [(cls, ?)|]; [|rewrite Env.Props.P.elements_empty; auto with *].
+    destruct (find_method f (c_methods cls)); [|rewrite Env.Props.P.elements_empty; auto with *].
     destruct_list ys; simpl; try tauto.
     destruct_list (m_out m) as (?, ?) ? ?; simpl; try tauto.
-    rewrite <- 3 Env.In_Members, 2 Env.Props.P.F.add_in_iff, Env.Props.P.F.empty_in_iff; tauto.
+    rewrite <- 3 Env.In_Members, 2 Env.Props.P.F.add_in_iff, Env.Props.P.F.empty_in_iff; [ tauto | .. ].
+    all: split; auto; intros [ H | H ]; auto; inversion H.
 Qed.
 
 Lemma InMembers_rec_extcalls_temp:
@@ -237,7 +238,7 @@ Lemma InMembers_rec_extcalls_temp:
     \/ InMembers x (Env.elements e).
 Proof.
   induction s using stmt_ind2'; simpl; intros; try tauto.
-  - revert e0; revert dependent s.
+  - revert e0; generalize dependent s.
     take (Forall _ _) and induction it as [|[|] ??? IH]; simpl in *; intros; auto.
     rewrite IH, IHs; auto; symmetry; rewrite IH, IHs; auto; tauto.
   - rewrite IHs2, IHs1; symmetry; rewrite IHs2; tauto.
@@ -252,7 +253,7 @@ Lemma In_rec_instance_methods_In_insts:
     In (o, cid) insts.
 Proof.
   induction s using stmt_ind2'; intros * Wt Hin Spec; inv Wt; simpl in *; eauto.
-  - revert dependent m; revert dependent s.
+  - generalize dependent m; generalize dependent s.
     take (length _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
       take (Forall _ (_ :: _)) and inv it; eauto.
     eapply IH; eauto.
@@ -284,7 +285,7 @@ Lemma In_rec_instance_methods:
 Proof.
   induction s using stmt_ind2'; simpl; intros * Wt Nodup Ho; inv Wt;
     try (rewrite F.empty_mapsto_iff; tauto).
-  - revert m; revert dependent s.
+  - revert m; generalize dependent s.
     take (length _ = _) and clear it;
       induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
         take (Forall _ (_ :: _)) and inv it; eauto.
@@ -311,7 +312,7 @@ Lemma In_rec_instance_methods_temp_find_method :
       fid = prefix_temp cid' o.
 Proof.
   induction s using stmt_ind2'; intros * Hin Hfind; simpl in *; eauto.
-  - revert m Hin Hfind; revert dependent s.
+  - revert m Hin Hfind; generalize dependent s.
     induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
       inv H; eauto.
   - destruct (find_class _ _) eqn:Hclass; eauto. destruct p0.
@@ -389,7 +390,7 @@ Lemma In_rec_instance_methods_find_method :
       InMembers o insts.
 Proof.
   induction s using stmt_ind2'; intros * Wt Hin Hfind; inv Wt; simpl in *; eauto.
-  - clear H4 H5 H6. revert m Hin Hfind; revert dependent s.
+  - clear H4 H5 H6. revert m Hin Hfind; generalize dependent s.
     induction ss as [|[|] ? IH]; simpl in *; intros; inv H; eauto 12.
   - destruct_list ys; eauto.
     destruct (M.E.eq_dec (i, f) (o, fid)) as [[E1 E2]|E1]; simpl in *; subst.
@@ -554,7 +555,7 @@ Proof.
     [setoid_rewrite InMembers_translate_param_idem; intros * H * ?;
      eapply H; eauto; rewrite Env.Props.P.elements_empty; simpl; contradiction|].
   intros ???; induction (m_body m) using stmt_ind2'; simpl in *; auto.
-  - revert dependent s.
+  - generalize dependent s.
     take (Forall _ _) and induction it as [|[|]]; auto. intros; simpl in *. eapply IHit in H1; eauto.
   - intros * ? Hin; apply InMembers_rec_instance_methods_temp in Hin as [|]; eauto.
     apply (IHs2 (Env.empty _)); auto.
@@ -584,7 +585,7 @@ Proof.
     [setoid_rewrite InMembers_translate_param_idem; intros * H *;
      eapply H; eauto; rewrite Env.Props.P.elements_empty; simpl; contradiction|].
   intros ??; induction (m_body m) using stmt_ind2'; simpl in *; auto.
-  - revert dependent s.
+  - generalize dependent s.
     take (Forall _ _) and induction it as [|[|]]; auto. intros; simpl in *. eapply IHit in H1; eauto.
   - intros * ? Hin; apply InMembers_rec_extcalls_temp in Hin as [|]; eauto.
     apply (IHs2 (Env.empty _)); auto.
@@ -1268,7 +1269,7 @@ Section MethodSpec.
     generalize (Env.empty type) as e.
     induction f.(m_body) using stmt_ind2';
       inversion_clear WT as [| | | |????????? Findcl' Findmth'| |]; simpl; auto.
-    - revert dependent s.
+    - generalize dependent s.
       take (length _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; auto;
         take (Forall _ (_ :: _)) and inv it; eauto.
       rewrite IH, IHs; eauto.

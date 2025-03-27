@@ -564,9 +564,9 @@ dataflow memory for which the non-standard semantics holds true.
 
       exists (fun n => F (if r n then pred (count r n) else count r n) n).
       intro k; specialize (Msem' k).
-      do 2 eexists; intuition eauto;
-        intros n Count; auto.
-      rewrite Count; cases.
+      do 2 eexists; eauto with *;
+        intros n count; auto.
+      rewrite count; cases.
     Qed.
 
     Lemma holdreset_mfbyreset : forall x M v0 ls rs,
@@ -622,7 +622,7 @@ dataflow memory for which the non-standard semantics holds true.
                   apply sem_node_wf in Hsem' as (? & ?); eauto.
               - exact n.(n_outgt0).
             }
-            rewrite H0, <-H2, map_length; auto.
+            rewrite H0, <-H2, length_map; auto.
           }
           now apply length_hd_error.
         }
@@ -1027,7 +1027,7 @@ dataflow memory for which the non-standard semantics holds true.
   (*   destruct (es n); destruct Spec' as (?& Hx); auto. *)
   (*   rewrite Hx. *)
   (*   clear - Init Spec Find_n. *)
-  (*   revert dependent v. *)
+  (*   generalize dependent v. *)
   (*   induction n; intros; simpl; try congruence. *)
   (*   specialize (Spec n). *)
   (*   destruct (find_val x (M n)); try contradiction. *)
@@ -1059,7 +1059,7 @@ dataflow memory for which the non-standard semantics holds true.
     destruct (rs n), (es n); destruct Spec' as (?& Hx); auto.
     rewrite Hx.
     clear - Init Spec Find_n.
-    revert dependent v.
+    generalize dependent v.
     induction n; intros; simpl. destruct (rs 0); congruence.
     specialize (Spec n).
     destruct (find_val x (M n)); try contradiction.
