@@ -88,19 +88,18 @@ The compiler also accepts the options
 
 ## Local installation
 
-Vélus has been implemented in Coq.8.16.1. It includes a
-modified version of CompCert and depends on menhir >= 20230608.
-
+Vélus has been implemented in Coq.8.20.1. It includes a
+modified version of CompCert and depends on menhir.
 
 To build a self-contained installation for compiling and running
-Vélus, we recommend installing an ad-hoc
-[opam](https://opam.ocaml.org/) directory:
+Vélus, we recommend installing an ad-hoc [opam](https://opam.ocaml.org/)
+directory:
 
     $ cd $VELUS_DIR
     $ mkdir opam
-    $ opam init --root=opam --compiler=4.13.1
-    $ eval `opam config env --root=$VELUS_DIR/opam`
-    $ opam install -j4 ocamlbuild coq.8.16.1 menhir.20230608 ocamlgraph
+    $ opam switch create velus --packages ocaml.4.14.2,coq.8.20.1
+    $ eval `opam env --switch=velus`
+    $ opam install -j4 ocamlbuild menhir ocamlgraph
 
 To check the proofs and build Vélus:
 
@@ -110,3 +109,6 @@ To check the proofs and build Vélus:
 
 The configuration script uses the same options as CompCert's, except one
 additional `-compcertdir` option to specify the CompCert directory.
+
+Moreover, you can use the `-j[N]` option of `make` to enable parallel
+compilation.
