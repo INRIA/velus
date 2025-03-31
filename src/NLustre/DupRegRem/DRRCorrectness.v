@@ -183,7 +183,7 @@ Module Type DRRCORRECTNESS
         destruct x; simpl.
         inv Hsem; econstructor. 1,6:eauto with nlsem.
         1:rewrite map_app; simpl; auto.
-        + now rewrite map_length.
+        + now rewrite length_map.
         + apply Forall_app in H as (_&Hf). inv Hf; auto.
         + rewrite <-map_app, Forall_map.
           eapply Forall_impl_In; [|eauto]; intros; simpl in *.

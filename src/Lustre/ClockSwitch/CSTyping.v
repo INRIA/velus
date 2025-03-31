@@ -404,7 +404,7 @@ Module Type CSTYPING
             apply Partition_Permutation in Hpart. rewrite Hpart.
             apply HasType_app; eauto with senv.
           * eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; eauto.
-          * apply mmap_length in H2. destruct x, branches; simpl in *; try congruence; auto.
+          * apply mlength_map in H2. destruct x, branches; simpl in *; try congruence; auto.
           * rewrite <-H7.
             replace (map fst (map _ x)) with (map fst branches). reflexivity.
             clear - H2. apply mmap_values in H2.
@@ -420,7 +420,7 @@ Module Type CSTYPING
             simpl; rewrite map_app; auto. auto.
         + eapply CS.mmap2_values in H8. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H2.
           2:{ eapply Forall3_length in H8 as (?&?); congruence. }
-          2:{ eapply mmap_length in H2; eauto. }
+          2:{ eapply mlength_map in H2; eauto. }
           eapply Forall3_Forall3 in H2; eauto. clear H8.
           apply Forall_concat. apply Forall3_ignore12 in H2. simpl_Forall.
           repeat inv_branch. repeat inv_bind.

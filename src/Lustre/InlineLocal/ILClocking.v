@@ -115,7 +115,7 @@ Module Type ILCLOCKING
       - simpl_Forall; subst; auto.
       - contradict H5. eapply map_eq_nil; eauto.
       - simpl_Forall; subst; auto.
-      - rewrite map_length; auto.
+      - rewrite length_map; auto.
       - contradict H4. apply map_eq_nil in H4; auto.
       - simpl_Forall. auto.
       - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
@@ -123,7 +123,7 @@ Module Type ILCLOCKING
         eapply Forall_forall in H6; eauto; simpl in H6.
         eapply Forall_impl; [|eauto]; intros; subst; auto.
       - simpl_Forall.
-        now rewrite rename_exp_clocksof, map_length.
+        now rewrite rename_exp_clocksof, length_map.
       - now rewrite H6.
       - contradict H7. apply map_eq_nil in H7; auto.
       - simpl_Forall; auto.
@@ -132,7 +132,7 @@ Module Type ILCLOCKING
         eapply Forall_forall in H9; eauto; simpl in H9.
         eapply Forall_impl; [|eauto]; intros; subst; auto.
       - simpl_Forall.
-        now rewrite rename_exp_clocksof, map_length.
+        now rewrite rename_exp_clocksof, length_map.
       - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
         specialize (H11 _ eq_refl).
         rewrite Forall_map. rewrite Forall_forall in *; eauto.
@@ -141,7 +141,7 @@ Module Type ILCLOCKING
         rewrite rename_exp_clocksof, Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
       - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
         specialize (H13 _ eq_refl).
-        now rewrite rename_exp_clocksof, map_length.
+        now rewrite rename_exp_clocksof, length_map.
       - rewrite rename_exp_nclocksof. simpl_Forall.
         eapply rename_nclock_WellInstantiated1; eauto.
       - simpl_Forall.

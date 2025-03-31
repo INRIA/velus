@@ -54,7 +54,7 @@ Module Type STCCLOCKINGSEMANTICS
       /\ if islast then sem_clocked_var_instant base R (Last x) ck else True.
   Proof.
     intros * Ord WCP Nodup Sem WC Def Hin.
-    revert dependent ck; revert dependent x; revert dependent vars; revert dependent islast.
+    generalize dependent ck; generalize dependent x; generalize dependent vars; generalize dependent islast.
     eapply sem_trconstr_mult with
       (P_trconstr := fun base R S I S' tc =>
                        forall vars x ck islast,
@@ -80,7 +80,7 @@ Module Type STCCLOCKINGSEMANTICS
                         eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       inv_equalities. split; auto.
       unfold sem_clocked_var_instant.
-      inv Hexp; eauto; intuition; eauto; by_sem_det.
+      inv Hexp; intuition eauto; by_sem_det.
 
     - (* TcReset State *)
       intros * _ * ??? * ? WC Def ?.
@@ -93,7 +93,7 @@ Module Type STCCLOCKINGSEMANTICS
                     eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       inv_equalities.
       unfold sem_clocked_var_instant.
-      inv Hexp; eauto; intuition; eauto; by_sem_det.
+      inv Hexp; intuition eauto; by_sem_det.
 
     - (* TcUpdate Next *)
       intros * ? Find Hexp ??? * ? WC Def ?.
@@ -102,7 +102,7 @@ Module Type STCCLOCKINGSEMANTICS
                     eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       inv_equalities. split; auto.
       unfold sem_clocked_var_instant.
-      inv Hexp; eauto; intuition; eauto; by_sem_det.
+      inv Hexp; intuition eauto; by_sem_det.
 
     - (* TcReset Inst *)
       intros * ? * ? * ??? * ? WC Def ?.
@@ -157,12 +157,12 @@ Module Type STCCLOCKINGSEMANTICS
       destruct s.
       + eapply IH, sem_clock_instant_transfer_out_instant in Hsvx as Hck; eauto.
         split; auto.
-        split; intuition; eauto; try by_sem_det.
+        split; intuition eauto; try by_sem_det.
         destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
       + assert (exists c, sem_var_instant R' (Var x') (present c)) as Hsvx' by eauto.
         eapply IH, sem_clock_instant_transfer_out_instant in Hsvx'; eauto.
         split; auto.
-        split; intuition; eauto; try by_sem_det.
+        split; intuition eauto; try by_sem_det.
         unfold sem_var_instant, var_env in *. congruence.
 
     - (* systems *)
@@ -204,12 +204,12 @@ Module Type STCCLOCKINGSEMANTICS
         destruct x0.
         * eapply Hnd in Hvs.
           eapply clock_vars_to_sem_clock_instant in Hins'; eauto with datatypes.
-          split; intuition; eauto; try by_sem_det.
+          split; intuition eauto; try by_sem_det.
           destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
         * assert (exists c, sem_var_instant R0 (Var i) (present c)) as Hvs'' by eauto.
           eapply Hnd in Hvs''.
           eapply clock_vars_to_sem_clock_instant in Hins'; eauto with datatypes.
-          split; intuition; eauto; try by_sem_det.
+          split; intuition eauto; try by_sem_det.
           unfold sem_var_instant, var_env in *. simpl in *. congruence.
       + destruct P; simpl in *; subst.
         apply wc_trconstr_program_app; auto.

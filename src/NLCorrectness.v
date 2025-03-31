@@ -74,7 +74,7 @@ Lemma wt_streams_spec:
 Proof.
   unfold wt_values.
   split.
-  - intros * WTs n; revert dependent vss; induction n; intros.
+  - intros * WTs n; generalize dependent vss; induction n; intros.
     + rewrite tr_Streams_hd.
       induction WTs as [|???? WT]; simpl; auto.
       constructor; auto.
@@ -86,7 +86,7 @@ Proof.
       inv WT; auto.
   - intros WTs.
     unfold wt_streams.
-    revert dependent vss.
+    generalize dependent vss.
     induction xts, vss; intros; try now (specialize (WTs 0); simpl in WTs; inv WTs).
     constructor; auto.
     + rewrite SForall_forall; intro n; specialize (WTs n); inv WTs; auto.
@@ -177,10 +177,10 @@ Section NLTrace.
     - right; intro E; apply map_eq_nil in E; auto.
   Defined.
   Next Obligation.
-    unfold tr_Streams, idfst; rewrite 2 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 2 length_map; auto.
   Defined.
   Next Obligation.
-    unfold tr_Streams, idfst; rewrite 2 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 2 length_map; auto.
   Defined.
 
   (** Simply link the trace of a Lustre node with the trace of an Obc step method with the same parameters *)
@@ -406,7 +406,7 @@ Proof.
   assert (forall n, 0 < length (ins' n)) as Length.
   { inversion_clear Hsem as [???????? Ins].
     intro k; specialize (Ins k); apply Forall2_length in Ins.
-    unfold pstr in Ins; rewrite 2 map_length in Ins.
+    unfold pstr in Ins; rewrite 2 length_map in Ins.
     rewrite <-Ins.
     apply n_ingt0.
   }
@@ -597,13 +597,13 @@ Proof.
   - assert (m_in m_step = idfst main_node.(n_in)) as Ein by auto.
     assert (m_out m_step = idfst main_node.(n_out)) as Eout by auto.
     assert (length ins = length (n_in main_node)) as Len_ins.
-    { transitivity (length (idfst main_node.(n_in))); try apply map_length.
+    { transitivity (length (idfst main_node.(n_in))); try apply length_map.
       rewrite <-Ein.
       specialize (Hwt_in 0); unfold ins' in Hwt_in; setoid_rewrite Forall2_map_1 in Hwt_in.
       eapply Forall2_length; eauto.
     }
     assert (length outs = length (n_out main_node)) as Len_outs.
-    { transitivity (length (idfst main_node.(n_out))); try apply map_length.
+    { transitivity (length (idfst main_node.(n_out))); try apply length_map.
       rewrite <-Eout.
       specialize (Hwt_out 0); unfold outs' in Hwt_out; setoid_rewrite Forall2_map_1 in Hwt_out.
       eapply Forall2_length; eauto.

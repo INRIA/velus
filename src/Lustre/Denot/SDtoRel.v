@@ -242,7 +242,7 @@ Section Sem_alt.
     destruct HH as [Hlt Hllt]; auto; simpl in *; clear HH.
     destruct Hk as (k & Hk); simpl in *; subst.
     clear Nnil.
-    revert dependent vsst.
+    generalize dependent vsst.
     induction Hf; intros.
     - constructor.
       simpl_Forall. destruct x; simpl in *; congruence.
@@ -251,18 +251,18 @@ Section Sem_alt.
       inv Hk.
       econstructor; eauto.
       + eapply (IHHf (map (@tl _) vsst)).
-        * simpl_Forall. now rewrite map_length.
+        * simpl_Forall. now rewrite length_map.
         * intros; destruct (Nat.le_gt_cases (length vsst) m).
           2: erewrite map_nth', <- tl_nth, Hnm; auto.
           setoid_rewrite nth_overflow at 2.
-          2: rewrite map_length; auto.
+          2: rewrite length_map; auto.
           rewrite nth_nil, nth_overflow; auto.
           destruct (nth_in_or_default n l' []) as [| ->]; simpl in *; try lia.
           simpl_Forall; lia.
         * simpl_Forall. rewrite tl_length; lia.
       + rewrite Forall3_map_2, Forall3_same_2_3.
         clear IHHf.
-        rewrite map_length in *.
+        rewrite length_map in *.
         apply Forall2_forall2; split; intros; subst; auto.
         rewrite nth_indep with (d' := []); try lia.
         assert (In (nth n vsst []) vsst) as Hin.
@@ -347,7 +347,7 @@ Section Sem_alt.
   Proof.
     intros * Nnil He Hwt Heds Hld Hl Hf Ht.
     assert (Forall (fun l => length l = length (combine (concat sds) os)) vss).
-    { rewrite combine_length', Hld; auto. }
+    { rewrite length_combine', Hld; auto. }
     unshelve eapply Forall2t_Forall2 in Ht; auto.
     unshelve eapply Forall2Brs_transp in Hf; eauto.
     revert Hf Ht.
@@ -393,7 +393,7 @@ Proof.
   - destruct vss, ess; simpl in *; try congruence; inv Hf.
   - apply Forall2_length in Hf.
     apply Forall_map, Forall2_combine', Forall2_map_1.
-    setoid_rewrite map_length.
+    setoid_rewrite length_map.
     apply Forall2_ignore1'; auto.
   - apply Forall2_map_2.
     apply Forall3_combine'2.
@@ -425,7 +425,7 @@ Proof.
   - destruct vss, ess; simpl in *; try congruence; inv Hf.
   - apply Forall2_length in Hf.
     apply Forall_map, Forall2_combine', Forall2_map_1.
-    setoid_rewrite map_length.
+    setoid_rewrite length_map.
     apply Forall2_ignore1'; auto.
   - apply Forall2_map_2.
     apply Forall3_combine'2.
@@ -460,7 +460,7 @@ Proof.
   - destruct vss, ess; simpl in *; try congruence; inv Hf.
   - apply Forall2_length in Hf.
     apply Forall_map, Forall2_combine', Forall2_map_1.
-    setoid_rewrite map_length.
+    setoid_rewrite length_map.
     apply Forall2_ignore1'; auto.
   - apply Forall2_map_2.
     apply Forall3_combine'2.
@@ -469,7 +469,7 @@ Proof.
     simpl_Forall; eauto.
     edestruct EqSts_concat_eq as (?& Heq &?); eauto; subst.
     eexists; split; auto; now rewrite Heq.
-  - rewrite combine_length, Hld.
+  - rewrite length_combine, Hld.
     simpl_Forall; lia.
 Qed.
 
@@ -590,7 +590,7 @@ Proof.
       rewrite <- 2 annots_numstreams, <- 2 length_typesof_annots.
       take (typesof es = _) and rewrite it.
       take (typesof e0s = _) and rewrite it.
-      rewrite map_length.
+      rewrite length_map.
       apply Forall3_repeat, fby_absent.
   - (* Ewhen *)
     apply Swhen with
@@ -695,7 +695,7 @@ Proof.
     + (* Forall2t *)
       eapply Forall2t_forall2; simpl.
       * simpl_Forall.
-        rewrite combine_length'; auto.
+        rewrite length_combine'; auto.
         rewrite repeat_length in *.
         take (typesof _ = _) and rewrite <- it in *.
         rewrite <- annots_numstreams, <- length_typesof_annots; auto.
@@ -707,7 +707,7 @@ Proof.
         left; repeat split; simpl; auto using const_nth.
         simpl_Forall; subst.
         rewrite nth_repeat_in; simpl; auto using const_nth.
-        rewrite combine_length', concat_length_sum, map_map in Hn; auto.
+        rewrite length_combine', concat_length_sum, map_map in Hn; auto.
         setoid_rewrite repeat_length in Hn.
         rewrite <- annots_numstreams, <- length_typesof_annots.
         take (typesof _ = _) and rewrite it.
@@ -801,13 +801,13 @@ Proof.
     eauto using find_node_now.
   + (* ins *)
     apply Forall2_forall2; unfold idents.
-    rewrite map_length, repeat_length.
+    rewrite length_map, repeat_length.
     split; intros; subst; auto.
     econstructor; eauto.
     rewrite nth_repeat_in; now auto.
   + (* outs *)
     apply Forall2_forall2; unfold idents.
-    rewrite map_length, repeat_length.
+    rewrite length_map, repeat_length.
     split; intros; subst; auto.
     econstructor; eauto.
     rewrite nth_repeat_in; now auto.
@@ -850,7 +850,7 @@ Proof.
     assert (length xs = list_sum (List.map numstreams es)) as Hl.
     { rewrite <- annots_numstreams, <- length_typesof_annots.
       eauto using Forall2_length. }
-    clear - Hl. revert dependent xs.
+    clear - Hl. generalize dependent xs.
     induction es; simpl; intros.
     * destruct xs; simpl in *; auto; congruence.
     * apply length_app_decomp in Hl as (xs1 & xs2 & ? & Hl1 & Hl2); subst.
@@ -1376,7 +1376,8 @@ Proof.
   (* error cases *)
   all: try (inv Sr; tauto).
   2: assert (k = e) by (now apply Nat.eqb_eq); subst.
-  all: econstructor; auto using (proj1 (Nat.eqb_neq _ _)).
+  all: econstructor.
+  4: now apply Nat.eqb_neq in HH2.
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
   all: cases; try easy; inv Sr; eauto.
 Qed.
@@ -2303,8 +2304,8 @@ Proof.
   pose proof (n_nodup n) as [Ndio _].
   apply NoDup_app_l in Ndio as Ndi.
   apply NoDup_app_r in Ndio as Ndo.
-  pose proof (n_ingt0 n) as Innil; rewrite <- (map_length fst) in Innil.
-  pose proof (n_outgt0 n) as Onnil; setoid_rewrite <- (map_length fst) in Onnil.
+  pose proof (n_ingt0 n) as Innil; rewrite <- (length_map fst) in Innil.
+  pose proof (n_outgt0 n) as Onnil; setoid_rewrite <- (length_map fst) in Onnil.
   apply wc_find_node in Hfind as HH; auto; destruct HH as (G' & Wcn).
   edestruct map_mask as [Inf3 ->]; auto.
   edestruct map_mask as [Inf4 ->]; auto.
@@ -2539,8 +2540,8 @@ Proof.
     setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
     gen_sub_exps.
     rewrite Hfind, <- annots_numstreams, Hli.
-    unfold decl in Hlo; rewrite <- (map_length fst) in Hlo.
-    rewrite <- (map_length fst).
+    unfold decl in Hlo; rewrite <- (length_map fst) in Hlo.
+    rewrite <- (length_map fst).
     unfold idents, eq_rect.
     cases; intros; subst; try congruence.
     apply ok_reset; auto.
@@ -3014,7 +3015,7 @@ Proof.
       by eauto using NoDup_app_weaken.
   pose proof (denot_blocks_equs G ins envG envI env blks Hwl Nd) as Hb.
   clear Hwl Nd.
-  revert dependent env; intro env; simpl.
+  generalize dependent env; intro env; simpl.
   generalize (denot_blocks G ins blks envG envI env).
   intros env' Henv.
   induction blks as [| blk blks]; constructor.
@@ -3071,7 +3072,7 @@ Proof.
     apply Forall2_forall2.
     split. { now rewrite Ss_of_nprod_length. }
     intros ?? k ?? Hk **; subst.
-    assert (Hk' : k < length (n_in n)) by (rewrite map_length in Hk; auto).
+    assert (Hk' : k < length (n_in n)) by (rewrite length_map in Hk; auto).
     apply sem_var_restrict.
     { apply IsVar_app; left.
       apply IsVarC, fst_InMembers.
@@ -3085,9 +3086,9 @@ Proof.
   - (* sem_var out *)
     subst H os.
     apply Forall2_forall2.
-    split. { rewrite Ss_of_nprod_length. now setoid_rewrite map_length. }
+    split. { rewrite Ss_of_nprod_length. now setoid_rewrite length_map. }
     intros ?? k ?? Hk **; subst.
-    assert (Hk' : k < length (n_out n)) by (rewrite map_length in Hk; auto).
+    assert (Hk' : k < length (n_out n)) by (rewrite length_map in Hk; auto).
     apply sem_var_restrict.
     { apply IsVar_app; right.
       apply IsVarC, fst_InMembers.
@@ -3150,7 +3151,7 @@ Proof.
     edestruct clocks_of_bss as [Inf ->]; eauto 2 using NoDup_app_l.
     subst Γ Γ' Γ0 Γ'0.
     (* on simplifie get_locals partout : *)
-    revert dependent InfΓ.
+    generalize dependent InfΓ.
     take (_ = n_block n) and rewrite <- it, <- app_assoc in *.
     simpl (get_locals _) in *; intros.
     (* maintenant c'est ok *)
@@ -3212,8 +3213,8 @@ Proof.
   remember (inf_dom_np_of_env _ _ _) as Infi eqn:HH; clear HH.
   remember (inf_dom_np_of_env _ _ _) as Info eqn:HH; clear HH.
   fold xs os in Info, Infi.
-  revert dependent n.
-  revert dependent envI.
+  generalize dependent n.
+  generalize dependent envI.
   revert f.
   destruct G as [tys exts nds].
   induction nds as [|a nds]; intros. { inv Hfind. }
@@ -3307,10 +3308,10 @@ Proof.
   edestruct _ok_global as (?&?& Hsem); eauto using inf_dom_env_of_np.
   eapply sem_node_morph in Hsem; eauto using _Ss_of_nprod_eq.
   subst envI os ins; clear.
-  revert dependent ss.
-  rewrite <- (map_length fst).
+  generalize dependent ss.
+  rewrite <- (length_map fst).
   intros; apply _Ss_of_nprod_eq, np_of_env_of_np.
-  rewrite map_length; apply n_ingt0.
+  rewrite length_map; apply n_ingt0.
   destruct (n_nodup n); eauto using NoDup_app_weaken.
 Qed.
 
@@ -3348,7 +3349,7 @@ Proof.
   { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;
       eauto using inf_dom_env_of_np. }
   unfold decl.
-  rewrite <- (map_length fst (n_out n)); eauto.
+  rewrite <- (length_map fst (n_out n)); eauto.
 Qed.
 
 
@@ -3414,8 +3415,8 @@ Proof.
       bss ins envI <= bs ->
       wf_env Γ ins envI bs 0 ->
       wf_env Γ ins envI bs (envG f envI))).
-  revert dependent n.
-  revert dependent envI.
+  generalize dependent n.
+  generalize dependent envI.
   revert f.
   destruct G as [tys exts nds].
   induction nds as [|a nds]; intros. { inv Hfind. }
@@ -3606,10 +3607,10 @@ Proof.
   edestruct _ok_global_main as (?&?& Hsem); eauto using inf_dom_env_of_np.
   eapply sem_node_morph in Hsem; eauto using _Ss_of_nprod_eq.
   subst envI os ins; clear.
-  revert dependent ss.
-  rewrite <- (map_length fst).
+  generalize dependent ss.
+  rewrite <- (length_map fst).
   intros; apply _Ss_of_nprod_eq, np_of_env_of_np.
-  rewrite map_length; apply n_ingt0.
+  rewrite length_map; apply n_ingt0.
   destruct (n_nodup n); eauto using NoDup_app_weaken.
 Qed.
 
@@ -3635,7 +3636,7 @@ Proof.
   { eapply inf_dom_np_of_env, infinite_dom_app_l, denot_inf;
       eauto using inf_dom_env_of_np. }
   unfold decl.
-  rewrite <- (map_length fst (n_out n)); eauto.
+  rewrite <- (length_map fst (n_out n)); eauto.
 Qed.
 
 End SDTOREL.

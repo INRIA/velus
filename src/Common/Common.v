@@ -80,8 +80,7 @@ Lemma None_eq_dne:
   forall {A} (v : option A),
     ~(v <> None) <-> (v = None).
 Proof.
-  destruct v; intuition.
-  exfalso. apply H; discriminate.
+  destruct v; auto with *.
 Qed.
 
 Lemma in_inj_app_map:
@@ -382,7 +381,7 @@ Lemma equiv_decb_equiv:
 Proof.
   intros.
   split; intro; unfold equiv_decb in *;
-    destruct (equiv_dec x y); intuition.
+    destruct (equiv_dec x y); auto with *.
 Qed.
 
 Lemma nequiv_decb_false:
@@ -390,7 +389,7 @@ Lemma nequiv_decb_false:
     (x <>b y) = false <-> (x ==b y) = true.
 Proof.
   unfold nequiv_decb, equiv_decb.
-  intros. destruct (equiv_dec x y); intuition.
+  intros. destruct (equiv_dec x y); auto with *.
 Qed.
 
 Lemma equiv_decb_refl:
@@ -872,7 +871,7 @@ Section ORel.
 
 End ORel.
 
-Arguments orel {A}%type R%signature.
+Arguments orel {A}%_type R%_signature.
 Global Hint Constructors orel : datatypes.
 Global Hint Extern 5 (orel _ ?x ?x) => reflexivity : datatypes.
 
@@ -1232,7 +1231,7 @@ Section OptionReasoning.
     apply (orel_eq_weaken RB) in Hg.
     setoid_rewrite Rq in Hg. exists p; split; auto with datatypes.
   Qed.
-  Global Arguments orel_obind_inversion RA%signature {_} {RB}%signature {_ _ _}.
+  Global Arguments orel_obind_inversion RA%_signature {_} {RB}%_signature {_ _ _}.
 
   Lemma ofold_right_altdef:
     forall (f : A -> B -> option B) xs acc,

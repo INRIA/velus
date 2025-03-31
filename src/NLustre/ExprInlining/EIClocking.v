@@ -91,7 +91,7 @@ Module Type EICLOCKING
         induction ce using cexp_ind2'; intros * Wc; inv Wc; simpl; auto.
         - econstructor; auto; simpl_Forall; eauto.
           + intro contra. apply map_eq_nil in contra; auto.
-          + rewrite map_length. simpl_Forall; auto.
+          + rewrite length_map. simpl_Forall; auto.
         - econstructor; eauto using try_inline_in_exp_wc.
           + intro contra. apply map_eq_nil in contra; auto.
           + intros * Hin. simpl_In. simpl_Forall. auto.

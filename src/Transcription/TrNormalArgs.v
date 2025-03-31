@@ -89,7 +89,7 @@ Module Type TRNORMALARGS
       block_to_equation env envo xr d = OK eq' ->
       normal_args_eq G' eq'.
   Proof.
-    intros * Htog Hnormed Hnorma Htoeq. revert dependent xr.
+    intros * Htog Hnormed Hnorma Htoeq. generalize dependent xr.
     induction Hnormed; inv Hnorma; intros; simpl in *.
     - (* eq *)
       eapply to_equation_normal_args in Htoeq; eauto.
@@ -122,7 +122,7 @@ Module Type TRNORMALARGS
       normal_args G'.
   Proof.
     intros [] ? Hnormed Htog. monadInv Htog.
-    revert dependent x.
+    generalize dependent x.
     induction nodes0; intros * Htog; simpl in *; monadInv Htog; inv Hnormed;
       constructor; simpl; auto.
     - eapply to_node_normal_args; eauto.

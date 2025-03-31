@@ -58,8 +58,11 @@ Module Type STCORDERED
       apply find_unit_None; simpl.
       apply Forall_forall; intros * Hin'.
       eapply Forall'_In in Hin' as (?&?&?& Hnn); eauto; simpl in *; subst.
-      rewrite Forall_app, Forall_cons2, Forall_app, Forall_cons2 in Hnn; intuition.
-    - apply Spec, in_map_iff; eexists; (intuition eauto); reflexivity.
+      rewrite Forall_app, Forall_cons2, Forall_app, Forall_cons2 in Hnn; auto with *.
+    - apply Spec, in_map_iff.
+      eexists.
+      split; eauto with *.
+      reflexivity.
   Qed.
 
   Corollary Ordered_systems_find_In_systems {prefs} :
@@ -77,7 +80,9 @@ Module Type STCORDERED
     destruct P, P'; simpl in *; subst.
     apply Ordered_systems_split in Ord.
     intros * Hin.
-    eapply Forall_forall in Hin; eauto; simpl in *; intuition.
+    eapply Forall_forall in Hin; eauto.
+    simpl in *.
+    intuition.
   Qed.
 
   Lemma Ordered_systems_find_system {prefs} :

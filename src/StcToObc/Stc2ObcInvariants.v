@@ -180,7 +180,7 @@ Module Type STC2OBCINVARIANTS
       Fusible s ->
       Fusible (Control mems ck s).
   Proof.
-    induction ck as [|ck IH i b]; [now intuition|].
+    induction ck as [|ck IH i b]; [now auto with *|].
     intros * Hxni Hfce; simpl.
     cases; auto using Fusible; apply IH.
     - intros j Hfree Hcw.
@@ -230,7 +230,7 @@ Module Type STC2OBCINVARIANTS
       Fusible iacc ->
       Fusible (fold_left (fun i x => Comp (f x) i) xs iacc).
   Proof.
-    induction xs as [|x xs IH]; intros * Sch Fus1 Fus2; [now intuition|].
+    induction xs as [|x xs IH]; intros * Sch Fus1 Fus2; [now auto with *|].
     repeat take (Forall' _ (_ :: _)) and inv it.
     simpl in *. apply IH; auto.
     - constructor; auto. intros * ??.

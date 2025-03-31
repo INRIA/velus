@@ -87,7 +87,7 @@ Module Type DRRCLOCKING
         simpl; econstructor; eauto using rename_in_var_wc, rename_in_exp_wc.
       - contradict H5.
         eapply map_eq_nil; eauto.
-      - rewrite map_length, Forall2_map_2.
+      - rewrite length_map, Forall2_map_2.
         eapply Forall2_impl_In; [|eauto]; intros; simpl in *.
         eapply Forall_forall in H; eauto. eapply H in H2; eauto.
       - contradict H4.

@@ -872,7 +872,7 @@ Section SStream_functions.
     intros.
     apply first_rem_eq.
     - rewrite first_cons, smerge_eq, Foldi_fold_right.
-      revert dependent np; clear.
+      generalize dependent np; clear.
       induction l; intros.
       + simpl. now rewrite first_map, first_cons, map_eq_cons, map_bot.
       + simpl.
@@ -990,7 +990,7 @@ Section SStream_functions.
             /\ (~ In i l ->
                fold_right (fun '(j, x) => fmerge j c x)
                  (defcon c) (combine l ss) = err error_Ty)); [ tauto|].
-    revert dependent ss.
+    generalize dependent ss.
     subst c; simpl.
     induction l; simpl; intros; try tauto.
     destruct ss as [| s ss]; inversion_clear Hf.
@@ -1155,7 +1155,7 @@ Section SStream_functions.
     intros.
     apply first_rem_eq.
     - rewrite first_cons, scase_eq, Foldi_fold_right.
-      revert dependent np; clear.
+      generalize dependent np; clear.
       induction l; intros.
       + simpl. now rewrite first_map, first_cons, map_eq_cons, map_bot.
       + simpl.
@@ -1264,7 +1264,7 @@ Section SStream_functions.
     intros.
     apply first_rem_eq.
     - rewrite first_cons, scase_def__eq, Foldi_fold_right.
-      revert dependent np; clear.
+      generalize dependent np; clear.
       induction l; intros.
       + simpl. now rewrite first_zip, 2 first_cons, zip_cons, zip_bot1.
       + simpl.
@@ -1409,7 +1409,7 @@ Section SStream_functions.
                        (err error_Ty) (combine l ss) = pres v)
                \/ (fold_right (fun '(j, x) => fcase j (pres vt) x)
                     (err error_Ty) (combine l ss) = err error_Ty))); [ tauto|].
-    revert dependent ss.
+    generalize dependent ss.
     induction l as [|j l]; simpl; intros * Hf Hl.
     { split; eauto; tauto. }
     destruct ss as [|[] ss]; simpl in *; inv Hf; try lia.

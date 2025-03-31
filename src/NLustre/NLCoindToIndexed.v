@@ -137,8 +137,8 @@ Module Type NLCOINDTOINDEXED
           apply sem_exp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
               eapply (sem_clock_impl) in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
-        + right. eexists; intuition; auto.
-        + left; intuition.
+        + right. eexists. eauto with *.
+        + left; auto with *.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_exp_impl in Indexed';
           (take (CoInd.sem_annot _ _ _ _ _ _) and eapply IHn in it as [|]; destruct_conjs;
@@ -272,7 +272,7 @@ Module Type NLCOINDTOINDEXED
           eapply Forall2_ignore2, Forall_impl in IH; eauto.
           intros ? (?&Hin&He). specialize (He n); simpl in He.
           eapply length_in_right_combine with (l:=seq 0 (length ess)) in Hin as (?&Hin).
-          2:now rewrite seq_length.
+          2:now rewrite length_seq.
           eapply Forall_forall in Hin; eauto; simpl in *. now rewrite <-Hin.
         + assert (length ess = length es) as Hlen by (apply Forall2_length in IH; auto).
           eapply Exists_exists in Hpres as ((k&?)&Hin&?&?); subst.
@@ -312,12 +312,12 @@ Module Type NLCOINDTOINDEXED
           eapply Forall2_ignore2, Forall_impl in IH; eauto.
           intros ? (?&Hin&He). specialize (He n); simpl in He.
           eapply length_in_right_combine with (l:=seq 0 (length ess)) in Hin as (?&Hin).
-          2:now rewrite seq_length.
+          2:now rewrite length_seq.
           eapply Forall_forall in Hin; eauto; simpl in *. now rewrite <-Hin.
         + assert (length ess = length es) as Hlen by (apply Forall2_length in IH; auto).
           assert (exists vs, Forall2 (fun es v => es # n = present v) ess vs) as (vs & Hpres).
           { clear - Habs. eapply Forall_impl with (Q:=fun '(_, es) => es # n <> absent), Forall2_combine'' in Habs.
-            2:now rewrite seq_length. 2:(intros (?&?) ?; simpl; eauto).
+            2:now rewrite length_seq. 2:(intros (?&?) ?; simpl; eauto).
             induction Habs as [|???? He]; eauto.
             apply not_absent_present in He as (v & ?).
             destruct IHHabs as (vs & ?).
@@ -382,8 +382,8 @@ Module Type NLCOINDTOINDEXED
           apply sem_rhs_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
               eapply (sem_clock_impl) in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
-        + right. eexists; intuition; auto.
-        + left; intuition.
+        + right. eexists; eauto with *.
+        + left; auto with *.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_rhs_impl in Indexed';
           (take (CoInd.sem_annot _ _ _ _ _ _) and eapply IHn in it as [|]; destruct_conjs;
@@ -410,7 +410,7 @@ Module Type NLCOINDTOINDEXED
         CStr.bools_of xs rs ->
         Indexed.bools_of (tr_Stream xs) (tr_Stream rs).
     Proof.
-      intros ** n; revert dependent xs; revert rs.
+      intros ** n; generalize dependent xs; revert rs.
       induction n; intros * Rst.
       - unfold_Stv xs; inv Rst; rewrite tr_Stream_0; auto.
       - unfold_Stv xs; inv Rst; rewrite 2 tr_Stream_S; auto.
@@ -525,7 +525,7 @@ Module Type NLCOINDTOINDEXED
         CESem.clock_of (tr_Streams xss) ≈ tr_Stream (CStr.clocks_of xss).
     Proof.
       unfold CESem.clock_of.
-      intros xss n; revert dependent xss; induction n; intros.
+      intros xss n; generalize dependent xss; induction n; intros.
       - rewrite unfold_Stream at 1; simpl; rewrite tr_Stream_0, tr_Streams_hd.
         induction xss; simpl; auto.
         f_equal; auto.
@@ -540,8 +540,8 @@ Module Type NLCOINDTOINDEXED
         aligned xs bs ->
         forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.
-      intros * Sync n; revert dependent xs; revert bs; induction n; intros.
-      - inversion_clear Sync; rewrite 2 tr_Stream_0; intuition; discriminate.
+      intros * Sync n; generalize dependent xs; revert bs; induction n; intros.
+      - inversion_clear Sync; rewrite 2 tr_Stream_0; auto with *; discriminate.
       - rewrite <-2 tr_Stream_tl; apply IHn.
         inv Sync; auto.
     Qed.

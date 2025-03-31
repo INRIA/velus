@@ -175,9 +175,9 @@ Proof.
   constructor.
   - intro E; eapply Eapp_E0_inv in E.
     assert (forall n, length (tr_Streams ins n) = length (idfst (NL.Syn.n_in n'))) as Len_ins_2.
-    { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+    { intros. unfold tr_Streams. rewrite length_map, length_idfst; auto. }
     assert (forall n, length (tr_Streams outs n) = length (idfst (NL.Syn.n_out n'))) as Len_outs_2.
-    { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+    { intros. unfold tr_Streams. rewrite length_map, length_idfst; auto. }
     assert (idfst (NL.Syn.n_in n') <> [] \/ idfst (NL.Syn.n_out n') <> []) as Spec_in_out_2.
     { clear - Spec_in_out_n'.
       destruct Spec_in_out_n'; [left|right].
@@ -290,4 +290,3 @@ Proof.
   - apply velus_world_behaves; auto.
     apply Asm.semantics_determinate.
 Qed.
-

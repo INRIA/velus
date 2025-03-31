@@ -1015,10 +1015,11 @@ Module Type LCLOCKING
              apply oconcat_map_check_exp' in it as (? & ?); auto.
         take (forall2b _ _ _ = true) and rename it into FA2; apply forall2b_Forall2 in FA2.
         subst; simpl; repeat split; auto. constructor; auto.
-        2:pose proof (Forall2_length _ _ _ FA2) as Hlen; auto.
-        apply Forall2_ignore2 in FA2.
-        apply Forall_impl_In with (2:=FA2). intros ? ? (? & HH).
-        now rewrite equiv_decb_equiv in HH; inv HH.
+        + apply Forall2_ignore2 in FA2.
+          apply Forall_impl_In with (2:=FA2). intros ? ? (? & HH).
+          now rewrite equiv_decb_equiv in HH; inv HH.
+        + symmetry.
+          apply (@Forall2_length _ _ _ _ _ FA2).
       - (* Emerge *)
         take (Forall _ es) and (repeat setoid_rewrite Forall_forall in it).
         take (omap _ _ = Some _) and
@@ -1026,7 +1027,7 @@ Module Type LCLOCKING
         take (check_merge_clocks _ _ _ _ _ _ = true) and
              apply check_merge_clocks_correct in it as (Hf1 & Hf2).
         eapply Forall2_combine'' in Hf1. eapply Forall2_combine'' in Hf2.
-        2,3:(rewrite map_length; eapply Forall2_length in Heq; eauto).
+        2,3:(rewrite length_map; eapply Forall2_length in Heq; eauto).
         split; eauto. econstructor; eauto.
         + contradict H1; subst; simpl. auto.
         + rewrite Forall2_map_1 in Hf1. eapply Forall2_Forall2 in Hf1; [|eapply Heq].
@@ -1101,7 +1102,7 @@ Module Type LCLOCKING
                         (map (fun '(x, (_, ck, _, _)) => (x, ck)) n.(n_out)) (map (fun '(ty, ck0) => (ck0, None)) a)).
         { apply Forall2_map_1, Forall2_forall.
           take (Forall2 _ n.(n_out) _) and rename it into FA2.
-          split. 2:{ eapply Forall2_length in FA2. rewrite map_length in *; auto. }
+          split. 2:{ eapply Forall2_length in FA2. rewrite length_map in *; auto. }
           intros (x, (((xt, xc), xcaus), xl)) (ck, nm) Ix.
           rewrite combine_map_snd, in_map_iff in Ix.
           destruct Ix as (((y & ((yt & yc) & ycaus)), (yc' & ynm)) & EE & Ix); inv EE.
@@ -1221,10 +1222,10 @@ Module Type LCLOCKING
                                           xck (ck2, Some x2))
                       (map (fun '(x, (_, ck, _, _)) => (x, ck)) n.(n_out)) (map snd l2) xs).
       { apply Forall3_combine2, Forall2_map_1, Forall2_forall; simpl.
-        rewrite map_length; auto.
+        rewrite length_map; auto.
         take (Forall2 _ n.(n_out) _) and rename it into FA2.
         split. 2:{ eapply Forall2_length in FA2.
-                   rewrite combine_length, map_length, H4, Nat.min_id; auto. }
+                   rewrite length_combine, length_map, H4, Nat.min_id; auto. }
         intros (x, ((xt, xc), xcaus)) (ck, nm) Ix.
         rewrite combine_map_fst, combine_map_snd, in_map_iff in Ix.
         destruct Ix as (((y & (((yt & yc) & ycaus) & yl)), ((? & yc') & ynm)) & EE & Ix); inv EE.
@@ -2186,7 +2187,7 @@ Module Type LCLOCKING
         + rewrite <- clocksof_nclocksof in H8.
           rewrite Forall_forall in Hwc. apply Hwc in H8...
         + now inv Hwcnode.
-        + rewrite map_length. apply n_ingt0... }
+        + rewrite length_map. apply n_ingt0... }
       specialize (Forall2_app H8 H9) as Hinst.
       eapply WellInstantiated_wc_clocks in Hinst...
       + rewrite map_app, map_map, Forall_app in Hinst. destruct Hinst as [_ Hinst].
@@ -2367,9 +2368,9 @@ Module Type LCLOCKING
              | H:clockof ?e = _ |- context [clockof ?e] => rewrite H
              | H:clocksof ?e = _ |- context [clocksof ?e] => rewrite H
              | |- context [length (annots ?es)] =>
-                 erewrite <-map_length, <-clocksof_annots
-             | |- context [length (map _ _)] => rewrite map_length
-             | H: context [length (map _ _)] |- _ => rewrite map_length in H
+                 erewrite <-length_map, <-clocksof_annots
+             | |- context [length (map _ _)] => rewrite length_map
+             | H: context [length (map _ _)] |- _ => rewrite length_map in H
              | H:None = Some _ |- _ => inv H
              | H:Some _ = Some _ |- _ => inv H
              | H:Forall2 _ _ _ |- _ => apply Forall2_length in H
@@ -2397,10 +2398,10 @@ Module Type LCLOCKING
       + eapply Forall_impl; [|eauto]. intros ? (?&Ck).
         rewrite <- length_clockof_numstreams, Ck...
       + apply Forall2_length in H4.
-        rewrite map_length, length_nclocksof_annots in H4...
+        rewrite length_map, length_nclocksof_annots in H4...
       + apply Forall3_length in H5 as (Hlen1&Hlen2).
-        rewrite 2 map_length in Hlen1...
-    - rewrite app_nil_r. apply Forall2_length in H7. now rewrite map_length in H7.
+        rewrite 2 length_map in Hlen1...
+    - rewrite app_nil_r. apply Forall2_length in H7. now rewrite length_map in H7.
     - apply Forall2_length in H2. now rewrite length_clocksof_annots in H2.
   Qed.
   Global Hint Resolve wc_equation_wl_equation : lclocking.

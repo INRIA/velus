@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 # Start Proof General with the right -I options
 # Use the Makefile to rebuild dependencies if needed
 # Recompile the modified file after coqide editing

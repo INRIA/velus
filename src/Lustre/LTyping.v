@@ -1638,8 +1638,8 @@ Module Type LTYPING
              | H:typeof ?e = _ |- context [typeof ?e] => rewrite H
              | H:typesof ?e = _ |- context [typesof ?e] => rewrite H
              | |- context [length (annots ?es)] =>
-                 erewrite <-map_length, <-typesof_annots
-             | |- context [length (map _ _)] => rewrite map_length
+                 erewrite <-length_map, <-typesof_annots
+             | |- context [length (map _ _)] => rewrite length_map
              | H:None = Some _ |- _ => inv H
              | H:Some _ = Some _ |- _ => inv H
              | _ => simpl_Forall; intros
@@ -1664,7 +1664,7 @@ Module Type LTYPING
     inv Hwt. constructor.
     + rewrite Forall_forall in *...
     + apply Forall2_length in H0.
-      rewrite typesof_annots, map_length in H0...
+      rewrite typesof_annots, length_map in H0...
   Qed.
   Global Hint Resolve wt_equation_wl_equation : ltyping.
 

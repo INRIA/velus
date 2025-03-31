@@ -46,7 +46,7 @@ Module Type CCCORRECTNESS
     induction 1 as [|? us [Spec Names]]; simpl; constructor; simpl; auto.
     split; auto.
     - intros * Hin; apply Spec in Hin as (?&?&?& Find).
-      intuition; apply cut_cycles_find_system in Find; eauto.
+      auto with *; apply cut_cycles_find_system in Find; eauto.
     - clear - Names; induction us; simpl; inv Names; constructor; auto.
   Qed.
 
@@ -60,7 +60,7 @@ Module Type CCCORRECTNESS
     econstructor; eauto.
     simpl; intros * Hin.
     apply Insts in Hin as (?&?&?).
-    eexists; intuition; eauto.
+    eexists; auto with *; eauto.
   Qed.
   Global Hint Resolve cut_cycles_initial_state : stcsem.
 
@@ -74,7 +74,7 @@ Module Type CCCORRECTNESS
     econstructor; eauto.
     simpl; intros * Hin; pose proof Hin.
     apply Insts in Hin as (?&?&?).
-    eexists; intuition; eauto.
+    eexists; auto with *; eauto.
   Qed.
   Global Hint Resolve cut_cycles_state_closed : stcsem.
 
@@ -129,7 +129,7 @@ Module Type CCCORRECTNESS
         rewrite Forall_app in *. repeat take (_ /\ _) and destruct it; simpl_Forall.
         econstructor; eauto.
         2:rewrite map_app; simpl; eauto.
-        + rewrite map_length. unfold sem_var_instant in *; eauto.
+        + rewrite length_map. unfold sem_var_instant in *; eauto.
         + apply Forall_app. split; simpl_Forall; eauto.
       - econstructor.
         + unfold sem_var_instant in *; eauto.

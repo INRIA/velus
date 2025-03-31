@@ -77,7 +77,11 @@ Module Type OBCINVARIANTS
       <->
       ~ Can_write_in_var x s1 /\ ~ Can_write_in_var x s2.
   Proof.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+    intros; split; intros.
+    - split; auto with *.
+    - destruct H.
+      intros Hn.
+      inversion Hn; auto.
   Qed.
 
   (** ** Assert that an Obc command never writes to a variable more than once. *)

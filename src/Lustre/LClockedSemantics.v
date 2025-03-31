@@ -1036,7 +1036,7 @@ Module Type LCLOCKEDSEMANTICS
         as sem_transitions_ck_morph.
   Proof.
     intros H H' EH ?? Eb ???? Estres Hsem.
-    revert dependent y3.
+    generalize dependent y3.
     induction Hsem; intros * Heq; econstructor; eauto.
     - rewrite <-Heq, <-Eb; auto.
     - now rewrite <-EH, <-Eb.
@@ -1589,7 +1589,7 @@ Module Type LCLOCKEDSEMANTICS
   Proof.
     intros * WCin Hscin WIi.
     pose proof (wc_env_has_Cbase _ WCin) as [i Hin].
-    { rewrite map_length. exact (n_ingt0 n). }
+    { rewrite length_map. exact (n_ingt0 n). }
     apply WellInstantiated_parent in WIi as Hp.
     change (Forall (fun ck => (fun x => x = bck \/ clock_parent bck x) (fst ck))
                    ncks) in Hp.
@@ -1776,7 +1776,7 @@ Module Type LCLOCKEDSEMANTICS
     rewrite clocksof_nclocksof, Forall2_map_1, Forall2_map_2 in Hscin.
     rewrite Forall2_map_1, Forall2_map_2.
     assert (length ncks = length (n_out n)) as Hlen1.
-    { apply Forall2_length in WIo. now rewrite map_length in WIo. }
+    { apply Forall2_length in WIo. now rewrite length_map in WIo. }
     assert (length ncks = length ss) as Hlen2.
     { specialize (Hk 0) as (?&_&_&Hf).
       unfold idents in Hf. simpl_Forall. apply Forall2_length in Hf.
@@ -1784,7 +1784,7 @@ Module Type LCLOCKEDSEMANTICS
     eapply Forall2_forall2; split; eauto.
     intros [? ?] ? ? [? ?] ? Hlen Hnth1 Hnth2; simpl; subst.
     eapply sc_inst_mask; eauto.
-    - eapply Forall2_forall2 in WIo as [? WIo]. setoid_rewrite map_length in WIo.
+    - eapply Forall2_forall2 in WIo as [? WIo]. setoid_rewrite length_map in WIo.
       rewrite Hlen1 in Hlen.
       specialize (WIo (xH, Cbase) _ _ _ _ Hlen eq_refl Hnth1).
       inv WIo; eauto.
@@ -1793,16 +1793,16 @@ Module Type LCLOCKEDSEMANTICS
       specialize (Hk k) as (Hi&?&?&?).
       exists (var_history Hi). split.
       + eapply Forall2_forall2 in H0 as [? Hck].
-        rewrite Hlen1 in Hlen. setoid_rewrite map_length in Hck.
+        rewrite Hlen1 in Hlen. setoid_rewrite length_map in Hck.
         specialize (Hck (xH, Cbase) (abstract_clock (def_stream b)) _ _ _ Hlen eq_refl eq_refl).
         erewrite clocks_of_mask in Hck.
         setoid_rewrite map_nth' with (l:=map _ _) (d':=Streams.const absent) in Hck. erewrite map_nth' with (l:=ss), ac_mask in Hck; eauto.
-        2:rewrite map_length. 1,2:congruence.
+        2:rewrite length_map. 1,2:congruence.
       + intros i i' Free Sub.
         destruct (nth n0 (map (fun '(x, (_, ck, _, _)) => (x, ck)) (n_out n)) (1%positive, Cbase)) as (yck, ny) eqn:Hy.
         assert (In (yck, ny) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n) ++ map (fun '(x, (_, ck, _, _)) => (x, ck)) (n_out n))) as Hyin2.
         { apply in_or_app. right.
-          rewrite <- Hy. apply nth_In. rewrite map_length. now setoid_rewrite <-Hlen1. }
+          rewrite <- Hy. apply nth_In. rewrite length_map. now setoid_rewrite <-Hlen1. }
         pose proof (wc_env_free_in_clock _ _ _ _ WCinout Hyin2 Free) as [].
         eapply inst_in_eqst_mask with (vs:=(concat ss0++ss)). 1,5:eauto.
         * eapply Forall2_app; eauto.
@@ -2042,7 +2042,7 @@ Module Type LCLOCKEDSEMANTICS
              | H:_ = ?l |- _ = ?l => rewrite <-H
              | H:?l = _ |- _ = ?l => rewrite <-H; try reflexivity
              | H:?es <> [] |- _ => destruct es; simpl in *; try congruence; clear H; simpl_Forall
-             | |- length (List.map _ _) = _ => rewrite map_length
+             | |- length (List.map _ _) = _ => rewrite length_map
              | |- length (concat _) = length (concat _) => apply concat_length_eq; simpl_Forall
              end).
       1-3:apply Forall2_swap_args; simpl_Forall; rewrite length_annot_numstreams; eauto.
@@ -2053,7 +2053,7 @@ Module Type LCLOCKEDSEMANTICS
         take (forall k, _) and specialize (it 0). inv it.
         simpl_Forall. take (Forall2 _ _ v) and (apply Forall2_length in it).
         rewrite H3 in H14; inv H14.
-        repeat rewrite map_length in *. setoid_rewrite H16. auto.
+        repeat rewrite length_map in *. setoid_rewrite H16. auto.
     Qed.
 
     Corollary sem_exps_ck_numstreams : forall H b es vs,
@@ -2068,7 +2068,7 @@ Module Type LCLOCKEDSEMANTICS
       clear Hwt Hsem.
       induction Hf; simpl.
       - reflexivity.
-      - repeat rewrite app_length.
+      - repeat rewrite length_app.
         f_equal; auto.
         rewrite length_annot_numstreams. assumption.
     Qed.
@@ -2081,7 +2081,7 @@ Module Type LCLOCKEDSEMANTICS
       intros * Hwl Hsem.
       assert (length vs = length (annot e)) as Hlen.
       { rewrite length_annot_numstreams. eapply sem_exp_ck_numstreams; eauto. }
-      inv Hwl; inv Hsem; simpl in *; repeat constructor; repeat rewrite map_length in *.
+      inv Hwl; inv Hsem; simpl in *; repeat constructor; repeat rewrite length_map in *.
       all:simpl_Forall; simpl; auto.
       all:apply Forall2_forall; split; auto.
     Qed.
@@ -2279,10 +2279,10 @@ Module Type LCLOCKEDSEMANTICS
       + rewrite Forall2_map_1. apply Forall2_forall. split.
         * intros (?&?) ??; simpl in *; auto.
         * rewrite Forall2_map_2 in H10. eapply Forall2_length in H10. rewrite <-H10.
-          rewrite map_length.
+          rewrite length_map.
           specialize (H19 0). inv H19.
           rewrite Forall2_map_2 in H5. apply Forall2_length in H5.
-          setoid_rewrite map_length in H5; auto. rewrite H3 in H8; inv H8; auto.
+          setoid_rewrite length_map in H5; auto. rewrite H3 in H8; inv H8; auto.
       + eapply sc_exps'; eauto.
   Qed.
 
@@ -2854,8 +2854,8 @@ Module Type LCLOCKEDSEMANTICS
     apply when_spec. intros n. repeat rewrite const_nth'.
     apply whenb_nth with (n:=n) in H10 as [(Hb&Hc&Hx)|[(?&Hb&Hc&?&Hx)|(Hb&Hc&Hx)]];
       setoid_rewrite Hb; setoid_rewrite Hc; setoid_rewrite Hx; eauto.
-    - right; left. do 2 eexists. intuition; eauto.
-    - right; right. eexists. intuition; eauto.
+    - right; left. do 2 eexists. auto with *; eauto.
+    - right; right. eexists. auto with *; eauto.
   Qed.
 
   Lemma sem_clock_when_enum : forall H bs bs' bs'' cs ck id x tx c,
@@ -2870,8 +2870,8 @@ Module Type LCLOCKEDSEMANTICS
     apply when_spec. intros n. repeat rewrite enum_nth'.
     apply whenb_nth with (n:=n) in H10 as [(Hb&Hc&Hx)|[(?&Hb&Hc&?&Hx)|(Hb&Hc&Hx)]];
       setoid_rewrite Hb; setoid_rewrite Hc; setoid_rewrite Hx; eauto.
-    - right; left. do 2 eexists. intuition; eauto.
-    - right; right. eexists. intuition; eauto.
+    - right; left. do 2 eexists. auto with *; eauto.
+    - right; right. eexists. auto with *; eauto.
   Qed.
 
 End LCLOCKEDSEMANTICS.

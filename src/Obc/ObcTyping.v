@@ -512,7 +512,7 @@ Module Type OBCTYPING
         rewrite Forall2_swap_args in Hevals.
         match goal with H:Forall2 _ es fm.(m_in) |- _ => rename H into Hes end.
         apply all_In_Forall2.
-        now rewrite <-(Forall2_length _ _ _ Hes), (Forall2_length _ _ _ Hevals).
+        now rewrite <- (@Forall2_length _ _ _ _ _ Hes), (@Forall2_length _ _ _ _ _ Hevals).
         intros x v Hin.
         apply Forall2_chain_In' with (1:=Hevals) (2:=Hes) in Hin.
         destruct Hin as (e & Hexp & Hty & Hxy & Hyv).

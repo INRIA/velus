@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 # Test if VELUS_DIR is set to avoid going into the home directory
 if [ -z ${VELUS_DIR+x} ]; then VELUS_DIR=.; fi

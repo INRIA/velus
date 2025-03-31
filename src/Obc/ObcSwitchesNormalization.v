@@ -172,8 +172,8 @@ Module Type OBCSWITCHESNORMALIZATION
                 repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
                 destruct os; simpl in *; try contradiction.
                 now apply it.
-             ++ simpl; rewrite map_length; lia.
-             ++ now rewrite length_removelast_cons, map_length.
+             ++ simpl; rewrite length_map; lia.
+             ++ now rewrite length_removelast_cons, length_map.
           -- rewrite nth_error_app3 in Nth; inv Nth; simpl in *.
              ++ econstructor.
                 ** eauto.
@@ -188,25 +188,25 @@ Module Type OBCSWITCHESNORMALIZATION
                    repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
                    destruct (last (o :: ss) None); simpl in *; try contradiction.
                    now apply it.
-             ++ now rewrite length_removelast_cons, map_length.
+             ++ now rewrite length_removelast_cons, length_map.
           -- contradict Nth.
              apply not_Some_is_None, nth_error_None.
-             rewrite app_length, length_removelast_cons, map_length; simpl; lia.
+             rewrite length_app, length_removelast_cons, length_map; simpl; lia.
         * pose proof Nth as Hin; apply nth_error_In in Hin.
           repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
           destruct (Compare_dec.lt_eq_lt_dec c (length ss)) as [[|]|].
           -- econstructor; eauto.
              ++ rewrite nth_error_app1, nth_error_removelast, <-map_cons,
                 map_nth_error', Nth; simpl; eauto.
-                ** rewrite map_length; lia.
-                ** now rewrite length_removelast_cons, map_length.
+                ** rewrite length_map; lia.
+                ** now rewrite length_removelast_cons, length_map.
              ++ destruct s0; simpl in *; try contradiction.
                 now apply it.
           -- rewrite nth_error_last with (d := None) in Nth; auto.
              inv Nth.
              econstructor; eauto.
              ++ rewrite nth_error_app3; eauto.
-                now rewrite length_removelast_cons, map_length.
+                now rewrite length_removelast_cons, length_map.
              ++ simpl.
                 rewrite <-map_cons.
                 change None with (option_map normalize_stmt None).
@@ -345,7 +345,7 @@ Module Type OBCSWITCHESNORMALIZATION
     unfold normalize_switch.
     destruct (has_default_branch (map (option_map normalize_stmt) ss)) eqn: E.
     - econstructor; eauto.
-      + now rewrite map_length.
+      + now rewrite length_map.
       + intros * Hin; apply in_map_iff in Hin as (?& Eq & Hin).
         pose proof Hin.
         apply option_map_inv in Eq as (?&?&?); subst.
@@ -356,7 +356,7 @@ Module Type OBCSWITCHESNORMALIZATION
       destruct Eq; subst.
       econstructor; eauto.
       + destruct ss; simpl in *; subst; simpl; auto.
-        rewrite app_length, length_removelast_cons, map_length; simpl; lia.
+        rewrite length_app, length_removelast_cons, length_map; simpl; lia.
       + destruct ss; simpl in *.
         * Transparent last.
           simpl; auto.

@@ -89,7 +89,7 @@ Module Env.
     Proof.
       intros * Heq.
       unfold map, mapi in *.
-      eapply xmapi_ext; intuition.
+      eapply xmapi_ext; auto with *.
     Qed.
 
     Lemma map_Equiv {B} {Ra: A -> A -> Prop} {Rb: B -> B -> Prop} : forall (f : A -> B) (m1 m2: t A),
@@ -160,7 +160,7 @@ Module Env.
              find x (adds_with f xvs s) = find x s).
       Proof.
         induction xvs as [|(x', v')].
-        - intuition; destruct H; contradiction.
+        - auto with *; destruct H; contradiction.
         - split.
           + simpl; intros [?|Hin].
             *{ subst.
@@ -190,7 +190,7 @@ Module Env.
           (exists b, List.In (x, b) xvs /\ f b = a)
           \/ (~ InMembers x xvs /\ find x m = Some a).
       Proof.
-        induction xvs as [|(x', v') xs IH]; simpl. now intuition.
+        induction xvs as [|(x', v') xs IH]; simpl. now auto with *.
         intros * Hfind. apply IH in Hfind as [(?&?&?)|(Hnim & Hfind)]; eauto.
         destruct (Pos.eq_dec x' x).
         - subst. rewrite gss in Hfind.
@@ -415,7 +415,7 @@ Module Env.
         (In x (adds xs vs m) <-> (List.In x xs \/ In x m)).
     Proof.
       unfold adds; intros.
-      rewrite In_adds_spec', <-In_InMembers_combine; auto; intuition.
+      rewrite In_adds_spec', <-In_InMembers_combine; auto; auto with *.
     Qed.
 
     Lemma adds_opt_nil_nil:
@@ -555,10 +555,10 @@ Module Env.
           inversion LR as [LR1 LR2|??? LR1 LR2]; symmetry in LR1, LR2.
           * apply Env.Props.P.F.not_find_in_iff in LR1.
             apply Env.Props.P.F.not_find_in_iff in LR2.
-            intuition.
+            auto with *.
           * apply find_In in LR1.
             apply find_In in LR2.
-            intuition.
+            auto with *.
         + intros x v v' MS MT.
           apply find_1 in MS.
           apply find_1 in MT.
@@ -761,7 +761,7 @@ Module Env.
       intros x ys vs env Hin.
       revert vs; induction ys; intro vs; simpl; auto.
       rewrite find_gsso_opt.
-      - apply IHys. intuition.
+      - apply IHys. auto with *.
       - intro. apply Hin. now left.
     Qed.
 
@@ -801,13 +801,13 @@ Module Env.
       setoid_rewrite Props.P.F.in_find_iff.
       induction xs as [|y xs' IH].
       - intros vos x; unfold adds_opt.
-        destruct vos; simpl; rewrite gempty; intuition.
+        destruct vos; simpl; rewrite gempty; auto with *.
       - intros vos x.
         destruct vos as [|vo vos].
-        + now unfold adds_opt; simpl; rewrite gempty; intuition.
+        + now unfold adds_opt; simpl; rewrite gempty; auto with *.
         + destruct (Pos.eq_dec x y).
           *{ subst; destruct vo.
-             - now rewrite find_gsss_opt; intuition.
+             - now rewrite find_gsss_opt; auto with *.
              - now rewrite adds_opt_cons_cons_None; intro HH; apply IH in HH; constructor 2.
            }
           * rewrite find_gsso_opt; auto.
@@ -930,7 +930,7 @@ Module Env.
         find x (adds' xs s) = Some v
         -> List.In (x, v) xs \/ (~InMembers x xs /\ find x s = Some v).
     Proof.
-      induction xs as [|(x', v') xs IH]; simpl. now intuition.
+      induction xs as [|(x', v') xs IH]; simpl. now auto with *.
       intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
       destruct (ident_eq_dec x' x).
       + subst. rewrite Env.gss in Hfind.
@@ -2120,7 +2120,7 @@ Module Env.
       intros ? x ys vs env Hin.
       revert vs; induction ys; intro vs; simpl; auto.
       rewrite find_gsso_opt'.
-      - apply IHys. rewrite Ino_In in *. intuition.
+      - apply IHys. rewrite Ino_In in *. auto with *.
       - intro. apply Hin. rewrite Ino_In. now left.
     Qed.
 
@@ -2183,7 +2183,7 @@ Module Env.
         = Env.find x (adds_opt' xs vs (adds_opt' xs' vs' e)).
     Proof.
       intros * Hino Hin.
-      revert dependent x. revert vs. induction xs; intros; inv Hin.
+      generalize dependent x. revert vs. induction xs; intros; inv Hin.
       destruct a as [p|]; take (LiftO _ _ _) and inv it. destruct vs.
       do 2 rewrite adds_opt'_nil'.
          specialize (Hino p). simpl in Hino.

@@ -374,7 +374,7 @@ Module Type CSCLOCKING
             right; left; inv Hini; simpl_In. econstructor; solve_In; auto.
           * rewrite HasClock_app; left.
             eapply rename_var_wc; eauto.
-          * apply mmap_length in H9. destruct x, branches; simpl in *; try congruence.
+          * apply mlength_map in H9. destruct x, branches; simpl in *; try congruence.
           * eapply mmap_values, Forall2_ignore1 in H9. simpl_Forall.
             simpl_app. rewrite 2 HasClock_app. do 2 right. repeat inv_bind.
             eapply new_idents_In with (ids1:=filter _ _) in H16; eauto.
@@ -384,7 +384,7 @@ Module Type CSCLOCKING
             simpl; rewrite map_app; auto. auto.
         + eapply CS.mmap2_values in H12. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H9.
           2:{ eapply Forall3_length in H12 as (?&?); congruence. }
-          2:{ eapply mmap_length in H9; eauto. }
+          2:{ eapply mlength_map in H9; eauto. }
           eapply Forall3_Forall3 in H9; eauto. clear H12.
           apply Forall_concat. eapply Forall3_ignore12 in H9. simpl_Forall.
           repeat inv_branch. repeat inv_bind.

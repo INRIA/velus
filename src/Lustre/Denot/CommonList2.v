@@ -127,14 +127,14 @@ Proof.
   induction xs, ys; simpl; auto.
 Qed.
 
-Lemma combine_length' :
+Lemma length_combine' :
   forall A B,
   forall (l : list A) (l' : list B),
     length l = length l' ->
     length (combine l l') = length l.
 Proof.
   intros.
-  rewrite combine_length.
+  rewrite length_combine.
   lia.
 Qed.
 
@@ -212,7 +212,7 @@ Lemma Forall2_Forall3 :
     Forall3 (fun x y z => P x y /\ Q y z) xs ys zs.
 Proof.
   intros * Hp Hq.
-  revert dependent zs.
+  generalize dependent zs.
   induction Hp; intros; simpl_Forall.
   constructor.
   inversion_clear Hq. constructor; auto.
@@ -254,7 +254,7 @@ Lemma concat_length_sum :
     length (concat l) = list_sum (List.map (@length A) l).
 Proof.
   induction l; simpl; auto.
-  rewrite app_length; lia.
+  rewrite List.length_app; lia.
 Qed.
 
 Lemma length_app_decomp :
@@ -269,7 +269,7 @@ Proof.
   - exists [],l. auto.
   - destruct (IHn (S m)) as (l1 & [| x l2] &?&?&?); simpl in *; try lia.
     exists (l1 ++ [x]),l2.
-    rewrite <- app_assoc, app_length; simpl.
+    rewrite <- app_assoc, List.length_app; simpl.
     repeat split; auto; lia.
 Qed.
 
@@ -496,8 +496,8 @@ Section Forall2_relation.
            as F2_morph2.
   Proof.
     intros P Q PQ xs1 xs2 Ha ys1 ys2 Hb Hf.
-    revert dependent xs2.
-    revert dependent ys2.
+    generalize dependent xs2.
+    generalize dependent ys2.
     induction Hf; intros; inv Ha; inv Hb; constructor; eauto.
     eapply PQ; eauto.
   Qed.
@@ -510,8 +510,8 @@ Section Forall2_relation.
     split; intro Hf.
     - refine (F2_morph2 _ _ _ _ _ _ _ _ _ _); eauto.
       intros ???????; edestruct PQ; eauto.
-    - revert dependent xs1.
-      revert dependent ys1.
+    - generalize dependent xs1.
+      generalize dependent ys1.
       induction Hf; intros; inv Ha; inv Hb; constructor; eauto.
       eapply PQ; eauto.
   Qed.
@@ -587,7 +587,7 @@ Section Forall2t.
         eapply Forall_map, Forall_impl; eauto.
         intros [] **; simpl in *; lia.
     - intro Nth.
-      revert dependent ll.
+      generalize dependent ll.
       induction l as [| x l]; intros.
       { constructor; simpl_Forall; now apply symmetry, length_zero_iff_nil. }
       constructor.
@@ -643,11 +643,11 @@ Section Forall2t.
     destruct l as [|[] l].
     1,2: contradict H; eauto.
     simpl.
-    rewrite 2 app_length.
+    rewrite 2 List.length_app.
     assert (le (length (concat (map (tl (A:=A)) l))) (length (concat l))); auto with arith.
     clear.
     induction l; simpl; auto.
-    rewrite 2 app_length.
+    rewrite 2 List.length_app.
     destruct a; simpl; auto with arith.
   Qed.
 
@@ -661,17 +661,17 @@ Section Forall2t.
       - destruct k; auto.
         destruct l as [|[]]; simpl in *; try congruence.
         inv H; simpl in *; congruence.
-      - constructor; auto using map_length.
+      - constructor; auto using length_map.
         eapply Forall_impl in Hf; eauto.
         simpl; intros * HH.
-        now rewrite map_length in HH.
+        now rewrite length_map in HH.
     }
     destruct (Nat.lt_ge_cases n (length l)) as [Lt|Le].
     2:{ rewrite (nth_overflow _ _ Le), nth_nil.
-        cases. rewrite nth_overflow; auto; now rewrite map_length.
+        cases. rewrite nth_overflow; auto; now rewrite length_map.
         rewrite Ht, nth_overflow; auto.
         rewrite nth_overflow; simpl; auto with arith.
-        now rewrite map_length.
+        now rewrite length_map.
     }
     cases; simpl.
     erewrite map_nth', hd_nth; eauto.
@@ -700,7 +700,7 @@ Section Forall2t.
     assert ((nth n ll' []) =  (map (fun l => nth n l d) ll)) as ->.
     2: apply Hft; congruence.
     eapply list_eq_ext with d.
-    - eapply Forall_nth in Hf as ->; auto using map_length.
+    - eapply Forall_nth in Hf as ->; auto using length_map.
     - intros m Hm.
       (* TODO: il y a sans doute plus propre à faire... *)
       erewrite Ht, map_nth'; auto.
@@ -776,7 +776,7 @@ Proof.
     apply in_combine_r in H0.
     simpl_Forall; subst; auto. }
   unshelve rewrite 2 Forall2t_forall2; auto.
-  2:{ simpl_Forall; rewrite map_length.
+  2:{ simpl_Forall; rewrite length_map.
       apply in_combine_r in H.
       eapply Forall_forall in Hl; eauto. }
   intros Hp k Hk.
@@ -791,7 +791,7 @@ Proof.
   apply in_combine_r in Hin as Hr.
   eapply Forall_forall in Hl; eauto.
   erewrite nth_indep, map_nth; eauto.
-  rewrite map_length; lia.
+  rewrite length_map; lia.
 Qed.
 
 (** On peut simuler un Forall3t en ajoutant une colonne supplémentaire

@@ -3,7 +3,6 @@ Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
-From Coq Require Import NPeano.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
@@ -104,7 +103,7 @@ Module Type INDEXEDTOCOIND
       length (seq_streams str m) = m.
   Proof.
     intros; unfold seq_streams.
-    now rewrite map_length, seq_length.
+    now rewrite length_map, length_seq.
   Qed.
 
   (** The [n]th element of the range-built list of Streams starting at 0 is *)
@@ -117,7 +116,7 @@ Module Type INDEXEDTOCOIND
     unfold seq_streams; intros.
     rewrite map_nth' with (d':=0); simpl.
     - rewrite seq_nth; auto; lia.
-    - rewrite seq_length; lia.
+    - rewrite length_seq; lia.
   Qed.
 
   Corollary nth_tr_streams_from_nth:
@@ -138,7 +137,7 @@ Module Type INDEXEDTOCOIND
   Proof.
     intros * Len.
     apply Forall2_eq, Forall2_forall2.
-    split; unfold_tr_streams; rewrite map_length.
+    split; unfold_tr_streams; rewrite length_map.
     - now rewrite 2 seq_streams_length.
     - intros * Hlen E1 E2; rewrite <-E1, <-E2.
       rewrite map_nth' with (d':=a); auto.
@@ -277,7 +276,7 @@ Module Type INDEXEDTOCOIND
         + apply whenb_nth. intros n0.
           repeat rewrite init_from_nth.
           specialize (Spec (n0 + n)%nat) as [(?&?&?)|[(?&?)|(?&?&?&?&?)]]; eauto.
-          right; left. eexists. intuition; eauto.
+          right; left. eexists. auto with *; eauto.
     Qed.
 
     Corollary sem_clock_impl:

@@ -361,7 +361,7 @@ Module Type TR
     right. auto.
   Defined.
 
-  Remark mmap_length:
+  Remark mlength_map:
     forall {A B : Type} (f: A -> res B) l l',
       mmap f l = OK l' ->
       length l' = length l.
@@ -841,7 +841,7 @@ Module Type TR
       induction 1; simpl;
         setoid_rewrite <- app_nil_l at 4;
         setoid_rewrite suffix_of_clock_app;
-        rewrite app_length; simpl; lia.
+        rewrite length_app; simpl; lia.
     Qed.
 
     Lemma parent_common_suffix :
@@ -913,7 +913,7 @@ Module Type TR
         prefix l1 (l2 ++ [e]) ->
         prefix l1 l2 \/ l1 = (l2 ++ [e]).
     Proof.
-      intros * Hp. revert dependent l1.
+      intros * Hp. generalize dependent l1.
       induction l2; simpl; intros.
       - inv Hp; auto with datatypes. inv H1; auto.
       - inv Hp; auto with datatypes. specialize (IHl2 _ H1) as []; auto with datatypes.
@@ -956,7 +956,7 @@ Module Type TR
           rewrite suffix_of_clock_app. apply prefix_app.
         + setoid_rewrite <- app_nil_l at 4.
           rewrite suffix_of_clock_app. now apply prefix_app'.
-      - intro Hp. revert dependent bk.
+      - intro Hp. generalize dependent bk.
         induction ck; intros.
         + simpl in *. inv Hp. destruct bk; simpl in *; auto.
           setoid_rewrite <- app_nil_l in H0 at 3.
@@ -978,7 +978,7 @@ Module Type TR
         prefix p sfx2 ->
         prefix p (common_suffix sfx1 sfx2).
     Proof.
-      intros. revert dependent sfx2.
+      intros. generalize dependent sfx2.
       induction H as [|a]. auto with datatypes. intros * Hp. simpl. destruct a.
       destruct sfx2. inv Hp. destruct p. inv Hp.
       rewrite equiv_decb_refl, Pos.eqb_refl. simpl. constructor. auto.
@@ -1024,7 +1024,7 @@ Module Type TR
       destruct lck. inversion 1.
       simpl. intros * Hin Hf. rewrite <- fold_left_map.
       apply Forall_cons2 in Hf as [Hf1 Hf2].
-      revert dependent c. induction lck. simpl. intros.
+      generalize dependent c. induction lck. simpl. intros.
       inv Hin; try tauto.
       now rewrite clock_of_suffix_of_clock.
       simpl. apply Forall_cons2 in Hf2 as [? Hf]. specialize (IHlck Hf).

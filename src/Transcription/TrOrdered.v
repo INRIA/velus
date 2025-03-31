@@ -46,13 +46,13 @@ Module Type TRORDERED
     intros * Htr Hord.
     destruct n'. simpl in Hord.
     tonodeInv Htr. cases. do 2 constructor.
-    clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. revert dependent n_eqs.
+    clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. generalize dependent n_eqs.
     induction l1; intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.
     destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
     inversion_clear Hord as [ ? ? Hord' |].
     - constructor. clear IHl1 Hmmap.
-      revert dependent eq'. generalize (@nil (ident * clock)) as xr.
+      generalize dependent eq'. generalize (@nil (ident * clock)) as xr.
       induction a using L.block_ind2; intros; simpl in *;
         try solve [monadInv Hteq].
       + destruct eq' as [| | i ck x le |]; inv Hord'.
@@ -82,7 +82,7 @@ Module Type TRORDERED
       Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
     intros ? [] ? Hnames Htog. monadInv Htog.
-    revert dependent x.
+    generalize dependent x.
     induction nodes; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
     - erewrite <-to_node_name; eauto.
     - eapply IHnodes in EQ; eauto.
@@ -95,7 +95,7 @@ Module Type TRORDERED
       Ord.Ordered_nodes P.
   Proof.
     intros [] ? Htr Hord. monadInv Htr.
-    revert dependent x.
+    generalize dependent x.
     unfold Lord.Ordered_nodes, CommonProgram.Ordered_program in Hord; simpl in Hord.
     induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
     constructor.

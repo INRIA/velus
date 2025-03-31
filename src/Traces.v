@@ -181,10 +181,10 @@ Section LTrace.
     destruct (node.(n_in)). now inv H0. now inversion 1.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idfst; rewrite 3 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 3 length_map; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idfst; rewrite 4 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 4 length_map; auto.
   Qed.
 
   Lemma trace_node_step:
@@ -200,4 +200,3 @@ Section LTrace.
   Qed.
 
 End LTrace.
-

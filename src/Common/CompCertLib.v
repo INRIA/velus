@@ -198,7 +198,7 @@ Section IterError.
   Proof.
     unfold iter_error.
     induction l; simpl.
-    - intuition.
+    - auto with *.
     - split; intros H.
       + monadInv H.
         take (unit) and destruct it.
@@ -384,13 +384,13 @@ Lemma two_power_nat_le_divides:
 Proof.
   intros m n HH.
   repeat rewrite two_power_nat_equiv in HH.
-  rewrite <-Z.pow_le_mono_r_iff in HH; intuition.
+  rewrite <-Z.pow_le_mono_r_iff in HH; auto with *.
   apply Z.le_exists_sub in HH.
   destruct HH as [p [HH1 HH2]].
   rewrite <- (Z2Nat.id p) in HH1; eauto.
   apply Zdivide_intro with (q:=two_power_nat (Z.to_nat p)).
   repeat rewrite two_power_nat_equiv.
-  rewrite <-Z.pow_add_r; intuition.
+  rewrite <-Z.pow_add_r; auto with *.
   rewrite HH1.
   reflexivity.
 Qed.
@@ -456,7 +456,7 @@ Proof.
   - simpl. rewrite peq_false.
     + now apply IH with (1:=Hndup) (2:=Heq).
     + intro; subst.
-      apply NotInMembers_NotIn in Heq; intuition.
+      apply NotInMembers_NotIn in Heq; auto with *.
 Qed.
 
 Lemma field_offset_type:
@@ -817,7 +817,11 @@ Proof.
       apply IHl; auto.
   - intros (x, t).
     specialize (H Nodup x t).
-    intuition.
+    destruct H.
+    split.
+    + intuition.
+    + intuition auto.
+      inversion H2.
 Qed.
 
 Lemma Permutation_set:

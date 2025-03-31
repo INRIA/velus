@@ -47,8 +47,8 @@ Module Type NLORDERED
     Proof.
       intros n eq eqs.
       split; intro HH.
-      - split; intro; apply HH; unfold Is_node_in; intuition.
-      - destruct HH; inversion_clear 1; intuition.
+      - split; intro; apply HH; unfold Is_node_in; auto with *.
+      - destruct HH; inversion_clear 1; auto with *.
     Qed.
 
     Lemma Is_node_in_Forall:
@@ -64,7 +64,7 @@ Module Type NLORDERED
       - apply not_Is_node_in_cons.
         inversion_clear HH as [|? ? Heq Heqs].
         apply IH in Heqs.
-        intuition.
+        auto with *.
     Qed.
 
   End Is_node_Properties.

@@ -101,12 +101,12 @@ Module Type CCTYPING
       induction e using cexp_ind2'; intros * Wt; inv Wt; simpl.
       - (* merge *)
         econstructor; simpl_Forall; eauto.
-        + now rewrite map_length.
+        + now rewrite length_map.
         + now rewrite rename_cexp_typeofc.
       - (* case *)
         econstructor; simpl_Forall; eauto using rename_exp_wt.
         + now rewrite rename_exp_typeof.
-        + now rewrite map_length.
+        + now rewrite length_map.
         + intros * In. simpl_In. repeat take (forall e, In _ l -> _) and specialize (it _ Hin).
           now rewrite 2 rename_cexp_typeofc.
         + intros * In. simpl_In. repeat take (forall e, In _ l -> _) and specialize (it _ Hin).

@@ -180,7 +180,7 @@ Module Type SCCLOCKING
       - simpl_Forall; subst; auto.
       - contradict H5. eapply map_eq_nil; eauto.
       - simpl_Forall; subst; auto.
-      - rewrite map_length; auto.
+      - rewrite length_map; auto.
       - contradict H4. apply map_eq_nil in H4; auto.
       - simpl_Forall. auto.
       - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
@@ -188,7 +188,7 @@ Module Type SCCLOCKING
         eapply Forall_forall in H6; eauto; simpl in H6.
         eapply Forall_impl; [|eauto]; intros; subst; auto.
       - simpl_Forall.
-        now rewrite subclock_exp_clocksof, map_length.
+        now rewrite subclock_exp_clocksof, length_map.
       - now rewrite H6.
       - contradict H7. apply map_eq_nil in H7; auto.
       - simpl_Forall; auto.
@@ -197,7 +197,7 @@ Module Type SCCLOCKING
         eapply Forall_forall in H9; eauto; simpl in H9.
         eapply Forall_impl; [|eauto]; intros; subst; auto.
       - simpl_Forall.
-        now rewrite subclock_exp_clocksof, map_length.
+        now rewrite subclock_exp_clocksof, length_map.
       - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
         specialize (H11 _ eq_refl).
         rewrite Forall_map. rewrite Forall_forall in *; eauto.
@@ -206,24 +206,24 @@ Module Type SCCLOCKING
         rewrite subclock_exp_clocksof, Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
       - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
         specialize (H13 _ eq_refl).
-        now rewrite subclock_exp_clocksof, map_length.
+        now rewrite subclock_exp_clocksof, length_map.
       - (* app *)
         remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es))))) as sub2.
         assert (length (n_in n) = length (nclocksof (map (subclock_exp bck sub subl) es))) as Len.
         { apply Forall2_length in H8.
-          rewrite ? map_length, ? length_nclocksof_annots, <-? length_clocksof_annots, ? subclock_exp_clocksof, ? map_length in *.
+          rewrite ? length_map, ? length_nclocksof_annots, <-? length_clocksof_annots, ? subclock_exp_clocksof, ? length_map in *.
           auto. }
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox)
                   (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es))) as Hsub2.
-        { apply Forall2_forall; split; [|now rewrite map_length].
+        { apply Forall2_forall; split; [|now rewrite length_map].
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es)))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es)))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers; [|now rewrite map_length].
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers; [|now rewrite length_map].
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.
@@ -279,18 +279,18 @@ Module Type SCCLOCKING
                                             (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es))))) as sub2.
         assert (length (n_in n) = length (nclocksof (map (subclock_exp bck sub subl) es))) as Len.
         { apply Forall2_length in H4.
-          rewrite ? map_length, ? length_nclocksof_annots, <-? length_clocksof_annots, ? subclock_exp_clocksof, ? map_length in *.
+          rewrite ? length_map, ? length_nclocksof_annots, <-? length_clocksof_annots, ? subclock_exp_clocksof, ? length_map in *.
           auto. }
         assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox)
                   (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es))) as Hsub2.
-        { apply Forall2_forall; split; [|now rewrite map_length].
+        { apply Forall2_forall; split; [|now rewrite length_map].
           intros (?&?) (?&?) Hin'.
           assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es)))) as Hin2.
           { repeat setoid_rewrite combine_map_fst in Hin'.
             eapply in_map_iff in Hin' as (((?&(?&?)&?)&?&?)&Heq&?); inv Heq.
             rewrite combine_map_fst. eapply in_map_iff. do 2 esplit; eauto. simpl; auto. }
           assert (NoDupMembers (combine (map fst (n_in n)) (nclocksof (map (subclock_exp bck sub subl) es)))) as Hnd1.
-          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers; [|now rewrite map_length].
+          { rewrite fst_NoDupMembers, combine_map_fst', <-fst_NoDupMembers; [|now rewrite length_map].
             pose proof (n_nodup n) as (Hnd1&_). apply fst_NoDupMembers; eauto using NoDup_app_l. }
           destruct o; simpl; subst.
           - eapply Env.find_In_from_list.

@@ -300,7 +300,7 @@ Proof.
   assert (Hl : length (pStr ins) = length (n_in n')).
   { apply Forall2_length in Hf2.
     unfold pStr in *.
-    repeat rewrite map_length in *; auto. }
+    repeat rewrite length_map in *; auto. }
   split; auto.
   apply Hwt in Hfind as Hwti.
   unfold NLCorrectness.wt_streams in Hwti.
@@ -330,10 +330,10 @@ Proof.
     erewrite env_of_np_nth , nth_nprod_of_Ss with (k:=k); auto.
     unfold pStr. rewrite map_nth.
     apply DSForall_DS_of_S, SForall_map, SForall_map; eauto.
-    all: unfold pStr, idents, idfst in *; repeat rewrite map_length in *; try congruence.
+    all: unfold pStr, idents, idfst in *; repeat rewrite length_map in *; try congruence.
     unfold mem_nth.
     rewrite CommonList2.mem_nth_nth; auto using node_NoDup_in.
-    rewrite map_length; auto.
+    rewrite length_map; auto.
   - (* cl_DS *)
     apply HasClock_In in Hck.
     unfold cl_DS.
@@ -358,10 +358,10 @@ Proof.
         rewrite HU; simpl. rewrite AC_cons, rem_cons; auto.
         rewrite HV, DS_const_eq, rem_cons at 1; auto.
       }
-      all: unfold idents, pStr in *; repeat rewrite map_length in *; try congruence.
+      all: unfold idents, pStr in *; repeat rewrite length_map in *; try congruence.
     unfold mem_nth.
     rewrite CommonList2.mem_nth_nth; auto using node_NoDup_in.
-    rewrite map_length; auto. }
+    rewrite length_map; auto. }
     clear HH; rewrite Henv; auto.
     assert (bss (idents (n_in n')) env == DS_const true) as ->.
     { assert  ((idents (n_in n'))  <> []) as Hn0.
@@ -392,10 +392,10 @@ Proof.
       unfold pStr. rewrite map_nth.
       apply DSForall_DS_of_S, SForall_map, SForall_map; simpl; eauto.
       apply SForall_forall; auto.
-      all: unfold idents, pStr in *; repeat rewrite map_length in *; try congruence.
+      all: unfold idents, pStr in *; repeat rewrite length_map in *; try congruence.
     unfold mem_nth.
     rewrite CommonList2.mem_nth_nth; auto using node_NoDup_in.
-    rewrite map_length; auto.
+    rewrite length_map; auto.
     Unshelve.
     all: eauto. all: try exact (Streams.const (Vscalar Values.Vundef)).
     exact (Streams.const absent).

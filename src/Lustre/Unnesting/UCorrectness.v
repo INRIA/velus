@@ -526,7 +526,7 @@ Module Type UCORRECTNESS
               eapply Forall_impl_In; [|eapply Hlen]; intros (?&?) Hin Hl; simpl in *.
               destruct l0; simpl in *; try congruence.
               eapply Forall_forall in Hnum; eauto. inv Hnum.
-              rewrite app_length, length_annot_numstreams, H4 in Hl. inv Hl; auto.
+              rewrite length_app, length_annot_numstreams, H4 in Hl. inv Hl; auto.
             * rewrite Forall_map.
               eapply Forall_impl; [|eapply Hnum]; intros (?&?) Hf; simpl in *.
               inv Hf; simpl in *; auto.
@@ -581,7 +581,7 @@ Module Type UCORRECTNESS
               eapply Forall_impl_In; [|eapply Hlen]; intros (?&?) Hin Hl; simpl in *.
               destruct l0; simpl in *; try congruence.
               eapply Forall_forall in Hnum; eauto. inv Hnum.
-              rewrite app_length, length_annot_numstreams, H4 in Hl. inv Hl; auto.
+              rewrite length_app, length_annot_numstreams, H4 in Hl. inv Hl; auto.
             * rewrite Forall_map.
               eapply Forall_impl; [|eapply Hnum]; intros (?&?) Hf; simpl in *.
               inv Hf; simpl in *; auto.
@@ -603,7 +603,7 @@ Module Type UCORRECTNESS
         eapply Forall2_forall2; split; auto; intros; subst.
         apply sem_var_union3', sem_var_of_list; eauto using NoDup_NoDupMembers_combine.
         rewrite <-combine_nth; auto. apply nth_In.
-        now rewrite combine_length, <-Hlen, Nat.min_id.
+        now rewrite length_combine, <-Hlen, Nat.min_id.
       Qed.
 
       Fact mmap2_sem : forall b is_control es H vs es' eqs' st st',
@@ -865,7 +865,7 @@ Module Type UCORRECTNESS
 
           assert (Forall2 (sem_var H'''') (List.map (fun '(x, _) => Var x) x5) vs) as Hsemvars.
           { rewrite HeqH''''. eapply sem_new_vars; eauto.
-            + rewrite map_length; auto.
+            + rewrite length_map; auto.
             + eapply idents_for_anns_NoDup in H4; eauto. }
 
           assert (FEnv.refines (@EqSt _) H'' H'''') as Href4.
@@ -936,7 +936,7 @@ Module Type UCORRECTNESS
 
           assert (Forall2 (sem_var H'''') (map (fun '(x, _) => Var x) x5) vs) as Hsemvars.
           { rewrite HeqH''''. eapply sem_new_vars; eauto.
-            + rewrite map_length; auto.
+            + rewrite length_map; auto.
             + eapply idents_for_anns_NoDup in H4; eauto. }
 
           assert (FEnv.refines (@EqSt _) H'' H'''') as Href4.
@@ -1017,7 +1017,7 @@ Module Type UCORRECTNESS
             { subst. eapply idents_for_anns_refines...
               destruct Histst1 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi2) (map (fun '(x, _) => Var x) x3) vs) as Hvars.
-            { rewrite HeqHi2. eapply sem_new_vars... 1:rewrite map_length...
+            { rewrite HeqHi2. eapply sem_new_vars... 1:rewrite length_map...
               eapply idents_for_anns_NoDup... }
             exists Hi2. split;[|split;[|split]]; eauto with norm.
             * repeat (etransitivity; eauto).
@@ -1081,7 +1081,7 @@ Module Type UCORRECTNESS
                 inv H21; try congruence. simpl_Forall.
                 solve_length. }
               eapply Forall3_forall3. repeat split; auto.
-              + now rewrite map_length.
+              + now rewrite length_map.
               + intros * N Nth1 Nth2 Nth3.
                 erewrite map_nth' with (d':=OpAux.bool_velus_type) in Nth2; [|congruence]; subst.
                 eapply Case; eauto.
@@ -1104,7 +1104,7 @@ Module Type UCORRECTNESS
             { subst. eapply idents_for_anns_refines...
               destruct Histst2 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi3) (map (fun '(x, _) => Var x) x) vs) as Hvars.
-            { rewrite HeqHi3. eapply sem_new_vars... 1:rewrite map_length...
+            { rewrite HeqHi3. eapply sem_new_vars... 1:rewrite length_map...
               eapply idents_for_anns_NoDup; eauto. }
             exists Hi3. split;[|split;[|split]]; eauto with norm.
             * repeat (etransitivity; eauto).
@@ -1193,7 +1193,7 @@ Module Type UCORRECTNESS
             { subst. eapply idents_for_anns_refines...
               destruct Histst3 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi4) (map (fun '(x, _) => Var x) x) vs) as Hvars.
-            { rewrite HeqHi4. eapply sem_new_vars... 1:rewrite map_length...
+            { rewrite HeqHi4. eapply sem_new_vars... 1:rewrite length_map...
               eapply idents_for_anns_NoDup; eauto. }
             exists Hi4. split;[|split;[|split]]; eauto with norm.
             * repeat (etransitivity; eauto).
@@ -1236,12 +1236,12 @@ Module Type UCORRECTNESS
           specialize (idents_for_anns_length _ _ _ _ H5) as Hlength1.
           assert (length (n_out n) = length vs) as Hlength2.
           { specialize (H23 0). inv H23. rewrite H12 in H7; inv H7. apply Forall2_length in H9.
-            unfold idents in *. repeat rewrite map_length in H9. auto. }
+            unfold idents in *. repeat rewrite length_map in H9. auto. }
           assert (length es = length ss) as Hlength3.
           { apply Forall2_length in H19... }
           assert (length (concat x6) = length (n_in n)) as Hlength4.
           { eapply mmap2_unnest_exp_length in H2; eauto with lclocking. eapply Forall2_length in H13.
-            rewrite map_length in H13. rewrite H13. subst_length. now rewrite length_nclocksof_annots. }
+            rewrite length_map in H13. rewrite H13. subst_length. now rewrite length_nclocksof_annots. }
 
           assert (Hun1:=H2). eapply mmap2_sem in H2... clear H.
           destruct H2 as [H' [Href1 [Histst1 [Hsem1 Hsem1']]]].
@@ -1249,7 +1249,7 @@ Module Type UCORRECTNESS
           assert (Hun2:=H3). eapply unnest_noops_exps_sem in H3 as (H''&Href2&Histst2&Hsem2&Hsem2'); eauto.
           3:{ eapply mmap2_normalized_lexp in Hun1; eauto with lclocking. }
           4:eapply Forall2_concat; eauto.
-          2:{ unfold find_node_incks. now rewrite H12, map_length. }
+          2:{ unfold find_node_incks. now rewrite H12, length_map. }
           2:{ eapply mmap2_unnest_exp_wc in Hun1 as (?&?); eauto. }
 
           assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).
@@ -1283,13 +1283,13 @@ Module Type UCORRECTNESS
               rewrite concat_map_singl2. eapply HGref; eauto. }
           remember (H''' + FEnv.of_list (combine (map (fun '(x, _) => Var x) x8) vs)) as H''''.
           assert (length vs = length x8) as Hlen'.
-          { eapply Forall2_length in H14. rewrite 2 map_length in H14. solve_length. }
+          { eapply Forall2_length in H14. rewrite 2 length_map in H14. solve_length. }
           assert (FEnv.refines (@EqSt _) H''' H'''') as Href4.
           { subst. eapply idents_for_anns_refines...
             destruct Histst3 as (Hdom3&_); auto.
           }
           assert (Forall2 (sem_var H'''') (map (fun '(x, _) => Var x) x8) vs) as Hvars.
-          { rewrite HeqH''''. eapply sem_new_vars... 1:rewrite map_length...
+          { rewrite HeqH''''. eapply sem_new_vars... 1:rewrite length_map...
             eapply idents_for_anns_NoDup; eauto. }
           exists H''''. split;[|split;[|split]]...
           + repeat (etransitivity; eauto).
@@ -1415,7 +1415,7 @@ Module Type UCORRECTNESS
           repeat inv_bind.
           assert (length (concat x6) = length (n_in n)) as Hlength4.
           { eapply mmap2_unnest_exp_length in H0; eauto with lclocking.
-            eapply Forall2_length in H10. rewrite map_length in H10. solve_length.
+            eapply Forall2_length in H10. rewrite length_map in H10. solve_length.
             now rewrite length_nclocksof_annots. }
 
           assert (Hun1:=H0). eapply unnest_exps_sem in H0...
@@ -1424,7 +1424,7 @@ Module Type UCORRECTNESS
           assert (Hun2:=H1). eapply unnest_noops_exps_sem in H1 as (H''&Href2&Histst2&Hsem2&Hsem2'); eauto.
           3:{ eapply mmap2_normalized_lexp in Hun1; eauto with lclocking. }
           4:eapply Forall2_concat...
-          2:{ unfold find_node_incks. rewrite H9, map_length; auto. }
+          2:{ unfold find_node_incks. rewrite H9, length_map; auto. }
           2:{ eapply mmap2_unnest_exp_wc. 1,3:eauto. simpl_Forall; repeat solve_incl. }
 
           assert (length rs = length l0) as Hlen3 by (eapply Forall2_length in H18; eauto).
@@ -1542,12 +1542,12 @@ Module Type UCORRECTNESS
       Proof with eauto.
         induction es; intros vs Hlen; simpl in *...
         - destruct vs; simpl in *; auto; congruence.
-        - rewrite app_length in Hlen.
+        - rewrite length_app in Hlen.
           rewrite length_annot_numstreams in Hlen.
           destruct vs; constructor...
-          + rewrite firstn_length. lia.
+          + rewrite length_firstn. lia.
           + apply IHes.
-            rewrite skipn_length.
+            rewrite length_skipn.
             lia.
       Qed.
 
@@ -1568,9 +1568,9 @@ Module Type UCORRECTNESS
         - destruct v1s, v2s; simpl in *; inv Len.
           1,2:destruct n; simpl in *; inv Nth; eauto.
           + do 2 esplit; eauto.
-            rewrite 2 firstn_length. simpl. lia.
+            rewrite 2 length_firstn. simpl. lia.
           + eapply IHes in H1 as (?&?); eauto.
-            rewrite 2 skipn_length. simpl. cases; auto.
+            rewrite 2 length_skipn. simpl. cases; auto.
       Qed.
 
       Fact combine_for_numstreams_nth_2 {V1 V2} d1 d2 : forall es (v1s : list V1) (v2s : list V2) n n' e v1 v2,
@@ -1590,17 +1590,17 @@ Module Type UCORRECTNESS
           + destruct n; simpl in *.
             * inv Nth1. inv Nth2.
               assert (n' < numstreams e) as Lt.
-              { rewrite firstn_length in Len1. lia. }
+              { rewrite length_firstn in Len1. lia. }
               rewrite ? nth_firstn_1; auto.
               destruct n'; simpl; auto.
               right. rewrite <-combine_nth; auto. eapply nth_In.
-              rewrite combine_length. rewrite firstn_length in *. simpl in *. lia.
+              rewrite length_combine. rewrite length_firstn in *. simpl in *. lia.
             * eapply IHes in Nth1; eauto.
-              2:rewrite ? skipn_length; simpl; cases; lia.
+              2:rewrite ? length_skipn; simpl; cases; lia.
               destruct (numstreams a); simpl in *; auto. right.
               apply In_nth_error in Nth1 as (?&Nth3).
               apply combine_nth_error in Nth3 as (NthL&NthR).
-              apply nth_error_skipn in NthL. apply nth_error_skipn in NthR.
+              rewrite nth_error_skipn in NthL. rewrite nth_error_skipn in NthR.
               eapply nth_error_In, combine_nth_error; eauto.
       Qed.
 
@@ -1618,14 +1618,14 @@ Module Type UCORRECTNESS
         destruct equ as [xs es]. inv Hwt; inv Hsem.
         - (* app *)
           assert (length xs = length anns) as Hlen.
-          { eapply Forall3_length in H6 as (_&Hlen). rewrite map_length in Hlen; auto. }
+          { eapply Forall3_length in H6 as (_&Hlen). rewrite length_map in Hlen; auto. }
 
           unfold unnest_rhss in *.
           repeat inv_bind. unfold unnest_exps in H0; repeat inv_bind.
           inv H12; inv H16. inv H14. simpl in *; rewrite app_nil_r in *.
           assert (length (concat x) = length (n_in n)) as Hlength4.
           { eapply mmap2_unnest_exp_length in H0; eauto with lclocking.
-            eapply Forall2_length in H5. rewrite map_length in H5. solve_length.
+            eapply Forall2_length in H5. rewrite length_map in H5. solve_length.
             now rewrite length_nclocksof_annots. }
 
           assert (Hun1:=H0). eapply unnest_exps_sem in H0...
@@ -1634,7 +1634,7 @@ Module Type UCORRECTNESS
           assert (Hun2:=H1). eapply unnest_noops_exps_sem in H1 as (H''&Href2&Histst2&Hsem2&Hsem2'); eauto.
           3:{ eapply mmap2_normalized_lexp in Hun1; eauto with lclocking. }
           4:eapply Forall2_concat...
-          2:{ unfold find_node_incks. rewrite H4, map_length; auto. }
+          2:{ unfold find_node_incks. rewrite H4, length_map; auto. }
           2:{ eapply mmap2_unnest_exp_wc. 1,3:eauto. simpl_Forall; repeat solve_incl. }
 
           assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).

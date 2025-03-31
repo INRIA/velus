@@ -556,13 +556,13 @@ Module Type NLCOINDSEMANTICS
         as sem_cexp_morph.
   Proof.
     intros H H' EH b b' Eb e xs xs' Exs Sem.
-    revert b' xs' Eb Exs; revert dependent xs;
+    revert b' xs' Eb Exs; generalize dependent xs;
       induction e using cexp_ind2; intros; inv Sem.
     - econstructor; eauto.
       + erewrite <-EH; eauto.
       + instantiate (1 := ess).
         take (merge _ _ _) and clear it.
-        revert dependent ess; induction l; inversion_clear 1;
+        generalize dependent ess; induction l; inversion_clear 1;
           constructor; take (Forall _ _) and inv it; auto.
         take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.
@@ -570,7 +570,7 @@ Module Type NLCOINDSEMANTICS
       + rewrite <-EH, <-Eb; eauto.
       + instantiate (1 := ess).
         take (case _ _ _ _) and clear it.
-        revert dependent ess; induction l; inversion_clear 1;
+        generalize dependent ess; induction l; inversion_clear 1;
           constructor; take (Forall _ _) and inv it; auto.
         take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.

@@ -1447,17 +1447,19 @@ Section ElabDeclaration.
     forall {A: Type} x (xs: list (ident * A)) s,
       PS.In x (nameset s xs) <-> PS.In x s \/ In x (map fst xs).
   Proof.
-    induction xs as [|yv xs IH].
-    now intuition.
-    destruct yv as (y & v); simpl.
-    split; intro HH.
-    - apply IH in HH.
-      destruct HH as [HH|]; auto.
-      rewrite PSP.FM.add_iff in HH.
-      intuition.
-    - apply IH.
-      rewrite PSP.FM.add_iff.
-      intuition.
+    induction xs as [| [ y v ] xs IH]; intros.
+    - split; [ auto | ].
+      intros [ H | H ]; [ auto | inversion H ].
+    - split.
+      + intros H.
+        apply IH in H as [ H' | H' ].
+        * rewrite PSP.FM.add_iff in H'.
+          destruct H'; [ | auto ].
+          simpl in *.
+          auto.
+        * simpl in *.
+          auto.
+      + intros [ H | [ H | H ] ]; apply IH; auto with *.
   Qed.
 
   Fixpoint find_dup (xs : list ident) :=
@@ -2286,7 +2288,7 @@ Section ElabDeclaration.
     (* 0 < length xin *)
     rewrite Bool.orb_false_iff in Hb; destruct Hb as (Hin & Hout).
     apply not_equiv_decb_equiv in Hin.
-    setoid_rewrite map_length.
+    setoid_rewrite length_map.
     now apply Nat.neq_0_lt_0 in Hin.
   Qed.
   Next Obligation.

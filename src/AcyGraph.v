@@ -419,7 +419,7 @@ Section Dfs.
   Proof.
     intros [p Hag].
     rewrite Env.cardinal_1, PS.cardinal_spec. simpl.
-    rewrite <-(map_length fst).
+    rewrite <-(length_map fst).
     assert (NoDup (PS.elements p)) as Hnds
         by (rewrite NoDup_NoDupA; apply PS.elements_spec2w).
     assert (NoDupMembers (Env.elements graph)) as Hndg
@@ -705,7 +705,7 @@ Proof.
   intros * Hpref.
   induction Hpref; auto.
   destruct H as (Hnin&Hv&Ha).
-  constructor; intuition.
+  constructor; auto with *.
   eapply Forall_impl; [|eauto].
   intros * ? ? ?. right; auto.
 Qed.

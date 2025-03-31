@@ -16,7 +16,7 @@ From compcert Require
 (* Processor-specific extraction directives *)
 Load extractionMachdep.
 
-Cd "extraction/extracted".
+Set Extraction Output Directory "extraction/extracted".
 
 Extraction Blacklist Int String List.
 

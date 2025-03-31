@@ -68,7 +68,7 @@ Module Type NLSEMEQUIV
     - induction E as [|???? E']; simpl; auto.
       intro; f_equal; auto.
       now rewrite E'.
-    - revert dependent xss'; induction xss; simpl; intros.
+    - generalize dependent xss'; induction xss; simpl; intros.
       + assert (xss' = []) as ->; try reflexivity.
         specialize (E 0).
         eapply map_eq_nil; eauto.
@@ -109,7 +109,7 @@ Module Type NLSEMEQUIV
     apply EqSts_iff.
     intro n.
     eapply pointwise_eq_list with (d := absent).
-    - rewrite 2 map_length.
+    - rewrite 2 length_map.
       unfold CIStr.ICStr.tr_streams.
       rewrite CIStr.ICStr.tr_streams_from_length.
       specialize (E 0); now apply Forall2_length in E.

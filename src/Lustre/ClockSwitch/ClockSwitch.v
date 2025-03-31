@@ -416,7 +416,7 @@ Module Type CLOCKSWITCH
       { eapply mmap2_values in H5. eapply mmap_values in H1.
         eapply Forall3_ignore3' with (zs:=x3) in H1.
         2:{ eapply Forall3_length in H5 as (?&?). congruence. }
-        2:{ eapply mmap_length in H1; eauto. }
+        2:{ eapply mlength_map in H1; eauto. }
         eapply Forall3_Forall3, Forall3_ignore1 in H1; eauto. clear H5.
         apply Forall2_swap_args. simpl_Forall. clear H1.
         repeat Syn.inv_branch. repeat inv_bind.
@@ -528,7 +528,7 @@ Module Type CLOCKSWITCH
       do 2 esplit. repeat apply Forall2_app.
       + instantiate (1:=map (fun _ => []) l). simpl_Forall. constructor.
       + eapply mmap2_values, Forall3_ignore12 in H4.
-        2:{ apply mmap_length in H2; auto. }
+        2:{ apply mlength_map in H2; auto. }
         instantiate (1:=map (fun _ => []) (concat x3)).
         simpl_Forall. take (In _ (concat _)) and apply in_concat in it as (?&?&?).
         simpl_Forall. repeat inv_branch. repeat inv_bind.
@@ -592,7 +592,7 @@ Module Type CLOCKSWITCH
         etransitivity; [|etransitivity]; eauto with fresh. }
       eapply mmap2_st_follows in H2; eauto.
       eapply mmap2_values, Forall3_ignore3 in H2.
-      2:{ eapply mmap_length in H1; eauto. }
+      2:{ eapply mlength_map in H1; eauto. }
       simpl_Forall. destruct b; repeat inv_bind. simpl_Forall.
       eapply mmap_st_follows in H6; eauto.
       simpl_Forall; eauto.
@@ -801,7 +801,7 @@ Module Type CLOCKSWITCH
 
         eapply mmap2_values' in H4; eauto. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H2.
         2:{ eapply Forall3_length in H4 as (?&?). congruence. }
-        2:{ eapply mmap_length in H2; eauto. }
+        2:{ eapply mlength_map in H2; eauto. }
         2:{ intros; destruct_conjs; destruct b0; repeat inv_bind.
             eapply mmap_st_follows; eauto. simpl_Forall; eauto using switch_block_st_follows. }
         eapply Forall3_Forall3, Forall3_ignore12 in H2; eauto. clear H4.
@@ -919,7 +919,7 @@ Module Type CLOCKSWITCH
       + apply Forall_concat. simpl_Forall.
         eapply mmap2_values in H3. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H2.
         2:{ eapply Forall3_length in H3 as (?&?); congruence. }
-        2:{ eapply mmap_length in H2; eauto. }
+        2:{ eapply mlength_map in H2; eauto. }
         eapply Forall3_Forall3 in H2; eauto. clear H3.
         eapply Forall3_ignore12 in H2. simpl_Forall. repeat inv_branch; repeat inv_bind.
         rewrite 2 in_app_iff in H5; destruct H5 as [|[|]]; simpl_In; subst. 2,3:constructor.
@@ -960,7 +960,7 @@ Module Type CLOCKSWITCH
       + apply Forall_concat. simpl_Forall.
         eapply mmap2_values in H3. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H2.
         2:{ eapply Forall3_length in H3 as (?&?); congruence. }
-        2:{ eapply mmap_length in H2; eauto. }
+        2:{ eapply mlength_map in H2; eauto. }
         eapply Forall3_Forall3 in H2; eauto. clear H3.
         eapply Forall3_ignore12 in H2. simpl_Forall.
         repeat inv_branch; repeat inv_bind.

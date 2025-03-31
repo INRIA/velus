@@ -60,7 +60,7 @@ Module Type TRTYPING
       L.typeof e = [ty] ->
       typeof e' = ty.
   Proof.
-    intros * Htr Hwt Hty. revert dependent e'. revert dependent ty.
+    intros * Htr Hwt Hty. generalize dependent e'. generalize dependent ty.
     induction e using L.exp_ind2; intros; inv Htr; inv Hty; simpl; auto.
     - cases.
     - cases.
@@ -88,7 +88,7 @@ Module Type TRTYPING
       L.typeof e = [ty] ->
       CE.typeofc e' = ty.
   Proof.
-    intros * Htr Hwt Hty. revert dependent e'. revert dependent ty.
+    intros * Htr Hwt Hty. generalize dependent e'. generalize dependent ty.
     induction e using L.exp_ind2; intros; inv Htr; inv Hty; simpl; auto.
     - cases.
     - cases.
@@ -149,7 +149,7 @@ Module Type TRTYPING
           LT.wt_exp G vars e ->
           CET.wt_exp G.(L.types) (idty vars) e'.
       Proof.
-        intros * Htr Hwt. revert dependent e'.
+        intros * Htr Hwt. generalize dependent e'.
         induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt; eauto with clocks nltyping.
         - inv Htr. now constructor.
         - inv Htr. inv H1. now constructor.
@@ -172,7 +172,7 @@ Module Type TRTYPING
           LT.wt_exp G vars e ->
           CET.wt_cexp G.(L.types) (idty vars) e'.
       Proof.
-        intros * Htr Hwvars Hwt. revert dependent e'.
+        intros * Htr Hwvars Hwt. generalize dependent e'.
         Opaque to_lexp.
         induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt; simpl in *; try monadInv Htr.
         1-7:eapply wt_lexp in EQ; eauto with nltyping. 1-7:econstructor; eauto.
@@ -180,25 +180,25 @@ Module Type TRTYPING
         - cases_eqn Hb. monadInv Htr. take (Senv.HasType _ _ _) and inv it.
           econstructor; eauto.
           + solve_In. rewrite H1; eauto.
-          + symmetry. erewrite map_length, <-Permutation_length; eauto using BranchesSort.Permuted_sort.
-            erewrite mmap_length; [|eauto].
-            erewrite <-map_length, H5, seq_length; auto.
+          + symmetry. erewrite length_map, <-Permutation_length; eauto using BranchesSort.Permuted_sort.
+            erewrite mlength_map; [|eauto].
+            erewrite <-length_map, H5, length_seq; auto.
           + clear - H7 H8 EQ.
-            rewrite Forall_map, <-BranchesSort.Permuted_sort. revert dependent x.
+            rewrite Forall_map, <-BranchesSort.Permuted_sort. generalize dependent x.
             induction es; intros; simpl in *; monadInv EQ; inv H7; inv H8; constructor; auto.
             cases_eqn EQ0; subst. inv H1. simpl in H3; rewrite app_nil_r in H3.
             monadInv EQ0. eapply typeofc_cexp in EQ1; eauto.
           + clear - H H7 EQ.
-            rewrite Forall_map, <-BranchesSort.Permuted_sort. revert dependent x.
+            rewrite Forall_map, <-BranchesSort.Permuted_sort. generalize dependent x.
             induction es; intros; simpl in *; monadInv EQ; inv H; inv H7; constructor; auto.
             cases_eqn EQ0; inv H1; inv H2; monadInv EQ0; auto.
         - cases_eqn Eq; simpl in *; subst. monadInv Htr.
           econstructor; eauto.
           + eapply wt_lexp in EQ; eauto.
           + eapply typeof_lexp in EQ; eauto.
-          + symmetry. erewrite map_length, <-Permutation_length; eauto using BranchesSort.Permuted_sort.
-            erewrite mmap_length; [|eauto].
-            erewrite <-map_length, H8, seq_length; auto.
+          + symmetry. erewrite length_map, <-Permutation_length; eauto using BranchesSort.Permuted_sort.
+            erewrite mlength_map; [|eauto].
+            erewrite <-length_map, H8, length_seq; auto.
           + intros ? Hin.
             eapply in_map_iff in Hin as ((?&?)&Heq&Hin); simpl in *; inv Heq.
             rewrite <-BranchesSort.Permuted_sort in Hin.
@@ -223,8 +223,8 @@ Module Type TRTYPING
           econstructor; eauto.
           + eapply wt_lexp in EQ; eauto.
           + eapply typeof_lexp in EQ; eauto.
-          + symmetry. erewrite map_length, <-map_length.
-            rewrite complete_branches_fst, seq_length; auto.
+          + symmetry. erewrite length_map, <-length_map.
+            rewrite complete_branches_fst, length_seq; auto.
             * rewrite <-BranchesSort.Permuted_sort.
               erewrite fst_NoDupMembers, to_controls_fst, <-fst_NoDupMembers; eauto.
             * eapply Sorted.Sorted_StronglySorted, Sorted_impl, BranchesSort.Sorted_sort.
@@ -303,7 +303,7 @@ Module Type TRTYPING
           incl (common_suffix sfx1 sfx2) sfx1.
       Proof.
         intros * ? Hmem.
-        revert dependent sfx2. induction sfx1 as [|[]]; simpl; intros; auto.
+        generalize dependent sfx2. induction sfx1 as [|[]]; simpl; intros; auto.
         cases. inv Hmem; eauto.
       Qed.
 
@@ -396,8 +396,8 @@ Module Type TRTYPING
             { eapply H15, Hlasts. econstructor; eauto. congruence. }
           + erewrite <- (to_node_in n); eauto.
             clear - HwtG H3 H6 EQ. setoid_rewrite Forall2_map_2.
-            remember (L.n_in n). clear Heql0. revert dependent l0.
-            revert dependent x.
+            remember (L.n_in n). clear Heql0. generalize dependent l0.
+            generalize dependent x.
             induction l; intros; inv EQ; auto.
             inv H6; auto.
             simpl_Foralls. eapply ty_lexp in H2; eauto. simpl in *.
@@ -409,7 +409,7 @@ Module Type TRTYPING
             inv H3. apply Forall_app.
             split; auto.
             apply LT.wt_exp_clockof in H5; auto.
-          + clear H5 H6 H9 H11. revert dependent l. induction x; intros; auto.
+          + clear H5 H6 H9 H11. generalize dependent l. induction x; intros; auto.
             inv EQ. simpl_Foralls.
             constructor; eauto using wt_lexp.
           + rewrite Forall_app; split.
@@ -488,7 +488,7 @@ Module Type TRTYPING
         inv Hvars; inv H0; L.inv_VarsDefined.
         inv Hnd2; inv H1. apply Forall2_ignore2 in Hvars. simpl_Forall.
         do 2 esplit; eauto.
-        eapply NoDup_concat; eauto. rewrite Hperm0, Hperm.
+        eapply Common.CommonList.NoDup_concat; eauto. rewrite Hperm0, Hperm.
         apply NoDup_app'; eauto using NoDup_app_r.
         - apply fst_NoDupMembers; auto.
         - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.

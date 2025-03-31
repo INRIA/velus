@@ -43,9 +43,6 @@ Module Export Op <: OPERATORS.
     | Tfloat sz  => Ctypes.Tfloat sz Ctypes.noattr
     end.
 
-  Definition list_type_to_typelist : list Ctypes.type -> Ctypes.typelist :=
-    List.fold_right (Ctypes.Tcons) Ctypes.Tnil.
-
   Definition typecl (ty: Ctypes.type) : option ctype :=
     match ty with
     | Ctypes.Tint sz sg attr => Some (Tint sz sg)
@@ -61,7 +58,7 @@ Module Export Op <: OPERATORS.
     | Tint Ctypes.I16 Ctypes.Signed   => AST.Mint16signed
     | Tint Ctypes.I16 Ctypes.Unsigned => AST.Mint16unsigned
     | Tint Ctypes.I32 _               => AST.Mint32
-    | Tint Ctypes.IBool _             => AST.Mint8unsigned
+    | Tint Ctypes.IBool _             => AST.Mbool
     | Tlong _                         => AST.Mint64
     | Tfloat Ctypes.F32               => AST.Mfloat32
     | Tfloat Ctypes.F64               => AST.Mfloat64
@@ -634,7 +631,7 @@ Module Export Op <: OPERATORS.
       match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
     - inv WTv. apply Cop.val_casted_single.
       match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
-    - specialize (Hnptr b i); intuition.
+    - specialize (Hnptr b i); auto with *.
   Qed.
 
   (* Solve goal with hypothesis of the form:
@@ -661,8 +658,8 @@ Module Export Op <: OPERATORS.
   Proof.
     intros e x Hom.
     destruct e as [b|]; [destruct b|].
-    - injection Hom; intro; subst; intuition.
-    - injection Hom; intro; subst; intuition.
+    - injection Hom; intro; subst; auto with *.
+    - injection Hom; intro; subst; auto with *.
     - discriminate Hom.
   Qed.
 
@@ -1072,14 +1069,19 @@ Module Export Op <: OPERATORS.
   Proof.
     intros * Hwt.
     destruct ty as [sz sg|sz|sz].
-    - destruct sz, sg; simpl;
-        inv Hwt; auto;
-        match goal with
-        | H:Ctyping.wt_int _ _ _ |- _ => rewrite <-H
-        end;
-        try rewrite Int.sign_ext_idem;
-        try rewrite Int.zero_ext_idem;
-        intuition.
+    - destruct sz, sg; simpl; inv Hwt; auto.
+      + rewrite <- H2.
+        rewrite Int.sign_ext_idem; auto with *.
+      + rewrite <- H2.
+        rewrite Int.zero_ext_idem; auto with *.
+      + rewrite <- H2.
+        rewrite Int.sign_ext_idem; auto with *.
+      + rewrite <- H2.
+        rewrite Int.zero_ext_idem; auto with *.
+      + destruct H2 as [ H2 | H2 ];
+        rewrite H2; rewrite <- Int.zero_ext_idem; auto with *.
+      + destruct H2 as [ H2 | H2 ];
+        rewrite H2; rewrite <- Int.zero_ext_idem; auto with *.    
     - destruct sz; inv Hwt; auto.
     - destruct sz; inv Hwt; auto.
   Qed.
@@ -1107,7 +1109,7 @@ Module Export Op <: OPERATORS.
     forall ge mem,
       Events.external_functions_sem
         (pos_to_str f)
-        {| AST.sig_args := List.map (fun cty => Ctypes.typ_of_type (cltype cty)) tyins;
+        {| AST.sig_args := List.map (fun cty => Ctypes.argtype_of_type (cltype cty)) tyins;
            AST.sig_res := Ctypes.rettype_of_type (cltype tyout);
            AST.sig_cc := AST.cc_default |}
         ge xs mem nil y mem

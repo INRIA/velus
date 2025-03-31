@@ -272,7 +272,7 @@ Module Type EQUIV
     intros Pc P p1 p2 WTp Types Externs Hfa Hclasses.
     rewrite program_refines_def; split; [|split]; auto.
     unfold find_class.
-    pose proof (Forall2_length _ _ _ Hfa) as Hlen.
+    pose proof (@Forall2_length _ _ _ _ _ Hfa) as Hlen.
     revert WTp Hfa Hclasses.
     destruct p1, p2; simpl in *; subst.
     pattern classes0, classes1.
@@ -298,7 +298,7 @@ Module Type EQUIV
         destruct (Hpr' _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
         exists c1', p1'''.
         rewrite Hcn.
-        destruct (ident_eq_dec (c_name c2) n); try congruence; intuition.
+        destruct (ident_eq_dec (c_name c2) n); try congruence; auto with *.
   Qed.
 
   Lemma stmt_refines_strengthen:

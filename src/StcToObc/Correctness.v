@@ -249,10 +249,11 @@ Module Type CORRECTNESS
        /\ me' = me /\ ve' = ve).
   Proof.
     intros * WT StEval.
-    revert dependent s.
-    induction WT; intuition.
+    generalize dependent s.
+    induction WT; auto with *.
+    intros s StEval.
     simpl in *; apply IHWT in StEval as [[Hp Hs]|[Hp [Hmenv Henv]]];
-      intuition; inv Hs.
+      auto with *; inv Hs.
     take (nth_error _ _ = _) and rewrite nth_error_skip_branches_with in it.
     cases; inv it; simpl in *; auto with obcsem.
     chase_skip; eauto with obcsem.
@@ -289,7 +290,7 @@ Module Type CORRECTNESS
           stmt_eval prog me ve s (me', ve') ->
           stmt_eval prog me ve (Control mems ck s) (me', ve')).
     Proof.
-      revert dependent s; clear s WTs.
+      generalize dependent s; clear s WTs.
       induction ck; split; auto.
       - inversion 1.
       - pose proof (Control_wt _ _ _ _ _ _ TypesSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
@@ -413,14 +414,14 @@ Module Type CORRECTNESS
       (~ InMembers x xs -> find_val x me = Some v).
   Proof.
     intros * Find; split; [intros * Nodup Hin|intros * Hin].
-    - revert dependent me; induction xs as [|(x', ((c, t), ck))]; intros;
+    - generalize dependent me; induction xs as [|(x', ((c, t), ck))]; intros;
         inv Hin; inv Nodup.
       + rewrite add_mems_gss in Find; auto; inv Find.
-        exists c, t, ck; intuition.
+        exists c, t, ck; auto with *.
       + rewrite add_mems_cons in Find.
         edestruct IHxs as (?&?&?&?&?); eauto.
         do 3 eexists; intuition; eauto; right; eauto.
-    - revert dependent me; induction xs as [|(x', ((c', t'), ck'))]; intros.
+    - generalize dependent me; induction xs as [|(x', ((c', t'), ck'))]; intros.
       + now rewrite add_mems_nil in Find.
       + rewrite add_mems_cons in Find.
         apply NotInMembers_cons in Hin as (? & ?).
@@ -535,10 +536,10 @@ Module Type CORRECTNESS
     inversion_clear Rst as [??????????? Find' Find_m ? StEval Ret].
     setoid_rewrite Find in Find'; inv Find'.
     rewrite exists_reset_method in Find_m; inv Find_m; simpl in *.
-    inv Ret; intuition.
+    inv Ret; auto with *.
     rewrite Env.adds_opt_nil_nil in StEval.
     apply translate_reset_comp in StEval as (?& Insts).
-    rewrite translate_reset_comp; intuition.
+    rewrite translate_reset_comp; auto with *.
     assert (ve' = vempty) as HH by (eapply reset_insts_same_venv; eauto).
     rewrite HH in Insts; auto.
   Qed.
@@ -800,8 +801,8 @@ Module Type CORRECTNESS
       pose proof (sem_var_instant_det _ _ _ _ Hvs Hxsem) as Hpvc.
       subst; inv Heqp.
       now rewrite Env.find_gsss_opt.
-    + pose proof (Forall2_length _ _ _ Hvar) as Hlenyss.
-      pose proof (Forall2_length _ _ _ Hovals) as Hlenovals.
+    + pose proof (@Forall2_length _ _ _ _ _ Hvar) as Hlenyss.
+      pose proof (@Forall2_length _ _ _ _ _ Hovals) as Hlenovals.
       destruct vs; try discriminate.
       destruct ovs; try discriminate.
       rewrite Env.find_gsso_opt; auto.
@@ -1156,7 +1157,7 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present'; eauto with obcsem.
         1:{ eapply equiv_env_map; [|eauto]. intros * F.
             destruct x0; auto with stcfree. inv F. }
-        intuition. simpl. econstructor; eauto with obcsem.
+        auto with *. simpl. econstructor; eauto with obcsem.
       + eapply Memory_Corres_Reset_present; eauto.
         eapply Is_well_sch_Reset_Last; eauto.
         eapply Is_well_sch_Reset_Next; eauto.
@@ -1169,7 +1170,7 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present'; eauto using stmt_eval, exp_correct.
         1:{ eapply equiv_env_map; [|eauto]. intros * F.
             destruct x0; auto with stcfree. inv F. }
-        intuition. simpl. constructor; eauto with obcsem.
+        auto with *. simpl. constructor; eauto with obcsem.
       + eapply Memory_Corres_Reset_present; eauto.
         eapply Is_well_sch_Reset_Last; eauto.
         eapply Is_well_sch_Reset_Next; eauto.
@@ -1792,7 +1793,7 @@ Module Type CORRECTNESS
           -- apply exists_step_method.
           -- simpl; transitivity (length xs).
              ++ symmetry; eapply Forall2_length; eauto.
-             ++ rewrite length_idfst, <-map_length with (f := fst);
+             ++ rewrite length_idfst, <-length_map with (f := fst);
                   symmetry; eapply Forall2_length; eauto.
           -- simpl; eauto.
           -- simpl; rewrite map_fst_idfst.
@@ -1860,7 +1861,7 @@ Module Type CORRECTNESS
             eapply Closed, state_closed_empty; eauto).
     exists me'; split; [|split]; auto.
     clear - Find Loop Wdef WC WT WTS0 WTins Eq Spec Clock.
-    revert Loop Eq; revert dependent S0; revert me'.
+    revert Loop Eq; generalize dependent S0; revert me'.
     generalize 0.
     cofix COFIX; intros.
     inversion_clear Loop as [??????? Sem].

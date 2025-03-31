@@ -103,7 +103,7 @@ Section Translate.
   Definition funcall (y: option ident) (f: ident) (tret: option Ctypes.type) (args: list Clight.expr) : Clight.statement :=
     let tys := map Clight.typeof args in
     let tret := or_default Ctypes.Tvoid tret in
-    let sig := Ctypes.Tfunction (list_type_to_typelist tys) tret AST.cc_default in
+    let sig := Ctypes.Tfunction tys tret AST.cc_default in
     Clight.Scall y (Clight.Evar f sig) args.
 
   Definition assign (x: ident) (ty: Ctypes.type): Clight.expr -> Clight.statement :=
@@ -194,7 +194,7 @@ Section Translate.
         let y' := prefix temp y in
         Clight.Ssequence
           (Clight.Scall (Some y')
-             (Clight.Evar f (Ctypes.Tfunction (list_type_to_typelist tyins)
+             (Clight.Evar f (Ctypes.Tfunction tyins
                                (cltype tyout)
                                AST.cc_default))
              es)
@@ -350,7 +350,7 @@ Definition load_in (ins: list (ident * type)): Clight.statement :=
        let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
        let load :=
            Clight.Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t))
-                           (Ctypes.Tcons typtr Ctypes.Tnil)
+                           [typtr]
                            [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr] in
        Clight.Ssequence s load)
     ins Clight.Sskip.
@@ -363,7 +363,7 @@ Definition write_multiple_outs (node: ident) (outs: list (ident * type)) : Cligh
        let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
        let write :=
            Clight.Sbuiltin None (AST.EF_vstore (type_to_chunk t))
-                           (Ctypes.Tcons typtr (Ctypes.Tcons (translate_type t) Ctypes.Tnil))
+                           [typtr; translate_type t]
                            [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr;
                               Clight.Efield (Clight.Evar out_struct t_struct) x (translate_type t)] in
        Clight.Ssequence s write)
@@ -375,7 +375,7 @@ Definition write_out (node: ident) (outs: list (ident * type)) : Clight.statemen
   | [(x, t)] =>
     let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
     Clight.Sbuiltin None (AST.EF_vstore (type_to_chunk t))
-                    (Ctypes.Tcons typtr (Ctypes.Tcons (translate_type t) Ctypes.Tnil))
+                    [typtr; translate_type t]
                     [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr;
                        (Clight.Etempvar x (translate_type t))]
   | outs => write_multiple_outs node outs
@@ -434,15 +434,15 @@ Definition make_main (do_sync: bool) (node: ident) (m: method): AST.globdef Clig
   fundef [] vars (map translate_param (temp ++ m.(m_in))) Ctypes.type_int32s (main_body do_sync node m).
 
 Definition make_entry_point (do_sync: bool): AST.globdef Clight.fundef Ctypes.type :=
-  let sig := Ctypes.Tfunction Ctypes.Tnil Ctypes.Tvoid AST.cc_default in
+  let sig := Ctypes.Tfunction [] Ctypes.Tvoid AST.cc_default in
   let main := Clight.Evar (if do_sync then main_sync_id else main_proved_id) sig in
   let body := Clight.Scall None main [] in
   fundef [] [] [] Ctypes.type_int32s body.
 
 Definition ef_sync: Clight.fundef :=
-  let sg := AST.mksignature [] AST.Tvoid AST.cc_default in
+  let sg := AST.mksignature [] AST.Xvoid AST.cc_default in
   let ef := AST.EF_external "sync" sg in
-  Ctypes.External ef Ctypes.Tnil Ctypes.Tvoid AST.cc_default.
+  Ctypes.External ef [] Ctypes.Tvoid AST.cc_default.
 
 Definition make_sync: AST.globdef Clight.fundef Ctypes.type :=
   @AST.Gfun Clight.fundef Ctypes.type ef_sync.
@@ -514,10 +514,10 @@ Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
 Definition translate_external (f : ident) (tyins : list ctype) (tyout : ctype) : (ident * AST.globdef (Ctypes.fundef Clight.function) Ctypes.type) :=
   let ctyins := List.map cltype tyins in
   let ctyout := cltype tyout in
-  let sig := {| AST.sig_args := List.map Ctypes.typ_of_type ctyins;
+  let sig := {| AST.sig_args := List.map Ctypes.argtype_of_type ctyins;
                AST.sig_res := Ctypes.rettype_of_type ctyout;
                AST.sig_cc := AST.cc_default |} in
-  (f, AST.Gfun (Ctypes.External (AST.EF_external (pos_to_str f) sig) (list_type_to_typelist ctyins) ctyout AST.cc_default)).
+  (f, AST.Gfun (Ctypes.External (AST.EF_external (pos_to_str f) sig) ctyins ctyout AST.cc_default)).
 
 Definition check_externs (prog : program): res unit :=
   do _ <- if (forallb is_atom (map fst prog.(externs))) then OK tt

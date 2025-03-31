@@ -88,7 +88,7 @@ Module Type TRCLOCKING
               L.clockof e = [ck]
               /\ wc_exp (idck vars) e' ck).
       Proof.
-        intros * Hto Hwc. revert dependent e'.
+        intros * Hto Hwc. generalize dependent e'.
         induction e using L.exp_ind2; intros; inv Hto; inv Hwc.
         - exists Cbase. split; constructor.
         - exists Cbase. split; constructor.
@@ -154,7 +154,7 @@ Module Type TRCLOCKING
               L.clockof e = [ck]
               /\ wc_cexp (idck vars) e' ck).
       Proof.
-        intros * Hto Hwt Hwenv Hwc. revert dependent e'.
+        intros * Hto Hwt Hwenv Hwc. generalize dependent e'.
         Opaque to_lexp.
         induction e using L.exp_ind2; intros;
           simpl in *; try monadInv Hto;
@@ -173,7 +173,7 @@ Module Type TRCLOCKING
             destruct es, x0; simpl in *; try congruence.
             apply H5; auto. monadInv EQ.
           + take Senv.annotation and destruct it. simpl in *.
-            erewrite map_length, <-Permutation_length, <-map_length, to_controls_fst, map_length; eauto using BranchesSort.Permuted_sort.
+            erewrite length_map, <-Permutation_length, <-length_map, to_controls_fst, length_map; eauto using BranchesSort.Permuted_sort.
             assert (Forall (fun '(i, e) => wc_cexp (idck vars) e (Con clo x1 (Tenum tx0 tn, i))) x0) as Hwc'.
             { eapply Forall_forall; intros (?&?) Hin.
               eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ as ((?&?)&Hin2&Htr); eauto.
@@ -190,12 +190,12 @@ Module Type TRCLOCKING
             2:{ eapply Permutation_seq_eq.
                 - erewrite <-BranchesSort.Permuted_sort, to_controls_fst; eauto.
                   erewrite H12. replace (Datatypes.length es) with (length tn); auto.
-                  symmetry. erewrite <-map_length, H12, seq_length; auto.
+                  symmetry. erewrite <-length_map, H12, length_seq; auto.
                 - apply Sorted.Sorted_StronglySorted. intros ?????; lia.
                   eapply Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
                   intros * Hleb. apply Nat.leb_le in Hleb; auto.
             }
-            apply Forall2_combine''. 1:now rewrite 2 map_length.
+            apply Forall2_combine''. 1:now rewrite 2 length_map.
             rewrite <-combine_fst_snd, <-BranchesSort.Permuted_sort; auto.
         - simpl in *. esplit; split; eauto.
           inv Hwc. inv Hwt. simpl_Foralls. constructor; simpl; auto.
@@ -256,7 +256,7 @@ Module Type TRCLOCKING
                                end) ck = Some ck'.
       Proof.
         intros * Hinst.
-        revert dependent ck'. induction ck; intros; auto.
+        generalize dependent ck'. induction ck; intros; auto.
         inv Hinst.
         destruct (instck bck sub ck) eqn:?; try discriminate.
         destruct (sub i) eqn:Hs; try discriminate.
@@ -283,8 +283,8 @@ Module Type TRCLOCKING
         erewrite <-to_node_in; eauto.
         pose proof (L.n_nodup n) as (Hdup&_).
         remember (L.n_in n) as ins. clear Heqins.
-        revert dependent ins.
-        revert dependent es'.
+        generalize dependent ins.
+        generalize dependent es'.
         induction es as [| e].
         { intros. inv EQ. simpl in WIi. inv WIi.
           take ([] = _) and apply symmetry, map_eq_nil, map_eq_nil in it.
@@ -378,13 +378,13 @@ Module Type TRCLOCKING
             inversion_clear Wcn as [? Wcin _ _].
             apply find_base_clock_bck.
             - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
-              rewrite map_length; exact (L.n_ingt0 n).
+              rewrite length_map; exact (L.n_ingt0 n).
             - apply LC.WellInstantiated_parent in WIi.
               rewrite L.clocksof_nclocksof. simpl_Forall; eauto. }
           eapply NLC.CEqApp; eauto; try discriminate.
           + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
             apply Forall2_length in Hf2. apply Forall3_length in WIo as (WIo&?).
-            unfold idfst, idsnd in *. repeat rewrite map_length in *. setoid_rewrite WIo; auto.
+            unfold idfst, idsnd in *. repeat rewrite length_map in *. setoid_rewrite WIo; auto.
             unfold idsnd, idfst. simpl_Forall. eauto.
           + (* outputs *)
             unfold idsnd in *.
@@ -412,13 +412,13 @@ Module Type TRCLOCKING
             inversion_clear Wcn as [? Wcin _ _].
             apply find_base_clock_bck.
             - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
-              rewrite map_length; exact (L.n_ingt0 n).
+              rewrite length_map; exact (L.n_ingt0 n).
             - apply LC.WellInstantiated_parent in WIi.
               rewrite L.clocksof_nclocksof. simpl_Forall; eauto. }
           eapply NLC.CEqApp; eauto; try discriminate.
           + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
             apply Forall2_length in Hf2. apply Forall2_length in WIo.
-            1,2:unfold idfst, idsnd in *. repeat rewrite map_length in *. setoid_rewrite WIo; auto.
+            1,2:unfold idfst, idsnd in *. repeat rewrite length_map in *. setoid_rewrite WIo; auto.
             simpl_Forall. eauto.
           + (* outputs *)
             unfold idsnd in *.
@@ -428,11 +428,11 @@ Module Type TRCLOCKING
             2:{ unfold idfst, idsnd. erewrite 2 map_map, map_ext; eauto. intros; destruct_conjs; auto. }
             rewrite Forall2_map_2 in WIo.
             eapply Forall3_ignore1' in Hf2. eapply Forall3_ignore2' in WIo. eapply Forall3_Forall3 in WIo; eauto. clear Hf2.
-            2:{ apply Forall3_length in Hf2 as (?&?). repeat rewrite map_length in *; auto. }
+            2:{ apply Forall3_length in Hf2 as (?&?). repeat rewrite length_map in *; auto. }
             2:{ apply Forall2_length in Hf2. apply Forall2_length in WIo. congruence. }
             apply Forall2_forall. split.
             2:{ apply Forall3_length in WIo as (?&?).
-                unfold idsnd, idfst in *. repeat rewrite map_length in *. congruence. }
+                unfold idsnd, idfst in *. repeat rewrite length_map in *. congruence. }
             intros (?&(?&?)) ? Hin. split.
             * destruct (sub i) eqn:Hsub.
               -- eapply Forall3_ignore3, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto; simpl in *. destruct WIo as ((?&?)&?&Hsub'&?); simpl in *.

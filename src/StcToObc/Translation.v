@@ -270,7 +270,7 @@ Module Type TRANSLATION
       length (skip_branches_with n i s) = n.
   Proof.
     induction n; intros; simpl; auto.
-    rewrite skip_branches_with_S, app_length, IHn; simpl; lia.
+    rewrite skip_branches_with_S, length_app, IHn; simpl; lia.
   Qed.
 
   Fact nth_error_skip_branches_with:

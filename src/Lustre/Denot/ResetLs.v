@@ -1,3 +1,5 @@
+Require Import Coq.Arith.Compare.
+
 Require Import List.
 Require Import Cpo SDfuns CommonDS.
 Open Scope bool_scope.
@@ -574,8 +576,8 @@ Lemma cs_spec1 :
 Proof.
   intros * Infr Sr Hcs.
   apply take_Oeq; intro n.
-  revert dependent cs.
-  revert dependent rs.
+  generalize dependent cs.
+  generalize dependent rs.
   induction n; intros; auto.
   apply infinite_decomp in Infr as (vr & rs' & Hrs & Infr').
   rewrite Hrs in *.
@@ -956,8 +958,8 @@ Proof.
   intros * Sx Hf.
   pose proof (St := SafeF xs Sx).
   pose proof (Hac := AcF xs); revert St Hac; generalize (f xs); intros.
-  revert dependent t.
-  revert dependent xs.
+  generalize dependent t.
+  generalize dependent xs.
   induction n; simpl (nrem _ _); intros.
   - destruct (@is_cons_elim _ xs) as (vx & xs' & Hxs).
     { apply first_is_cons; rewrite Hf; auto. }
@@ -1065,7 +1067,7 @@ Proof.
     unfold AC in *; rewrite Hac, 2 MAP_map, map_comp; apply map_ext; intros []; auto.
   - (* partie false *)
     clear Ht1.
-    apply Lt.le_lt_or_eq_stt in Hlt as [Hlt|]; subst.
+    apply le_decide in Hlt as [Hlt|]; subst.
     2: now rewrite Nat.sub_diag.
     rewrite nrem_when, take_when, Ht2.
     rewrite (when_false _ (map _ _)), map_comp, <- take_map; cycle 1.

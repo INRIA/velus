@@ -179,7 +179,6 @@ Section Extra.
     intros; subst.
     revert x.
     induction l; simpl; intros; auto.
-    rewrite IHl; auto.
   Qed.
 
   Lemma map_last:
@@ -751,15 +750,25 @@ Section RevTR.
 
   Definition rev_tr (l: list A) := rev_append l [].
 
+  Lemma rev_append_spec:
+    forall l1 l2,
+      rev_append l1 l2 = rev l1 ++ l2.
+  Proof.
+    intros l1.
+    induction l1 as [ | x l IH ]; intros l2; [ reflexivity | ].
+    simpl.
+    rewrite IH.
+    now rewrite <- app_assoc.
+  Qed.
+
   Lemma rev_tr_spec:
     forall l,
       rev_tr l = rev l.
   Proof.
-    intro; unfold rev_tr.
-    rewrite (app_nil_end (rev l)).
-    generalize (@nil A).
-    induction l; simpl; intros; auto.
-    rewrite IHl, app_last_app; auto.
+    intros l.
+    unfold rev_tr.
+    rewrite rev_append_spec with (l2 := []).
+    apply app_nil_r.
   Qed.
 
 End RevTR.
@@ -874,7 +883,7 @@ Section Incl.
     forall (x: A) xs ys,
       incl (x :: xs) ys -> In x ys /\ incl xs ys.
   Proof.
-    unfold incl; intuition.
+    unfold incl; auto with *.
   Qed.
 
   Lemma incl_tl': forall (x : A) xs ys,
@@ -1136,9 +1145,9 @@ Section Nodup.
     inv H.
     destruct IHxs as [Hxs [Hws Hall]]; trivial; [].
     repeat split.
-    + constructor; intuition.
+    + constructor; auto with *.
     + assumption.
-    + constructor; intuition.
+    + constructor; auto with *.
   - intros H; decompose record H;
       now apply NoDup_app'.
   Qed.
@@ -1250,7 +1259,7 @@ Lemma concat_length:
     length (concat l) = fold_left (fun s x => s + length x) l 0.
 Proof.
   induction l; simpl; auto.
-  rewrite app_length.
+  rewrite length_app.
   rewrite IHl.
   clear.
   replace (length a) with (length a + 0) at 2; try lia.
@@ -1263,7 +1272,7 @@ Section ConcatMap.
 
   Context {A B: Type}.
 
-  Lemma flat_map_length:
+  Lemma flat_length_map:
     forall l (f : A -> list B),
       length (flat_map f l) = fold_left (fun s x => s + length (f x)) l 0.
   Proof.
@@ -1276,7 +1285,7 @@ Section ConcatMap.
       length (flat_map f (x :: xs)) = length (f x) + length (flat_map f xs).
   Proof.
     intros. setoid_rewrite flat_map_concat_map.
-    simpl. now rewrite app_length.
+    simpl. now rewrite length_app.
   Qed.
 
   Lemma flat_map_app:
@@ -1445,7 +1454,7 @@ Section ConcatMap.
   Proof.
     induction l; intros Hf; simpl; auto.
     inv Hf.
-    rewrite app_length.
+    rewrite length_app.
     rewrite H1; simpl.
     f_equal; auto.
   Qed.
@@ -1457,7 +1466,7 @@ Section ConcatMap.
     intros l1 l2 Hf.
     induction Hf; simpl.
     - reflexivity.
-    - repeat rewrite app_length. f_equal; auto.
+    - repeat rewrite length_app. f_equal; auto.
   Qed.
 
   Lemma concat_length_map_nth : forall (f : A -> list B) (l : list A) n da db,
@@ -1963,9 +1972,9 @@ Section ForallExists.
       + inversion_clear 1 as [|? ? HnP Hfa].
         inversion_clear HH as [|? ? Hex]; auto.
         apply IHxs in Hex; auto.
-        intros y Hin. apply Hdec. intuition.
-      + destruct (Hdec x) as [Hx|Hx]; auto. now intuition.
-        right. apply IHxs; intuition.
+        intros y Hin. apply Hdec. auto with *.
+      + destruct (Hdec x) as [Hx|Hx]; auto with *.
+        right. apply IHxs; auto with *.
   Qed.
 
   Lemma Exists_map:
@@ -2330,7 +2339,7 @@ Section SkipnDropn.
     - now rewrite Nat.sub_0_r.
   Qed.
 
-  Lemma skipn_length:
+  Lemma length_skipn:
     forall n (l: list A),
       length (skipn n l) = length l - n.
   Proof.
@@ -2496,23 +2505,23 @@ Section Combine.
     simpl. now rewrite (IHl _ H1).
   Qed.
 
-  Lemma combine_length_l:
+  Lemma length_combine_l:
     forall (l : list A) (l' : list B),
       length (combine l l') = length l ->
       length l <= length l'.
   Proof.
     intros l l' Hlen.
-    rewrite combine_length in Hlen.
+    rewrite length_combine in Hlen.
     rewrite Nat.min_l_iff in Hlen. lia.
   Qed.
 
-  Lemma combine_length_r:
+  Lemma length_combine_r:
     forall (l : list A) (l' : list B),
       length (combine l l') = length l' ->
       length l >= length l'.
   Proof.
     intros l l' Hlen.
-    rewrite combine_length in Hlen.
+    rewrite length_combine in Hlen.
     rewrite Nat.min_r_iff in Hlen. lia.
   Qed.
 
@@ -2605,14 +2614,14 @@ Qed.
 Section AppLength.
   Context {A B : Type}.
 
-  Lemma app_length_impl :
+  Lemma length_app_impl :
     forall (l1 l'1 : list A) (l2 l'2 : list B),
       length l'1 = length l'2 ->
       length (l'1 ++ l1) = length (l'2 ++ l2) ->
       length l1 = length l2.
   Proof.
     intros * Hl Hlapp.
-    rewrite 2 app_length in Hlapp.
+    rewrite 2 length_app in Hlapp.
     lia.
   Qed.
 
@@ -2624,16 +2633,16 @@ Section AppLength.
                   /\ length l2' = length l2).
   Proof.
     intros.
-    rewrite app_length in H.
+    rewrite length_app in H.
     exists (firstn (length l1) l),(skipn (length l1) l). split; [|split].
     - symmetry. apply firstn_skipn.
-    - rewrite firstn_length. lia.
-    - apply app_length_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
-      rewrite firstn_length. lia.
-      rewrite firstn_skipn. now rewrite app_length.
+    - rewrite length_firstn. lia.
+    - apply length_app_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
+      rewrite length_firstn. lia.
+      rewrite firstn_skipn. now rewrite length_app.
   Qed.
 
-  Lemma app_length_inv1 :
+  Lemma length_app_inv1 :
     forall (l1 l1' l2 l2' : list A),
       l1 ++ l2 = l1' ++ l2' ->
       length l1 = length l1' ->
@@ -2645,7 +2654,7 @@ Section AppLength.
     do 2 rewrite firstn_app_3 in Happ; auto.
   Qed.
 
-  Lemma app_length_inv2:
+  Lemma length_app_inv2:
     forall (l1 l1' l2 l2' : list A),
       l1 ++ l2 = l1' ++ l2' ->
       length l1 = length l1' ->
@@ -2842,7 +2851,7 @@ Section Forall2.
     eapply Forall2_forall2. split; auto.
     intros * Hn Hnth1 Hnth2.
     eapply Forall_forall in Hf; eauto.
-    2:eapply nth_In with (d:=(a, b)); eauto; rewrite combine_length, <-Hlen, Nat.min_id; eauto.
+    2:eapply nth_In with (d:=(a, b)); eauto; rewrite length_combine, <-Hlen, Nat.min_id; eauto.
     rewrite combine_nth in Hf; eauto.
     congruence.
   Qed.
@@ -3021,7 +3030,7 @@ Section Forall2.
       apply Hin.
       subst x' y'. rewrite <-combine_nth with (1:=Hlen).
       apply nth_In.
-      now rewrite combine_length, <-Hlen, Nat.min_id.
+      now rewrite length_combine, <-Hlen, Nat.min_id.
     - intros H; split.
       + intros * Hin.
         apply Forall2_combine in H.
@@ -3143,8 +3152,8 @@ Section Forall2.
       Forall2 (fun x y => P x y) (map (fun _ => e) l) l'.
   Proof.
     intros * Hf Hlen.
-    apply Forall2_forall; split; [| now rewrite map_length].
-    intros * Hin. revert dependent l'.
+    apply Forall2_forall; split; [| now rewrite length_map].
+    intros * Hin. generalize dependent l'.
     induction l; intros. inv Hin.
     destruct l'; inv Hlen. simpl in Hin.
     destruct Hin; inv Hf; try inv H; eauto.
@@ -3167,8 +3176,14 @@ Section Forall2.
       now apply IHl.
     - exfalso; eapply app_cons_not_nil; eauto.
     - take (Forall2 _ (_ ++ _) (_ ++ _)) and rename it into Hll'.
-      assert (length (rev l) = length (rev l'))
-        by (apply Forall2_length in Hll'; rewrite 2 app_length in Hll'; simpl in *; lia).
+      assert (length (rev l) = length (rev l')).
+      {
+        apply Forall2_length in Hll'.
+        rewrite 2 List.length_app in Hll'.
+        simpl in Hll'.
+        lia.
+      }
+        (* by (apply Forall2_length in Hll'; simpl in *. *)
       apply Forall2_app_split in Hll' as [? Hab]; auto.
       inv Hab.
       constructor; auto.
@@ -3319,7 +3334,7 @@ Proof.
       * apply app_nth1; rewrite <- H; auto.
     + (* the element is in the rest of the sublist *)
       rewrite Nat.ltb_ge in Hnx.
-      rewrite app_length in Hlen3.
+      rewrite List.length_app in Hlen3.
       assert (n - length x < length (concat l)) as Hlen3' by lia.
       specialize (IHHlen2 (n - length x) Hlen3' (* (app_nth2 _ _ _ Hnx') (app_nth2 _ _ _ Hny') *)).
       assert (n >= length x) as Hnx' by lia; assert (n >= length y) as Hny' by lia.
@@ -3344,7 +3359,7 @@ Proof.
   assert (length (concat l1) = length (concat l2)) as Hlenconcat.
   { clear Hlen Hforall.
     induction Hlen'; simpl; auto.
-    repeat rewrite app_length. rewrite H. rewrite IHHlen'. reflexivity. }
+    repeat rewrite List.length_app. rewrite H. rewrite IHHlen'. reflexivity. }
   split; auto.
   intros a b n x1 x2 Hlen2 Hnth1 Hnth2; subst.
   specialize (nth_In _ a Hlen2) as Hin1.
@@ -3820,7 +3835,9 @@ Section InMembers.
       InMembers y (ws ++ xs) <-> (InMembers y ws) \/ (InMembers y xs).
   Proof.
     induction ws as [|y' ws IH].
-    - now intuition.
+    - intros xs.
+      split; [ auto | ].
+      intros [ H | H ]; [ inversion H | assumption ].
     - destruct y' as [y' yv]. simpl.
       split; intro HH; destruct HH as [HH|HH].
       + intuition.
@@ -4766,7 +4783,7 @@ Section ListSuffix.
   Proof.
     apply Wf_nat.well_founded_lt_compat with (f:=@length A).
     destruct 1 as (x' & H1 & H2).
-    subst y. rewrite app_length.
+    subst y. rewrite List.length_app.
     assert (length x' <> 0) as H3; try lia.
     now rewrite length_zero_iff_nil.
   Qed.
@@ -5391,7 +5408,7 @@ Proof.
     eapply nth_error_Some; intro contra; congruence.
   - exists k; split; auto.
     assert (k < length xs) as Hlen by (eapply nth_error_Some; intro contra; congruence).
-    erewrite nth_error_nth' with (d:=0). 2:now rewrite seq_length.
+    erewrite nth_error_nth' with (d:=0). 2:now rewrite length_seq.
     rewrite seq_nth; auto.
 Qed.
 

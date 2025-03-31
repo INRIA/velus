@@ -806,7 +806,7 @@ Module Type CSCORRECTNESS
             repeat (etransitivity; eauto using new_idents_st_follows). }
           assert (Hf:=Hni). eapply mmap_values, Forall3_ignore3' with (zs:=x3) in Hf.
           2:{ eapply Forall3_length in H20 as (?&?); congruence. }
-          2:eapply mmap_length in Hni; eauto.
+          2:eapply mlength_map in Hni; eauto.
           2:{ intros; destruct_conjs. take (branch _) and destruct it. repeat inv_bind.
               eapply mmap_st_follows; eauto.
               simpl_Forall; eauto using switch_block_st_follows. }

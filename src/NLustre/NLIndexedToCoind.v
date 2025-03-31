@@ -65,7 +65,7 @@ Module Type NLINDEXEDTOCOIND
     (*   unfold CESem.sem_var, CESem.lift'. *)
     (*   intros * Sem. *)
     (*   destruct (FEnv.find x H) as [xs'|] eqn: E; simpl in *. *)
-    (*   - exists xs'; intuition. *)
+    (*   - exists xs'; auto with *. *)
     (*     intro n; specialize (Sem n). *)
     (*     unfold CESem.sem_var_instant, CESem.restr_hist in Sem. *)
     (*     rewrite FEnv.Props.P.F.map_o in Sem. *)
@@ -88,9 +88,9 @@ Module Type NLINDEXEDTOCOIND
       unfold CESem.sem_vars, IStr.lift.
       intros * Sem n.
       apply Forall2_forall2; split.
-      - now rewrite skipn_length, seq_length.
+      - now rewrite length_skipn, length_seq.
       - intros x_d k_d n' x k Length Hskipn Hseq.
-        rewrite skipn_length in Length.
+        rewrite length_skipn in Length.
         rewrite nth_skipn in Hskipn.
         rewrite nth_seq in Hseq; auto; subst.
         intro m; specialize (Sem m).
@@ -200,12 +200,12 @@ Module Type NLINDEXEDTOCOIND
       intros * Sem.
       interp_str b H e Sem.
       interp_str b H x Sem.
-      do 2 eexists; intuition; eauto.
+      do 2 eexists; intuition eauto.
       specialize (Sem_e n); specialize (Sem_x n); specialize (Sem n); inv Sem.
       - left; exists sc.
-        repeat split; auto; intuition CESem.sem_det.
+        repeat split; intuition CESem.sem_det.
       - right; left; exists sc, b'; intuition; try CESem.sem_det.
-      - right; right; repeat split; auto; intuition CESem.sem_det.
+      - right; right; repeat split; intuition CESem.sem_det.
     Qed.
 
     Lemma unop_inv:
@@ -224,11 +224,11 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       interp_str b H e Sem.
-      eexists; intuition; eauto.
+      eexists; intuition eauto.
       specialize (Sem_e n); specialize (Sem n); inv Sem;
         try match goal with H: typeof ?e = _, H': typeof ?e = _ |- _ => rewrite H in H'; inv H' end.
-      - left; do 2 eexists; intuition; eauto; CESem.sem_det.
-      - right; intuition; auto; CESem.sem_det.
+      - left. do 2 eexists. intuition eauto. CESem.sem_det.
+      - right; intuition eauto. CESem.sem_det.
     Qed.
 
     Lemma binop_inv:
@@ -251,11 +251,11 @@ Module Type NLINDEXEDTOCOIND
       intros * Sem.
       interp_str b H e1 Sem.
       interp_str b H e2 Sem.
-      do 2 eexists; intuition; eauto.
+      do 2 eexists; intuition eauto.
       specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem;
         repeat match goal with H: typeof ?e = _, H': typeof ?e = _ |- _ => rewrite H in H'; inv H' end.
       - left; do 3 eexists; intuition; eauto; try CESem.sem_det.
-      - right; intuition; auto; CESem.sem_det.
+      - right. intuition; CESem.sem_det.
     Qed.
 
     (** ** Semantics of exps *)
@@ -282,7 +282,7 @@ Module Type NLINDEXEDTOCOIND
                        (tr_stream_from n es).
     Proof.
       intros * Sem.
-      revert dependent H; revert b es n.
+      generalize dependent H; revert b es n.
       induction e; intros * Sem; destruct_conjs; unfold CESem.sem_exp, lift in Sem.
 
       - constructor.
@@ -314,8 +314,8 @@ Module Type NLINDEXEDTOCOIND
         econstructor; eauto.
         apply lift2_spec.
         intro m; repeat rewrite init_from_nth; specialize (Spec (m + n)%nat).
-        repeat match goal with H: _ \/ _ |- _ => destruct H end; destruct_conjs; intuition.
-        right; do 3 eexists; intuition; eauto.
+        repeat match goal with H: _ \/ _ |- _ => destruct H end; destruct_conjs; auto with *.
+        right; do 3 eexists; auto with *; eauto.
     Qed.
 
     Corollary sem_exp_impl:
@@ -351,7 +351,7 @@ Module Type NLINDEXEDTOCOIND
       intros * Sem.
       apply sem_exps_inv in Sem as (ess' & Sem & Eess').
       assert (length es = length (ess n)) as Length by
-          (rewrite Eess', map_length; simpl; eapply Forall2_length; eauto).
+          (rewrite Eess', length_map; simpl; eapply Forall2_length; eauto).
       apply Forall2_forall2; split.
       - unfold_tr_streams; rewrite seq_streams_length; simpl; lia.
       - intros; subst.
@@ -491,21 +491,21 @@ Module Type NLINDEXEDTOCOIND
         specialize (E n).
         unfold interp_cexps, lift_interp, interp_cexps_instant in E.
         rewrite ? map_app in E; simpl in E.
-        apply app_inv in E as (E1 & E2'); [|rewrite ? map_length; auto].
+        apply app_inv in E as (E1 & E2'); [|rewrite ? length_map; auto].
         inversion E2' as [[E E2]]; clear E2'.
-        do 3 eexists; intuition eauto; try CESem.sem_det.
-        + erewrite <-E, <-interp_cexp_instant_complete; eauto.
+        do 3 eexists; intuition; eauto; try CESem.sem_det.
+        + erewrite <- E, <- interp_cexp_instant_complete; eauto.
         + apply Forall_app; take (Forall _ _) and apply Forall_app in it as (Sem1 & Sem2); split.
-          * clear - E1 Sem1; revert dependent ess1;
+          * clear - E1 Sem1; generalize dependent ess1;
               induction Sem1, ess1; simpl in *; try discriminate; constructor; inv E1; auto.
             erewrite <-interp_cexp_instant_complete; eauto.
-          * clear - E2 Sem2; revert dependent ess2;
+          * clear - E2 Sem2; generalize dependent ess2;
               induction Sem2, ess2; simpl in *; try discriminate; constructor; inv E2; auto.
             erewrite <-interp_cexp_instant_complete; eauto.
       - right; repeat split; auto; try CESem.sem_det.
         take (Forall _ _) and rename it into Sem; clear - Sem E.
         specialize (E n).
-        revert dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
+        generalize dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
         erewrite <-interp_cexp_instant_complete; eauto.
     Qed.
 
@@ -564,7 +564,7 @@ Module Type NLINDEXEDTOCOIND
         unfold interp_ocexps, lift_interp, interp_ocexps_instant in E.
         rewrite ? map_app in E; simpl in E.
         split.
-        + revert dependent ess'.
+        + generalize dependent ess'.
           take (Forall2 _ _ _) and clear - it; induction it, ess';
             inversion_clear 1; constructor; simpl in E; inv E; auto.
           erewrite <-interp_cexp_instant_complete; eauto; discriminate.
@@ -579,13 +579,13 @@ Module Type NLINDEXEDTOCOIND
           rewrite <-L1', L1.
           eexists; intuition eauto; try CESem.sem_det.
           rewrite ? map_app in E.
-          apply app_inv in E as (?& E'); [|now rewrite 2 map_length].
+          apply app_inv in E as (?& E'); [|now rewrite 2 List.length_map].
           simpl in E'; inv E'.
           erewrite <-interp_cexp_instant_complete; eauto.
       - right; repeat split; auto; try CESem.sem_det.
         take (Forall _ _) and rename it into Sem; clear - Sem E.
         specialize (E n).
-        revert dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
+        generalize dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
         erewrite <-interp_cexp_instant_complete; eauto.
     Qed.
 
@@ -670,7 +670,7 @@ Module Type NLINDEXEDTOCOIND
                        (tr_stream_from n es).
     Proof.
       intros * Sem.
-      revert dependent H; revert b es n.
+      generalize dependent H; revert b es n.
       induction e using cexp_ind2; intros * Sem; unfold CESem.sem_cexp, IStr.lift in Sem.
 
       - destruct x; apply merge_inv in Sem as (xs & ess & ? & Hess & Spec).
@@ -685,7 +685,7 @@ Module Type NLINDEXEDTOCOIND
             destruct Spec as [(?&?&?&?&?&Hxs&Happ&Hlen&Hpres&Habs&Hes)|
                               (Hxs&Habs&Hes)];
             subst; repeat rewrite init_from_nth.
-          * right; do 2 eexists; intuition eauto.
+          * right; do 2 eexists; intuition; eauto.
             -- eapply Exists_exists. exists (length x1, tr_stream_from n x2); repeat split; auto.
                2:rewrite init_from_nth; auto.
                eapply In_combine_seq.
@@ -705,7 +705,7 @@ Module Type NLINDEXEDTOCOIND
                   eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *; auto.
                ++ apply Compare_dec.not_lt in Hgt. exfalso.
                   apply Hlen, Nat.le_antisymm; auto.
-          * left; intuition eauto.
+          * left. intuition; eauto.
             eapply Forall_forall; intros (?&?) Hin.
             eapply In_combine_seq in Hin.
             rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
@@ -739,7 +739,6 @@ Module Type NLINDEXEDTOCOIND
             rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
             eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *.
             rewrite init_from_nth; auto.
-
       - apply exp_inv in Sem; constructor; auto with nlsem.
     Qed.
 
@@ -947,7 +946,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
-      - rewrite map_length, 2 tr_streams_from_length, mask_length; auto.
+      - rewrite length_map, 2 tr_streams_from_length, mask_length; auto.
       - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2.
         rewrite tr_streams_from_length in Len.
         rewrite <-Nth1, <-Nth2.

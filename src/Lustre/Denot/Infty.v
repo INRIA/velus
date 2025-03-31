@@ -364,9 +364,9 @@ Proof.
   assert (Hy : forall x, is_ncons n (f X x)) by (subst; intros; eauto).
   remember (_ f X) as Y eqn:HH; clear HH.
   rewrite PROJ_simpl.
-  revert dependent R.
-  revert dependent X.
-  revert dependent Y.
+  generalize dependent R.
+  generalize dependent X.
+  generalize dependent Y.
   induction n as [|[]]; intros; auto.
   { apply is_cons_sreset_aux; auto; now apply (Cf 1). }
   apply is_ncons_is_cons in Cr as Hr.
@@ -396,10 +396,10 @@ Proof.
   remember (_ f X) as Y eqn:HH; clear HH.
   intro x.
   remember_ds (sreset_aux _ _ _ _ _) as tx.
-  revert dependent tx.
-  revert dependent X.
-  revert dependent Y.
-  revert dependent R.
+  generalize dependent tx.
+  generalize dependent X.
+  generalize dependent Y.
+  generalize dependent R.
   cofix Cof; intros.
   inversion_clear Ir as [Hc IIr].
   apply is_cons_elim in Hc as (vr & R' & Hr).

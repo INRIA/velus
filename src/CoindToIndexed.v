@@ -3,7 +3,6 @@ Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
-From Coq Require Import NPeano.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
@@ -187,7 +186,7 @@ Module Type COINDTOINDEXED
         CStr.sem_clock H b ck bs ->
         IStr.sem_clock (tr_Stream b) (tr_history H) ck (tr_Stream bs).
     Proof.
-      intros * Hsemck n. revert dependent bs.
+      intros * Hsemck n. generalize dependent bs.
       induction ck; intros * Hsemck.
       - inv Hsemck. rewrite H1. constructor.
       - inv Hsemck. apply IHck in H6.

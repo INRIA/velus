@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 SRCFILE=${1:?"Source file not given"}
 NODE=${2:-main}

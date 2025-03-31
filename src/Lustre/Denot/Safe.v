@@ -486,7 +486,7 @@ Section SDfuns_safe.
     intros * Hop Hwt.
     unfold ty_DS, DSForall_pres, sunop in *.
     apply DSForall_map.
-    revert dependent s.
+    generalize dependent s.
     cofix Cof.
     destruct s; intro Hs; constructor; inv Hs; auto.
     cases_eqn HH; inv HH0.
@@ -503,7 +503,7 @@ Section SDfuns_safe.
     intros * Hop Hwt Hsf.
     unfold ty_DS, safe_ty, sunop in *.
     apply DSForall_map.
-    revert dependent s.
+    generalize dependent s.
     cofix Cof.
     destruct s; intro Hs; constructor; inv Hsf; inv Hs; auto.
     cases_eqn HH.
@@ -517,7 +517,7 @@ Section SDfuns_safe.
     intros * Hsf.
     unfold safe_cl, sunop in *.
     apply DSForall_map.
-    revert dependent s.
+    generalize dependent s.
     cofix Cof.
     destruct s; intro Hs; constructor; inv Hs; auto.
     cases_eqn HH.
@@ -532,7 +532,7 @@ Section SDfuns_safe.
     intros * Hsf Hop.
     unfold safe_op, sunop in *.
     apply DSForall_map.
-    revert dependent s.
+    generalize dependent s.
     cofix Cof.
     destruct s; intro Hs; constructor; inv Hs; inv Hop; auto.
     cases_eqn HH.
@@ -622,7 +622,7 @@ Section SDfuns_safe.
       rewrite Hc, AC_cons in *.
       apply Con_le_simpl in Hcl1 as [], Hcl2 as []; subst.
       constructor.
-      + cases_eqn HH.
+      + cases_eqn HH; discriminate.
       + eapply Cof in Ht; eauto.
   Qed.
 
@@ -791,7 +791,7 @@ Section SDfuns_safe.
     cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as []; subst.
     all: econstructor; eauto; clear Hdec cs.
-    - revert_all; intros A Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+    - revert_all; intros A Cof; cofix Cof'. intros v ys xs' cs' ? Sy ? [] Ht ? ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with _ ys xs'; eauto. }
       destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
       { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
@@ -799,14 +799,15 @@ Section SDfuns_safe.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with _ xs' ys'; eauto.
-    - revert_all; intros A Cof; cofix Cof'; intros * v ys Sy [] ?? Ht ??? Cx' ?.
+    - revert_all; intros A Cof; cofix Cof'. intros ? ys ? xs' cs' ? Sy ? [] Ht ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
       { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
       rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
-      eapply Cof with _ xs' ys'; eauto.
+      intros.
+      eapply (Cof _ a0 xs' ys'); auto.
   Qed.
 
   (* TODO: refaire avec DSle_rec_eq ? *)
@@ -833,7 +834,7 @@ Section SDfuns_safe.
     cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as [? Ht]; subst.
     all: econstructor; eauto; clear Hdec cs.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+    - revert_all; intro Cof; cofix Cof'. intros ys xs' cs' ? Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons, AC_is_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -841,7 +842,7 @@ Section SDfuns_safe.
       rewrite fbyA_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with xs' ys'; eauto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ?? Ht ??? Cx' ?.
+    - revert_all; intro Cof; cofix Cof'. intros ys ? xs' cs' ? Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
       apply uncons in Hcy as (vy & ys' & Hdec).
@@ -872,7 +873,7 @@ Section SDfuns_safe.
     rewrite fby1_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
-    - revert_all; intros A Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+    - revert_all; intros A Cof; cofix Cof'. intros v cs ys xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with v cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -883,7 +884,7 @@ Section SDfuns_safe.
       apply rem_le_compat in Cx', Cy.
       rewrite rem_cons in Cx', Cy.
       eapply Cof with v (rem cs) xs' ys'; auto.
-    - revert_all; intros A Cof; cofix Cof'; intros * ??? Sy Cy [] ? xs' Cx' Ht ? Sx'.
+    - revert_all; intros A Cof; cofix Cof'. intros ? cs ys ? xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -914,7 +915,7 @@ Section SDfuns_safe.
     rewrite fby_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+    - revert_all; intro Cof; cofix Cof'. intros cs ys xs' Cx' Sy Cy [] Ht ? Sx'.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -925,7 +926,7 @@ Section SDfuns_safe.
       apply rem_le_compat in Cx', Cy.
       rewrite rem_cons in Cx', Cy.
       eapply Cof with (rem cs) xs' ys'; auto.
-    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] v xs' Cx' Ht ? Sx'.
+    - revert_all; intro Cof; cofix Cof'. intros cs ys ? xs' Cx' Sy ? [] Ht _ ?.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
@@ -950,8 +951,8 @@ Section SDfuns_safe.
     intros * Hk Wtx Wtc.
     unfold ty_DS, DSForall_pres, swhenv in *.
     remember_ds (swhen _ _ _ _ _ _) as t.
-    revert dependent cs.
-    revert dependent xs.
+    generalize dependent cs.
+    generalize dependent xs.
     revert t.
     cofix Cof; intros.
     destruct t.
@@ -1005,7 +1006,11 @@ Section SDfuns_safe.
     all: try take (err _ = err _) and inv it.
     all: try take (pres _ = pres _) and inv it.
     all: try (take ((_ =? _) = _) and rewrite it in * ).
-    all: esplit; split; [ apply HV | exists xs', cs'; eauto 8 ].
+    all: esplit; split; [ | exists xs', cs'; eauto 8 ].
+    all: rewrite HV.
+    all: apply cons_eq_compat; auto.
+    destruct a; [ reflexivity | ].
+    apply Bool.andb_false_r.
   Qed.
 
   Lemma safe_swhenv :
@@ -1958,7 +1963,7 @@ Section wf_var.
       rewrite <- Eq2; reflexivity.
       rewrite <- Eq3; reflexivity.
       rewrite Hy; reflexivity.
-      revert dependent x2.
+      generalize dependent x2.
       induction k; simpl; intros; subst.
       + inv Hwfv; auto.
       + eapply IHk in Hk; eauto.
@@ -1966,7 +1971,7 @@ Section wf_var.
         now inv Hwfv.
     - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
       rewrite <- Eq1, <- Eq2, <- Eq3.
-      revert dependent x2.
+      generalize dependent x2.
       induction k; intros; simpl in Hk; subst.
       + inv Hwfv.
         rewrite AC_cons, first_cons in *; auto.
@@ -1974,7 +1979,7 @@ Section wf_var.
         destruct x2; simpl; auto.
         now inv Hwfv.
     - apply decomp_eq in Eq4 as (? & (k & Hk) & Hy).
-      revert dependent x2.
+      generalize dependent x2.
       induction k; intros; simpl in Hk; subst.
       + now inv Hwfv.
       + eapply IHk in Hk; eauto.
@@ -1993,14 +1998,14 @@ Section wf_var.
     unfold safe_DS, ty_DS, DSForall_pres.
     repeat split.
     - (* ty *)
-      revert dependent xs.
+      generalize dependent xs.
       revert envI bs env.
       cofix Cof; intros.
       destruct xs; inv Hwfv.
       + constructor; eauto.
       + constructor; [cases|]; eauto.
     - (* sf *)
-      revert dependent xs.
+      generalize dependent xs.
       revert envI bs env.
       cofix Cof; intros.
       destruct xs; inv Hwfv.
@@ -2277,7 +2282,7 @@ Section SubClock.
     clear.
     intros a s x y Hdx.
     destruct Hdx as (k & Hk).
-    revert dependent x. induction k; simpl in *; intros * Hk Hsub; subst.
+    generalize dependent x. induction k; simpl in *; intros * Hk Hsub; subst.
     - inv Hsub; eauto.
     - destruct (IHk (pred x)); eauto.
       destruct x; simpl; auto. now inv Hsub.
@@ -2494,7 +2499,7 @@ Proof.
   intros * WCin Hcl.
   apply bss_sub.
   - pose proof (wc_env_has_Cbase _ WCin) as [i Hin].
-    { rewrite map_length. exact (n_ingt0 n). }
+    { rewrite length_map. exact (n_ingt0 n). }
     assert (In i (idents (n_in n))) as Hi by (unfold idents; solve_In).
     exists i; split; auto.
     specialize (Hcl i Cbase).
@@ -2706,7 +2711,7 @@ Section Node_safe.
     apply mem_ident_nth in Hxin as (k & Hl).
     apply mem_nth_Some in Hl as Hk; eauto.
     unfold idents in Hk.
-    rewrite map_length in Hk.
+    rewrite length_map in Hk.
     erewrite env_of_np_nth; eauto.
     apply forall_nprod_k; auto.
   Qed.
@@ -2748,11 +2753,11 @@ Section Node_safe.
     intros * Hty Henv.
     unfold ty_env in *.
     apply Forall2_forall2; split.
-    { rewrite list_of_nprod_length, map_length.
+    { rewrite list_of_nprod_length, length_map.
       eauto using Forall2_length. }
     intros d ? k ty ? Hk ??; subst.
     assert (lk : k < Datatypes.length (List.map fst (n_out n))).
-    { rewrite map_length; apply Forall2_length in Hty; lia. }
+    { rewrite length_map; apply Forall2_length in Hty; lia. }
     rewrite list_of_nprod_nth, (nth_np_of_env xH); auto.
     specialize (Henv (nth k (List.map fst (n_out n)) xH) (nth k tys d)).
     unfold denot_var in Henv.
@@ -2815,7 +2820,7 @@ Section Node_safe.
   Proof.
     clear. unfold cl_env, cl_DS.
     intros * Wci Wcio Hinsto Hinsti Hclo Hcli Ncs.
-    apply Forall2_length in Hinsto as Hl; rewrite 2 map_length in Hl.
+    apply Forall2_length in Hinsto as Hl; rewrite 2 length_map in Hl.
     (* même résultat que denot_clock_inst_ins mais pour les sorties : *)
     assert
       (forall ck x ck',
@@ -2838,11 +2843,11 @@ Section Node_safe.
     }
     unfold idents, denot_var in *.
     apply Forall2_forall2.
-    split. { now rewrite list_of_nprod_length, 2 map_length. }
+    split. { now rewrite list_of_nprod_length, 2 length_map. }
     intros d s k ? ? Hk ??; subst.
-    rewrite map_length in Hk.
+    rewrite length_map in Hk.
     rewrite list_of_nprod_nth.
-    erewrite nth_np_of_env with (d:=xH). 2: rewrite map_length; lia.
+    erewrite nth_np_of_env with (d:=xH). 2: rewrite length_map; lia.
     edestruct (nth k (n_out n)) as (x,(((ty,ck),i),o)) eqn:Kth.
     assert (Hin : In (x, ((ty, ck), i, o)) (n_out n)).
     { rewrite <- Kth. apply nth_In. unfold decl. (* !!!!! *) lia. }
@@ -2851,7 +2856,7 @@ Section Node_safe.
     2:{ eapply Forall2_nth with (n := k) in Hinsto as [_ Inst].
         erewrite 2 map_nth', Kth in Inst. erewrite map_nth'.
         cases_eqn HH; simpl in *; rewrite HH; eauto.
-        all: rewrite ?map_length; lia. }
+        all: rewrite ?length_map; lia. }
     erewrite map_nth', Kth; simpl (fst _). 2: lia.
     specialize (Hclo x ck). cases_eqn Hxin.
     2:{ eapply Hclo, HasClock_app_r, senv_HasClock', Hin. }
@@ -2996,7 +3001,7 @@ Section Node_safe.
     (* sinon on va "attendre" les [Eps] sur x jusqu'à lui trouver
        une tête *)
     remember_ds (denot_var ins envIk _ x) as xs.
-    revert dependent x.
+    generalize dependent x.
     revert xs.
     cofix Cof; intros.
     destruct xs.
@@ -3330,7 +3335,7 @@ Section Node_safe.
       simpl; intros; cases; try congruence.
       rewrite clocksof_nclocksof in Wc.
       2:{ unfold decl in *;
-          take (length a = _ ) and rewrite it, map_length in *; congruence. }
+          take (length a = _ ) and rewrite it, length_map in *; congruence. }
       unfold eq_rect; cases; simpl.
       (* remarque: Hnode est utilisé par safe_sreset  *)
       (* on choisit bien [[bck]] comme majorant de bss *)
@@ -3453,11 +3458,11 @@ Section Node_safe.
   Proof.
     intros * Hsafe Hbs Hwt Hwc Hop Hwtr Hwcr Hopr Hfind ND Wtr' Wci Wcio Wtin Wtout WIin WIout ? Hle.
     assert (length anns = length (n_out n)) as Hlout.
-    { apply Forall3_length in WIout. now rewrite 2 map_length in WIout. }
+    { apply Forall3_length in WIout. now rewrite 2 length_map in WIout. }
     assert (length (List.map fst (n_out n)) = length anns) as Hlout'. (* pas une blague *)
-    { unfold idents. now rewrite map_length. }
+    { unfold idents. now rewrite length_map. }
     assert (length xs = length anns) as Hl.
-    { apply Forall3_length in WIout. now rewrite 2 map_length in WIout. }
+    { apply Forall3_length in WIout. now rewrite 2 length_map in WIout. }
     assert (Forall2 (fun x y => sub x = Some y) (List.map fst (n_out n)) xs) as Hsub.
     { apply Forall3_ignore2, Forall2_map_1 in WIout.
       unfold idents; rewrite Forall2_map_1.
@@ -3556,9 +3561,9 @@ Section Node_safe.
     unfold denot_var in *.
     apply Forall2_forall2.
     change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
-    split. { now rewrite list_of_nprod_length, 2 map_length in *. }
+    split. { now rewrite list_of_nprod_length, 2 length_map in *. }
     intros d s k ? ? Hk ??; subst.
-    rewrite map_length in Hk.
+    rewrite length_map in Hk.
     rewrite list_of_nprod_nth; try lia.
     erewrite nth_np_of_env with (d:=xH); try lia.
     edestruct (nth k (n_out n)) as (x,(((ty,ck),i),o)) eqn:Kth.
@@ -3568,7 +3573,7 @@ Section Node_safe.
     2:{ rewrite in_map_iff. exists (x,((ty,ck),i,o)). auto. }
     2:{ eapply Forall3_nth with (n := k) in WIout as [_ Inst].
         erewrite 2 map_nth', Kth in Inst. erewrite map_nth'; eauto.
-        all: rewrite ?map_length; unfold decl in *; lia. }
+        all: rewrite ?length_map; unfold decl in *; lia. }
     unfold idents, decl in *. erewrite map_nth', Kth; simpl (fst _); try lia.
     eapply Ole_trans, (Cl x ck); auto.
     2: apply HasClock_app; eauto using senv_HasClock'.
@@ -3985,7 +3990,7 @@ Proof.
     now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
   clear HG. (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
   revert Norte.
-  revert dependent n. revert f envI. revert bs.
+  generalize dependent n. revert f envI. revert bs.
   destruct G as [tys exts nds].
   induction nds as [|a nds]; intros. inv Hfind.
   destruct (ident_eq_dec (n_name a) f); subst.
@@ -4101,7 +4106,7 @@ Proof.
     (* si x n'est pas une entrée, c'est ok *)
     2: unfold denot_var; rewrite Hmem; apply wf_var_bot.
     remember_ds (denot_var ins _ _ x) as xs.
-    revert dependent xs.
+    generalize dependent xs.
     cofix Cof; intros.
     destruct xs.
     { constructor; rewrite <- eqEps in Hxs; eauto. }

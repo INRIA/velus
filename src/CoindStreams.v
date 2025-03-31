@@ -136,7 +136,7 @@ Module Type COINDSTREAMS
         as app_EqSts.
   Proof.
     intros xss xss' Exss yss yss' Eyss.
-    revert dependent yss; revert dependent xss'.
+    generalize dependent yss; generalize dependent xss'.
     induction xss; induction yss; intros; inv Exss; inv Eyss;
       simpl; try constructor; auto.
     - now rewrite 2 app_nil_r.
@@ -718,7 +718,7 @@ Module Type COINDSTREAMS
       forall n, xs # n = if b # n then present (Vscalar (sem_cconst c)) else absent.
   Proof.
     split.
-    - intros E n; revert dependent xs; revert c b; induction n; intros;
+    - intros E n; generalize dependent xs; revert c b; induction n; intros;
         unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
           repeat rewrite Str_nth_S; auto.
     - revert xs c b.
@@ -803,7 +803,7 @@ Module Type COINDSTREAMS
       forall n, xs # n = if b # n then present (Venum c) else absent.
   Proof.
     split.
-    - intros E n; revert dependent xs; revert c b; induction n; intros;
+    - intros E n; generalize dependent xs; revert c b; induction n; intros;
         unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
           repeat rewrite Str_nth_S; auto.
     - revert xs c b.
@@ -868,9 +868,9 @@ Module Type COINDSTREAMS
               /\ rs # n = present x)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert cs rs c.
+    - intros H n; generalize dependent xs; revert cs rs c.
       induction n; intros.
-      + inv H; intuition.
+      + inv H; auto with *.
         * right; left. do 2 eexists; intuition.
         * right; right. do 2 eexists; intuition.
       + inv H; repeat rewrite Str_nth_S; auto.
@@ -911,10 +911,10 @@ Module Type COINDSTREAMS
               /\ ys # n = present y)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert ys ty op.
+    - intros H n; generalize dependent xs; revert ys ty op.
       induction n; intros.
-      + inv H; intuition.
-        right. do 2 eexists; intuition; auto.
+      + inv H; auto with *.
+        right. do 2 eexists; intuition. assumption.
       + inv H; repeat rewrite Str_nth_S;auto.
     - revert xs ys ty op.
       cofix CoFix; intros * H.
@@ -943,10 +943,10 @@ Module Type COINDSTREAMS
               /\ zs # n = present z)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert ys zs ty1 ty2 op.
+    - intros H n; generalize dependent xs; revert ys zs ty1 ty2 op.
       induction n; intros.
-      + inv H; intuition.
-        right. do 3 eexists; intuition; auto.
+      + inv H; auto with *.
+        right. do 3 eexists; intuition. assumption.
       + inv H; repeat rewrite Str_nth_S; auto.
     - revert xs ys zs ty1 ty2 op.
       cofix CoFix; intros * H.
@@ -973,10 +973,10 @@ Module Type COINDSTREAMS
              /\ ys # n = present (Vscalar y))).
   Proof.
     split.
-    - intros H n; revert dependent xss; revert ys.
+    - intros H n; generalize dependent xss; revert ys.
       induction n; intros.
-      + inv H; intuition.
-        right. do 3 eexists; intuition; eauto.
+      + inv H; auto with *.
+        right. do 3 eexists; auto with *; eauto.
       + inv H; repeat rewrite Str_nth_S; eauto.
         1,2:edestruct IHn as [(?&?)|(?&?&?&?&?)]; eauto.
         1,3:left; split; simpl_Forall; auto.
@@ -1031,10 +1031,10 @@ Module Type COINDSTREAMS
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ess rs.
+      generalize dependent xs; revert ess rs.
       induction n; intros.
-      + inv H; intuition.
-        right; do 2 eexists; intuition; eauto.
+      + inv H; auto with *.
+        right; do 2 eexists; intuition eauto.
       + inv H; repeat rewrite Str_nth_S.
         * take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
@@ -1101,9 +1101,9 @@ Module Type COINDSTREAMS
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ess d rs.
+      generalize dependent xs; revert ess d rs.
       induction n; intros.
-      + inv H; intuition.
+      + inv H; auto with *.
         * right; left. repeat esplit; eauto.
         * right; right. repeat esplit; eauto.
       + inv H; repeat rewrite Str_nth_S.
@@ -1763,13 +1763,13 @@ Module Type COINDSTREAMS
     intros xs xs' Exs.
     constructor; simpl.
     - clear Cofix.
-      revert dependent xs'.
+      generalize dependent xs'.
       induction xs; intros; try inv Exs; simpl; auto.
       f_equal; auto.
       now rewrite H1.
     - apply Cofix.
       clear Cofix.
-      revert dependent xs'.
+      generalize dependent xs'.
       induction xs; intros; try inv Exs; simpl; constructor.
       + now rewrite H1.
       + now apply IHxs.
@@ -1893,8 +1893,8 @@ Module Type COINDSTREAMS
     split.
     - intros Henum n. revert bs xs ys Henum.
       induction n; intros.
-      + inv Henum; intuition.
-        right; left. eexists; intuition; auto.
+      + inv Henum; auto with *.
+        right; left. eexists; intuition.
       + inv Henum; repeat rewrite Str_nth_S; auto.
     - revert bs xs ys.
       cofix CoFix; intros * Henum.
@@ -2066,7 +2066,7 @@ Module Type COINDSTREAMS
       sub_clock s s'.
   Proof.
     intros * Hsc Hsc' Hparent.
-    revert dependent s'. induction Hparent; intros.
+    generalize dependent s'. induction Hparent; intros.
     - eapply sub_clock_Con; eauto.
     - inversion Hsc' as [|????????? Hck']; subst.
       subst; pose proof (sub_clock_Con _ _ _ _ _ _ _ Hck' Hsc');

@@ -56,7 +56,7 @@ Module Type NLCLOCKINGSEMANTICS
       sem_clocked_var bk H (Var x) ck.
   Proof.
     intros * Ord WCG Nodup Sem WC Def Hin.
-    revert dependent ck; revert dependent islast; revert dependent x; revert dependent vars.
+    generalize dependent ck; generalize dependent islast; generalize dependent x; generalize dependent vars.
     induction Sem as [?????? Hvar Hexp|
                       ???????????? Hvars ??? Hsem|
                       ??????????? Hexp Hvar| |
@@ -127,11 +127,11 @@ Module Type NLCLOCKINGSEMANTICS
       take (sem_var_instant (var_env (H' n)) _ _) and rename it into Hsvx.
       destruct x1.
       + eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx; eauto.
-        split; intuition; eauto; try by_sem_det.
+        split; intuition; try by_sem_det.
         destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
       + assert (exists c, sem_var_instant (H' n) (Var i) (present c)) as Hsvx' by eauto.
         eapply Hscv', sem_clock_instant_transfer_out_instant in Hsvx'; eauto.
-        split; intuition; eauto; try by_sem_det.
+        split; intuition eauto; try by_sem_det.
         destruct_conjs. unfold sem_var_instant, var_env in *. congruence.
 
     - (* EqFby *)
@@ -180,7 +180,7 @@ Module Type NLCLOCKINGSEMANTICS
       apply Forall2_Forall2 with (1:=Houts) in Houts'.
       apply Forall2_in_left with (2:=Hin) in Houts' as (s & Hsin & Hvs & Hvs').
       destruct s.
-      + split; intuition; eauto; try by_sem_det.
+      + split; intuition eauto; try by_sem_det.
         * eapply Hnd in Hvs.
           eapply clock_vars_to_sem_clock_instant with (Hn' := var_env (H m)) in H1; eauto; try by_sem_det.
           eapply in_app; eauto.
@@ -188,7 +188,7 @@ Module Type NLCLOCKINGSEMANTICS
         * eapply clock_vars_to_sem_clock_instant; eauto.
           -- eapply in_app; eauto.
           -- apply Hnd; auto.
-      + split; intuition; eauto; try by_sem_det;
+      + split; intuition eauto; try by_sem_det;
           assert (exists c, sem_var_instant (H m) (Var x) (present c)) as Hvs'' by eauto.
         * eapply clock_vars_to_sem_clock_instant; eauto.
           -- eapply in_app; eauto.

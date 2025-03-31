@@ -92,7 +92,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Proof.
     intros x.
     split; intro HH.
-    destruct x; [intuition|eauto].
+    destruct x; [auto with *|eauto].
     destruct HH as [c HH]; rewrite HH.
     intro; discriminate.
   Qed.
@@ -223,8 +223,8 @@ if the clocked stream is [absent] at the corresponding instant. *)
       k = (match n with 0 => 0 | S m => count rs m end).
   Proof.
     induction n; simpl.
-    - destruct (rs 0); intuition.
-    - destruct (rs (S n)); [|now intuition].
+    - destruct (rs 0); auto with *.
+    - destruct (rs (S n)); [|now auto with *].
       split; inversion 1; subst; auto.
   Qed.
 
@@ -274,7 +274,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Proof.
     intros; unfold mask.
     destruct (k =? count r n); auto.
-    unfold all_absent; rewrite map_length.
+    unfold all_absent; rewrite length_map.
     induction n; auto.
   Qed.
 
@@ -484,7 +484,7 @@ environment.
         -> sem_clock_instant base R ck v2
         -> v1 = v2.
     Proof.
-      induction ck; repeat inversion 1; subst; intuition;
+      induction ck; repeat inversion 1; subst; auto with *;
         try repeat progress match goal with
                             | H1: sem_clock_instant ?bk ?R ?ck ?l,
                                   H2: sem_clock_instant ?bk ?R ?ck ?r |- _ =>
