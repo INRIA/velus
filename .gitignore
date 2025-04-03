@@ -47,3 +47,7 @@ _CoqProject
 *.exe
 *.out
 *.ff
+
+# Result of nix build
+
+result*

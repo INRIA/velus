@@ -7,6 +7,8 @@ a="/$0"; a=${a%/*}; a=${a#/}; a=${a:-.}; BASEDIR=$(cd "$a" && pwd)
 coqproject="$BASEDIR/_CoqProject"
 compcertdir="$BASEDIR/CompCert"
 srcdir="$BASEDIR/src"
+flocqdir="$compcertdir/flocq"
+menhirlibdir="$compcertdir/MenhirLib"
 
 # if true, execute CompCert/configure script, that forces to recompile
 # the whole submodule
@@ -19,6 +21,10 @@ while : ; do
     "") break;;
     -compcertdir|--compcertdir)
         compcertdir="$2"; shift;;
+    -flocqdir|--flocqdir)
+        flocqdir="$2"; shift;;
+    -menhirlibdir|--menhirlibdir)
+        menhirlibdir="$2"; shift;;
     -prefix|--prefix)
         prefix="-prefix $2"; shift;;
     -bindir|--bindir)
@@ -66,7 +72,7 @@ printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 	             "${ARCH}_${BITSIZE}";
     fi;
     printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
-    printf -- "-R \"%s\" Flocq\\n" "$compcertdir/flocq";
-    printf -- "-R \"%s\" MenhirLib\\n" "$compcertdir/MenhirLib";
+    printf -- "-R \"%s\" Flocq\\n" "$flocqdir";
+    printf -- "-R \"%s\" MenhirLib\\n" "$menhirlibdir";
     cat vfiles
 } >"$coqproject"
