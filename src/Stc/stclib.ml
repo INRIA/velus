@@ -84,11 +84,18 @@ module PrintFun
     val print_system     : Format.formatter -> Stc.system -> unit
     val print_program    : Format.formatter -> Stc.program -> unit
     val print_fullclocks : bool ref
+    val print_clocktypes : bool ref
   end
   =
   struct
 
     include Coreexprlib.PrintFun (CE) (Ops)
+
+    let print_clocktypes = ref false
+
+    let print_clocktype fmt ck =
+      if !print_clocktypes
+      then Format.fprintf fmt "@[<hov 8>(* :: %a *)@]@ " print_clock ck
 
     let print_reset p (id, ((c0, ty), ck)) =
       fprintf p "%a@ = %a%a"
@@ -104,8 +111,9 @@ module PrintFun
     let rec print_trconstr p tc =
       match tc with
       | Stc.TcDef (ck, x, e) ->
-        fprintf p "@[<hov 2>%a =@ %a@]"
+        fprintf p "@[<hov 2>%a =@ %a%a@]"
           print_ident x
+          print_clocktype ck
           print_rhs e
       | Stc.TcReset (ckr, Stc.ResState (x, ty, c0)) ->
         fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
@@ -118,16 +126,19 @@ module PrintFun
             print_ident s
             print_clock ckr
       | Stc.TcUpdate (ck, _, Stc.UpdLast (x, e)) ->
-        fprintf p "@[<hov 2>update@ %a =@ %a@]"
+        fprintf p "@[<hov 2>update@ %a =@ %a%a@]"
           print_ident x
+          print_clocktype ck
           print_cexp e
       | Stc.TcUpdate (ck, _, Stc.UpdNext (x, e)) ->
-        fprintf p "@[<hov 2>next@ %a =@ %a@]"
+        fprintf p "@[<hov 2>next@ %a =@ %a%a@]"
           print_ident x
+          print_clocktype ck
           print_exp e
       | Stc.TcUpdate (ck, _, Stc.UpdInst (i, xs, f, es)) ->
-        fprintf p "@[<hov 2>%a =@ %a<%a>(@[<hv 0>%a@])@]"
+        fprintf p "@[<hov 2>%a =@ %a%a<%a>(@[<hv 0>%a@])@]"
           print_pattern xs
+          print_clocktype ck
           print_ident f
           print_ident i
           (print_comma_list print_exp) es

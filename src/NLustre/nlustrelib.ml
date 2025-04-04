@@ -74,47 +74,61 @@ module PrintFun
     val print_node       : Format.formatter -> NL.node -> unit
     val print_global     : Format.formatter -> NL.global -> unit
     val print_fullclocks : bool ref
+    val print_clocktypes : bool ref
   end
   =
   struct
 
     include Coreexprlib.PrintFun (CE) (Ops)
 
+    let print_clocktypes = ref false
+
+    let print_clocktype fmt ck =
+      if !print_clocktypes
+      then Format.fprintf fmt "@[<hov 8>(* :: %a *)@]@ " print_clock ck
+
     let rec print_equation p eq =
       match eq with
       | NL.EqDef (x, ck, e) ->
-          fprintf p "@[<hov 2>%a =@ %a;@]"
+          fprintf p "@[<hov 2>%a =@ %a%a;@]"
             print_ident x
+            print_clocktype ck
             print_rhs e
       | NL.EqApp (xs, ck, f, es, []) ->
-          fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
+          fprintf p "@[<hov 2>%a =@ %a%a(@[<hv 0>%a@]);@]"
             print_pattern xs
+            print_clocktype ck
             print_ident f
             (print_comma_list print_exp) es
       | NL.EqApp (xs, ck, f, es, ckrs) ->
-        fprintf p "@[<hov 2>%a =@ (restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
+        fprintf p "@[<hov 2>%a =@ %a(restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
           print_pattern xs
+          print_clocktype ck
           print_ident f
           (print_comma_list print_ident) (List.map fst ckrs)
           (print_comma_list print_exp) es
       | NL.EqFby (x, ck, v0, e, []) ->
-          fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
+          fprintf p "@[<hov 2>%a =@ %a%a fby@ %a;@]"
             print_ident x
+            print_clocktype ck
             Ops.print_const (v0, CE.typeof e)
             print_exp e
       | NL.EqFby (x, ck, v0, e, ckrs) ->
-        fprintf p "@[<hov 2>%a =@ reset (%a fby@ %a) every %a;@]"
+        fprintf p "@[<hov 2>%a =@ %areset (%a fby@ %a) every %a;@]"
           print_ident x
+          print_clocktype ck
           Ops.print_const (v0, CE.typeof e)
           print_exp e
           (print_comma_list print_ident) (List.map fst ckrs)
-      | NL.EqLast (x, ty, _, v0, []) ->
-          fprintf p "@[<hov 2>last %a =@ %a;@]"
+      | NL.EqLast (x, ty, ck, v0, []) ->
+          fprintf p "@[<hov 2>last %a =@ %a%a;@]"
             print_ident x
+            print_clocktype ck
             Ops.print_const (v0, ty)
-      | NL.EqLast (x, ty, _, v0, ckrs) ->
-        fprintf p "@[<hov 2>last %a =@ %a every %a;@]"
+      | NL.EqLast (x, ty, ck, v0, ckrs) ->
+        fprintf p "@[<hov 2>last %a =@ %a%a every %a;@]"
           print_ident x
+          print_clocktype ck
           Ops.print_const (v0, ty)
           (print_comma_list print_ident) (List.map fst ckrs)
 

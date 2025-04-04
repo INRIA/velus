@@ -184,6 +184,11 @@ let set_fullclocks () =
   Interfacelib.PrintNLustre.print_fullclocks := true;
   Interfacelib.PrintStc.print_fullclocks := true
 
+let set_clocktypes () =
+  Interfacelib.PrintLustre.print_clocktypes := true;
+  Interfacelib.PrintNLustre.print_clocktypes := true;
+  Interfacelib.PrintStc.print_clocktypes := true
+
 let speclist = [
   "-o", Arg.String set_output_file, " Set <output> file name";
   "-main", Arg.String set_main_node, " Specify the main node";
@@ -212,6 +217,8 @@ let speclist = [
                                          " Print 'full' clocks in declarations";
   "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
                                    " Show result clocks of nested applications";
+  "-clocktypes", Arg.Unit set_clocktypes,
+                                   " Show clock types of equations";
   "-noexpinlining", Arg.Clear Veluslib.exp_inlining, " skip expression inlining";
   "-nodce", Arg.Clear Veluslib.dce, " Skip dead code elimination";
   "-noremovedupregs", Arg.Clear Veluslib.dupregrem, " Skip duplicate register removal";

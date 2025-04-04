@@ -105,6 +105,7 @@ module PrintFun
   sig
     val print_fullclocks : bool ref
     val print_appclocks  : bool ref
+    val print_clocktypes : bool ref
 
     val print_exp        : formatter -> L.exp -> unit
     val print_equation   : formatter -> L.equation -> unit
@@ -115,6 +116,22 @@ module PrintFun
   struct
     let print_fullclocks = ref false
     let print_appclocks  = ref false
+    let print_clocktypes = ref false
+
+    let exp_cks = function
+      | L.Econst _ -> [L.Cbase]
+      | L.Eenum _ -> [L.Cbase]
+      | L.Evar (_, (_, ck)) -> [ck]
+      | L.Elast (_, (_, ck)) -> [ck]
+      | L.Eunop (_, _, (_, ck)) -> [ck]
+      | L.Ebinop (_, _, _, (_, ck)) -> [ck]
+      | L.Eextcall (_, _, (_, ck)) -> [ck]
+      | L.Efby (_, _, anns) -> List.map snd anns
+      | L.Earrow (_, _, anns) -> List.map snd anns
+      | L.Ewhen (_, _, _, (tys, ck)) -> List.map (Fun.const ck) tys
+      | L.Emerge (_, _, (tys, ck)) -> List.map (Fun.const ck) tys
+      | L.Ecase (_, _, _, (tys, ck)) -> List.map (Fun.const ck) tys
+      | L.Eapp (_, _, _, anns) -> List.map snd anns
 
     let precedence = function
       | L.Econst _ -> (16, NA)
@@ -281,9 +298,16 @@ module PrintFun
       | xs  -> fprintf p "(@[<hv 0>%a@])"
                  (print_comma_list print_ident) xs
 
+    let print_eq_clocktypes fmt es =
+      if !print_clocktypes
+      then Format.fprintf fmt "@[<hov 8>(* :: %a *)@]@ "
+             print_cks List.(concat (map exp_cks es))
+
     let rec print_equation p (xs, es) =
-      fprintf p "@[<hov 2>%a = %a@]"
-        print_pattern xs (exp_list 0) es
+      fprintf p "@[<hov 2>%a = %a%a@]"
+        print_pattern xs
+        print_eq_clocktypes es
+        (exp_list 0) es
 
     let print_state_tag p (c, ty) =
       print_ident p (List.nth ty (PrintOps.int_of_enumtag c))
