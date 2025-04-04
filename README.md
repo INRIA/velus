@@ -49,37 +49,37 @@ program examples/count.s.
 
 The compiler also accepts the options
 
-* -dnolast
+* `-dnolast`
   Output the Lustre code after compilation of last declarations into <file>.nolast.lus
 
-* -dnoauto
+* `-dnoauto`
   Output the Lustre code after compilation of state machines into <file>.noauto.lus
 
-* -dnoswitch
+* `-dnoswitch`
   Output the Lustre code after compilation of switch blocks into <file>.noswitch.lus
 
-* -dnolocal
+* `-dnolocal`
   Output the Lustre code after inlining of local scopes into <file>.nolocal.lus
 
-* -dnlustre
+* `-dnlustre`
   Output the normalized NLustre code into <file>.n.lus
 
-* -dstc
+* `-dstc`
   Output the Stc intermediate code into <file>.stc
 
-* -dsch
+* `-dsch`
   Output the scheduled code into <file>.sch.stc
 
-* -dobc
+* `-dobc`
   Output the Obc intermediate code into <file>.obc
 
-* -dclight
+* `-dclight`
   Output the generated Clight code into <file>.light.c
 
-* -nofusion
+* -`nofusion`
   Disable the if/then/else fusion optimization.
 
-* -sync
+* -`sync`
   Generate an optional `main_sync` entry point and a <file>.sync.c
   containing a simulation that prints the outputs at each cycle and requests
   inputs. In contrast to `main_proved`, this entry point is not formally verified
@@ -88,6 +88,8 @@ The compiler also accepts the options
 
 ## Local installation
 
+### Using opam
+
 Vélus has been implemented in Coq.8.20.1. It includes a
 modified version of CompCert and depends on menhir.
 
@@ -95,20 +97,48 @@ To build a self-contained installation for compiling and running
 Vélus, we recommend installing an ad-hoc [opam](https://opam.ocaml.org/)
 directory:
 
-    $ cd $VELUS_DIR
-    $ mkdir opam
-    $ opam switch create velus --packages ocaml.4.14.2,coq.8.20.1
-    $ eval `opam env --switch=velus`
-    $ opam install -j4 ocamlbuild menhir ocamlgraph
+```bash
+$ git clone https://github.com/INRIA/velus
+$ cd velus
+$ git submodule --init --recursive
+$ opam switch create velus --packages=ocaml.4.14.2,coq.8.20.1
+$ eval $(opam env --switch=velus --set-switch)
+$ opam install -j ocamlbuild menhir ocamlgraph
+```
 
 To check the proofs and build Vélus:
 
-    $ cd $VELUS
-    $ ./configure [options] target
-    $ make
+```bash
+$ ./configure [options] <target>
+$ make -j # Uses all the available cores
+```
 
-The configuration script uses the same options as CompCert's, except one
-additional `-compcertdir` option to specify the CompCert directory.
+The `<target>` must be one of the [supported target platforms](https://compcert.org/man/manual001.html#target-platforms)
+of CompCert.
 
-Moreover, you can use the `-j[N]` option of `make` to enable parallel
-compilation.
+#### Configuration options
+
+The configuration script has the same options as CompCert's with
+the following specfic to Vélus:
+
+* `-velus-only`
+  Only compile Vélus (and not CompCert). This option may be useful with
+  `-compcertdir`.
+
+* `-compcertdir`
+  Overrides the default path to the directory containing your local version of
+  CompCert.
+
+* `-flocqdir`
+  Set the path to the directory containing `Flocq` if you're not using the one
+  packaged in CompCert.
+
+* `-menhirlibdir`
+  Set the path to the directory containing `MenhirLib` if you're not using the
+  one packaged in CompCert.
+
+### Using nix
+
+If you are using the [nix package manager](https://nixos.org/), you can
+directly compile Vélus using the flake with the command `nix build`. This does
+not require a local version of CompCert to build.
