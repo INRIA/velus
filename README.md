@@ -83,10 +83,10 @@ directory:
 ```bash
 $ git clone https://github.com/INRIA/velus
 $ cd velus
-$ git submodule --init --recursive
+$ git submodule update --init --recursive
 $ opam switch create velus --packages=ocaml.4.14.2,coq.8.20.1
 $ eval $(opam env --switch=velus --set-switch)
-$ opam install -j ocamlbuild menhir ocamlgraph
+$ opam install ocamlbuild menhir ocamlgraph
 ```
 
 To check the proofs and build Vélus:
