@@ -99,6 +99,12 @@ $ make -j # Uses all the available cores
 The `<target>` must be one of the [supported target platforms](https://compcert.org/man/manual001.html#target-platforms)
 of CompCert.
 
+On `aarch64-macOS`, it is possible to cross-compile to `x86_64-linux` (the configuration we test most regularly) with the following commands:
+```
+brew install x86_64-elf-gcc
+./configure x86_64-linux -toolprefix x86_64-elf-
+```
+
 #### Configuration options
 
 The configuration script has the same options as CompCert's with
